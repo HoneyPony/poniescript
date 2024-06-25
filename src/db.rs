@@ -1,12 +1,14 @@
+use std::any::TypeId;
 use std::collections::HashMap;
-use std::path::{self, Path, PathBuf};
+use std::path::{Path, PathBuf};
+use std::cell::RefCell;
 
 // Import relevant things.
 use crate::expr::Var;
-use crate::typ::Typ;
+use crate::typ::Type;
 use crate::source::Source;
 
-use crate::lexer::Tok;
+use crate::lexer::{Tok, Token};
 
 // I guess we could just use one file, because we're not allowed to have the macro
 // expand to struct fields, for some reason.
@@ -20,6 +22,7 @@ pub struct Db {
 
 	str_side_map: HashMap<Box<str>, StrId>,
 	source_side_map: HashMap<PathBuf, SourceId>,
+	type_side_map: HashMap<Type, TypId>,
 
 	key_lookup_map: HashMap<StrId, Tok>,
 }
@@ -31,6 +34,7 @@ impl Db {
 
 			str_side_map: HashMap::new(),
 			source_side_map: HashMap::new(),
+			type_side_map: HashMap::new(),
 
 			key_lookup_map: HashMap::new(),
 		};
@@ -70,8 +74,30 @@ impl Db {
 		return id;
 	}
 
+	pub fn put_type(&mut self, typ: Type) -> TypId {
+		if let Some(existing) = self.type_side_map.get(&typ) {
+			return *existing;
+		}
+
+		let id = self.new_id(typ.clone());
+		self.type_side_map.insert(typ, id);
+
+		return id;
+	}
+
 	pub fn lookup_key(&self, id: StrId) -> Option<Tok> {
 		self.key_lookup_map.get(&id).map(|tok| *tok)
+	}
+
+	pub fn new_var(&mut self, name: Token) -> VarId {
+		let typ = self.put_type(Type::Unassigned);
+
+		let var = Var {
+			name,
+			typ,
+		};
+
+		return self.new_id(var);
 	}
 }
 

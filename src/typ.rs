@@ -1,4 +1,5 @@
-pub enum Typ {
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub enum Type {
 	Int,
 
 	//Class(ClassId),

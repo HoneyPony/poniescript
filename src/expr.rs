@@ -1,11 +1,9 @@
 include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 
-use crate::db::*;
+use crate::{db::*, lexer::Token};
 
 /// Information for a variable.
 pub struct Var {
-	id: VarId,
-	name: StrId,
-	typ: TypId,
-	initializer: Expr,
+	pub name: Token,
+	pub typ: TypId,
 }
