@@ -83,6 +83,7 @@ pub fn generate(file: &mut File) {
 	Variable : VarId identity
 	Assign   : VarId identity, Expr value
 	Literal  : StrId contents, TypId typ
+	Declare  : VarId identity, Expr value
 
 	"#;
 
