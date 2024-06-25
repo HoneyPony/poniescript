@@ -5,6 +5,6 @@ pub enum Typ {
 	//Function(SignatureId),
 	//ListOf(TypId),
 	
-	Error
+	Unassigned
 }
 

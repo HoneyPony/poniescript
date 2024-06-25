@@ -4,6 +4,7 @@ mod typ;
 mod source;
 mod lexer;
 mod module;
+mod parser;
 
 use std::env;
 use std::path::Path;
