@@ -1,0 +1,7 @@
+( ) [ ] { } , . - + / * -= += /= *= ; 
+! != = == > >= < <=
+ident "string" 1234
+and class else false fun for if null or 
+return super self true var while 
+
+print

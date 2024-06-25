@@ -24,9 +24,9 @@ pub fn parse_module(db: &mut Db, path: &Path) -> std::io::Result<Module> {
 	let mut lexer = crate::lexer::Lexer::new(file, source_id);
 
 	loop {
-		let tok = lexer.next_token(db);
+		let tok = lexer.next_token(db)?;
 
-		println!("{:>8}: {:>8?} '{}'", tok.location.offset, tok.typ, db.get(tok.lexeme));
+		println!("{:>8}: {:?} '{}'", tok.location.offset, tok.typ, db.get(tok.lexeme));
 
 		if tok.typ == crate::lexer::Tok::Eof {
 			break;
