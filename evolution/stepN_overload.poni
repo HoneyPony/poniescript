@@ -1,0 +1,26 @@
+fun global(a: int) {
+	print("int: ", a);
+}
+
+fun global(a: float) {
+	print("float: ", a);
+}
+
+fun global(a: bool) {
+	print("bool: " a);
+}
+
+fun init() {
+	// Maybe this one should fail..
+	global(5);
+	// But likely not these.
+	global(5.0);
+	global(true);
+
+	// So, it's clear that 'fun x' does not work exactly the same as 'var x = fun()'
+	// Really, 'global' is a symbol corresponding not to a function, but to a sort
+	// of weird construct that can be automatically inferred to mean one of three
+	// different functions...
+	//
+	// In fact, I think their names could be global(int), global(float), and global(bool)
+}

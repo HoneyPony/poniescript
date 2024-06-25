@@ -1,0 +1,9 @@
+class Util {
+	static fun bloop() {
+		print("bloop");
+	}
+}
+
+// Names and such are actually very important IMO, and a system that can
+// be difficult to implement. So, it might be worth working on early.
+Util.bloop();

@@ -1,6 +1,6 @@
 class Test {
-	var x;
-	var y;
+	var x: int;
+	var y: int;
 
 	new(x: int, y: int) {
 		this.x = x;

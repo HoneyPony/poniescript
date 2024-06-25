@@ -1,0 +1,5 @@
+fun test() {
+	var local = fun(x: int) -> int {
+		return x + 5;
+	};
+}

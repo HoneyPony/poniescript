@@ -1,0 +1,11 @@
+class Super {
+	var x: int;
+}
+
+class Super2 {
+	var y: int;
+}
+
+class Other : Super, Super2 {
+	// Do we want to handle collisions...?
+}
