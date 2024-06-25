@@ -175,19 +175,19 @@ impl Lexer {
 		return self.advance();
 	}
 
-	fn advance_if(&mut self, at: char) -> bool {
+	fn advance_if(&mut self, at: char) -> std::io::Result<bool> {
 		if self.peek() == at {
-			self.advance();
-			return true;
+			self.advance()?;
+			return Ok(true);
 		}
-		return false;
+		return Ok(false);
 	}
 
-	fn tok_eq(&mut self, non_equal: Tok, with_equal: Tok) -> Tok {
-		match self.advance_if('=') {
+	fn tok_eq(&mut self, non_equal: Tok, with_equal: Tok) -> std::io::Result<Tok> {
+		Ok(match self.advance_if('=')? {
 			true => with_equal,
 			false => non_equal
-		}
+		})
 	}
 
 	fn error(&self, db: &mut Db, message: String) {
@@ -252,15 +252,15 @@ impl Lexer {
 			'.' => Tok::Dot,
 			';' => Tok::Semicolon,
 
-			'-' => self.tok_eq(Tok::Minus, Tok::MinusEqual),
-			'+' => self.tok_eq(Tok::Plus, Tok::PlusEqual),
-			'/' => self.tok_eq(Tok::Slash, Tok::SlashEqual),
-			'*' => self.tok_eq(Tok::Star, Tok::StarEqual),
+			'-' => self.tok_eq(Tok::Minus, Tok::MinusEqual)?,
+			'+' => self.tok_eq(Tok::Plus, Tok::PlusEqual)?,
+			'/' => self.tok_eq(Tok::Slash, Tok::SlashEqual)?,
+			'*' => self.tok_eq(Tok::Star, Tok::StarEqual)?,
 
-			'!' => self.tok_eq(Tok::Bang, Tok::BangEqual),
-			'=' => self.tok_eq(Tok::Equal, Tok::EqualEqual),
-			'>' => self.tok_eq(Tok::Greater, Tok::GreaterEqual),
-			'<' => self.tok_eq(Tok::Less, Tok::LessEqual),
+			'!' => self.tok_eq(Tok::Bang, Tok::BangEqual)?,
+			'=' => self.tok_eq(Tok::Equal, Tok::EqualEqual)?,
+			'>' => self.tok_eq(Tok::Greater, Tok::GreaterEqual)?,
+			'<' => self.tok_eq(Tok::Less, Tok::LessEqual)?,
 
 			'"' => {
 				return self.string(db);
