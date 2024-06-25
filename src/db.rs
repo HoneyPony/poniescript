@@ -1,3 +1,7 @@
+// Import relevant things.
+use crate::expr::Var;
+use crate::typ::Typ;
+
 // I guess we could just use one file, because we're not allowed to have the macro
 // expand to struct fields, for some reason.
 include!(concat!(env!("OUT_DIR"), "/db.code.rs"));

@@ -42,6 +42,7 @@ pub fn generate(code_file: &mut File, struct_file: &mut File) {
 	let pairs = vec![
 		("StrId", "Box<str>"),
 		("VarId", "Var"),
+		("TypId", "Typ"),
 	];
 
 	writeln!(struct_file, "struct DbArenas {{").unwrap();
