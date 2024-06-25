@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Read;
@@ -36,6 +37,35 @@ pub struct Token {
 	pub typ: Tok,
 	pub lexeme: StrId,
 	pub location: SourceLocation,
+}
+
+pub fn build_key_lookup_map(db: &mut Db) -> HashMap<StrId, Tok> {
+	let mut map = HashMap::new();
+
+	let mut add = |key, value: Tok| {
+		let key = db.put_str(key);
+		map.insert(key, value);
+	};
+
+	add("and"   , Tok::And);
+	add("class" , Tok::Class);
+	add("else"  , Tok::Else);
+	add("false" , Tok::False);
+	add("fun"   , Tok::Fun);
+	add("for"   , Tok::For);
+	add("if"    , Tok::If);
+	add("null"  , Tok::Null);
+	add("or"    , Tok::Or);
+	add("return", Tok::Return);
+	add("super" , Tok::Super);
+	add("self"  , Tok::KeySelf);
+	add("true"  , Tok::True);
+	add("var"   , Tok::Var);
+	add("while" , Tok::While);
+
+	add("print", Tok::Print);
+
+	return map;
 }
 
 pub struct Lexer {
@@ -178,7 +208,15 @@ impl Lexer {
 	fn ident(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		// The dummy next char at eof will terminate this automatically.
 		while is_ident(self.peek()) { self.advance()?; }
-		return self.mk_token_res(db, Tok::Identifier);
+
+		let mut token = self.mk_token(db, Tok::Identifier);
+
+		// Replace token with keyword if it matches one
+		if let Some(key_ty) = db.lookup_key(token.lexeme) {
+			token.typ = key_ty;
+		}
+
+		return Ok(token);
 	}
 
 	fn number(&mut self, db: &mut Db) -> std::io::Result<Token> {

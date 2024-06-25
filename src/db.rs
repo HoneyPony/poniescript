@@ -6,6 +6,8 @@ use crate::expr::Var;
 use crate::typ::Typ;
 use crate::source::Source;
 
+use crate::lexer::Tok;
+
 // I guess we could just use one file, because we're not allowed to have the macro
 // expand to struct fields, for some reason.
 include!(concat!(env!("OUT_DIR"), "/db.code.rs"));
@@ -18,16 +20,27 @@ pub struct Db {
 
 	str_side_map: HashMap<Box<str>, StrId>,
 	source_side_map: HashMap<PathBuf, SourceId>,
+
+	key_lookup_map: HashMap<StrId, Tok>,
 }
 
 impl Db {
 	pub fn new() -> Self {
-		return Db {
+		let mut db = Db {
 			arenas: DbArenas::new(),
 
 			str_side_map: HashMap::new(),
 			source_side_map: HashMap::new(),
-		}
+
+			key_lookup_map: HashMap::new(),
+		};
+
+		// Technically, this does waste the initially created
+		// HashMap, but the db is created once per whole program run,
+		// so it's not a huge inefficiency.
+		db.key_lookup_map = crate::lexer::build_key_lookup_map(&mut db);
+
+		return db;
 	}
 
 	pub fn put_str(&mut self, str: &str) -> StrId {
@@ -55,6 +68,10 @@ impl Db {
 		self.source_side_map.insert(buf, id);
 
 		return id;
+	}
+
+	pub fn lookup_key(&self, id: StrId) -> Option<Tok> {
+		self.key_lookup_map.get(&id).map(|tok| *tok)
 	}
 }
 
