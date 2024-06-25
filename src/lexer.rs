@@ -98,7 +98,7 @@ fn is_alpha(c: char) -> bool {
 }
 
 fn is_ident(c: char) -> bool {
-	return is_alpha(c) || is_num(c);
+	return is_alpha(c) || is_num(c) || c == '_';
 }
 
 impl Lexer {
@@ -266,7 +266,7 @@ impl Lexer {
 				return self.string(db);
 			},
 
-			'a'..='z' | 'A'..='Z' => {
+			'a'..='z' | 'A'..='Z' | '_' => {
 				return self.ident(db);
 			},
 

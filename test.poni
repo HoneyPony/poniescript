@@ -4,4 +4,6 @@ ident "string" 1234 12.34 0.34 1. .34
 and class else false fun for if null or 
 return super self true var while 
 
+_ a b c hello_world
+
 print
