@@ -16,17 +16,21 @@ pub enum Tok {
 	Minus, Plus, Slash, Star,
 	MinusEqual, PlusEqual, SlashEqual, StarEqual,
 
-	Semicolon,
+	Semicolon, Colon,
+
+	Question, Percent, Ampersand, VerticalBar,
 
 	Bang, BangEqual,
 	Equal, EqualEqual,
 	Greater, GreaterEqual,
 	Less, LessEqual,
 
+	LeftArrow,
+
 	Identifier, String, Number,
 
-	And, Class, Else, False, Fun, For, If, Null, Or,
-	Return, Super, KeySelf, True, Var, While,
+	And, Class, Else, False, Fun, For, If, In, Null, Or,
+	Range, Return, Super, KeySelf, True, Using, Var, While,
 
 	Print,
 
@@ -54,12 +58,15 @@ pub fn build_key_lookup_map(db: &mut Db) -> HashMap<StrId, Tok> {
 	add("fun"   , Tok::Fun);
 	add("for"   , Tok::For);
 	add("if"    , Tok::If);
+	add("in"    , Tok::In);
 	add("null"  , Tok::Null);
 	add("or"    , Tok::Or);
+	add("range" , Tok::Range);
 	add("return", Tok::Return);
 	add("super" , Tok::Super);
 	add("self"  , Tok::KeySelf);
 	add("true"  , Tok::True);
+	add("using" , Tok::Using);
 	add("var"   , Tok::Var);
 	add("while" , Tok::While);
 
@@ -250,9 +257,25 @@ impl Lexer {
 			']' => Tok::RightSquare,
 			',' => Tok::Comma,
 			'.' => Tok::Dot,
-			';' => Tok::Semicolon,
 
-			'-' => self.tok_eq(Tok::Minus, Tok::MinusEqual)?,
+			';' => Tok::Semicolon,
+			':' => Tok::Colon,
+			'?' => Tok::Question,
+			'%' => Tok::Percent,
+			'&' => Tok::Ampersand,
+			'|' => Tok::VerticalBar,
+
+			'-' => {
+				if self.advance_if('=')? {
+					Tok::MinusEqual
+				}
+				else if self.advance_if('>')? {
+					Tok::LeftArrow
+				}
+				else {
+					Tok::Minus
+				}
+			},
 			'+' => self.tok_eq(Tok::Plus, Tok::PlusEqual)?,
 			'/' => self.tok_eq(Tok::Slash, Tok::SlashEqual)?,
 			'*' => self.tok_eq(Tok::Star, Tok::StarEqual)?,
