@@ -1,4 +1,6 @@
-use std::{fs::File, io::Write};
+use std::fs::File;
+use std::io::Write as _;
+use std::fmt::Write as _;
 
 fn generate_struct(struct_file: &mut File, id: &str, ty: &str) -> String {
 	// Chop off the "id" part then convert to lowercase
@@ -45,10 +47,23 @@ pub fn generate(code_file: &mut File, struct_file: &mut File) {
 		("TypId", "Typ"),
 	];
 
+	let mut init = String::new();
+	writeln!(init, "impl DbArenas {{").unwrap();
+	writeln!(init, "\tpub fn new() -> Self {{").unwrap();
+	writeln!(init, "\t\treturn DbArenas {{").unwrap();
+
 	writeln!(struct_file, "struct DbArenas {{").unwrap();
 	for pair in pairs {
 		let arena = generate_struct(struct_file, pair.0, pair.1);
 		generate_id(code_file, pair.0, pair.1, &arena).unwrap();
+
+		writeln!(init, "\t\t\t{arena}: Vec::new(),").unwrap();
 	}
 	writeln!(struct_file, "}}").unwrap();
+
+	writeln!(init, "\t\t}}").unwrap();
+	writeln!(init, "\t}}").unwrap();
+	writeln!(init, "}}").unwrap();
+
+	writeln!(code_file, "{}", init).unwrap();
 }

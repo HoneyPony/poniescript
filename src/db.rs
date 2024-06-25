@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 // Import relevant things.
 use crate::expr::Var;
 use crate::typ::Typ;
@@ -10,7 +12,32 @@ include!(concat!(env!("OUT_DIR"), "/db.struct.rs"));
 /// The Db stores all of the arena-allocated objects that can be referenced
 /// with Ids. Basically all of these objects live for the entire program.
 pub struct Db {
-	arenas: DbArenas
+	arenas: DbArenas,
+
+	str_side_map: HashMap<Box<str>, StrId>,
+}
+
+impl Db {
+	pub fn new() -> Self {
+		return Db {
+			arenas: DbArenas::new(),
+
+			str_side_map: HashMap::new(),
+		}
+	}
+
+	pub fn put_str(&mut self, str: &str) -> StrId {
+		if let Some(existing) = self.str_side_map.get(str) {
+			return *existing;
+		}
+
+		let boxed: Box<str> = str.to_owned().into_boxed_str();
+		// TODO: Figure out if this is working correctly...
+		let id = self.new_id(boxed.clone());
+		self.str_side_map.insert(boxed, id);
+
+		return id;
+	}
 }
 
 /// Lets the Db implement some functions for every type of id.
