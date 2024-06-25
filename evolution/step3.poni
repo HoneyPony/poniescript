@@ -1,0 +1,14 @@
+var x = 0;
+var y = 10;
+
+fun my_global(a: int, b: int) {
+	print(a + b);
+}
+
+// Maybe we can support a main method early on. This won't make too much
+// sense later... but, it could still be called init()
+fun init() {
+	var local = 5;
+	var local2 = 6;
+	my_global(local, local2);
+}

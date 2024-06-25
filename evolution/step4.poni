@@ -1,0 +1,21 @@
+class Test {
+	var x;
+	var y;
+
+	new(x: int, y: int) {
+		this.x = x;
+		this.y = y;
+	}
+
+	fun debug() {
+		print(this.x, " ", this.y);
+	}
+}
+
+// This one will be much harder to get working. It has to support type inference,
+// new classes as types, etc.
+
+fun init() {
+	var local = new Test();
+	local.debug();
+}

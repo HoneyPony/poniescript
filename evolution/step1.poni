@@ -1,0 +1,12 @@
+var x = 0;
+var y = 10;
+
+fun my_global(a: int, b: int) {
+	// Note:
+	// print should be a builtin for a while.
+	// This is because variadic functions are a very complicated feature.
+	//
+	// We may want to support them one day, but to start off simple, things
+	// like print() and str() should be builtin.
+	print(a, b);
+}

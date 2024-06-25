@@ -79,7 +79,10 @@ fn generate_spec(name: &str, mut spec: &str, file: &mut File) -> std::fmt::Resul
 pub fn generate(file: &mut File) {
 	let spec = r#"
 
-	Binary : Expr left, Expr right
+	Binary   : Expr left, Expr right, TypId typ
+	Variable : VarId identity
+	Assign   : VarId identity, Expr value
+	Literal  : StrId contents, TypId typ
 
 	"#;
 

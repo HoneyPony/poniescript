@@ -1,0 +1,6 @@
+var x = 0;
+var y = 10;
+
+fun my_global(a: int, b: int) {
+	print(a + b);
+}
