@@ -1,0 +1,12 @@
+class Player
+
+var name: String;
+
+// TODO: Think about string types..?
+new(name: String) {
+	self.name = name;
+}
+
+fun say_hello() {
+	print(name);
+}
