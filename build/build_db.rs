@@ -40,13 +40,7 @@ fn generate_id(code_file: &mut File, name: &str, ty: &str, arena: &str) -> std::
 	Ok(())
 }
 
-pub fn generate(code_file: &mut File, struct_file: &mut File) {
-	let pairs = vec![
-		("StrId", "Box<str>"),
-		("VarId", "Var"),
-		("TypId", "Typ"),
-	];
-
+fn generate_impl(code_file: &mut File, struct_file: &mut File, pairs: &Vec<(&str, &str)>) {
 	let mut init = String::new();
 	writeln!(init, "impl DbArenas {{").unwrap();
 	writeln!(init, "\tpub fn new() -> Self {{").unwrap();
@@ -66,4 +60,16 @@ pub fn generate(code_file: &mut File, struct_file: &mut File) {
 	writeln!(init, "}}").unwrap();
 
 	writeln!(code_file, "{}", init).unwrap();
+}
+
+pub fn generate(code_file: &mut File, struct_file: &mut File) {
+	// Modify this array to add new Id types
+	let pairs = vec![
+		("StrId", "Box<str>"),
+		("VarId", "Var"),
+		("TypId", "Typ"),
+		("SourceId", "Source"),
+	];
+
+	generate_impl(code_file, struct_file, &pairs);
 }

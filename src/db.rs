@@ -1,8 +1,10 @@
 use std::collections::HashMap;
+use std::path::{self, Path, PathBuf};
 
 // Import relevant things.
 use crate::expr::Var;
 use crate::typ::Typ;
+use crate::source::Source;
 
 // I guess we could just use one file, because we're not allowed to have the macro
 // expand to struct fields, for some reason.
@@ -15,6 +17,7 @@ pub struct Db {
 	arenas: DbArenas,
 
 	str_side_map: HashMap<Box<str>, StrId>,
+	source_side_map: HashMap<PathBuf, SourceId>,
 }
 
 impl Db {
@@ -23,6 +26,7 @@ impl Db {
 			arenas: DbArenas::new(),
 
 			str_side_map: HashMap::new(),
+			source_side_map: HashMap::new(),
 		}
 	}
 
@@ -35,6 +39,20 @@ impl Db {
 		// TODO: Figure out if this is working correctly...
 		let id = self.new_id(boxed.clone());
 		self.str_side_map.insert(boxed, id);
+
+		return id;
+	}
+
+	pub fn put_source_path(&mut self, path: &Path) -> SourceId {
+		if let Some(existing) = self.source_side_map.get(path) {
+			return *existing;
+		}
+
+		let buf = path.to_path_buf();
+		let source = Source::new(buf.clone());
+
+		let id = self.new_id(source);
+		self.source_side_map.insert(buf, id);
 
 		return id;
 	}
