@@ -181,6 +181,18 @@ impl Lexer {
 		return self.mk_token_res(db, Tok::Identifier);
 	}
 
+	fn number(&mut self, db: &mut Db) -> std::io::Result<Token> {
+		while is_num(self.peek()) { self.advance()?; }
+
+		if self.peek() == '.' {
+			// Eat the dot
+			self.advance()?;
+
+			while is_num(self.peek()) { self.advance()?; }
+		}
+		return self.mk_token_res(db, Tok::Number);
+	}
+
 	pub fn next_token(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		let c = self.advance_past_whitespace()?;
 
@@ -218,6 +230,10 @@ impl Lexer {
 
 			'a'..='z' | 'A'..='Z' => {
 				return self.ident(db);
+			},
+
+			'0'..='9' => {
+				return self.number(db);
 			},
 
 			_ => {
