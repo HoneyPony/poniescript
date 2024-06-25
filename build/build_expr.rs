@@ -69,8 +69,8 @@ fn generate_spec(name: &str, mut spec: &str, file: &mut File) -> std::fmt::Resul
 
 	{
 		use std::io::Write;
-		write!(file, "{}\n", struct_defs);
-		write!(file, "{}", enum_def);
+		write!(file, "{}\n", struct_defs).unwrap();
+		write!(file, "{}", enum_def).unwrap();
 	}
 
 	Ok(())
