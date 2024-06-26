@@ -1,7 +1,6 @@
 use crate::db::*;
 use crate::lexer::Tok;
 use crate::module::Module;
-use crate::source::SourceLocation;
 use crate::typ::Type;
 
 use crate::expr::*;
@@ -62,6 +61,36 @@ enum Val {
 		lit: &'static str
 	}
 }
+
+/// The idea with this macro is that, according to the Rust documentation,
+/// fmt::Write is supposed to be infallible in terms of pure formatting, i.e.
+/// the error would only occur due to the underlying stream.
+/// 
+/// As such, there is very little reason to try to handle those errors. Instead,
+/// we should basically unwrap() every single one. This macro helps make that
+/// kind of idea easier to write.
+macro_rules! inf_write {
+	($into:expr, $($arg:tt)*) => {
+		match write!($into, $($arg)*) {
+			Ok(_) => {},
+			Err(_) => {
+				panic!("codegen: 'infallible' write to buffer failed");
+			}
+		}
+	}
+}
+
+macro_rules! inf_writeln {
+	($into:expr, $($arg:tt)*) => {
+		match writeln!($into, $($arg)*) {
+			Ok(_) => {},
+			Err(_) => {
+				panic!("codegen: 'infallible' write to buffer failed");
+			}
+		}
+	}
+}
+
 
 impl std::fmt::Display for Val {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -139,7 +168,7 @@ impl<'a> Codegen<'a> {
 		let val = self.new_val();
 		let ctype = self.get_expr_ctype(binary.typ);
 		// TODO: Indentation system
-		writeln!(into, "const {ctype} {val} = {left} {op} {right};");
+		inf_writeln!(into, "const {ctype} {val} = {left} {op} {right};");
 
 		val
 	}
@@ -163,12 +192,12 @@ impl<'a> Codegen<'a> {
 		self.push(ctx);
 		let value = self.expr(expr, into);
 		self.pop(ctx);
-		writeln!(into, "{} = {value};", self.db.get_cname(var));
+		inf_writeln!(into, "{} = {value};", self.db.get_cname(var));
 	}
 
 	fn codegen_to_buffers(&mut self, module: &Module, out: &mut CodegenOutputs) {
 		for global in &module.globals {
-			writeln!(out.global_define, "{} {};",
+			inf_writeln!(out.global_define, "{} {};",
 				self.db.get_var_ctype(global.identity), self.db.get_cname(global.identity));
 
 			self.assign(global.identity, &global.value, &mut out.global_init)
