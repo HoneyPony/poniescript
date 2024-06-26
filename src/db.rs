@@ -29,6 +29,9 @@ pub struct Db {
 
 	/// Keep a cache of all generated ctypes so that we can quickly re-use them.
 	ctype_cache: HashMap<TypId, &'static str>,
+
+	/// Keep a cache of generated type reprs also for re-using them.
+	type_repr_cache: RefCell<HashMap<TypId, &'static str>>,
 }
 
 impl Db {
@@ -43,6 +46,7 @@ impl Db {
 			key_lookup_map: HashMap::new(),
 
 			ctype_cache: HashMap::new(),
+			type_repr_cache: RefCell::new(HashMap::new()),
 		};
 
 		// Technically, this does waste the initially created
@@ -137,13 +141,25 @@ impl Db {
 		self.get(self.get(var).name.lexeme)
 	}
 
-	pub fn repr_var_type(&self, var: VarId) -> String {
+	pub fn repr_var_type(&self, var: VarId) -> &'static str {
 		self.repr_type(self.get(var).typ)
 	}
 
-	pub fn repr_type(&self, typ: TypId) -> String {
-		// TODO: Cache type strings in another side map..?
-		self.get(typ).to_string()
+	pub fn repr_type(&self, typ: TypId) -> &'static str {
+		if let Some(&cached) = self.type_repr_cache.borrow().get(&typ) {
+			return cached;
+		}
+
+		let value = self.get(typ).to_string().leak();
+
+		// Note: Using &'static str as the hash map value makes it possible
+		// to do this with interior mutability. Maybe we should also do that
+		// for ctypes -- although, those the overhead from RefCell is more
+		// relevant because we have to generate a LOT of those in the compiled
+		// code.
+		self.type_repr_cache.borrow_mut().insert(typ, value);
+
+		value
 	}
 
 	pub fn err_locate(&self, location: &SourceLocation) {
