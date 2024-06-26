@@ -128,6 +128,16 @@ impl TypeChecker {
 				value
 			}
 
+			// Ints dominate numerics.
+			(Type::Int, Type::UnassignedNumeric, _) => {
+				var_ty
+			}
+
+			// Floats dominate whole number and decimals.
+			(Type::Float, Type::UnassignedNumeric | Type::UnassignedDecimal, _) => {
+				var_ty
+			}
+
 			(Type::Unassigned, _, _) => value,
 
 			// More branches to come with parameterized types...
@@ -148,7 +158,7 @@ impl TypeChecker {
 
 			db,
 			at,
-			"Invalid assignment to {}: Target is {}, but value is {}",
+			"Invalid assignment to '{}': need {}, but value is {}",
 			db.err_var(var),
 			db.err_var_type(var),
 			db.err_type(value)
