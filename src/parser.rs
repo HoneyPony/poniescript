@@ -132,16 +132,64 @@ impl<'a, 'b> Parser<'a, 'b> {
 			self.db.put_type(typ));
 	}
 
-	fn expression(&mut self) -> Result<Expr> {
+	fn expr_prefix(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
 			Tok::DecimalNumber | Tok::WholeNumber => {
 				self.number()
 			},
 
 			_ => {
-				got!(self, "Expected identifier")
+				got!(self, "Expected expression")
 			}
 		}
+	}
+
+	fn peek_precedence(&self) -> (u32, u32) {
+		// Note: This matches up with expr_infix().
+		// If (a, b) a < b this operator is left-associative, else right-associative.
+		match self.peek_typ() {
+			Tok::Plus | Tok::Minus => (1, 2),
+			Tok::Star | Tok::Slash => (3, 4),
+
+			// Any other tokens should not be parsed as infix.
+			_ => (0, 0)
+		}
+	}
+
+	fn expr_infix(&mut self, lhs: Expr) -> Result<Expr> {
+		// We want to bind rightward to any expressions that left-associate
+		// towards us, so we use the right-hand precedence.
+		let cur_prec = self.peek_precedence().1;
+
+		match self.peek_typ() {
+			// Binary expressions
+			Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash => {
+				let op = self.advance()?;
+				let rhs = self.expr_precedence(cur_prec)?;
+				return Expr::mk_binary_ok(op.location, lhs, rhs, self.db.put_type(Type::Unassigned));
+			},
+
+			// We should never call expr_infix() with an invalid operator,
+			// because we have to go through the peek_precedence() table to
+			// get here.
+			_ => unreachable!()
+		}
+	}
+
+	fn expr_precedence(&mut self, precedence: u32) -> Result<Expr> {
+		let mut expr = self.expr_prefix()?;
+
+		// Our precedence is coming from the right of the previous expr, so we compare to the left-hand
+		// side precdence.
+		while precedence < self.peek_precedence().0 {
+			expr = self.expr_infix(expr)?;
+		}
+
+		Ok(expr)
+	}
+
+	fn expression(&mut self) -> Result<Expr> {
+		self.expr_precedence(0)
 	}
 
 	fn typ(&mut self) -> Result<TypId> {

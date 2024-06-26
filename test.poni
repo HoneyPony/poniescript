@@ -1,2 +1,1 @@
-var example: int = 10.5;
-var example2 = 0.5;
+var add = 1 + 2 * 5.2;

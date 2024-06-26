@@ -94,6 +94,71 @@ impl TypeChecker {
 	//	ty_left
 	//}
 
+	fn unify_left(&mut self, db: &mut Db, lhs: TypId, rhs: TypId) -> Result<TypId> {
+		// If equal: Nothing else to be learned.
+		if lhs == rhs {
+			return Ok(lhs);
+		}
+
+		let left = db.get(lhs);
+		let right = db.get(rhs);
+
+		let unified = match (left, right) {
+			(Type::UnassignedDecimal, Type::UnassignedNumeric) => {
+				// Numerics become further constrained by Decimal.
+				lhs
+			}
+
+			// Ints dominate numerics.
+			(Type::Int, Type::UnassignedNumeric) => {
+				lhs
+			}
+
+			// Floats dominate whole number and decimals.
+			(Type::Float, Type::UnassignedNumeric | Type::UnassignedDecimal) => {
+				lhs
+			}
+
+			(_, Type::Unassigned) => lhs,
+
+			// More branches to come with parameterized types...
+
+			_ => return Err(TypeCheckErr)
+		};
+
+		Ok(unified)
+	}
+
+	fn unify_bi(&mut self, db: &mut Db, lhs: TypId, rhs: TypId) -> Result<TypId> {
+		if lhs == rhs {
+			return Ok(lhs);
+		}
+
+		// The idea here is that, we try both ways to see if the type can get
+		// "stronger", and so if one of them changes, we go with the one
+		// that changed.
+		//
+		// If our unify_left method is sound, it should only be possible for
+		// the type values to move in one direction.
+		if let Ok(candidate) = self.unify_left(db, lhs, rhs) {
+			// TODO: Are these if checks redundant..?
+			if candidate != rhs {
+				return Ok(candidate);
+			}
+		}
+
+		// If that didn't do anything, try unifying the other way.
+		if let Ok(candidate) = self.unify_left(db, rhs, lhs) {
+			if candidate != lhs {
+				return Ok(candidate);
+			}
+		}
+
+		// If neither unification worked, then the types are not compatible
+		// in either direction.
+		return Err(TypeCheckErr)
+	}
+
 	fn unify_assign(&mut self, db: &mut Db, var: VarId, value: TypId) -> Result<TypId> {
 		let var_ty = db.get(var).typ;
 
@@ -169,7 +234,23 @@ impl TypeChecker {
 
 	fn do_type(&mut self, db: &mut Db, expr: &mut Expr) -> Result<TypId> {
 		Ok(match expr {
-			Expr::Binary(_) => todo!(),
+			Expr::Binary(binary) => {
+				let left = self.do_type(db, &mut binary.left)?;
+				let right = self.do_type(db, &mut binary.right)?;
+
+				let unified = type_error!(
+					self.unify_bi(db, left, right),
+					db,
+					&binary.location,
+					"Invalid operands to binary operator: LHS is {}, RHS is {}",
+					db.err_type(left),
+					db.err_type(right)
+				);
+
+				binary.typ = unified;
+				
+				unified
+			},
 			Expr::Variable(var) => db.get(var.identity).typ,
 			Expr::Assign(assign) => {
 				self.do_assign(db, &assign.location, assign.identity, &mut assign.value)?
