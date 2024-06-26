@@ -95,6 +95,10 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 
 		// To get fields...
 		let mut fields: Vec<(&str, &str)> = vec![];
+
+		// Always add a source location field.
+		fields.push(("SourceLocation", "location"));
+
 		loop {
 			if at_line_end(spec) { break; }
 
@@ -112,6 +116,8 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 
 			fields.push((ty, name));
 		}
+
+		
 
 		writeln!(struct_defs, "pub struct {ty_name} {{")?;
 		for field in &fields {

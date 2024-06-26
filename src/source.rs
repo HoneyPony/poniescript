@@ -9,6 +9,7 @@ use crate::db::*;
 //	Synthesized,
 //}
 
+#[derive(Clone)]
 pub struct SourceLocation {
 	pub source: SourceId,
 	pub offset: u64,

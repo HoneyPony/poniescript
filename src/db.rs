@@ -6,7 +6,7 @@ use std::cell::RefCell;
 // Import relevant things.
 use crate::expr::Var;
 use crate::typ::Type;
-use crate::source::Source;
+use crate::source::{Source, SourceLocation};
 
 use crate::lexer::{Tok, Token};
 
@@ -98,6 +98,24 @@ impl Db {
 		};
 
 		return self.new_id(var);
+	}
+
+	pub fn err_var(&self, var: VarId) -> &str {
+		self.get(self.get(var).name.lexeme)
+	}
+
+	pub fn err_var_type(&self, var: VarId) -> String {
+		self.err_type(self.get(var).typ)
+	}
+
+	pub fn err_type(&self, typ: TypId) -> String {
+		// TODO: Cache type strings in another side map..?
+		self.get(typ).to_string()
+	}
+
+	pub fn err_locate(&self, location: &SourceLocation) {
+		// TODO: Implement an actual system for showing error locations.
+		eprintln!("at {}, offset {}", location.source.0, location.offset);
 	}
 }
 

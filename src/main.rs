@@ -5,17 +5,46 @@ mod source;
 mod lexer;
 mod module;
 mod parser;
+mod typecheck;
 
 use std::env;
 use std::path::Path;
+use std::process::exit;
+
+use module::Module;
+
+fn parse_all_modules(db: &mut db::Db, input_paths: Vec<&Path>) -> (Vec<Module>, bool) {
+	let mut modules = vec![];
+
+	let mut had_error = false;
+
+	for path in input_paths {
+		match module::parse_module(db, path) {
+			Ok(module) => { modules.push(module) },
+			Err(err) => {
+				eprintln!("Unable to parse source file {}: {err}", path.display());
+				had_error = true;
+			}
+		}
+	}
+
+	(modules, had_error)
+}
 
 fn main() {
 	let mut db = db::Db::new();
 
-	match module::parse_module(&mut db, "test.poni".as_ref()) {
-		Ok(_) => {},
-		Err(err) => {
-			eprintln!("Error parsing module: {err}");
-		}
-	}
+	let input_paths: Vec<&Path> = vec!["test.poni".as_ref()];
+	
+	// Pass 1: Parse
+	let (mut modules, had_error) = parse_all_modules(&mut db, input_paths);
+
+	if had_error { exit(1); }
+
+	// Pass 2: Type check and infer
+	let had_error = typecheck::typecheck(&mut db, &mut modules);
+
+	if had_error { exit(2); }
+
+	// Pass 3: Codegen
 }

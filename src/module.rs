@@ -1,12 +1,15 @@
 use std::path::Path;
 
 use crate::db::*;
+use crate::expr::Declare;
 use crate::parser::Parser;
 
 pub struct Module {
 	//classes: Vec<ClassId>,
 	//functions: Vec<FunctionId>,
-	globals: Vec<VarId>,
+
+	// Globals are simply variable declarations that aren't in any other scope.
+	pub globals: Vec<Declare>,
 }
 
 impl Module {

@@ -120,7 +120,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 	fn number(&mut self) -> Result<Expr> {
 		let number = expected!(self, Tok::Number, "number literal")?;
 
-		return Expr::mk_literal_ok(number,
+		return Expr::mk_literal_ok(number.location.clone(),
+			number,
 			self.db.put_type(Type::UnassignedNumeric));
 	}
 
@@ -142,13 +143,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let name = expected_after!(self, Tok::Identifier, key_var,
 			"variable name")?;
 
-		expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
+		let equal = expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
 
 		let initializer = self.expression()?;
 		
 		let identity = self.db.new_var(name);
 
-		return Stmt::new_declare_ok(identity, initializer);
+		return Stmt::new_declare_ok(equal.location, identity, initializer);
 	}
 
 	fn parse_top_level(&mut self) -> Result<()> {
