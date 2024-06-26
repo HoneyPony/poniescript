@@ -27,14 +27,68 @@ fn at_line_end(spec: &str) -> bool {
 	}
 }
 
-fn generate_spec(name: &str, mut spec: &str, file: &mut File) -> std::fmt::Result {
+struct Opt {
+	box_exprs: bool,
+}
+
+struct ConstructOpt {
+	wrap_ok: bool,
+	to_enum: bool,
+}
+
+fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt: &Opt, fields: &Vec<(&str, &str)>, into: &mut String) -> std::fmt::Result {
+	let prefix = if copt.to_enum { "mk_" } else { "new_" };
+	let suffix = if copt.wrap_ok { "_ok" } else { "" };
+
+	let return_type = match copt {
+		ConstructOpt { wrap_ok: false, to_enum: false } => ty_name.to_string(),
+		ConstructOpt { wrap_ok: false, to_enum: true } => enum_name.to_string(),
+		ConstructOpt { wrap_ok: true, to_enum: false } => format!("crate::parser::Result<{ty_name}>"),
+		ConstructOpt { wrap_ok: true, to_enum: true } => format!("crate::parser::Result<{enum_name}>"),
+	};
+	
+	write!(into, "\tpub fn {prefix}{}{suffix}(", ty_name.to_ascii_lowercase())?;
+
+	let mut add_comma = false;
+	for field in fields {
+		let mut param_ty = field.0;
+		if param_ty == "Box<Expr>" && opt.box_exprs { param_ty = "Expr"; }
+
+		if add_comma { write!(into, ", ")?; }
+		add_comma = true;
+
+		write!(into, "{}: {}", field.1, param_ty)?;
+	}
+	writeln!(into, ") -> {return_type} {{")?;
+	for field in fields {
+		if field.0 == "Box<Expr>" && opt.box_exprs {
+			writeln!(into, "\t\tlet {0} = Box::new({0});", field.1)?;
+		}
+	}
+	write!(into, "\t\t")?;
+	if copt.wrap_ok { write!(into, "Ok(")?; }
+	if copt.to_enum { write!(into, "{enum_name}::{ty_name}(")?; }
+	write!(into, "{ty_name} {{")?;
+	for field in fields {
+		write!(into, "{}, ", field.1)?;
+	}
+	write!(into, "}}")?;
+	if copt.to_enum { write!(into, ")")?; }
+	if copt.wrap_ok { write!(into, ")")?; }
+	writeln!(into, "")?;
+
+	writeln!(into, "\t}}")?;
+	
+	Ok(())
+}
+
+fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::fmt::Result {
 	let mut enum_def = String::new();
 	let mut struct_defs = String::new();
 	let mut enum_impl = String::new();
-	let mut enum_ok_funs = String::new();
 
 	writeln!(enum_def, "pub enum {name} {{")?;
-	writeln!(enum_impl, "impl Expr {{")?;
+	writeln!(enum_impl, "impl {name} {{")?;
 
 	while let Some(ty_name) = token(&mut spec) {
 		token(&mut spec);
@@ -46,7 +100,7 @@ fn generate_spec(name: &str, mut spec: &str, file: &mut File) -> std::fmt::Resul
 
 			let Some(mut ty) = token(&mut spec) else { return Ok(()); };
 
-			if ty == "Expr" {
+			if ty == "Expr" && opt.box_exprs {
 				ty = "Box<Expr>";
 			}
 
@@ -67,50 +121,26 @@ fn generate_spec(name: &str, mut spec: &str, file: &mut File) -> std::fmt::Resul
 
 		writeln!(enum_def, "\t{ty_name}({ty_name}),")?;
 
-		write!(enum_impl, "\tpub fn mk_{}(", ty_name.to_ascii_lowercase())?;
-		write!(enum_ok_funs, "\tpub fn mk_{}_ok(", ty_name.to_ascii_lowercase())?;
-
-		let mut add_comma = false;
-		for field in &fields {
-			let mut param_ty = field.0;
-			if param_ty == "Box<Expr>" { param_ty = "Expr"; }
-
-			if add_comma { write!(enum_impl, ", ")?; write!(enum_ok_funs, ", ")?; }
-			add_comma = true;
-
-			write!(enum_impl, "{}: {}", field.1, param_ty)?;
-			write!(enum_ok_funs, "{}: {}", field.1, param_ty)?;
-		}
-		writeln!(enum_impl, ") -> {ty_name} {{")?;
-		writeln!(enum_ok_funs, ") -> crate::parser::Result<{ty_name}> {{")?;
-		for field in &fields {
-			if field.0 == "Box<Expr>" {
-				writeln!(enum_impl, "\t\tlet {0} = Box::new({0});", field.1)?;
-			}
-		}
-		write!(enum_impl, "\t\t{ty_name} {{")?;
-		write!(enum_ok_funs, "\t\tOk(Expr::mk_{}(", ty_name.to_ascii_lowercase())?;
-
-		let mut add_comma = false;
-
-		for field in &fields {
-			write!(enum_impl, "{}, ", field.1)?;
-
-			if add_comma { write!(enum_ok_funs, ", ")?; }
-			add_comma = true;
-
-			write!(enum_ok_funs, "{}", field.1)?;
-		}
-		writeln!(enum_impl, "}}")?;
-		writeln!(enum_ok_funs, "))")?;
-
-		writeln!(enum_impl, "\t}}")?;
-		writeln!(enum_ok_funs, "\t}}")?;
+		generate_constructor(name,
+			ty_name,
+			ConstructOpt { wrap_ok: false, to_enum: false },
+			&opt, &fields, &mut enum_impl)?;
+		generate_constructor(name,
+			ty_name,
+			ConstructOpt { wrap_ok: false, to_enum: true },
+			&opt, &fields, &mut enum_impl)?;
+		generate_constructor(name,
+			ty_name,
+			ConstructOpt { wrap_ok: true, to_enum: false },
+			&opt, &fields, &mut enum_impl)?;
+		generate_constructor(name,
+			ty_name,
+			ConstructOpt { wrap_ok: true, to_enum: true },
+			&opt, &fields, &mut enum_impl)?;
 	}
 
 	writeln!(enum_def, "}}")?;
 
-	writeln!(enum_impl, "{}", enum_ok_funs)?;
 	writeln!(enum_impl, "}}")?;
 
 	{
@@ -124,15 +154,32 @@ fn generate_spec(name: &str, mut spec: &str, file: &mut File) -> std::fmt::Resul
 }
 
 pub fn generate(file: &mut File) {
-	let spec = r#"
+	let expr_spec = r#"
 
 	Binary   : Expr left, Expr right, TypId typ
 	Variable : VarId identity
 	Assign   : VarId identity, Expr value
 	Literal  : StrId contents, TypId typ
-	Declare  : VarId identity, Expr value
+	
 
 	"#;
 
-	generate_spec("Expr", spec, file).expect("couldn't codegen");
+	let stmt_spec = r#"
+	
+	Declare    : VarId identity, Expr value
+	Expression : Expr expression
+
+	"#;
+
+	let expr_opt = Opt {
+		// Exprs inside exprs must be boxed.
+		box_exprs: true,
+	};
+
+	let stmt_opt = Opt {
+		box_exprs: false,
+	};
+
+	generate_spec("Expr", expr_spec, expr_opt, file).unwrap();
+	generate_spec("Stmt", stmt_spec, stmt_opt, file).unwrap();
 }

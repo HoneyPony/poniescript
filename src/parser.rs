@@ -116,7 +116,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		
 		let identity = self.db.new_var(name);
 
-		return Expr::mk_declare_ok(identity, initializer);
+		return Stmt::new_declare_ok(identity, initializer);
 	}
 
 	fn parse_top_level(&mut self) -> Result<()> {
