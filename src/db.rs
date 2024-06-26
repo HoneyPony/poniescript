@@ -114,6 +114,8 @@ impl Db {
 	}
 
 	// These should definitely be cached rather than generated each time, but..
+	//
+	// TODO: Consider generating the ctypes as soon as we generate a new type
 	pub fn get_ctype(&mut self, typ: TypId) -> &'static str {
 		if let Some(&cached) = self.ctype_cache.get(&typ) {
 			return cached;

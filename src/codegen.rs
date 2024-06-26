@@ -59,6 +59,12 @@ enum Val {
 	DirectLit {
 		ctype: &'static str,
 		lit: &'static str
+	},
+	Binary {
+		ctype: &'static str,
+		left: Box<Val>,
+		right: Box<Val>,
+		op: char,
 	}
 }
 
@@ -96,7 +102,10 @@ impl std::fmt::Display for Val {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Val::Tmp(idx) => write!(f, "tmp{}", idx),
-			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")			
+			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
+			Val::Binary { ctype, left, right, op } => {
+				write!(f, "({ctype})({left} {op} {right})")
+			}
 		}
 		
 	}
@@ -158,19 +167,18 @@ impl<'a> Codegen<'a> {
 		self.pop(binary.typ);
 
 		let op = match binary.op {
-			Tok::Star => "*",
-			Tok::Plus => "+",
-			Tok::Minus => "-",
-			Tok::Slash => "/",
+			Tok::Star => '*',
+			Tok::Plus => '+',
+			Tok::Minus => '-',
+			Tok::Slash => '/',
 			_ => unreachable!()
 		};
 
-		let val = self.new_val();
+		//let val = self.new_val();
 		let ctype = self.get_expr_ctype(binary.typ);
 		// TODO: Indentation system
-		inf_writeln!(into, "const {ctype} {val} = {left} {op} {right};");
-
-		val
+		//inf_writeln!(into, "const {ctype} {val} = {left} {op} {right};");
+		Val::Binary { ctype, left: Box::new(left), right: Box::new(right), op }
 	}
 
 	fn expr(&mut self, expr: &Expr, into: &mut String) -> Val {
