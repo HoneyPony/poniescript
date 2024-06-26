@@ -28,7 +28,7 @@ pub struct Db {
 	key_lookup_map: HashMap<StrId, Tok>,
 
 	/// Keep a cache of all generated ctypes so that we can quickly re-use them.
-	ctype_cache: HashMap<TypId, &'static str>,
+	ctype_cache: Vec<&'static str>,
 
 	/// Keep a cache of generated type reprs also for re-using them.
 	type_repr_cache: RefCell<HashMap<TypId, &'static str>>,
@@ -45,7 +45,7 @@ impl Db {
 
 			key_lookup_map: HashMap::new(),
 
-			ctype_cache: HashMap::new(),
+			ctype_cache: Vec::new(),
 			type_repr_cache: RefCell::new(HashMap::new()),
 		};
 
@@ -89,6 +89,11 @@ impl Db {
 			return *existing;
 		}
 
+		let ctype = typ.gen_ctype(self);
+
+		// IMPORTANT: The pushes() here must line up with new_id() -> TypId
+		self.ctype_cache.push(ctype.leak());
+
 		let id = self.new_id(typ.clone());
 		self.type_side_map.insert(typ, id);
 
@@ -117,18 +122,9 @@ impl Db {
 	//
 	// TODO: Consider generating the ctypes as soon as we generate a new type
 	pub fn get_ctype(&mut self, typ: TypId) -> &'static str {
-		if let Some(&cached) = self.ctype_cache.get(&typ) {
-			return cached;
-		}
-
-		let full_type = self.get(typ).clone();
-		let value = full_type.gen_ctype(self).leak();
-
-		// TODO: Look into ways to make this safe with &self rather than
-		// &mut self. It should be fine...?
-		self.ctype_cache.insert(typ, value);
-
-		value
+		// Safety: AS LONG AS we don't call new_id outside of put_type,
+		// the index must be valid.
+		unsafe { self.ctype_cache.get_unchecked(typ.0) }
 	}
 
 	pub fn get_var_ctype(&mut self, var: VarId) -> &'static str {

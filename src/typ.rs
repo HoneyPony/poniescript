@@ -43,7 +43,7 @@ impl Type {
 			Type::Unassigned | Type::UnassignedNumeric 
 			| Type::UnassignedDecimal | Type::UnboundIdent(_)
 			=> {
-				panic!("Trying to generate ctype for invalid type");
+				"<unassigned-type>".into()
 			}
 		}
 	}
