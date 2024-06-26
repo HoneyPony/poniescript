@@ -133,15 +133,15 @@ impl Db {
 		self.get(var).typ
 	}
 
-	pub fn err_var(&self, var: VarId) -> &str {
+	pub fn repr_var(&self, var: VarId) -> &str {
 		self.get(self.get(var).name.lexeme)
 	}
 
-	pub fn err_var_type(&self, var: VarId) -> String {
-		self.err_type(self.get(var).typ)
+	pub fn repr_var_type(&self, var: VarId) -> String {
+		self.repr_type(self.get(var).typ)
 	}
 
-	pub fn err_type(&self, typ: TypId) -> String {
+	pub fn repr_type(&self, typ: TypId) -> String {
 		// TODO: Cache type strings in another side map..?
 		self.get(typ).to_string()
 	}

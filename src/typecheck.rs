@@ -224,9 +224,9 @@ impl TypeChecker {
 			db,
 			at,
 			"Invalid assignment to '{}': need {}, but value is {}",
-			db.err_var(var),
-			db.err_var_type(var),
-			db.err_type(value)
+			db.repr_var(var),
+			db.repr_var_type(var),
+			db.repr_type(value)
 		);
 
 		Ok(unified)
@@ -243,8 +243,8 @@ impl TypeChecker {
 					db,
 					&binary.location,
 					"Invalid operands to binary operator: LHS is {}, RHS is {}",
-					db.err_type(left),
-					db.err_type(right)
+					db.repr_type(left),
+					db.repr_type(right)
 				);
 
 				binary.typ = unified;
