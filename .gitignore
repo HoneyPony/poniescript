@@ -1,3 +1,5 @@
 /target
 /*.c
+/*.exe
 /big1.poni
+/big2.poni
