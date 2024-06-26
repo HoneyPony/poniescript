@@ -69,6 +69,7 @@ pub fn generate(db_file: &mut File) {
 	let pairs = vec![
 		("StrId", "&'static str"),
 		("VarId", "Var"),
+		("FunId", "Fun"),
 		("TypId", "Type"),
 		("SourceId", "Source"),
 	];

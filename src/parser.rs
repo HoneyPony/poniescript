@@ -116,6 +116,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 		return Ok(None)
 	}
 
+	fn at(&mut self, ty: Tok) -> bool {
+		return self.peek_typ() == ty;
+	}
+
 	fn number(&mut self) -> Result<Expr> {
 		let number = self.advance()?; // Eat numerical token... TODO expected! with multiple
 		// types..?
@@ -228,6 +232,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			typ = self.typ()?;
 		}
 
+		// TODO: This should be after the typ if we see a type declaration...
 		let equal = expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
 
 		let initializer = self.expression()?;
@@ -239,6 +244,31 @@ impl<'a, 'b> Parser<'a, 'b> {
 		return Stmt::new_declare_ok(equal.location, identity, initializer);
 	}
 
+	fn named_fun_declaration(&mut self) -> Result<FunId> {
+		let key_fun = expected!(self, Tok::Fun, "'fun'")?;
+
+		let name = expected_after!(self, Tok::Identifier, key_fun,
+			"function name")?;
+
+		expected!(self, Tok::LeftParen, "'(' after function name")?;
+
+		let parameters = vec![];
+
+		while !self.at(Tok::RightParen) && !self.is_at_end() {
+
+		}
+
+		expected!(self, Tok::RightParen, "')' after function parameter list")?;
+
+		let mut return_type = self.db.put_type(Type::Void);
+
+		return Ok(self.db.new_id(Fun {
+			name,
+			parameters,
+			return_type
+		}))
+	}
+
 	fn parse_top_level(&mut self) -> Result<()> {
 		match self.peek_typ() {
 			Tok::Eof => { },
@@ -247,6 +277,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 				let global = self.var_declaration()?;
 				self.module.globals.push(global);
 			},
+
+			Tok::Fun => {
+
+			}
 
 			_ => {
 				// Skip the erroneous token, as nothing else will drive

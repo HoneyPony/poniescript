@@ -4,6 +4,7 @@ use crate::db::{Db, StrId};
 pub enum Type {
 	Int,
 	Float,
+	Void,
 
 	//Class(ClassId),
 	//Function(SignatureId),
@@ -26,6 +27,7 @@ impl Type {
 		match self {
 			Type::Int => "int".to_string(),
 			Type::Float => "float".to_string(),
+			Type::Void => "void".to_string(),
 			Type::Unassigned => "<unknown>".to_string(),
 			Type::UnassignedNumeric => "a number".to_string(),
 			Type::UnassignedDecimal => "a decimal number".to_string(),
@@ -39,6 +41,7 @@ impl Type {
 			Type::Int => return "ps_int".into(),
 			Type::Float => return "ps_float".into(),
 
+			Type::Void => return "void".into(),
 
 			Type::Unassigned | Type::UnassignedNumeric 
 			| Type::UnassignedDecimal | Type::UnboundIdent(_)

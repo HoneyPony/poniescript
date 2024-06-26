@@ -170,6 +170,7 @@ pub fn generate(file: &mut File) {
 
 	"#;
 
+	// 	FunDeclare : FunId identity, Vec<VarId> args, 
 	let stmt_spec = r#"
 	
 	Declare    : VarId identity, Expr value

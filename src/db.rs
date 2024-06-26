@@ -6,6 +6,7 @@ use std::cell::RefCell;
 
 // Import relevant things.
 use crate::expr::Var;
+use crate::expr::Fun;
 use crate::typ::Type;
 use crate::source::{Source, SourceLocation};
 

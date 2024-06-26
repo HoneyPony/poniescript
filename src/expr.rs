@@ -12,6 +12,15 @@ pub struct Var {
 	pub typ: TypId,
 }
 
+pub struct Fun {
+	pub name: Token,
+
+	/// Parameters are the values when the function is defined, arguments
+	/// are the values passed by the caller.
+	pub parameters: Vec<VarId>,
+	pub return_type: TypId,
+}
+
 struct BoxAlloc {
 	exprs: &'static mut [MaybeUninit<Expr>],
 	stmts: &'static mut [MaybeUninit<Stmt>],
