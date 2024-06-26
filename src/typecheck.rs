@@ -164,7 +164,9 @@ impl TypeChecker {
 			Expr::Assign(assign) => {
 				self.do_assign(db, &assign.location, assign.identity, &mut assign.value)?
 			},
-			Expr::Literal(_) => todo!(),
+			Expr::Literal(lit) => {
+				lit.typ
+			},
 		})
 	}
 
