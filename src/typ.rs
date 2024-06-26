@@ -1,4 +1,4 @@
-use crate::db::StrId;
+use crate::db::{Db, StrId};
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum Type {
@@ -31,6 +31,20 @@ impl Type {
 			Type::UnassignedDecimal => "a decimal number".to_string(),
 
 			Type::UnboundIdent(id) => "<unknown named>".to_string(),
+		}
+	}
+
+	pub fn gen_ctype(&self, db: &mut Db) -> String {
+		match self {
+			Type::Int => return "ps_int".into(),
+			Type::Float => return "ps_float".into(),
+
+
+			Type::Unassigned | Type::UnassignedNumeric 
+			| Type::UnassignedDecimal | Type::UnboundIdent(_)
+			=> {
+				panic!("Trying to generate ctype for invalid type");
+			}
 		}
 	}
 }

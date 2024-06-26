@@ -6,6 +6,7 @@ mod lexer;
 mod module;
 mod parser;
 mod typecheck;
+mod codegen;
 
 use std::env;
 use std::path::Path;
@@ -47,9 +48,10 @@ fn main() {
 	if had_error { exit(2); }
 
 	// Pass 3: Codegen
+	codegen::codegen(&mut db, &modules);
 
 	// Temporary: Print out the type of every var.
-	for var in db.var_range() {
-		println!("Type of {} -> {}", db.err_var(var), db.err_var_type(var));
-	}
+	//for var in db.var_range() {
+	//	println!("Type of {} -> {}", db.err_var(var), db.err_var_type(var));
+	//}
 }

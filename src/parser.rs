@@ -166,7 +166,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash => {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
-				return Expr::mk_binary_ok(op.location, lhs, rhs, self.db.put_type(Type::Unassigned));
+				return Expr::mk_binary_ok(op.location, op.typ, lhs, rhs, self.db.put_type(Type::Unassigned));
 			},
 
 			// We should never call expr_infix() with an invalid operator,

@@ -98,6 +98,25 @@ impl Db {
 		return self.new_id(var);
 	}
 
+	pub fn get_cname(&mut self, var: VarId) -> &str {
+		// TODO: Cname generation, as well as 'extern C' sort of thing
+		return self.get(self.get(var).name.lexeme);
+	}
+
+	// These should definitely be cached rather than generated each time, but..
+	pub fn get_ctype(&mut self, typ: TypId) -> String {
+		let typ = self.get(typ).clone();
+		typ.gen_ctype(self)
+	}
+
+	pub fn get_var_ctype(&mut self, var: VarId) -> String {
+		self.get_ctype(self.get(var).typ)
+	}
+
+	pub fn get_var_type(&mut self, var: VarId) -> TypId {
+		self.get(var).typ
+	}
+
 	pub fn err_var(&self, var: VarId) -> &str {
 		self.get(self.get(var).name.lexeme)
 	}
