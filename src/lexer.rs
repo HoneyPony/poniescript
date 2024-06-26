@@ -27,7 +27,7 @@ pub enum Tok {
 
 	LeftArrow,
 
-	Identifier, String, Number,
+	Identifier, String, WholeNumber, DecimalNumber,
 
 	And, Class, Else, False, Fun, For, If, In, Null, Or,
 	Range, Return, Super, KeySelf, True, Using, Var, While,
@@ -229,21 +229,23 @@ impl Lexer {
 	fn number(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		while is_num(self.peek()) { self.advance()?; }
 
-		if self.peek() == '.' {
+		let ty = if self.peek() == '.' {
 			// Eat the dot
 			self.advance()?;
 
 			while is_num(self.peek()) { self.advance()?; }
-		}
-		return self.mk_token_res(db, Tok::Number);
+
+			Tok::DecimalNumber
+		} else { Tok::WholeNumber };
+		return self.mk_token_res(db, ty);
 	}
 
 	pub fn next_token(&mut self, db: &mut Db) -> std::io::Result<Token> {
-		let c = self.advance_past_whitespace()?;
-
 		if self.at_eof {
 			return self.mk_token_res(db, Tok::Eof);
 		}
+
+		let c = self.advance_past_whitespace()?;
 
 		// In terms of code structure, we check the identifier and numerical
 		// case first, so that we can have a big match at the end.
