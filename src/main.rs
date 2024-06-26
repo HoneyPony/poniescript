@@ -35,8 +35,19 @@ fn parse_all_modules(db: &mut db::Db, input_paths: Vec<&Path>) -> (Vec<Module>, 
 fn main() {
 	let mut db = db::Db::new();
 
-	let input_paths: Vec<&Path> = vec!["test.poni".as_ref()];
+	let args: Vec<String> = std::env::args().collect();
+
+	let mut input_paths: Vec<&Path> = Vec::new();
+
+	for arg in &args[1..] {
+		input_paths.push(arg.as_ref());
+	}
 	
+	if input_paths.is_empty() {
+		eprintln!("Need at least one input file");
+		exit(1);
+	}
+
 	// Pass 1: Parse
 	let (mut modules, had_error) = parse_all_modules(&mut db, input_paths);
 
