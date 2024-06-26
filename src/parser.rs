@@ -167,7 +167,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::Eof => { },
 
 			Tok::Var => {
-				self.var_declaration()?;
+				let global = self.var_declaration()?;
+				self.module.globals.push(global);
 			},
 
 			_ => {
