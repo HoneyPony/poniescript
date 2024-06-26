@@ -6,6 +6,7 @@ pub enum Type {
 	//Function(SignatureId),
 	//ListOf(TypId),
 	
-	Unassigned
+	Unassigned,
+	UnassignedNumeric,
 }
 

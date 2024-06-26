@@ -7,6 +7,7 @@ use crate::lexer::*;
 use crate::module::Module;
 
 use crate::expr::*;
+use crate::typ::Type;
 
 pub struct Parser<'a, 'b> {
 	lexer: Lexer,
@@ -23,10 +24,17 @@ pub enum ParseErr {
 
 pub type Result<T> = std::result::Result<T, ParseErr>;
 
+macro_rules! parse_error {
+	($($arg:tt)*) => {
+		// For now, just eprintln()... TODO Implement error handling system
+		eprintln!($($arg)*); 
+    };
+}
+
 macro_rules! consume {
     ($parser:ident, $ty:expr, $($arg:tt)*) => {
         if($parser.peek_typ() != $ty) {
-			eprintln!($($arg)*);
+			parse_error!($($arg)*);
 			return Err(ParseErr::SyntaxErr);
         }
 		else {
@@ -37,13 +45,22 @@ macro_rules! consume {
 
 macro_rules! expected {
 	($parser:ident, $ty:expr, $($arg:tt)*) => {
-		consume!($parser, $ty, "Expected {}, got {}", format!($($arg)*), $parser.db.get($parser.peek_lexeme()))
+		consume!($parser, $ty, "Expected {}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()))
+	}
+}
+
+macro_rules! got {
+	($parser:ident, $($arg:tt)*) => {
+		{
+			parse_error!("{}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()));
+			return Err(ParseErr::SyntaxErr)
+		}
 	}
 }
 
 macro_rules! expected_after {
 	($parser:ident, $ty:expr, $prev_tok:expr, $($arg:tt)*) => {
-		consume!($parser, $ty, "Expected {} after {}, got {}",
+		consume!($parser, $ty, "Expected {} after '{}', got '{}'",
 			format!($($arg)*),
 			$parser.db.get($prev_tok.lexeme),
 			$parser.db.get($parser.peek_lexeme()),
@@ -91,17 +108,32 @@ impl<'a, 'b> Parser<'a, 'b> {
 		return self.current.typ == Tok::Eof;
 	}
 
-	fn match_(&mut self, ty: Tok) -> bool {
+	fn match_(&mut self, ty: Tok) -> Result<bool> {
 		if self.peek_typ() == ty {
-			self.advance();
-			return true;
+			self.advance()?;
+			return Ok(true);
 		}
 
-		return false;
+		return Ok(false);
+	}
+
+	fn number(&mut self) -> Result<Expr> {
+		let number = expected!(self, Tok::Number, "number literal")?;
+
+		return Expr::mk_literal_ok(number,
+			self.db.put_type(Type::UnassignedNumeric));
 	}
 
 	fn expression(&mut self) -> Result<Expr> {
-		return Err(ParseErr::SyntaxErr);
+		match self.peek_typ() {
+			Tok::Number => {
+				self.number()
+			},
+
+			_ => {
+				got!(self, "Expected identifier")
+			}
+		}
 	}
 
 	fn var_declaration(&mut self) -> Result<Declare> {
@@ -128,7 +160,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 			},
 
 			_ => {
-				// Report error...
+				// Skip the erroneous token, as nothing else will drive
+				// parsing forward.
+				self.advance()?;
+				got!(self, "Expected 'var', 'const', 'class', or 'fun'")
 			}
 		}
 
@@ -145,9 +180,15 @@ impl<'a, 'b> Parser<'a, 'b> {
 	// 
 	// That's a bit hard to do with ?. Although, I guess at sync points is
 	// the only place we have to check.
-	pub fn parse(&mut self) -> Result<()> {
+	pub fn parse(&mut self) -> io::Result<()> {
 		while !self.is_at_end() {
-			self.parse_top_level()?;
+			match self.parse_top_level() {
+				// Syntax errors are only used to unwind the parser. No
+				// need to report them to the caller here (we will report them
+				// through a more sophisticated mechanism later).
+				Ok(_) | Err(ParseErr::SyntaxErr) => continue,
+				Err(ParseErr::IoErr(err)) => return Err(err)
+			}
 		}
 
 		Ok(())

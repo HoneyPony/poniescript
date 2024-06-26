@@ -159,7 +159,7 @@ pub fn generate(file: &mut File) {
 	Binary   : Expr left, Expr right, TypId typ
 	Variable : VarId identity
 	Assign   : VarId identity, Expr value
-	Literal  : StrId contents, TypId typ
+	Literal  : Token contents, TypId typ
 	
 
 	"#;
