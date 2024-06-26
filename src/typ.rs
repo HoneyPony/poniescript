@@ -34,7 +34,7 @@ impl Type {
 		}
 	}
 
-	pub fn gen_ctype(&self, db: &mut Db) -> String {
+	pub fn gen_ctype(&self, db: &Db) -> String {
 		match self {
 			Type::Int => return "ps_int".into(),
 			Type::Float => return "ps_float".into(),
