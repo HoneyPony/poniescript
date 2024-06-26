@@ -1,5 +1,6 @@
 use std::any::TypeId;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::cell::RefCell;
 
@@ -25,6 +26,9 @@ pub struct Db {
 	type_side_map: HashMap<Type, TypId>,
 
 	key_lookup_map: HashMap<StrId, Tok>,
+
+	/// Keep a cache of all generated ctypes so that we can quickly re-use them.
+	ctype_cache: HashMap<TypId, &'static str>,
 }
 
 impl Db {
@@ -37,6 +41,8 @@ impl Db {
 			type_side_map: HashMap::new(),
 
 			key_lookup_map: HashMap::new(),
+
+			ctype_cache: HashMap::new(),
 		};
 
 		// Technically, this does waste the initially created
@@ -104,12 +110,22 @@ impl Db {
 	}
 
 	// These should definitely be cached rather than generated each time, but..
-	pub fn get_ctype(&self, typ: TypId) -> String {
-		let typ = self.get(typ).clone();
-		typ.gen_ctype(self)
+	pub fn get_ctype(&mut self, typ: TypId) -> &'static str {
+		if let Some(&cached) = self.ctype_cache.get(&typ) {
+			return cached;
+		}
+
+		let full_type = self.get(typ).clone();
+		let value = full_type.gen_ctype(self).leak();
+
+		// TODO: Look into ways to make this safe with &self rather than
+		// &mut self. It should be fine...?
+		self.ctype_cache.insert(typ, value);
+
+		value
 	}
 
-	pub fn get_var_ctype(&self, var: VarId) -> String {
+	pub fn get_var_ctype(&mut self, var: VarId) -> &'static str {
 		self.get_ctype(self.get(var).typ)
 	}
 

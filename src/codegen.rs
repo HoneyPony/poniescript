@@ -19,7 +19,7 @@ struct Codegen<'a> {
 
 	val_idx: usize,
 
-	db: &'a Db
+	db: &'a mut Db
 }
 
 /// Some of the output buffers used for code generation. Separate from
@@ -60,7 +60,7 @@ impl std::fmt::Display for Val {
 }
 
 impl<'a> Codegen<'a> {
-	fn new(db: &'a Db) -> Self {
+	fn new(db: &'a mut Db) -> Self {
 		return Codegen {
 			functions: Vec::new(),
 
@@ -78,7 +78,7 @@ impl<'a> Codegen<'a> {
 		val
 	}
 
-	fn get_expr_ctype(&mut self, ty: TypId) -> String {
+	fn get_expr_ctype(&mut self, ty: TypId) -> &'static str {
 		let ty = match self.db.get(ty) {
 			Type::UnassignedDecimal | Type::UnassignedNumeric => {
 				*self.context_types.last().unwrap()
@@ -178,7 +178,7 @@ impl<'a> Codegen<'a> {
 	}
 }
 
-pub fn codegen(db: &Db, modules: &Vec<Module>) {
+pub fn codegen(db: &mut Db, modules: &Vec<Module>) {
 	let mut codegen = Codegen::new(db);
 
 	codegen.codegen(modules);
