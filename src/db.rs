@@ -11,10 +11,8 @@ use crate::source::{Source, SourceLocation};
 
 use crate::lexer::{Tok, Token};
 
-// I guess we could just use one file, because we're not allowed to have the macro
-// expand to struct fields, for some reason.
-include!(concat!(env!("OUT_DIR"), "/db.code.rs"));
-include!(concat!(env!("OUT_DIR"), "/db.struct.rs"));
+// Include arenas
+include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 
 /// The Db stores all of the arena-allocated objects that can be referenced
 /// with Ids. Basically all of these objects live for the entire program.

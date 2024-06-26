@@ -17,9 +17,8 @@ fn main() {
     let mut expr_file = new_gen_file(&out_dir, "expr.gen.rs");
 	build_expr::generate(&mut expr_file);
 
-	let mut db_code = new_gen_file(&out_dir, "db.code.rs");
-	let mut db_struct = new_gen_file(&out_dir, "db.struct.rs");
-	build_db::generate(&mut db_code, &mut db_struct);
+	let mut db_file = new_gen_file(&out_dir, "db.arenas.rs");
+	build_db::generate(&mut db_file);
 
 	// Note: This setup is based in part off of
 	// https://github.com/condekind/tokers/blob/main/src/world.rs
