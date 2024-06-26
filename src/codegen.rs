@@ -49,13 +49,27 @@ impl CodegenOutputs {
 /// 
 /// This lets us write the codegen as though we are generating code
 /// for a pure stack machine.
-struct Val {
-	name: usize,
+/// 
+/// What's espcially nice about this is that, if we want to generate some
+/// more compact expressions, we can simply add a new case to Val -- and as
+/// long as we code it correctly, we will more or less automatically create
+/// a syntax tree in C, with very little effort on top of what it would take
+/// to do a pure stack-based style.
+enum Val {
+	Tmp(usize),
+	DirectLit {
+		ctype: &'static str,
+		lit: &'static str
+	}
 }
 
 impl std::fmt::Display for Val {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "tmp{}", self.name)
+		match self {
+			Val::Tmp(idx) => write!(f, "tmp{}", idx),
+			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")			
+		}
+		
 	}
 }
 
@@ -73,7 +87,7 @@ impl<'a> Codegen<'a> {
 	}
 
 	fn new_val(&mut self) -> Val {
-		let val = Val { name: self.val_idx };
+		let val = Val::Tmp(self.val_idx);
 		self.val_idx += 1;
 		val
 	}
@@ -136,13 +150,10 @@ impl<'a> Codegen<'a> {
 			Expr::Variable(_) => todo!(),
 			Expr::Assign(_) => todo!(),
 			Expr::Literal(lit) => {
-				let val = self.new_val();
-				let ctype = self.get_expr_ctype(lit.typ);
-				let literal = self.db.get(lit.contents.lexeme);
-
-				writeln!(into, "const {ctype} {val} = {literal};");
-
-				val
+				Val::DirectLit {
+					ctype: self.get_expr_ctype(lit.typ),
+					lit: self.db.get(lit.contents.lexeme),
+				}
 			},
 		}
 	}

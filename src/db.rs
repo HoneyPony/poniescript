@@ -21,7 +21,7 @@ include!(concat!(env!("OUT_DIR"), "/db.struct.rs"));
 pub struct Db {
 	arenas: DbArenas,
 
-	str_side_map: HashMap<Box<str>, StrId>,
+	str_side_map: HashMap<String, StrId>,
 	source_side_map: HashMap<PathBuf, SourceId>,
 	type_side_map: HashMap<Type, TypId>,
 
@@ -62,10 +62,10 @@ impl Db {
 			return *existing;
 		}
 
-		let boxed: Box<str> = str.to_owned().into_boxed_str();
-		// TODO: Figure out if this is working correctly...
-		let id = self.new_id(boxed.clone());
-		self.str_side_map.insert(boxed, id);
+		let leaked = str.to_owned().leak();
+
+		let id = IdFuncs::<StrId, &'static str>::new_id(self, leaked);
+		self.str_side_map.insert(leaked.to_string(), id);
 
 		return id;
 	}

@@ -65,7 +65,7 @@ fn generate_impl(code_file: &mut File, struct_file: &mut File, pairs: &Vec<(&str
 pub fn generate(code_file: &mut File, struct_file: &mut File) {
 	// Modify this array to add new Id types
 	let pairs = vec![
-		("StrId", "Box<str>"),
+		("StrId", "&'static str"),
 		("VarId", "Var"),
 		("TypId", "Type"),
 		("SourceId", "Source"),
