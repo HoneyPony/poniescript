@@ -5,6 +5,8 @@ use crate::db::*;
 
 use crate::lexer::*;
 use crate::module::Module;
+use crate::module::ExprId;
+use crate::module::StmtId;
 
 use crate::expr::*;
 use crate::typ::Type;
@@ -116,7 +118,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		return Ok(None)
 	}
 
-	fn number(&mut self) -> Result<Expr> {
+	fn number(&mut self) -> Result<ExprId> {
 		let number = self.advance()?; // Eat numerical token... TODO expected! with multiple
 		// types..?
 		//let number = expected!(self, Tok::Number, "number literal")?;
@@ -127,12 +129,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 			_ => unreachable!()
 		};
 
-		return Expr::mk_literal_ok(number.location.clone(),
+		return Expr::mk_literal_ok(&mut self.module,
+			number.location.clone(),
 			number,
 			self.db.put_type(typ));
 	}
 
-	fn expr_prefix(&mut self) -> Result<Expr> {
+	fn expr_prefix(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
 			Tok::DecimalNumber | Tok::WholeNumber => {
 				self.number()
@@ -156,7 +159,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 	}
 
-	fn expr_infix(&mut self, lhs: Expr) -> Result<Expr> {
+	fn expr_infix(&mut self, lhs: ExprId) -> Result<ExprId> {
 		// We want to bind rightward to any expressions that left-associate
 		// towards us, so we use the right-hand precedence.
 		let cur_prec = self.peek_precedence().1;
@@ -176,7 +179,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 	}
 
-	fn expr_precedence(&mut self, precedence: u32) -> Result<Expr> {
+	fn expr_precedence(&mut self, precedence: u32) -> Result<ExprId> {
 		let mut expr = self.expr_prefix()?;
 
 		// Our precedence is coming from the right of the previous expr, so we compare to the left-hand
@@ -188,7 +191,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		Ok(expr)
 	}
 
-	fn expression(&mut self) -> Result<Expr> {
+	fn expression(&mut self) -> Result<ExprId> {
 		self.expr_precedence(0)
 	}
 
@@ -216,7 +219,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		})
 	}
 
-	fn var_declaration(&mut self) -> Result<Declare> {
+	fn var_declaration(&mut self) -> Result<StmtId> {
 		let key_var = expected!(self, Tok::Var, "'var''")?;
 
 		let name = expected_after!(self, Tok::Identifier, key_var,
@@ -236,7 +239,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		
 		let identity = self.db.new_var(name, typ);
 
-		return Stmt::new_declare_ok(equal.location, identity, initializer);
+		return Stmt::mk_declare_ok(&mut self.module, equal.location, identity, initializer);
 	}
 
 	fn parse_top_level(&mut self) -> Result<()> {

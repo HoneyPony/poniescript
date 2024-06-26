@@ -15,7 +15,7 @@ pub struct Module {
 	//functions: Vec<FunctionId>,
 
 	// Globals are simply variable declarations that aren't in any other scope.
-	pub globals: Vec<Declare>,
+	pub globals: Vec<StmtId>,
 
 	pub arenas: ModuleArenas
 }

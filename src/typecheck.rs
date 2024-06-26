@@ -235,7 +235,7 @@ impl TypeChecker {
 	}
 
 	fn do_type(&mut self, module: &mut Module, db: &mut Db, expr: ExprId) -> Result<TypId> {
-		let expr = module.get_mut(expr);
+		let expr = module.get(expr);
 		
 		Ok(match expr {
 			Expr::Binary(binary) => {
@@ -257,7 +257,7 @@ impl TypeChecker {
 			},
 			Expr::Variable(var) => db.get(var.identity).typ,
 			Expr::Assign(assign) => {
-				self.do_assign(db, &assign.location, assign.identity, &mut assign.value)?
+				self.do_assign(module, db, &assign.location, assign.identity, assign.value)?
 			},
 			Expr::Literal(lit) => {
 				lit.typ
@@ -265,12 +265,19 @@ impl TypeChecker {
 		})
 	}
 
-	fn declare(&mut self, module: &mut Module, db: &mut Db, declare: &mut Declare) {
-		self.do_assign(module, db, &declare.location, declare.identity, declare.value);
+	fn declare(&mut self, module: &mut Module, db: &mut Db, declare: StmtId) {
+		let stmt = module.get_mut(declare);
+		match stmt {
+			Stmt::Declare(declare) => {
+				self.do_assign(module, db, &declare.location, declare.identity, declare.value);
+			},
+
+			_ => unreachable!()
+		}
 	}
 
 	fn typecheck(&mut self, db: &mut Db, module: &mut Module) {
-		for global in &mut module.globals {
+		for global in module.globals {
 			self.declare(module, db, global);
 		}
 	}

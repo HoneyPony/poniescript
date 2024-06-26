@@ -43,23 +43,23 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 
 	let return_type = match copt {
 		ConstructOpt { wrap_ok: false, to_enum: false, .. } => ty_name.to_string(),
-		ConstructOpt { wrap_ok: false, to_enum: true, .. } => enum_name.to_string(),
+		ConstructOpt { wrap_ok: false, to_enum: true, .. } => format!("{enum_name}Id"),
 		ConstructOpt { wrap_ok: true, to_enum: false, .. } => format!("crate::parser::Result<{ty_name}>"),
-		ConstructOpt { wrap_ok: true, to_enum: true, .. } => format!("crate::parser::Result<{enum_name}>"),
+		ConstructOpt { wrap_ok: true, to_enum: true, .. } => format!("crate::parser::Result<{enum_name}Id>"),
 	};
 	
 	write!(into, "\tpub fn {prefix}{}{suffix}(", ty_name.to_ascii_lowercase())?;
 
 	let mut add_comma = false;
 
-	if copt.needs_module {
+	if /* copt.needs_module */ true {
 		write!(into, "module: &mut Module")?;
 		add_comma = true;
 	}
 
 	for field in fields {
 		let mut param_ty = field.0;
-		if param_ty == "ExprId" && opt.box_exprs { param_ty = "Expr"; }
+		//if param_ty == "ExprId" && opt.box_exprs { param_ty = "Expr"; }
 
 		if add_comma { write!(into, ", ")?; }
 		add_comma = true;
@@ -67,11 +67,11 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 		write!(into, "{}: {}", field.1, param_ty)?;
 	}
 	writeln!(into, ") -> {return_type} {{")?;
-	for field in fields {
-		if field.0 == "ExprId" && opt.box_exprs {
-			writeln!(into, "\t\tlet {0} = module.new_id({0});", field.1)?;
-		}
-	}
+	//for field in fields {
+	//	if field.0 == "ExprId" && opt.box_exprs {
+	//		writeln!(into, "\t\tlet {0} = module.new_id({0});", field.1)?;
+	//	}
+	//}
 	write!(into, "\t\t")?;
 	if copt.wrap_ok { write!(into, "Ok(")?; }
 	if copt.to_enum { write!(into, "{enum_name}::{ty_name}(")?; }
