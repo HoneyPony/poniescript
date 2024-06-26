@@ -37,6 +37,7 @@ pub enum Tok {
 	Eof
 }
 
+#[derive(Clone)]
 pub struct Token {
 	pub typ: Tok,
 	pub lexeme: StrId,

@@ -52,7 +52,7 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 	let mut add_comma = false;
 	for field in fields {
 		let mut param_ty = field.0;
-		if param_ty == "Box<Expr>" && opt.box_exprs { param_ty = "Expr"; }
+		if param_ty == "&'static mut Expr" && opt.box_exprs { param_ty = "Expr"; }
 
 		if add_comma { write!(into, ", ")?; }
 		add_comma = true;
@@ -61,8 +61,8 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 	}
 	writeln!(into, ") -> {return_type} {{")?;
 	for field in fields {
-		if field.0 == "Box<Expr>" && opt.box_exprs {
-			writeln!(into, "\t\tlet {0} = Box::new({0});", field.1)?;
+		if field.0 == "&'static mut Expr" && opt.box_exprs {
+			writeln!(into, "\t\tlet {0} = alloc_expr({0});", field.1)?;
 		}
 	}
 	write!(into, "\t\t")?;
@@ -105,7 +105,7 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 			let Some(mut ty) = token(&mut spec) else { return Ok(()); };
 
 			if ty == "Expr" && opt.box_exprs {
-				ty = "Box<Expr>";
+				ty = "&'static mut Expr";
 			}
 
 			let Some(mut name) = token(&mut spec) else { return Ok(()); };
