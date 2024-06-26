@@ -41,47 +41,11 @@ fn get_alloc() -> &'static mut BoxAlloc {
 }
 
 fn alloc_block<T>() -> &'static mut [MaybeUninit<T>] {
-	vec![
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-		MaybeUninit::<T>::uninit(),
-	].leak()
+	unsafe {
+		// Copied straight from MaybeUninit::uninit_array
+		let a = MaybeUninit::<[MaybeUninit<T>; 512]>::uninit().assume_init();
+		return Vec::from(a).leak();
+	}
 }
 
 pub fn alloc_expr(expr: Expr) -> &'static mut Expr {
