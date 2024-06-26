@@ -1,5 +1,7 @@
 use crate::db::*;
 use crate::module::Module;
+use crate::module::ExprId;
+use crate::module::StmtId;
 use crate::source::SourceLocation;
 use crate::typ::Type;
 
@@ -215,8 +217,8 @@ impl TypeChecker {
 		Ok(unified)
 	}
 
-	fn do_assign(&mut self, db: &mut Db, at: &SourceLocation, var: VarId, expr: &mut Expr) -> Result<TypId> {
-		let value = self.do_type(db, expr)?;
+	fn do_assign(&mut self, module: &mut Module, db: &mut Db, at: &SourceLocation, var: VarId, expr: ExprId) -> Result<TypId> {
+		let value = self.do_type(module, db, expr)?;
 
 		let unified = type_error!(
 			self.unify_assign(db, var, value),
@@ -232,11 +234,13 @@ impl TypeChecker {
 		Ok(unified)
 	}
 
-	fn do_type(&mut self, db: &mut Db, expr: &mut Expr) -> Result<TypId> {
+	fn do_type(&mut self, module: &mut Module, db: &mut Db, expr: ExprId) -> Result<TypId> {
+		let expr = module.get_mut(expr);
+		
 		Ok(match expr {
 			Expr::Binary(binary) => {
-				let left = self.do_type(db, &mut binary.left)?;
-				let right = self.do_type(db, &mut binary.right)?;
+				let left = self.do_type(module, db, binary.left)?;
+				let right = self.do_type(module, db, binary.right)?;
 
 				let unified = type_error!(
 					self.unify_bi(db, left, right),
@@ -261,28 +265,26 @@ impl TypeChecker {
 		})
 	}
 
-	fn declare(&mut self, db: &mut Db, declare: &mut Declare) {
-		self.do_assign(db, &declare.location, declare.identity, &mut declare.value);
+	fn declare(&mut self, module: &mut Module, db: &mut Db, declare: &mut Declare) {
+		self.do_assign(module, db, &declare.location, declare.identity, declare.value);
 	}
 
-	fn module(&mut self, db: &mut Db, module: &mut Module) {
+	fn typecheck(&mut self, db: &mut Db, module: &mut Module) {
 		for global in &mut module.globals {
-			self.declare(db, global);
-		}
-	}
-
-	fn typecheck(&mut self, db: &mut Db, modules: &mut Vec<Module>) {
-		self.global_scope = true;
-		for module in modules {
-			self.module(db, module);
+			self.declare(module, db, global);
 		}
 	}
 }
 
 pub fn typecheck(db: &mut Db, modules: &mut Vec<Module>) -> bool {
-	let mut checker = TypeChecker::new();
+	let mut had_error = false;
 
-	checker.typecheck(db, modules);
+	for module in modules {
+		let mut checker = TypeChecker::new();
+		checker.typecheck(db, module);
 
-	checker.had_error
+		had_error = had_error || checker.had_error;
+	}
+
+	had_error
 }

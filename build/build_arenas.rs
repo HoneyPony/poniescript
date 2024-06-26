@@ -15,11 +15,11 @@ fn generate_struct(struct_: &mut String, id: &str, ty: &str) -> String {
 	new_name
 }
 
-fn generate_id(file: &mut File, name: &str, ty: &str, arena: &str) -> std::io::Result<()> {
+fn generate_id(file: &mut File, name: &str, ty: &str, arena: &str, parent_struct: &str) -> std::io::Result<()> {
 	writeln!(file, "#[derive(Clone, Copy, PartialEq, Eq, Hash)]")?;
 	writeln!(file, "pub struct {name}(usize);\n")?;
 
-	writeln!(file, "impl IdFuncs<{name}, {ty}> for Db {{")?;
+	writeln!(file, "impl IdFuncs<{name}, {ty}> for {parent_struct} {{")?;
 
 	writeln!(file, "\tfn get(&self, id: {name}) -> &{ty} {{")?;
 	writeln!(file, "\t\tunsafe {{ self.arenas.{arena}.get_unchecked(id.0) }} ")?;
@@ -40,17 +40,17 @@ fn generate_id(file: &mut File, name: &str, ty: &str, arena: &str) -> std::io::R
 	Ok(())
 }
 
-fn generate_impl(file: &mut File, pairs: &Vec<(&str, &str)>) {
+fn generate_impl(file: &mut File, ty_name: &str, pairs: &Vec<(&str, &str)>) {
 	let mut init = String::new();
 	let mut struct_ = String::new();
-	writeln!(init, "impl DbArenas {{").unwrap();
+	writeln!(init, "impl {ty_name}Arenas {{").unwrap();
 	writeln!(init, "\tpub fn new() -> Self {{").unwrap();
-	writeln!(init, "\t\treturn DbArenas {{").unwrap();
+	writeln!(init, "\t\treturn {ty_name}Arenas {{").unwrap();
 
-	writeln!(struct_, "struct DbArenas {{").unwrap();
+	writeln!(struct_, "struct {ty_name}Arenas {{").unwrap();
 	for pair in pairs {
 		let arena = generate_struct(&mut struct_, pair.0, pair.1);
-		generate_id(file, pair.0, pair.1, &arena).unwrap();
+		generate_id(file, pair.0, pair.1, &arena, ty_name).unwrap();
 
 		writeln!(init, "\t\t\t{arena}: Vec::new(),").unwrap();
 	}
@@ -64,14 +64,20 @@ fn generate_impl(file: &mut File, pairs: &Vec<(&str, &str)>) {
 	writeln!(file, "{}", init).unwrap();
 }
 
-pub fn generate(db_file: &mut File) {
+pub fn generate(db_file: &mut File, module_file: &mut File) {
 	// Modify this array to add new Id types
-	let pairs = vec![
+	let db_pairs = vec![
 		("StrId", "&'static str"),
 		("VarId", "Var"),
 		("TypId", "Type"),
 		("SourceId", "Source"),
 	];
 
-	generate_impl(db_file, &pairs);
+	let module_pairs = vec![
+		("ExprId", "Expr"),
+		("StmtId", "Stmt"),
+	];
+
+	generate_impl(db_file, "Db", &db_pairs);
+	generate_impl(module_file, "Module", &module_pairs);
 }

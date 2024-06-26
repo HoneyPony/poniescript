@@ -1,8 +1,14 @@
 use std::path::Path;
 
+// Include arenas
+include!(concat!(env!("OUT_DIR"), "/module.arenas.rs"));
+
 use crate::db::*;
 use crate::expr::Declare;
 use crate::parser::Parser;
+
+use crate::expr::Expr;
+use crate::expr::Stmt;
 
 pub struct Module {
 	//classes: Vec<ClassId>,
@@ -10,11 +16,14 @@ pub struct Module {
 
 	// Globals are simply variable declarations that aren't in any other scope.
 	pub globals: Vec<Declare>,
+
+	pub arenas: ModuleArenas
 }
 
 impl Module {
 	pub fn new_empty() -> Self {
 		return Module {
+			arenas: ModuleArenas::new(),
 			globals: Vec::new(),
 		}
 	}

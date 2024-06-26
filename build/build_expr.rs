@@ -34,6 +34,7 @@ struct Opt {
 struct ConstructOpt {
 	wrap_ok: bool,
 	to_enum: bool,
+	needs_module: bool,
 }
 
 fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt: &Opt, fields: &Vec<(&str, &str)>, into: &mut String) -> std::fmt::Result {
@@ -41,18 +42,24 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 	let suffix = if copt.wrap_ok { "_ok" } else { "" };
 
 	let return_type = match copt {
-		ConstructOpt { wrap_ok: false, to_enum: false } => ty_name.to_string(),
-		ConstructOpt { wrap_ok: false, to_enum: true } => enum_name.to_string(),
-		ConstructOpt { wrap_ok: true, to_enum: false } => format!("crate::parser::Result<{ty_name}>"),
-		ConstructOpt { wrap_ok: true, to_enum: true } => format!("crate::parser::Result<{enum_name}>"),
+		ConstructOpt { wrap_ok: false, to_enum: false, .. } => ty_name.to_string(),
+		ConstructOpt { wrap_ok: false, to_enum: true, .. } => enum_name.to_string(),
+		ConstructOpt { wrap_ok: true, to_enum: false, .. } => format!("crate::parser::Result<{ty_name}>"),
+		ConstructOpt { wrap_ok: true, to_enum: true, .. } => format!("crate::parser::Result<{enum_name}>"),
 	};
 	
 	write!(into, "\tpub fn {prefix}{}{suffix}(", ty_name.to_ascii_lowercase())?;
 
 	let mut add_comma = false;
+
+	if copt.needs_module {
+		write!(into, "module: &mut Module")?;
+		add_comma = true;
+	}
+
 	for field in fields {
 		let mut param_ty = field.0;
-		if param_ty == "Box<Expr>" && opt.box_exprs { param_ty = "Expr"; }
+		if param_ty == "ExprId" && opt.box_exprs { param_ty = "Expr"; }
 
 		if add_comma { write!(into, ", ")?; }
 		add_comma = true;
@@ -61,8 +68,8 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 	}
 	writeln!(into, ") -> {return_type} {{")?;
 	for field in fields {
-		if field.0 == "Box<Expr>" && opt.box_exprs {
-			writeln!(into, "\t\tlet {0} = Box::new({0});", field.1)?;
+		if field.0 == "ExprId" && opt.box_exprs {
+			writeln!(into, "\t\tlet {0} = module.new_id({0});", field.1)?;
 		}
 	}
 	write!(into, "\t\t")?;
@@ -99,13 +106,16 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 		// Always add a source location field.
 		fields.push(("SourceLocation", "location"));
 
+		let mut needs_module = false;
+
 		loop {
 			if at_line_end(spec) { break; }
 
 			let Some(mut ty) = token(&mut spec) else { return Ok(()); };
 
 			if ty == "Expr" && opt.box_exprs {
-				ty = "Box<Expr>";
+				ty = "ExprId";
+				needs_module = true;
 			}
 
 			let Some(mut name) = token(&mut spec) else { return Ok(()); };
@@ -117,8 +127,6 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 			fields.push((ty, name));
 		}
 
-		
-
 		writeln!(struct_defs, "pub struct {ty_name} {{")?;
 		for field in &fields {
 			writeln!(struct_defs, "\tpub {}: {},", field.1, field.0)?;
@@ -129,19 +137,19 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 
 		generate_constructor(name,
 			ty_name,
-			ConstructOpt { wrap_ok: false, to_enum: false },
+			ConstructOpt { wrap_ok: false, to_enum: false, needs_module },
 			&opt, &fields, &mut enum_impl)?;
 		generate_constructor(name,
 			ty_name,
-			ConstructOpt { wrap_ok: false, to_enum: true },
+			ConstructOpt { wrap_ok: false, to_enum: true, needs_module },
 			&opt, &fields, &mut enum_impl)?;
 		generate_constructor(name,
 			ty_name,
-			ConstructOpt { wrap_ok: true, to_enum: false },
+			ConstructOpt { wrap_ok: true, to_enum: false, needs_module },
 			&opt, &fields, &mut enum_impl)?;
 		generate_constructor(name,
 			ty_name,
-			ConstructOpt { wrap_ok: true, to_enum: true },
+			ConstructOpt { wrap_ok: true, to_enum: true, needs_module },
 			&opt, &fields, &mut enum_impl)?;
 	}
 
@@ -183,7 +191,7 @@ pub fn generate(file: &mut File) {
 	};
 
 	let stmt_opt = Opt {
-		box_exprs: false,
+		box_exprs: true,
 	};
 
 	generate_spec("Expr", expr_spec, expr_opt, file).unwrap();
