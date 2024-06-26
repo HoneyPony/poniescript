@@ -300,7 +300,11 @@ impl Lexer {
 			},
 
 			_ => {
-				self.error(db, format!("Unrecognized character '{c}'"));
+				// If we have flagged EOF, there's no more undefined characters.
+				// Otherwise, there's an error.
+				if !self.at_eof {
+					self.error(db, format!("Unrecognized character '{c}'"));
+				}
 				
 				// TODO: Do we want to introduce a separate "error token" here?
 				Tok::Eof
