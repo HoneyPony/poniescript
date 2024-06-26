@@ -60,12 +60,6 @@ enum Val {
 		ctype: &'static str,
 		lit: &'static str
 	},
-	Binary {
-		ctype: &'static str,
-		left: Box<Val>,
-		right: Box<Val>,
-		op: char,
-	}
 }
 
 /// The idea with this macro is that, according to the Rust documentation,
@@ -103,9 +97,6 @@ impl std::fmt::Display for Val {
 		match self {
 			Val::Tmp(idx) => write!(f, "tmp{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
-			Val::Binary { ctype, left, right, op } => {
-				write!(f, "({ctype})({left} {op} {right})")
-			}
 		}
 		
 	}
@@ -174,11 +165,12 @@ impl<'a> Codegen<'a> {
 			_ => unreachable!()
 		};
 
-		//let val = self.new_val();
+		let val = self.new_val();
 		let ctype = self.get_expr_ctype(binary.typ);
 		// TODO: Indentation system
-		//inf_writeln!(into, "const {ctype} {val} = {left} {op} {right};");
-		Val::Binary { ctype, left: Box::new(left), right: Box::new(right), op }
+		inf_writeln!(into, "const {ctype} {val} = {left} {op} {right};");
+
+		val
 	}
 
 	fn expr(&mut self, expr: &Expr, into: &mut String) -> Val {
