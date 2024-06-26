@@ -25,7 +25,7 @@ pub enum ParseErr {
 pub type Result<T> = std::result::Result<T, ParseErr>;
 
 macro_rules! parse_error {
-	($($arg:tt)*) => {
+	($parser:ident, $($arg:tt)*) => {
 		// For now, just eprintln()... TODO Implement error handling system
 		eprintln!($($arg)*); 
     };
@@ -34,7 +34,7 @@ macro_rules! parse_error {
 macro_rules! consume {
     ($parser:ident, $ty:expr, $($arg:tt)*) => {
         if($parser.peek_typ() != $ty) {
-			parse_error!($($arg)*);
+			parse_error!($parser, $($arg)*);
 			return Err(ParseErr::SyntaxErr);
         }
 		else {
@@ -52,7 +52,7 @@ macro_rules! expected {
 macro_rules! got {
 	($parser:ident, $($arg:tt)*) => {
 		{
-			parse_error!("{}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()));
+			parse_error!($parser, "{}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()));
 			return Err(ParseErr::SyntaxErr)
 		}
 	}
@@ -108,13 +108,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 		return self.current.typ == Tok::Eof;
 	}
 
-	fn match_(&mut self, ty: Tok) -> Result<bool> {
+	fn match_(&mut self, ty: Tok) -> Result<Option<Token>> {
 		if self.peek_typ() == ty {
-			self.advance()?;
-			return Ok(true);
+			return Ok(Some(self.advance()?));
 		}
 
-		return Ok(false);
+		return Ok(None)
 	}
 
 	fn number(&mut self) -> Result<Expr> {
@@ -145,11 +144,41 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 	}
 
+	fn typ(&mut self) -> Result<TypId> {
+		let tok = self.advance()?;
+		Ok(match tok.typ {
+			Tok::Identifier => {
+				// TODO: Maybe another lookup table similar to keywords..?
+				if tok.lexeme == self.db.put_str("int") {
+					return Ok(self.db.put_type(Type::Int))
+				}
+				if tok.lexeme == self.db.put_str("float") {
+					return Ok(self.db.put_type(Type::Float))
+				}
+
+				self.db.put_type(Type::UnboundIdent(tok.lexeme))
+			},
+
+			// More type syntax to come...
+
+			_ => {
+				parse_error!(self, "Expected type, got {}", self.db.get(tok.lexeme));
+				return Err(ParseErr::SyntaxErr)
+			}
+		})
+	}
+
 	fn var_declaration(&mut self) -> Result<Declare> {
 		let key_var = expected!(self, Tok::Var, "'var''")?;
 
 		let name = expected_after!(self, Tok::Identifier, key_var,
 			"variable name")?;
+
+		let mut typ = self.db.put_type(Type::Unassigned);
+
+		if let Some(colon) = self.match_(Tok::Colon)? {
+			typ = self.typ()?;
+		}
 
 		let equal = expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
 
@@ -157,7 +186,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::Semicolon, "';' after initializer expression")?;
 		
-		let identity = self.db.new_var(name);
+		let identity = self.db.new_var(name, typ);
 
 		return Stmt::new_declare_ok(equal.location, identity, initializer);
 	}

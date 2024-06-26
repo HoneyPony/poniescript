@@ -1,3 +1,5 @@
+use crate::db::StrId;
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum Type {
 	Int,
@@ -14,6 +16,9 @@ pub enum Type {
 	// Decimals cannot be assigned to Int. (But if we add fixed point types,
 	// they can be assigned to those).
 	UnassignedDecimal,
+
+	// A type that only exists before the name-binding pass.
+	UnboundIdent(StrId),
 }
 
 impl Type {
@@ -24,6 +29,8 @@ impl Type {
 			Type::Unassigned => "<unknown>".to_string(),
 			Type::UnassignedNumeric => "a number".to_string(),
 			Type::UnassignedDecimal => "a decimal number".to_string(),
+
+			Type::UnboundIdent(id) => "<unknown named>".to_string(),
 		}
 	}
 }

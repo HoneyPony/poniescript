@@ -89,9 +89,7 @@ impl Db {
 		self.key_lookup_map.get(&id).map(|tok| *tok)
 	}
 
-	pub fn new_var(&mut self, name: Token) -> VarId {
-		let typ = self.put_type(Type::Unassigned);
-
+	pub fn new_var(&mut self, name: Token, typ: TypId) -> VarId {
 		let var = Var {
 			name,
 			typ,
