@@ -9,6 +9,11 @@ pub enum Type {
 	
 	Unassigned,
 	UnassignedNumeric,
+	// For floating point numbers, we have to use a different Unassigned type.
+	// This is because numerics can be assigned to either Int or Float, but
+	// Decimals cannot be assigned to Int. (But if we add fixed point types,
+	// they can be assigned to those).
+	UnassignedDecimal,
 }
 
 impl Type {
@@ -18,6 +23,7 @@ impl Type {
 			Type::Float => "float".to_string(),
 			Type::Unassigned => "<unknown>".to_string(),
 			Type::UnassignedNumeric => "a number".to_string(),
+			Type::UnassignedDecimal => "a decimal number".to_string(),
 		}
 	}
 }

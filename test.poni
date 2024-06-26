@@ -1,16 +1,1 @@
-( ) [ ] { } , . - + / * -= += /= *=
-! != = == > >= < <=
-ident "string" 1234 12.34 0.34 1. .34
-and class else false fun for if null or 
-return super self true var while 
-
-; :
-
-for in range 
-using
-
-_ a b c hello_world
-
-print
-
--> 
+var example = 10;

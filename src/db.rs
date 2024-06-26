@@ -117,10 +117,39 @@ impl Db {
 		// TODO: Implement an actual system for showing error locations.
 		eprintln!("at {}, offset {}", location.source.0, location.offset);
 	}
+
+	pub fn var_range(&self) -> VarIter {
+		return VarIter { 
+			len: self.arenas.arena_var.len(),
+			current: 0
+		};
+	}
+}
+
+pub struct VarIter {
+	len: usize,
+	current: usize,
+}
+
+impl Iterator for VarIter {
+	type Item = VarId;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let result = if self.current == self.len {
+			None
+		}
+		else { Some(VarId(self.current)) };
+
+		self.current += 1;
+
+		result
+	}
 }
 
 /// Lets the Db implement some functions for every type of id.
 pub trait IdFuncs<Id, T> {
+	/// TODO: Consider making 'T' a type of IdFuncs, so it is only parameterized
+	/// by Id.
 	fn get(&self, id: Id) -> &T;
 
 	fn get_mut(&mut self, id: Id) -> &mut T;

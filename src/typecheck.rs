@@ -110,10 +110,22 @@ impl TypeChecker {
 		let unified = match (left, right, self.global_scope) {
 			(Type::Unassigned, Type::UnassignedNumeric, true) => {
 				// In global scope, if we have an un-inferred var, then the
-				// unassigned numeric should become float, I think...
-				//
-				// We could also make global vars without types an error....
+				// unassigned numeric must become a concrete type.
+				// For now, we make the dodgy decision that Whole -> Int
+				// and Decimal -> Float.
+				// One other option would be to make global vars require
+				// a type clause.
+				db.put_type(Type::Int)
+			},
+
+			(Type::Unassigned, Type::UnassignedDecimal, true) => {
+				// dodgy global var
 				db.put_type(Type::Float)
+			},
+
+			(Type::UnassignedNumeric, Type::UnassignedDecimal, _) => {
+				// Numerics become further constrained by Decimal.
+				value
 			}
 
 			(Type::Unassigned, _, _) => value,

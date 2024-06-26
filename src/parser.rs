@@ -118,16 +118,24 @@ impl<'a, 'b> Parser<'a, 'b> {
 	}
 
 	fn number(&mut self) -> Result<Expr> {
-		let number = expected!(self, Tok::Number, "number literal")?;
+		let number = self.advance()?; // Eat numerical token... TODO expected! with multiple
+		// types..?
+		//let number = expected!(self, Tok::Number, "number literal")?;
+
+		let typ = match number.typ {
+			Tok::DecimalNumber => Type::UnassignedDecimal,
+			Tok::WholeNumber => Type::UnassignedNumeric,
+			_ => unreachable!()
+		};
 
 		return Expr::mk_literal_ok(number.location.clone(),
 			number,
-			self.db.put_type(Type::UnassignedNumeric));
+			self.db.put_type(typ));
 	}
 
 	fn expression(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
-			Tok::Number => {
+			Tok::DecimalNumber | Tok::WholeNumber => {
 				self.number()
 			},
 
@@ -146,6 +154,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let equal = expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
 
 		let initializer = self.expression()?;
+
+		expected!(self, Tok::Semicolon, "';' after initializer expression")?;
 		
 		let identity = self.db.new_var(name);
 
