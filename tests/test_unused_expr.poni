@@ -1,0 +1,10 @@
+// This test ensures that even though an expression like 1 + 2 has type
+// UnassignedNumeric, it will still generated valid C code.
+
+fun test() {
+	1 + 2;
+}
+
+fun init() {
+	1 + 2;
+}

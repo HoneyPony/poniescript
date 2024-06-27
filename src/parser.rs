@@ -262,7 +262,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::RightBrace, "'}}' at end of block");
 
-		Expr::mk_block_ok(lbrace.location, stmts)
+		Expr::mk_block_ok(lbrace.location, stmts, false)
 	}
 
 	fn stmt(&mut self) -> Result<Stmt> {
@@ -270,6 +270,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			_ => {
 				let loc = self.save_location();
 				let inner = self.expression()?;
+				let semicolon = expected!(self, Tok::Semicolon, "after statement expression")?;
 				Stmt::mk_expression_ok(loc, inner)
 			}
 		}

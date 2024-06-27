@@ -206,9 +206,21 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn stmt(&mut self, stmt: &Stmt, into: &mut String) [
-
-	]
+	fn stmt(&mut self, stmt: &Stmt, into: &mut String) {
+		match stmt {
+			Stmt::Declare(_) => todo!(),
+			Stmt::Expression(expression) => {
+				// The value of the expression is unused inside a statement.
+				// Note that this automatically results in some kinds of
+				// dead-code elimination, such as 30; turning into nothing.
+				//
+				// And, because the expression itself generates any code,
+				// this function simply has to delegate to it.
+				self.expr(&expression.expression, into);
+			},
+			Stmt::FunDeclare(_) => todo!(),
+		}
+	}
 
 	fn assign(&mut self, var: VarId, expr: &Expr, into: &mut String) {
 		let ctx = self.db.get_var_type(var);
@@ -227,6 +239,25 @@ impl<'a> Codegen<'a> {
 			self.db.get_fun_ret_ctype(fun),
 			self.db.get_fun_cname(fun),
 			self.db.get_fun_cparams(fun));
+
+		// Same idea as in codegen()
+		let float = self.db.put_type(Type::Float);
+		self.push(float);
+
+		let val = self.expr(body, &mut own_buffer);
+		match val {
+			// If the block has no value, that's fine...
+			Val::None => { },
+
+			// But if it does have a value, then we write it as a default
+			// return value.
+			val => {
+				inf_writeln!(own_buffer, "return {val};");
+			}
+		}
+
+		// Pop type value
+		self.pop(float);
 
 		inf_writeln!(own_buffer, "}}");
 
@@ -253,6 +284,15 @@ impl<'a> Codegen<'a> {
 
 	fn codegen(&mut self, modules: &Vec<Module>) {
 		let mut outputs = CodegenOutputs::new();
+
+		// Strange but important: Any unassigned numeric type needs SOME kind
+		// of assigned type, such as a statement expression 1 + 2;
+		//
+		// This could, to some degree, be handled by some dead code elimination.
+		// But for now, we can just say that any undefined types are by default
+		// floats.
+		let float = self.db.put_type(Type::Float);
+		self.push(float);
 
 		for module in modules {
 			self.codegen_to_buffers(module, &mut outputs);

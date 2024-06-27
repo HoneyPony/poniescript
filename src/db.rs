@@ -145,6 +145,17 @@ impl Db {
 		// TODO: Cname generation
 		self.get(self.get(fun).name.lexeme)
 	}
+
+	pub fn get_fun_return_typid(&self, fun: FunId) -> TypId {
+		self.get(fun).return_type
+	}
+
+	pub fn does_fun_return_void(&self, fun: FunId) -> bool {
+		match self.get(self.get_fun_return_typid(fun)) {
+			Type::Void => true, 
+			_ => false
+		}
+	}
 	
 	pub fn get_fun_cparams(&self, fun: FunId) -> &'static str {
 		// This is a bit less safe. It cannot be called until

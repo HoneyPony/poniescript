@@ -293,8 +293,47 @@ impl TypeChecker {
 		self.do_assign(db, &declare.location, declare.identity, &mut declare.value);
 	}
 
-	fn fun_declare(&mut self, db: &mut Db, fun: &mut FunDeclare) {
+	fn fun_declare(&mut self, db: &mut Db, fun: &mut FunDeclare) -> Result<()> {
+		let value_used = if db.does_fun_return_void(fun.identity) {
+			// If the function returns void, we don't care about the value of
+			// the body.
+			false
+		}
+		else {
+			match &fun.value {
+				Expr::Block(block) => {
+					match block.stmts.last() {
+						Some(Stmt::Expression(_)) => true,
+						
+						// When we have Stmt::Return, we will return false here.
+						// Some(Stmt::Return)
 
+						_ => {
+							// TODO: We need to actually do a recursive code analysis
+							// that figures out which paths need to return a value..
+							type_error!(db, &block.location, "Function must return a value.");
+						}
+					}
+				}
+
+				// Any single-expr function must evaluate to a value.
+				_ => true,
+			}
+		};
+		let inner = self.do_type(db, &mut fun.value, value_used)?;
+
+		// If we're using the value of the expression, it must match the return
+		// type.
+		if value_used {
+			if inner != db.get_fun_return_typid(fun.identity) {
+				type_error!(db, &fun.location,
+					"Value of function body is {} but function returns {}",
+					db.repr_type(inner),
+					db.repr_type(db.get_fun_return_typid(fun.identity)));
+			}
+		}
+
+		Ok(())
 	}
 
 	fn module(&mut self, db: &mut Db, module: &mut Module) {
