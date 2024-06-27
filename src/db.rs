@@ -215,6 +215,14 @@ impl Db {
 		eprintln!("at {}, offset {}", location.source.0, location.offset);
 	}
 
+	pub fn type_generates_value(&self, id: TypId) -> bool {
+		match self.get(id) {
+			Type::Void => false,
+			Type::Bottom => false,
+			_ => true,
+		}
+	}
+
 	pub fn var_range(&self) -> VarIter {
 		return VarIter { 
 			len: self.arenas.arena_var.len(),

@@ -281,9 +281,6 @@ impl TypeChecker {
 				lit.typ
 			},
 			Expr::Block(block) => {
-				// Keep track of whether the value is used for later.
-				block.has_value = value_used;
-
 				// We must type-check every statement inside the block.
 				// However, the last statement is checked specially.
 				let all_but_last = match block.stmts.len() {

@@ -262,7 +262,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::RightBrace, "'}}' at end of block");
 
-		Expr::mk_block_ok(lbrace.location, stmts, self.db.put_type(Type::Void), false)
+		Expr::mk_block_ok(lbrace.location, stmts, self.db.put_type(Type::Void))
 	}
 
 	fn stmt(&mut self) -> Result<Stmt> {

@@ -68,8 +68,20 @@ enum Val {
 		lit: &'static str
 	},
 
+	/// Equivalent to Type::Bottom, sort of.
+	Bottom,
+
 	/// Used in cases where there's no value.
 	None,
+}
+
+impl Val {
+	pub fn is_bottom(&self) -> bool {
+		match self {
+			Val::Bottom => true,
+			_ => false,
+		}
+	}
 }
 
 /// The idea with this macro is that, according to the Rust documentation,
@@ -107,6 +119,7 @@ impl std::fmt::Display for Val {
 		match self {
 			Val::Tmp(idx) => write!(f, "tmp{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
+			Val::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
 			Val::None => Ok(()),
 		}
 		
@@ -196,7 +209,7 @@ impl<'a> Codegen<'a> {
 				}
 			},
 			Expr::Block(block) => {
-				let val = if block.has_value {
+				let val = if self.db.type_generates_value(block.typ) {
 					let val = self.new_val();
 
 					inf_writeln!(into, "{} {};",
@@ -228,7 +241,9 @@ impl<'a> Codegen<'a> {
 					(last, val) => {
 						let last = self.stmt(last.unwrap(), into);
 						let last = last.unwrap();
-						inf_writeln!(into, "{val} = {last};");
+						if !val.is_bottom() {
+							inf_writeln!(into, "{val} = {last};");
+						}
 
 						val
 					}
@@ -254,14 +269,18 @@ impl<'a> Codegen<'a> {
 				match &ret.expression {
 					Some(value) => {
 						let val = self.expr(value, into);
-						inf_writeln!(into, "return {val};");
+						// If the inner value is also a bottom type,
+						// then we can't really generate a return here.
+						if !val.is_bottom() {
+							inf_writeln!(into, "return {val};");
+						}
 					},
 					None => {
 						inf_writeln!(into, "return;");
 					}
 				}
 
-				None
+				Some(Val::Bottom)
 			}
 		}
 	}
