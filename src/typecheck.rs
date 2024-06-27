@@ -361,12 +361,15 @@ impl TypeChecker {
 		// If we're using the value of the expression, it must match the return
 		// type.
 		if value_used {
-			if inner != db.get_fun_return_typid(fun.identity) {
-				type_error!(self, db, &fun.location,
-					"Value of function body is {} but function returns {}",
-					db.repr_type(inner),
-					db.repr_type(db.get_fun_return_typid(fun.identity)));
-			}
+			let valid = self.unify_left(db,
+				db.get_fun_return_typid(fun.identity),
+				inner);
+			maybe_type_error!(self, 
+				valid,
+				db, &fun.location,
+				"Value of function body is {} but function returns {}",
+				db.repr_type(inner),
+				db.repr_type(db.get_fun_return_typid(fun.identity)));
 		}
 
 		Ok(())
