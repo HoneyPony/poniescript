@@ -262,7 +262,18 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::RightBrace, "'}}' at end of block");
 
-		Expr::mk_block_ok(lbrace.location, stmts, self.db.put_type(Type::Void))
+		// Note: This needs to start out as Bottom in the case that
+		// it ends up actually being Bottom, in an expression.
+		//
+		// If it isn't in an expression, it doesn't matter that it's bottom..
+		// while if it IS in an expression, it will either be bottom, or it will
+		// be something else.
+		//
+		// Essentially, if we assign Void, then it will stay void even if the
+		// last statement is return; because bottom can be assigned to void.
+		//
+		// We may want to consider simply deleting the Void type.
+		Expr::mk_block_ok(lbrace.location, stmts, self.db.put_type(Type::Bottom))
 	}
 
 	fn stmt(&mut self) -> Result<Stmt> {

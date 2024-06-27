@@ -154,6 +154,15 @@ impl TypeChecker {
 			return Ok(lhs);
 		}
 
+		let left = db.get(lhs);
+		let right = db.get(rhs);
+
+		match (left, right) {
+			(Type::Bottom, _) => return Ok(lhs),
+			(_, Type::Bottom) => return Ok(rhs),
+			_ => { }
+		}
+
 		// The idea here is that, we try both ways to see if the type can get
 		// "stronger", and so if one of them changes, we go with the one
 		// that changed.
@@ -295,7 +304,7 @@ impl TypeChecker {
 				// last statement then bail with Void.
 				if !value_used {
 					block.stmts.last_mut().map(|stmt| self.stmt(db, stmt, false));
-					return Ok(db.put_type(Type::Void));
+					return Ok(db.put_type(Type::Bottom));
 				}
 
 				// Otherwise, we need to compute a type for the value.

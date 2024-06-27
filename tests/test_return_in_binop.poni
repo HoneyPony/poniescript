@@ -1,0 +1,7 @@
+
+
+fun example() -> int {
+	3 + {
+		return 5;
+	};
+}

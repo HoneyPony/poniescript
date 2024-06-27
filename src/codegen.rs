@@ -16,6 +16,8 @@ struct Codegen<'a> {
 	/// known concrete types, and use the latest one when needed.
 	context_types: Vec<TypId>,
 
+	return_types: Vec<TypId>,
+
 	val_idx: usize,
 
 	db: &'a mut Db
@@ -133,6 +135,8 @@ impl<'a> Codegen<'a> {
 
 			context_types: Vec::new(),
 
+			return_types: Vec::new(),
+
 			val_idx: 0,
 
 			db
@@ -148,6 +152,7 @@ impl<'a> Codegen<'a> {
 	fn get_expr_ctype(&mut self, ty: TypId) -> &'static str {
 		let ty = match self.db.get(ty) {
 			Type::UnassignedDecimal | Type::UnassignedNumeric => {
+				eprintln!("context type: {}", self.db.repr_type(*self.context_types.last().unwrap()));
 				*self.context_types.last().unwrap()
 			},
 
@@ -162,6 +167,7 @@ impl<'a> Codegen<'a> {
 			Type::UnassignedDecimal | Type::UnassignedNumeric => return,
 			_ => {}
 		}
+		let ty = self.db.get_context_type(ty);
 		self.context_types.push(ty);
 	}
 
@@ -170,6 +176,7 @@ impl<'a> Codegen<'a> {
 			Type::UnassignedDecimal | Type::UnassignedNumeric => return,
 			_ => {}
 		}
+		let ty = self.db.get_context_type(ty);
 		self.context_types.pop();
 	}
 
@@ -180,6 +187,13 @@ impl<'a> Codegen<'a> {
 		let right = self.expr(&binary.right, into);
 
 		self.pop(binary.typ);
+
+		eprintln!("GOT VAL {left}");
+		eprintln!("GOT VAL {right}");
+
+		if left.is_bottom() || right.is_bottom() {
+			return Val::Bottom;
+		}
 
 		let op = match binary.op {
 			Tok::Star => '*',
@@ -217,7 +231,7 @@ impl<'a> Codegen<'a> {
 						val);
 
 					val
-				} else { Val::None };
+				} else { Val::Bottom };
 
 				let all_but_last = match block.stmts.len() {
 					0 => 0,
@@ -230,9 +244,9 @@ impl<'a> Codegen<'a> {
 				match (block.stmts.last(), val) {
 					// If the block has no val, then generate a statement
 					// and return Val::None.
-					(last, Val::None) => {
+					(last, Val::Bottom) => {
 						last.map(|last| self.stmt(last, into));
-						Val::None
+						Val::Bottom
 					},
 
 					// If the block has a val, then last MUST exist
@@ -268,7 +282,9 @@ impl<'a> Codegen<'a> {
 			Stmt::Return(ret) => {
 				match &ret.expression {
 					Some(value) => {
+						self.push(*self.return_types.last().unwrap());
 						let val = self.expr(value, into);
+						self.pop(*self.return_types.last().unwrap());
 						// If the inner value is also a bottom type,
 						// then we can't really generate a return here.
 						if !val.is_bottom() {
@@ -308,11 +324,14 @@ impl<'a> Codegen<'a> {
 			self.db.get_fun_return_typid(fun)
 		);
 		self.push(ctx_type);
+		self.return_types.push(ctx_type);
 
 		let val = self.expr(body, &mut own_buffer);
+		eprintln!("FUNCTION RETURN {val}");
 		match val {
 			// If the block has no value, that's fine...
-			Val::None => { },
+			// TODO: Consider getting rid of Val::None
+			Val::None | Val::Bottom => { },
 
 			// But if it does have a value, then we write it as a default
 			// return value.
@@ -322,6 +341,7 @@ impl<'a> Codegen<'a> {
 		}
 
 		// Pop type value
+		self.return_types.pop();
 		self.pop(ctx_type);
 
 		inf_writeln!(own_buffer, "}}");
