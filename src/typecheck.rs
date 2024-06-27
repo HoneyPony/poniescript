@@ -138,6 +138,9 @@ impl TypeChecker {
 
 			(_, Type::Unassigned) => lhs,
 
+			// The bottom type is a subtype of everything.
+			(_, Type::Bottom) => lhs,
+
 			// More branches to come with parameterized types...
 
 			_ => return Err(TypeCheckErr)
