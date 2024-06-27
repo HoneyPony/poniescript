@@ -265,9 +265,17 @@ impl TypeChecker {
 		self.do_assign(db, &declare.location, declare.identity, &mut declare.value);
 	}
 
+	fn fun_declare(&mut self, db: &mut Db, fun: &mut FunDeclare) {
+
+	}
+
 	fn module(&mut self, db: &mut Db, module: &mut Module) {
 		for global in &mut module.globals {
 			self.declare(db, global);
+		}
+
+		for fun in &mut module.functions {
+			self.fun_declare(db, fun);
 		}
 	}
 

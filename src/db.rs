@@ -31,6 +31,8 @@ pub struct Db {
 
 	/// Keep a cache of generated type reprs also for re-using them.
 	type_repr_cache: RefCell<HashMap<TypId, &'static str>>,
+
+	fun_cparams_cache: Vec<&'static str>,
 }
 
 impl Db {
@@ -46,6 +48,7 @@ impl Db {
 
 			ctype_cache: Vec::new(),
 			type_repr_cache: RefCell::new(HashMap::new()),
+			fun_cparams_cache: Vec::new(),
 		};
 
 		// Technically, this does waste the initially created
@@ -120,18 +123,34 @@ impl Db {
 	// These should definitely be cached rather than generated each time, but..
 	//
 	// TODO: Consider generating the ctypes as soon as we generate a new type
-	pub fn get_ctype(&mut self, typ: TypId) -> &'static str {
+	pub fn get_ctype(&self, typ: TypId) -> &'static str {
 		// Safety: AS LONG AS we don't call new_id outside of put_type,
 		// the index must be valid.
 		unsafe { self.ctype_cache.get_unchecked(typ.0) }
 	}
 
-	pub fn get_var_ctype(&mut self, var: VarId) -> &'static str {
+	pub fn get_var_ctype(&self, var: VarId) -> &'static str {
 		self.get_ctype(self.get(var).typ)
 	}
 
 	pub fn get_var_type(&self, var: VarId) -> TypId {
 		self.get(var).typ
+	}
+
+	pub fn get_fun_ret_ctype(&self, fun: FunId) -> &'static str {
+		self.get_ctype(self.get(fun).return_type)
+	}
+	
+	pub fn get_fun_cname(&self, fun: FunId) -> &str {
+		// TODO: Cname generation
+		self.get(self.get(fun).name.lexeme)
+	}
+	
+	pub fn get_fun_cparams(&self, fun: FunId) -> &'static str {
+		// This is a bit less safe. It cannot be called until
+		// db.generate_fun_cparams_cache() has been called, which can't be
+		// called until after type-checking.
+		unsafe { self.fun_cparams_cache.get_unchecked(fun.0) }
 	}
 
 	pub fn repr_var(&self, var: VarId) -> &str {
@@ -169,6 +188,31 @@ impl Db {
 			len: self.arenas.arena_var.len(),
 			current: 0
 		};
+	}
+
+	pub fn generate_fun_cparams_cache(&mut self) {
+		let range = self.arenas.arena_fun.len();
+
+		for id in 0..range {
+			let id = FunId(id);
+			let mut buffer = String::new();
+
+			let mut comma = false;
+
+			for param in &self.get(id).parameters {
+				if comma { buffer.push_str(", "); }
+				comma = true;
+
+				buffer.push_str(self.get_var_ctype(*param));
+				buffer.push(' ');
+				buffer.push_str(self.get_cname(*param));
+			}
+
+			if comma { buffer.push_str(", "); }
+			buffer.push_str("void* closure");
+
+			self.fun_cparams_cache.push(buffer.leak());
+		}
 	}
 }
 

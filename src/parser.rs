@@ -7,6 +7,7 @@ use crate::lexer::*;
 use crate::module::Module;
 
 use crate::expr::*;
+use crate::source::SourceLocation;
 use crate::typ::Type;
 
 pub struct Parser<'a, 'b> {
@@ -87,6 +88,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 		};
 
 		Ok(parser)
+	}
+
+	fn save_location(&self) -> SourceLocation {
+		return self.current.location.clone();
 	}
 
 	fn peek_typ(&self) -> Tok {
@@ -244,7 +249,32 @@ impl<'a, 'b> Parser<'a, 'b> {
 		return Stmt::new_declare_ok(equal.location, identity, initializer);
 	}
 
-	fn named_fun_declaration(&mut self) -> Result<FunId> {
+	fn block(&mut self) -> Result<Stmt> {
+		let lbrace = expected!(self, Tok::LeftBrace, "'{{' at beginning of block")?;
+
+		let mut stmts = Vec::new();
+
+		while !self.at(Tok::RightBrace) && !self.is_at_end() {
+			stmts.push(self.stmt()?);
+		}
+
+		expected!(self, Tok::RightBrace, "'}}' at end of block");
+
+		Stmt::mk_block_ok(lbrace.location, stmts)
+	}
+
+	fn stmt(&mut self) -> Result<Stmt> {
+		match self.peek_typ() {
+			Tok::LeftBrace => self.block(),
+			_ => {
+				let loc = self.save_location();
+				let inner = self.expression()?;
+				Stmt::mk_expression_ok(loc, inner)
+			}
+		}
+	}
+
+	fn named_fun_declaration(&mut self) -> Result<FunDeclare> {
 		let key_fun = expected!(self, Tok::Fun, "'fun'")?;
 
 		let name = expected_after!(self, Tok::Identifier, key_fun,
@@ -262,11 +292,21 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let mut return_type = self.db.put_type(Type::Void);
 
-		return Ok(self.db.new_id(Fun {
+		if let Some(arrow) = self.match_(Tok::LeftArrow)? {
+			// Parse return type
+			return_type = self.typ()?;
+		}
+
+		// Finally, parse function body.
+		// I suppose for now we can say that these are allowed to be single statements..?
+		let body = self.stmt()?;
+		let identity = self.db.new_id(Fun {
 			name,
 			parameters,
 			return_type
-		}))
+		});
+
+		Stmt::new_fundeclare_ok(key_fun.location, identity, body)
 	}
 
 	fn parse_top_level(&mut self) -> Result<()> {
@@ -279,7 +319,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 			},
 
 			Tok::Fun => {
-
+				// At the top level, unless preceded by a var .. = , a function
+				// must have a name.
+				let fun = self.named_fun_declaration()?;
+				self.module.functions.push(fun);
 			}
 
 			_ => {

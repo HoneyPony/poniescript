@@ -30,6 +30,10 @@ struct CodegenOutputs {
 			
 	/// Buffer containing the initialization code for all global variables.
 	global_init: String,
+
+	fun_declare: String,
+
+	fun_define: String,
 }
 
 impl CodegenOutputs {
@@ -37,6 +41,9 @@ impl CodegenOutputs {
 		CodegenOutputs {
 			global_define: String::new(),
 			global_init: String::new(),
+
+			fun_declare: String::new(),
+			fun_define: String::new(),
 		}
 	}
 }
@@ -195,12 +202,36 @@ impl<'a> Codegen<'a> {
 		inf_writeln!(into, "{} = {value};", self.db.get_cname(var));
 	}
 
+	// Does not generate the code for a function declaration (e.g. assigning
+	// it to a local).
+	fn function(&mut self, fun: FunId, body: &Stmt) {
+		let mut own_buffer = String::new();
+
+		inf_writeln!(own_buffer, "{} {}({}) {{",
+			self.db.get_fun_ret_ctype(fun),
+			self.db.get_fun_cname(fun),
+			self.db.get_fun_cparams(fun));
+
+		inf_writeln!(own_buffer, "}}");
+
+		self.functions.push(own_buffer);
+	}
+
 	fn codegen_to_buffers(&mut self, module: &Module, out: &mut CodegenOutputs) {
 		for global in &module.globals {
 			inf_writeln!(out.global_define, "{} {};",
 				self.db.get_var_ctype(global.identity), self.db.get_cname(global.identity));
 
 			self.assign(global.identity, &global.value, &mut out.global_init)
+		}
+
+		for fun in &module.functions {
+			inf_writeln!(out.fun_declare, "{} {}({});",
+				self.db.get_fun_ret_ctype(fun.identity),
+				self.db.get_fun_cname(fun.identity),
+				self.db.get_fun_cparams(fun.identity));
+			
+			self.function(fun.identity, &fun.value);
 		}
 	}
 
@@ -211,7 +242,12 @@ impl<'a> Codegen<'a> {
 			self.codegen_to_buffers(module, &mut outputs);
 		}
 
-		println!("{}", outputs.global_define);
+		println!("// --- global variables ---\n{}", outputs.global_define);
+		println!("// --- function declarations ---\n{}", outputs.fun_declare);
+		println!("// --- function definitions ---");
+		for fun in &self.functions {
+			println!("{}", fun);
+		}
 		println!("void poni_init() {{");
 		println!("{}", outputs.global_init);
 		println!("}}");

@@ -53,6 +53,7 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 	for field in fields {
 		let mut param_ty = field.0;
 		if param_ty == "&'static mut Expr" && opt.box_exprs { param_ty = "Expr"; }
+		if param_ty == "&'static mut Stmt" { param_ty = "Stmt"; }
 
 		if add_comma { write!(into, ", ")?; }
 		add_comma = true;
@@ -63,6 +64,9 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 	for field in fields {
 		if field.0 == "&'static mut Expr" && opt.box_exprs {
 			writeln!(into, "\t\tlet {0} = alloc_expr({0});", field.1)?;
+		}
+		if field.0 == "&'static mut Stmt" {
+			writeln!(into, "\t\tlet {0} = alloc_stmt({0});", field.1)?;
 		}
 	}
 	write!(into, "\t\t")?;
@@ -106,6 +110,9 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 
 			if ty == "Expr" && opt.box_exprs {
 				ty = "&'static mut Expr";
+			}
+			if ty == "Stmt" {
+				ty = "&'static mut Stmt";
 			}
 
 			let Some(mut name) = token(&mut spec) else { return Ok(()); };
@@ -175,6 +182,8 @@ pub fn generate(file: &mut File) {
 	
 	Declare    : VarId identity, Expr value
 	Expression : Expr expression
+	Block      : Vec<Stmt> stmts
+	FunDeclare : FunId identity, Stmt value
 
 	"#;
 
