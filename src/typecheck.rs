@@ -330,32 +330,22 @@ impl TypeChecker {
 	}
 
 	fn fun_declare(&mut self, db: &mut Db, fun: &mut FunDeclare) -> Result<()> {
-		let value_used = if db.does_fun_return_void(fun.identity) {
-			// If the function returns void, we don't care about the value of
-			// the body.
-			false
-		}
-		else {
-			match &fun.value {
-				Expr::Block(block) => {
-					match block.stmts.last() {
-						Some(Stmt::Expression(_)) => true,
-						
-						// When we have Stmt::Return, we will return false here.
-						// Some(Stmt::Return)
-
-						_ => {
-							// TODO: We need to actually do a recursive code analysis
-							// that figures out which paths need to return a value..
-							type_error!(self, db, &block.location, "Function must return a value.");
-						}
-					}
-				}
-
-				// Any single-expr function must evaluate to a value.
-				_ => true,
-			}
-		};
+		// The idea with whether we need the value to be used is somewhat tricky.
+		// Basically, in the simplest case, if we DO need a return value, then
+		// either we need:
+		//     fun example() { value; }
+		// or we need:
+		//     fun example() { return value; }
+		//
+		// In the second case, it might seem like 'return value;' doesn't evaluate 
+		// to any type, which is true, but it does evaluate to the "Has No Value"
+		// type, which can be "assigned" to any other type. So, it is perfectly fine
+		// for return value; to be the last case, and in that case, we do still
+		// "use" the value, but we just use the empty value of it.
+		//
+		// So, the only thing that affects whether we need a value is the return type.
+		// If it's void, we need no value; otherwise, we need a value.
+		let value_used = !db.does_fun_return_void(fun.identity);
 		let inner = self.do_type(db, &mut fun.value, value_used)?;
 
 		// If we're using the value of the expression, it must match the return
