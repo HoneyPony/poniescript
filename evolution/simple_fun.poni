@@ -3,3 +3,7 @@
 fun test() -> int {
 	1 + 2;
 }
+
+fun test2() -> int {
+	return 1 + 2;
+}

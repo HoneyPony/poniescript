@@ -267,6 +267,17 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 	fn stmt(&mut self) -> Result<Stmt> {
 		match self.peek_typ() {
+			Tok::Return => {
+				let key_return = self.advance()?;
+				// If there's an immediate Semicolon, it's an empty return.
+				if self.match_(Tok::Semicolon)?.is_some() {
+					return Stmt::mk_return_ok(key_return.location, None);
+				}
+
+				let inner = self.expression()?;
+				let semicolon = expected!(self, Tok::Semicolon, "after return value")?;
+				Stmt::mk_return_ok(key_return.location, Some(inner))
+			}
 			_ => {
 				let loc = self.save_location();
 				let inner = self.expression()?;

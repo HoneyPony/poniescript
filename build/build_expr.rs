@@ -184,6 +184,7 @@ pub fn generate(file: &mut File) {
 	Declare    : VarId identity, Expr value
 	Expression : Expr expression
 	FunDeclare : FunId identity, Expr value
+	Return     : Option<Expr> expression
 
 	"#;
 

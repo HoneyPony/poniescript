@@ -57,6 +57,8 @@ struct TypeChecker {
 	had_error: bool,
 
 	global_scope: bool,
+
+	return_types: Vec<TypId>,
 }
 
 struct TypeCheckErr;
@@ -95,6 +97,8 @@ impl TypeChecker {
 			had_error: false,
 
 			global_scope: false,
+
+			return_types: Vec::new(),
 		}
 	}
 
@@ -322,6 +326,49 @@ impl TypeChecker {
 				Ok(Some(self.do_type(db, &mut expr.expression, value_used)?))
 			},
 			Stmt::FunDeclare(_) => todo!(),
+			Stmt::Return(ret) => {
+				// The return statement is interesting in that it entirely
+				// ignores value_used. Because 'return' always returns
+				// the bottom type, its value may always be used if needed.
+				//
+				// That said, it DOES need to always get a value from its inner
+				// expr.
+
+				// TODO: CHeck return types
+				// Also, there's no need for a separate stack of these...
+				// We can do the good old trick where you push/pop as part of
+				// the function
+				let return_type = *self.return_types.last().unwrap();
+
+				let inner = match &mut ret.expression {
+					Some(expr) => expr,
+					None => {
+						if return_type != db.put_type(Type::Void) {
+							type_error!(self, 
+								db, &ret.location,
+								"Trying to return value in function returning void");
+						}
+
+						return Ok(Some(db.put_type(Type::Bottom)));
+					},
+				};
+
+				let typ = self.do_type(db, inner, true)?;
+
+				// TODO check return_types
+				let valid = self.unify_left(db, 
+					return_type,
+					typ);
+
+				maybe_type_error!(self, 
+					valid,
+					db, &ret.location,
+					"Trying to return {} in function returning {}",
+					db.repr_type(typ),
+					db.repr_type(return_type));
+
+				Ok(Some(db.put_type(Type::Bottom)))
+			}
 		}
 	}
 

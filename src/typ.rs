@@ -6,6 +6,8 @@ pub enum Type {
 	Float,
 	Void,
 
+	Bottom,
+
 	//Class(ClassId),
 	//Function(SignatureId),
 	//ListOf(TypId),
@@ -28,6 +30,7 @@ impl Type {
 			Type::Int => "int".to_string(),
 			Type::Float => "float".to_string(),
 			Type::Void => "void".to_string(),
+			Type::Bottom => "<bottom>".to_string(),
 			Type::Unassigned => "<unknown>".to_string(),
 			Type::UnassignedNumeric => "a number".to_string(),
 			Type::UnassignedDecimal => "a decimal number".to_string(),
@@ -42,6 +45,8 @@ impl Type {
 			Type::Float => "ps_float".into(),
 
 			Type::Void => "void".into(),
+
+			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 
 			Type::Unassigned => "<pony:compiler-err:unassigned-type>".into(),
 			Type::UnassignedNumeric => "<pony:compiler-err:unassigned-int-type>".into(),

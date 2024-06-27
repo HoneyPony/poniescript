@@ -250,6 +250,19 @@ impl<'a> Codegen<'a> {
 				Some(self.expr(&expression.expression, into))
 			},
 			Stmt::FunDeclare(_) => todo!(),
+			Stmt::Return(ret) => {
+				match &ret.expression {
+					Some(value) => {
+						let val = self.expr(value, into);
+						inf_writeln!(into, "return {val};");
+					},
+					None => {
+						inf_writeln!(into, "return;");
+					}
+				}
+
+				None
+			}
 		}
 	}
 
