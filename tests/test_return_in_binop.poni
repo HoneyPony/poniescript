@@ -12,3 +12,9 @@ fun example2() -> int {
 	{ return 20; } +
 	{ 1 * 2 * 3; };
 }
+
+fun example3() -> int {
+	{ 5; } + 
+	{ 3 + 4 + 10; } *
+	{ 1 * 2 * 3; };
+}
