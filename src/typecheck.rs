@@ -270,23 +270,54 @@ impl TypeChecker {
 				lit.typ
 			},
 			Expr::Block(block) => {
+				// Keep track of whether the value is used for later.
 				block.has_value = value_used;
-				// If the value isn't used, we can simply bail with Void.
+
+				// We must type-check every statement inside the block.
+				// However, the last statement is checked specially.
+				let all_but_last = match block.stmts.len() {
+					0 => 0,
+					n => n - 1,
+				};
+				for stmt in &mut block.stmts[0..all_but_last] {
+					self.stmt(db, stmt, false)?;
+				}
+
+				// If the value isn't used, we can simply type-check the
+				// last statement then bail with Void.
 				if !value_used {
+					block.stmts.last_mut().map(|stmt| self.stmt(db, stmt, false));
 					return Ok(db.put_type(Type::Void));
 				}
 
 				// Otherwise, we need to compute a type for the value.
-				// Note this also covers the case where the block has no last.
-				let Some(Stmt::Expression(last)) = block.stmts.last_mut() else {
+				// If the block has no statements, that's an error.
+				let Some(stmt) = block.stmts.last_mut() else {
 					type_error!(db, &block.location,
-					"Return value of block is used, but last statement is not an expression.");
+						"Return value of block is used, but the block is empty.");
 				};
 
-				// Finally, compute the type of that expression.
-				self.do_type(db, &mut last.expression, value_used)?
+				// If the block has a statement, defer to self.stmt(). But we
+				// need to get a TypId at the end.
+				let Some(val) = self.stmt(db, stmt, true)? else {
+					type_error!(db, &block.location,
+						"Return value of block is used, but its last statement has no value.");
+				};
+
+				// Return the computed TypId.
+				val
 			}
 		})
+	}
+
+	fn stmt(&mut self, db: &mut Db, stmt: &mut Stmt, value_used: bool) -> Result<Option<TypId>> {
+		match stmt {
+			Stmt::Declare(_) => todo!(),
+			Stmt::Expression(expr) => {
+				Ok(Some(self.do_type(db, &mut expr.expression, value_used)?))
+			},
+			Stmt::FunDeclare(_) => todo!(),
+		}
 	}
 
 	fn declare(&mut self, db: &mut Db, declare: &mut Declare) {

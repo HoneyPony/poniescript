@@ -1,5 +1,5 @@
 
 
-fun test() {
+fun test() -> int {
 	1 + 2;
 }

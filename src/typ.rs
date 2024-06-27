@@ -1,4 +1,4 @@
-use crate::db::{Db, StrId};
+use crate::db::*;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum Type {
@@ -38,16 +38,16 @@ impl Type {
 
 	pub fn gen_ctype(&self, db: &Db) -> String {
 		match self {
-			Type::Int => return "ps_int".into(),
-			Type::Float => return "ps_float".into(),
+			Type::Int => "ps_int".into(),
+			Type::Float => "ps_float".into(),
 
-			Type::Void => return "void".into(),
+			Type::Void => "void".into(),
 
-			Type::Unassigned | Type::UnassignedNumeric 
-			| Type::UnassignedDecimal | Type::UnboundIdent(_)
-			=> {
-				"<unassigned-type>".into()
-			}
+			Type::Unassigned => "<pony:compiler-err:unassigned-type>".into(),
+			Type::UnassignedNumeric => "<pony:compiler-err:unassigned-int-type>".into(),
+			Type::UnassignedDecimal => "<pony:compiler-err:unassigned-float-type>".into(),
+			Type::UnboundIdent(name) =>
+				format!("<pony:compiler-err:unassigned-named-type[{}]>", db.get(*name)),
 		}
 	}
 }
