@@ -173,6 +173,7 @@ pub fn generate(file: &mut File) {
 	Variable : VarId identity
 	Assign   : VarId identity, Expr value
 	Literal  : Token contents, TypId typ
+	Block    : Vec<Stmt> stmts
 	
 
 	"#;
@@ -182,8 +183,7 @@ pub fn generate(file: &mut File) {
 	
 	Declare    : VarId identity, Expr value
 	Expression : Expr expression
-	Block      : Vec<Stmt> stmts
-	FunDeclare : FunId identity, Stmt value
+	FunDeclare : FunId identity, Expr value
 
 	"#;
 

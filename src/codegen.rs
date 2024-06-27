@@ -67,6 +67,9 @@ enum Val {
 		ctype: &'static str,
 		lit: &'static str
 	},
+
+	/// Used in cases where there's no value.
+	None,
 }
 
 /// The idea with this macro is that, according to the Rust documentation,
@@ -104,6 +107,7 @@ impl std::fmt::Display for Val {
 		match self {
 			Val::Tmp(idx) => write!(f, "tmp{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
+			Val::None => Ok(()),
 		}
 		
 	}
@@ -191,8 +195,20 @@ impl<'a> Codegen<'a> {
 					lit: self.db.get(lit.contents.lexeme),
 				}
 			},
+			Expr::Block(block) => {
+				for stmt in &block.stmts {
+					self.stmt(stmt, into);
+				}
+
+				// TODO Handle non-None case
+				Val::None
+			}
 		}
 	}
+
+	fn stmt(&mut self, stmt: &Stmt, into: &mut String) [
+
+	]
 
 	fn assign(&mut self, var: VarId, expr: &Expr, into: &mut String) {
 		let ctx = self.db.get_var_type(var);
@@ -204,7 +220,7 @@ impl<'a> Codegen<'a> {
 
 	// Does not generate the code for a function declaration (e.g. assigning
 	// it to a local).
-	fn function(&mut self, fun: FunId, body: &Stmt) {
+	fn function(&mut self, fun: FunId, body: &Expr) {
 		let mut own_buffer = String::new();
 
 		inf_writeln!(own_buffer, "{} {}({}) {{",

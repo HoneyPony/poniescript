@@ -147,6 +147,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 				self.number()
 			},
 
+			Tok::LeftBrace => self.block(),
+
 			_ => {
 				got!(self, "Expected expression")
 			}
@@ -249,7 +251,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		return Stmt::new_declare_ok(equal.location, identity, initializer);
 	}
 
-	fn block(&mut self) -> Result<Stmt> {
+	fn block(&mut self) -> Result<Expr> {
 		let lbrace = expected!(self, Tok::LeftBrace, "'{{' at beginning of block")?;
 
 		let mut stmts = Vec::new();
@@ -260,12 +262,11 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::RightBrace, "'}}' at end of block");
 
-		Stmt::mk_block_ok(lbrace.location, stmts)
+		Expr::mk_block_ok(lbrace.location, stmts)
 	}
 
 	fn stmt(&mut self) -> Result<Stmt> {
 		match self.peek_typ() {
-			Tok::LeftBrace => self.block(),
 			_ => {
 				let loc = self.save_location();
 				let inner = self.expression()?;
@@ -297,16 +298,21 @@ impl<'a, 'b> Parser<'a, 'b> {
 			return_type = self.typ()?;
 		}
 
-		// Finally, parse function body.
-		// I suppose for now we can say that these are allowed to be single statements..?
-		let body = self.stmt()?;
+		// For now, the function body MUST be a block. But, we can change it
+		// to be a single expression, likely we other syntax, later.
+
+		if !self.at(Tok::LeftBrace) {
+			got!(self, "Expected '{{' after function parameter list");
+		}
+		let value = self.block()?;
+
 		let identity = self.db.new_id(Fun {
 			name,
 			parameters,
 			return_type
 		});
 
-		Stmt::new_fundeclare_ok(key_fun.location, identity, body)
+		Stmt::new_fundeclare_ok(key_fun.location, identity, value)
 	}
 
 	fn parse_top_level(&mut self) -> Result<()> {

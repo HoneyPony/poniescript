@@ -62,7 +62,7 @@ struct TypeChecker {
 struct TypeCheckErr;
 type Result<T> = std::result::Result<T, TypeCheckErr>;
 
-macro_rules! type_error {
+macro_rules! maybe_type_error {
     ($expr:expr, $db:ident, $location:expr, $($arg:tt)*) => {
 		match $expr {
 			Ok(ty) => ty,
@@ -72,6 +72,17 @@ macro_rules! type_error {
 
 				return Err(TypeCheckErr)
 			}
+		}
+    };
+}
+
+macro_rules! type_error {
+    ($db:ident, $location:expr, $($arg:tt)*) => {
+		{
+			$db.err_locate($location);
+			eprintln!($($arg)*);
+
+			return Err(TypeCheckErr)
 		}
     };
 }
@@ -216,9 +227,9 @@ impl TypeChecker {
 	}
 
 	fn do_assign(&mut self, db: &mut Db, at: &SourceLocation, var: VarId, expr: &mut Expr) -> Result<TypId> {
-		let value = self.do_type(db, expr)?;
+		let value = self.do_type(db, expr, true)?;
 
-		let unified = type_error!(
+		let unified = maybe_type_error!(
 			self.unify_assign(db, var, value),
 
 			db,
@@ -232,13 +243,13 @@ impl TypeChecker {
 		Ok(unified)
 	}
 
-	fn do_type(&mut self, db: &mut Db, expr: &mut Expr) -> Result<TypId> {
+	fn do_type(&mut self, db: &mut Db, expr: &mut Expr, value_used: bool) -> Result<TypId> {
 		Ok(match expr {
 			Expr::Binary(binary) => {
-				let left = self.do_type(db, &mut binary.left)?;
-				let right = self.do_type(db, &mut binary.right)?;
+				let left = self.do_type(db, &mut binary.left, value_used)?;
+				let right = self.do_type(db, &mut binary.right, value_used)?;
 
-				let unified = type_error!(
+				let unified = maybe_type_error!(
 					self.unify_bi(db, left, right),
 					db,
 					&binary.location,
@@ -258,6 +269,23 @@ impl TypeChecker {
 			Expr::Literal(lit) => {
 				lit.typ
 			},
+			Expr::Block(block) => {
+				block.has_value = value_used;
+				// If the value isn't used, we can simply bail with Void.
+				if !value_used {
+					return Ok(db.put_type(Type::Void));
+				}
+
+				// Otherwise, we need to compute a type for the value.
+				// Note this also covers the case where the block has no last.
+				let Some(Stmt::Expression(last)) = block.stmts.last_mut() else {
+					type_error!(db, &block.location,
+					"Return value of block is used, but last statement is not an expression.");
+				};
+
+				// Finally, compute the type of that expression.
+				self.do_type(db, &mut last.expression, value_used)?
+			}
 		})
 	}
 
