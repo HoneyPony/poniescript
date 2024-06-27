@@ -393,7 +393,13 @@ impl TypeChecker {
 		// So, the only thing that affects whether we need a value is the return type.
 		// If it's void, we need no value; otherwise, we need a value.
 		let value_used = !db.does_fun_return_void(fun.identity);
+		let return_type = db.get_fun_return_typid(fun.identity);
+
+		self.return_types.push(return_type);
+
 		let inner = self.do_type(db, &mut fun.value, value_used)?;
+
+		self.return_types.pop();
 
 		// If we're using the value of the expression, it must match the return
 		// type.
