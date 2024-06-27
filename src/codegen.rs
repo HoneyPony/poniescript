@@ -241,8 +241,10 @@ impl<'a> Codegen<'a> {
 			self.db.get_fun_cparams(fun));
 
 		// Same idea as in codegen()
-		let float = self.db.put_type(Type::Float);
-		self.push(float);
+		let ctx_type = self.db.get_context_type(
+			self.db.get_fun_return_typid(fun)
+		);
+		self.push(ctx_type);
 
 		let val = self.expr(body, &mut own_buffer);
 		match val {
@@ -257,7 +259,7 @@ impl<'a> Codegen<'a> {
 		}
 
 		// Pop type value
-		self.pop(float);
+		self.pop(ctx_type);
 
 		inf_writeln!(own_buffer, "}}");
 

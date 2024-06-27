@@ -164,6 +164,27 @@ impl Db {
 		unsafe { self.fun_cparams_cache.get_unchecked(fun.0) }
 	}
 
+	/// Computes the needed "context type" corresponding to the given
+	/// type. This is the type used for UnassignedNumeric types while
+	/// code-gening.
+	/// 
+	/// If there is a specific needed type, e.g. Int or Float, this will
+	/// return that; otherwise, it will return Float, which is the most
+	/// generic.
+	/// 
+	/// That said, if a type is not getting propagated, it is either the
+	/// last value in a block, or dead code.
+	pub fn get_context_type(&mut self, typ: TypId) -> TypId {
+		let typ = match self.get(typ) {
+			Type::Int => Type::Int,
+			Type::Float => Type::Float,
+			_ => Type::Float,
+		};
+
+		/// TODO: CACHE FLOAT AND INT VALUES SO THIS CAN BE &self
+		return self.put_type(typ);
+	}
+
 	pub fn repr_var(&self, var: VarId) -> &str {
 		self.get(self.get(var).name.lexeme)
 	}
