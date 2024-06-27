@@ -63,10 +63,11 @@ struct TypeCheckErr;
 type Result<T> = std::result::Result<T, TypeCheckErr>;
 
 macro_rules! maybe_type_error {
-    ($expr:expr, $db:ident, $location:expr, $($arg:tt)*) => {
+    ($self:ident, $expr:expr, $db:ident, $location:expr, $($arg:tt)*) => {
 		match $expr {
 			Ok(ty) => ty,
 			Err(_) => {
+				$self.had_error = true;
 				$db.err_locate($location);
 				eprintln!($($arg)*);
 
@@ -77,8 +78,9 @@ macro_rules! maybe_type_error {
 }
 
 macro_rules! type_error {
-    ($db:ident, $location:expr, $($arg:tt)*) => {
+    ($self:ident, $db:ident, $location:expr, $($arg:tt)*) => {
 		{
+			$self.had_error = true;
 			$db.err_locate($location);
 			eprintln!($($arg)*);
 
@@ -230,6 +232,7 @@ impl TypeChecker {
 		let value = self.do_type(db, expr, true)?;
 
 		let unified = maybe_type_error!(
+			self,
 			self.unify_assign(db, var, value),
 
 			db,
@@ -250,6 +253,7 @@ impl TypeChecker {
 				let right = self.do_type(db, &mut binary.right, value_used)?;
 
 				let unified = maybe_type_error!(
+					self,
 					self.unify_bi(db, left, right),
 					db,
 					&binary.location,
@@ -293,14 +297,14 @@ impl TypeChecker {
 				// Otherwise, we need to compute a type for the value.
 				// If the block has no statements, that's an error.
 				let Some(stmt) = block.stmts.last_mut() else {
-					type_error!(db, &block.location,
+					type_error!(self, db, &block.location,
 						"Return value of block is used, but the block is empty.");
 				};
 
 				// If the block has a statement, defer to self.stmt(). But we
 				// need to get a TypId at the end.
 				let Some(val) = self.stmt(db, stmt, true)? else {
-					type_error!(db, &block.location,
+					type_error!(self, db, &block.location,
 						"Return value of block is used, but its last statement has no value.");
 				};
 
@@ -343,7 +347,7 @@ impl TypeChecker {
 						_ => {
 							// TODO: We need to actually do a recursive code analysis
 							// that figures out which paths need to return a value..
-							type_error!(db, &block.location, "Function must return a value.");
+							type_error!(self, db, &block.location, "Function must return a value.");
 						}
 					}
 				}
@@ -358,7 +362,7 @@ impl TypeChecker {
 		// type.
 		if value_used {
 			if inner != db.get_fun_return_typid(fun.identity) {
-				type_error!(db, &fun.location,
+				type_error!(self, db, &fun.location,
 					"Value of function body is {} but function returns {}",
 					db.repr_type(inner),
 					db.repr_type(db.get_fun_return_typid(fun.identity)));
