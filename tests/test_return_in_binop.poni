@@ -5,3 +5,10 @@ fun example() -> int {
 		return 5;
 	};
 }
+
+fun example2() -> int {
+	{ 5; } + 
+	{ 3 + 4 + 10; } *
+	{ return 20; } +
+	{ 1 * 2 * 3; };
+}

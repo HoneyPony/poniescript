@@ -184,16 +184,12 @@ impl<'a> Codegen<'a> {
 		self.push(binary.typ);
 
 		let left = self.expr(&binary.left, into);
+		if left.is_bottom() { return Val::Bottom; }
+
 		let right = self.expr(&binary.right, into);
+		if right.is_bottom() { return Val::Bottom; }
 
 		self.pop(binary.typ);
-
-		eprintln!("GOT VAL {left}");
-		eprintln!("GOT VAL {right}");
-
-		if left.is_bottom() || right.is_bottom() {
-			return Val::Bottom;
-		}
 
 		let op = match binary.op {
 			Tok::Star => '*',
