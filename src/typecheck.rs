@@ -305,6 +305,7 @@ impl TypeChecker {
 				};
 
 				// Return the computed TypId.
+				block.typ = val;
 				val
 			}
 		})

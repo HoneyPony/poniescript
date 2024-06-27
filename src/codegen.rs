@@ -196,17 +196,48 @@ impl<'a> Codegen<'a> {
 				}
 			},
 			Expr::Block(block) => {
-				for stmt in &block.stmts {
+				let val = if block.has_value {
+					let val = self.new_val();
+
+					inf_writeln!(into, "{} {};",
+						self.get_expr_ctype(block.typ),
+						val);
+
+					val
+				} else { Val::None };
+
+				let all_but_last = match block.stmts.len() {
+					0 => 0,
+					n => n - 1,
+				};
+				for stmt in &block.stmts[0..all_but_last] {
 					self.stmt(stmt, into);
 				}
 
-				// TODO Handle non-None case
-				Val::None
+				match (block.stmts.last(), val) {
+					// If the block has no val, then generate a statement
+					// and return Val::None.
+					(last, Val::None) => {
+						last.map(|last| self.stmt(last, into));
+						Val::None
+					},
+
+					// If the block has a val, then last MUST exist
+					// (otherwise the type checker is broken)
+					// so return its value.
+					(last, val) => {
+						let last = self.stmt(last.unwrap(), into);
+						let last = last.unwrap();
+						inf_writeln!(into, "{val} = {last};");
+
+						val
+					}
+				}
 			}
 		}
 	}
 
-	fn stmt(&mut self, stmt: &Stmt, into: &mut String) {
+	fn stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<Val> {
 		match stmt {
 			Stmt::Declare(_) => todo!(),
 			Stmt::Expression(expression) => {
@@ -216,7 +247,7 @@ impl<'a> Codegen<'a> {
 				//
 				// And, because the expression itself generates any code,
 				// this function simply has to delegate to it.
-				self.expr(&expression.expression, into);
+				Some(self.expr(&expression.expression, into))
 			},
 			Stmt::FunDeclare(_) => todo!(),
 		}
