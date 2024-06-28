@@ -20,6 +20,8 @@ struct Codegen<'a> {
 
 	val_idx: usize,
 
+	indent_level: usize,
+
 	db: &'a mut Db
 }
 
@@ -128,6 +130,19 @@ impl std::fmt::Display for Val {
 	}
 }
 
+struct Indenter {
+	level: usize,
+}
+
+impl std::fmt::Display for Indenter {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		for i in 0..self.level {
+			write!(f, "\t")?;
+		}
+		Ok(())
+	}
+}
+
 impl<'a> Codegen<'a> {
 	fn new(db: &'a mut Db) -> Self {
 		return Codegen {
@@ -139,9 +154,13 @@ impl<'a> Codegen<'a> {
 
 			val_idx: 0,
 
+			indent_level: 0,
+
 			db
 		}
 	}
+
+	fn indent(&self) -> Indenter { return Indenter { level: self.indent_level } }
 
 	fn new_val(&mut self) -> Val {
 		let val = Val::Tmp(self.val_idx);
@@ -200,13 +219,15 @@ impl<'a> Codegen<'a> {
 
 		let val = self.new_val();
 		let ctype = self.get_expr_ctype(binary.typ);
+		let indent = self.indent();
 		// TODO: Indentation system
-		inf_writeln!(into, "const {ctype} {val} = {left} {op} {right};");
+		inf_writeln!(into, "{indent}const {ctype} {val} = {left} {op} {right};");
 
 		val
 	}
 
 	fn expr(&mut self, expr: &Expr, into: &mut String) -> Val {
+		let indent = self.indent();
 		match expr {
 			Expr::Binary(binary) => self.binary(binary, into),
 			Expr::Variable(_) => todo!(),
@@ -221,7 +242,7 @@ impl<'a> Codegen<'a> {
 				let val = if self.db.type_generates_value(block.typ) {
 					let val = self.new_val();
 
-					inf_writeln!(into, "{} {};",
+					inf_writeln!(into, "{indent}{} {};",
 						self.get_expr_ctype(block.typ),
 						val);
 
@@ -232,7 +253,8 @@ impl<'a> Codegen<'a> {
 					0 => 0,
 					n => n - 1,
 				};
-				inf_writeln!(into, "{{");
+				inf_writeln!(into, "{indent}{{");
+				self.indent_level += 1;
 				for stmt in &block.stmts[0..all_but_last] {
 					self.stmt(stmt, into);
 				}
@@ -252,20 +274,23 @@ impl<'a> Codegen<'a> {
 						let last = self.stmt(last.unwrap(), into);
 						let last = last.unwrap();
 						if !val.is_bottom() {
-							inf_writeln!(into, "{val} = {last};");
+							// Add one to indent because we're in the block
+							inf_writeln!(into, "{indent}\t{val} = {last};");
 						}
 
 						val
 					}
 				};
 
-				inf_writeln!(into, "}}");
+				self.indent_level -= 1;
+				inf_writeln!(into, "{indent}}}");
 				val
 			}
 		}
 	}
 
 	fn stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<Val> {
+		let indent = self.indent();
 		match stmt {
 			Stmt::Declare(_) => todo!(),
 			Stmt::Expression(expression) => {
@@ -287,11 +312,11 @@ impl<'a> Codegen<'a> {
 						// If the inner value is also a bottom type,
 						// then we can't really generate a return here.
 						if !val.is_bottom() {
-							inf_writeln!(into, "return {val};");
+							inf_writeln!(into, "{indent}return {val};");
 						}
 					},
 					None => {
-						inf_writeln!(into, "return;");
+						inf_writeln!(into, "{indent}return;");
 					}
 				}
 
@@ -305,12 +330,18 @@ impl<'a> Codegen<'a> {
 		self.push(ctx);
 		let value = self.expr(expr, into);
 		self.pop(ctx);
-		inf_writeln!(into, "{} = {value};", self.db.get_cname(var));
+
+		let indent = self.indent();
+		inf_writeln!(into, "{indent}{} = {value};", self.db.get_cname(var));
 	}
 
 	// Does not generate the code for a function declaration (e.g. assigning
 	// it to a local).
 	fn function(&mut self, fun: FunId, body: &Expr) {
+		let enclosing_indent = self.indent_level;
+		self.indent_level = 1;
+		let indent = self.indent();
+
 		let mut own_buffer = String::new();
 
 		inf_writeln!(own_buffer, "{} {}({}) {{",
@@ -334,7 +365,7 @@ impl<'a> Codegen<'a> {
 			// But if it does have a value, then we write it as a default
 			// return value.
 			val => {
-				inf_writeln!(own_buffer, "return {val};");
+				inf_writeln!(own_buffer, "{indent}return {val};");
 			}
 		}
 
@@ -342,19 +373,25 @@ impl<'a> Codegen<'a> {
 		self.return_types.pop();
 		self.pop(ctx_type);
 
+		self.indent_level = enclosing_indent;
+
 		inf_writeln!(own_buffer, "}}");
 
 		self.functions.push(own_buffer);
 	}
 
 	fn codegen_to_buffers(&mut self, module: &Module, out: &mut CodegenOutputs) {
+		// Use an indent level of 1 for the initialization code for all global variables.
+		self.indent_level = 1;
 		for global in &module.globals {
+			// Just dierectly encode the indentation..
 			inf_writeln!(out.global_define, "{} {};",
 				self.db.get_var_ctype(global.identity), self.db.get_cname(global.identity));
 
 			self.assign(global.identity, &global.value, &mut out.global_init)
 		}
 
+		self.indent_level = 0;
 		for fun in &module.functions {
 			inf_writeln!(out.fun_declare, "{} {}({});",
 				self.db.get_fun_ret_ctype(fun.identity),
