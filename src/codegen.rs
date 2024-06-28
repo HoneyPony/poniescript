@@ -152,7 +152,6 @@ impl<'a> Codegen<'a> {
 	fn get_expr_ctype(&mut self, ty: TypId) -> &'static str {
 		let ty = match self.db.get(ty) {
 			Type::UnassignedDecimal | Type::UnassignedNumeric => {
-				eprintln!("context type: {}", self.db.repr_type(*self.context_types.last().unwrap()));
 				*self.context_types.last().unwrap()
 			},
 
@@ -323,7 +322,6 @@ impl<'a> Codegen<'a> {
 		self.return_types.push(ctx_type);
 
 		let val = self.expr(body, &mut own_buffer);
-		eprintln!("FUNCTION RETURN {val}");
 		match val {
 			// If the block has no value, that's fine...
 			// TODO: Consider getting rid of Val::None

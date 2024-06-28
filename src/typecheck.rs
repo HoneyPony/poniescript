@@ -111,7 +111,7 @@ impl TypeChecker {
 	//	ty_left
 	//}
 
-	fn unify_left(&mut self, db: &mut Db, lhs: TypId, rhs: TypId) -> Result<TypId> {
+	fn unify_lhs_superset_rhs(&mut self, db: &mut Db, lhs: TypId, rhs: TypId) -> Result<TypId> {
 		// If equal: Nothing else to be learned.
 		if lhs == rhs {
 			return Ok(lhs);
@@ -149,7 +149,9 @@ impl TypeChecker {
 		Ok(unified)
 	}
 
-	fn unify_bi(&mut self, db: &mut Db, lhs: TypId, rhs: TypId) -> Result<TypId> {
+	// Computes the "intersection" of the two types if possible.
+	// Note that, e.g., Type::Bottom intersect Anything = Type::Bottom
+	fn unify_intersect(&mut self, db: &mut Db, lhs: TypId, rhs: TypId) -> Result<TypId> {
 		if lhs == rhs {
 			return Ok(lhs);
 		}
@@ -157,34 +159,33 @@ impl TypeChecker {
 		let left = db.get(lhs);
 		let right = db.get(rhs);
 
+		// The original idea was to try to use a single-directional type to
+		// infer these. But, that doesn't quite work.
+		//
+		// In particular, consider, e.g. int x = <bottom> -- this is a valid
+		// assignment to x.
+		//
+		// But then consider 3 + <bottom> -- this should actually have type
+		// <bottom> in our system. But the single-directional type rule would
+		// assign 'int' to this, perhaps.
+		//
+		// So the "intersection" rule must be unique somehow.
+
 		match (left, right) {
 			(Type::Bottom, _) => return Ok(lhs),
 			(_, Type::Bottom) => return Ok(rhs),
+
+			(Type::Int, Type::UnassignedNumeric) => return Ok(lhs),
+			(Type::UnassignedNumeric, Type::Int) => return Ok(rhs),
+
+			(Type::Float, Type::UnassignedNumeric | Type::UnassignedDecimal) => return Ok(lhs),
+			(Type::UnassignedNumeric | Type::UnassignedDecimal, Type::Float) => return Ok(rhs),
+		
+			(Type::UnassignedDecimal, Type::UnassignedNumeric) => return Ok(lhs),
+			(Type::UnassignedNumeric, Type::UnassignedDecimal) => return Ok(lhs),
 			_ => { }
 		}
 
-		// The idea here is that, we try both ways to see if the type can get
-		// "stronger", and so if one of them changes, we go with the one
-		// that changed.
-		//
-		// If our unify_left method is sound, it should only be possible for
-		// the type values to move in one direction.
-		if let Ok(candidate) = self.unify_left(db, lhs, rhs) {
-			// TODO: Are these if checks redundant..?
-			if candidate != rhs {
-				return Ok(candidate);
-			}
-		}
-
-		// If that didn't do anything, try unifying the other way.
-		if let Ok(candidate) = self.unify_left(db, rhs, lhs) {
-			if candidate != lhs {
-				return Ok(candidate);
-			}
-		}
-
-		// If neither unification worked, then the types are not compatible
-		// in either direction.
 		return Err(TypeCheckErr)
 	}
 
@@ -270,7 +271,7 @@ impl TypeChecker {
 
 				let unified = maybe_type_error!(
 					self,
-					self.unify_bi(db, left, right),
+					self.unify_intersect(db, left, right),
 					db,
 					&binary.location,
 					"Invalid operands to binary operator: LHS is {}, RHS is {}",
@@ -365,7 +366,7 @@ impl TypeChecker {
 				let typ = self.do_type(db, inner, true)?;
 
 				// TODO check return_types
-				let valid = self.unify_left(db, 
+				let valid = self.unify_lhs_superset_rhs(db, 
 					return_type,
 					typ);
 
@@ -413,7 +414,7 @@ impl TypeChecker {
 		// If we're using the value of the expression, it must match the return
 		// type.
 		if value_used {
-			let valid = self.unify_left(db,
+			let valid = self.unify_lhs_superset_rhs(db,
 				db.get_fun_return_typid(fun.identity),
 				inner);
 			maybe_type_error!(self, 
