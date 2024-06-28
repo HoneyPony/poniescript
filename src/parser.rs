@@ -291,13 +291,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 				}
 
 				let inner = self.expression()?;
-				let semicolon = expected!(self, Tok::Semicolon, "after return value")?;
+				let semicolon = expected!(self, Tok::Semicolon, "';' after return value")?;
 				Stmt::mk_return_ok(key_return.location, Some(inner))
 			}
 			_ => {
 				let loc = self.save_location();
 				let inner = self.expression()?;
-				let semicolon = expected!(self, Tok::Semicolon, "after statement expression")?;
+				let semicolon = expected!(self, Tok::Semicolon, "';' after statement expression")?;
 				Stmt::mk_expression_ok(loc, inner)
 			}
 		}
