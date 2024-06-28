@@ -237,7 +237,10 @@ impl<'a> Codegen<'a> {
 			Expr::Variable(variable) => {
 				Val::DirectVar { name: self.db.get_cname(variable.identity) }
 			},
-			Expr::Assign(_) => todo!(),
+			Expr::Assign(assign) => {
+				self.assign(assign.identity, assign.value, into, false);
+				Val::DirectVar { name: self.db.get_cname(assign.identity) }
+			},
 			Expr::Literal(lit) => {
 				Val::DirectLit {
 					ctype: self.get_expr_ctype(lit.typ),

@@ -1,0 +1,14 @@
+fun test() -> int {
+	var x = 5;
+	x = 6;
+	x = 7;
+	x;
+}
+
+fun test2() -> float {
+	var y: float = 5;
+	var z: float = 10;
+	y = y * 5;
+	z = y + z + y + z * 2;
+	return z;
+}

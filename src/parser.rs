@@ -211,11 +211,25 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		// In the future, if we see a dot or a (), we might generate a getter/setter/call.
 		// For now, we just generate either a Variable or some unbound name.
-		match self.scope_lookup(ident.lexeme) {
-			ScopeEntry::Var(identity) => Expr::mk_variable_ok(ident.location, identity),
+		let mut expr = match self.scope_lookup(ident.lexeme) {
+			ScopeEntry::Var(identity) => Expr::mk_variable(ident.location, identity),
 			ScopeEntry::Fun(_) => todo!(),
-			ScopeEntry::None => Expr::mk_unbound_ok(ident.location.clone(), ident),
+			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
+		};
+
+		if let Some(equal) = self.match_(Tok::Equal)? {
+			let rhs = self.expression()?;
+
+			// Assignment
+			return match expr {
+				Expr::Variable(variable) => 
+					Expr::mk_assign_ok(variable.location, variable.identity, rhs),
+				Expr::Unbound(_) => todo!(),
+				_ => unreachable!()
+			}
 		}
+
+		Ok(expr)
 	}
 
 	fn expr_prefix(&mut self) -> Result<Expr> {
