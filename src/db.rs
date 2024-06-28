@@ -123,7 +123,7 @@ impl Db {
 
 	pub fn get_cname(&self, var: VarId) -> &'static str {
 		// TODO: Cname generation, as well as 'extern C' sort of thing
-		unsafe { self.var_cname_cache.get_unchecked(var.0) }
+		unsafe { self.var_cname_cache.get_unchecked(var.to_usize()) }
 	}
 
 	// These should definitely be cached rather than generated each time, but..
@@ -132,7 +132,7 @@ impl Db {
 	pub fn get_ctype(&self, typ: TypId) -> &'static str {
 		// Safety: AS LONG AS we don't call new_id outside of put_type,
 		// the index must be valid.
-		unsafe { self.ctype_cache.get_unchecked(typ.0) }
+		unsafe { self.ctype_cache.get_unchecked(typ.to_usize()) }
 	}
 
 	pub fn get_var_ctype(&self, var: VarId) -> &'static str {
@@ -149,7 +149,7 @@ impl Db {
 	
 	pub fn get_fun_cname(&self, fun: FunId) -> &str {
 		// TODO: Cname generation
-		unsafe { self.fun_cname_cache.get_unchecked(fun.0) }
+		unsafe { self.fun_cname_cache.get_unchecked(fun.to_usize()) }
 	}
 
 	pub fn get_fun_return_typid(&self, fun: FunId) -> TypId {
@@ -167,7 +167,7 @@ impl Db {
 		// This is a bit less safe. It cannot be called until
 		// db.generate_fun_cparams_cache() has been called, which can't be
 		// called until after type-checking.
-		unsafe { self.fun_cparams_cache.get_unchecked(fun.0) }
+		unsafe { self.fun_cparams_cache.get_unchecked(fun.to_usize()) }
 	}
 
 	/// Computes the needed "context type" corresponding to the given
@@ -231,7 +231,7 @@ impl Db {
 
 	pub fn var_range(&self) -> VarIter {
 		return VarIter { 
-			len: self.arenas.arena_var.len(),
+			len: self.arenas.arena_var.len() as IdType,
 			current: 0
 		};
 	}
@@ -244,7 +244,7 @@ impl Db {
 	}
 
 	fn generate_var_cnames_cache(&mut self) {
-		let range = self.arenas.arena_var.len();
+		let range = self.arenas.arena_var.len() as IdType;
 
 		for id in 0..range {
 			let var = VarId(id);
@@ -256,7 +256,7 @@ impl Db {
 	}
 
 	fn generate_fun_cnames_cache(&mut self) {
-		let range = self.arenas.arena_fun.len();
+		let range = self.arenas.arena_fun.len() as IdType;
 
 		for id in 0..range {
 			let fun = FunId(id);
@@ -268,7 +268,7 @@ impl Db {
 	}
 
 	fn generate_fun_cparams_cache(&mut self) {
-		let range = self.arenas.arena_fun.len();
+		let range = self.arenas.arena_fun.len() as IdType;
 
 		for id in 0..range {
 			let id = FunId(id);
@@ -294,8 +294,8 @@ impl Db {
 }
 
 pub struct VarIter {
-	len: usize,
-	current: usize,
+	len: IdType,
+	current: IdType,
 }
 
 impl Iterator for VarIter {

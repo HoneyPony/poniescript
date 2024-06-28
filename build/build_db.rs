@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::Write as _;
 use std::fmt::Write as _;
 
+static TY: &str = "u32";
+
 fn generate_struct(struct_: &mut String, id: &str, ty: &str) -> String {
 	// Chop off the "id" part then convert to lowercase
 	let new_name = id[..id.len() - 2].to_ascii_lowercase();
@@ -17,20 +19,24 @@ fn generate_struct(struct_: &mut String, id: &str, ty: &str) -> String {
 
 fn generate_id(file: &mut File, name: &str, ty: &str, arena: &str) -> std::io::Result<()> {
 	writeln!(file, "#[derive(Clone, Copy, PartialEq, Eq, Hash)]")?;
-	writeln!(file, "pub struct {name}(usize);\n")?;
+	writeln!(file, "pub struct {name}({TY});\n")?;
+	writeln!(file, "impl {name} {{")?;
+	writeln!(file, "\tpub fn to_usize(self) -> usize {{ self.0 as usize }}")?;
+	//writeln!(file, "\tpub fn from_usize(v: usize) -> Self {{ {name}(v as {TY}) }}")?;
+	writeln!(file, "}}\n")?;
 
 	writeln!(file, "impl IdFuncs<{name}, {ty}> for Db {{")?;
 
 	writeln!(file, "\tfn get(&self, id: {name}) -> &{ty} {{")?;
-	writeln!(file, "\t\tunsafe {{ self.arenas.{arena}.get_unchecked(id.0) }} ")?;
+	writeln!(file, "\t\tunsafe {{ self.arenas.{arena}.get_unchecked(id.to_usize()) }} ")?;
 	writeln!(file, "\t}}")?;
 
 	writeln!(file, "\tfn get_mut(&mut self, id: {name}) -> &mut {ty} {{")?;
-	writeln!(file, "\t\tunsafe {{ self.arenas.{arena}.get_unchecked_mut(id.0) }} ")?;
+	writeln!(file, "\t\tunsafe {{ self.arenas.{arena}.get_unchecked_mut(id.to_usize()) }} ")?;
 	writeln!(file, "\t}}")?;
 
 	writeln!(file, "\tfn new_id(&mut self, item: {ty}) -> {name} {{")?;
-	writeln!(file, "\t\tlet index = self.arenas.{arena}.len();")?;
+	writeln!(file, "\t\tlet index = self.arenas.{arena}.len() as {TY};")?;
 	writeln!(file, "\t\tself.arenas.{arena}.push(item);")?;
 	writeln!(file, "\t\t{name}(index)")?;
 	writeln!(file, "\t}}")?;
@@ -43,6 +49,7 @@ fn generate_id(file: &mut File, name: &str, ty: &str, arena: &str) -> std::io::R
 fn generate_impl(file: &mut File, pairs: &Vec<(&str, &str)>) {
 	let mut init = String::new();
 	let mut struct_ = String::new();
+	writeln!(file, "pub type IdType = {TY};").unwrap();
 	writeln!(init, "impl DbArenas {{").unwrap();
 	writeln!(init, "\tpub fn new() -> Self {{").unwrap();
 	writeln!(init, "\t\treturn DbArenas {{").unwrap();
