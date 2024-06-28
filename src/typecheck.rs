@@ -344,11 +344,14 @@ impl TypeChecker {
 				// That said, it DOES need to always get a value from its inner
 				// expr.
 
-				// TODO: CHeck return types
-				// Also, there's no need for a separate stack of these...
+				// TODO: there's no need for a separate stack of these...
 				// We can do the good old trick where you push/pop as part of
 				// the function
-				let return_type = *self.return_types.last().unwrap();
+				let Some(&return_type) = self.return_types.last() else {
+					type_error!(self,
+						db, &ret.location,
+						"Trying to return outside of a function.");
+				};
 
 				let inner = match &mut ret.expression {
 					Some(expr) => expr,
@@ -364,8 +367,6 @@ impl TypeChecker {
 				};
 
 				let typ = self.do_type(db, inner, true)?;
-
-				// TODO check return_types
 				let valid = self.unify_lhs_superset_rhs(db, 
 					return_type,
 					typ);
