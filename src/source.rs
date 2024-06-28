@@ -16,6 +16,16 @@ pub struct SourceLocation {
 	pub length: u64,
 }
 
+struct SourceMap {
+	lines: Vec<usize>,
+}
+
+impl SourceMap {
+	pub fn find_corresponding_line(idx: usize) {
+		
+	}
+}
+
 pub struct Source {
 	name: String,
 	path: PathBuf,
