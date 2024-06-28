@@ -1,0 +1,13 @@
+fun test() -> int {
+	var x = 5;
+	var y = x + 2;
+	return x;
+}
+
+fun test2() -> int {
+	var z = 10;
+	var abc = {
+		10 + z;
+	};
+	abc;
+}

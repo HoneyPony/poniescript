@@ -325,13 +325,21 @@ impl TypeChecker {
 				// Return the computed TypId.
 				block.typ = val;
 				val
+			},
+			Expr::Unbound(_) => {
+				// In theory we will resolve all idents beforehand? But this might
+				// be different if we have function overloading.
+				panic!("compiler-err:tried-to-typecheck-an-unbound-identifier-expression");
 			}
 		})
 	}
 
 	fn stmt(&mut self, db: &mut Db, stmt: &mut Stmt, value_used: bool) -> Result<Option<TypId>> {
 		match stmt {
-			Stmt::Declare(_) => todo!(),
+			Stmt::Declare(declare) => {
+				self.declare(db, declare);
+				Ok(None)
+			},
 			Stmt::Expression(expr) => {
 				Ok(Some(self.do_type(db, &mut expr.expression, value_used)?))
 			},

@@ -174,7 +174,7 @@ pub fn generate(file: &mut File) {
 	Assign   : VarId identity, Expr value
 	Literal  : Token contents, TypId typ
 	Block    : Vec<Stmt> stmts, TypId typ
-	
+	Unbound  : Token identifier
 
 	"#;
 

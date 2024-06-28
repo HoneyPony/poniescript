@@ -71,6 +71,9 @@ enum Val {
 		ctype: &'static str,
 		lit: &'static str
 	},
+	DirectVar {
+		name: &'static str
+	},
 
 	/// Equivalent to Type::Bottom, sort of.
 	Bottom,
@@ -123,6 +126,7 @@ impl std::fmt::Display for Val {
 		match self {
 			Val::Tmp(idx) => write!(f, "tmp{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
+			Val::DirectVar { name } => write!(f, "{name}"),
 			Val::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
 			Val::None => Ok(()),
 		}
@@ -230,7 +234,9 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 		match expr {
 			Expr::Binary(binary) => self.binary(binary, into),
-			Expr::Variable(_) => todo!(),
+			Expr::Variable(variable) => {
+				Val::DirectVar { name: self.db.get_cname(variable.identity) }
+			},
 			Expr::Assign(_) => todo!(),
 			Expr::Literal(lit) => {
 				Val::DirectLit {
@@ -286,13 +292,19 @@ impl<'a> Codegen<'a> {
 				inf_writeln!(into, "{indent}}}");
 				val
 			}
+			Expr::Unbound(_) => {
+				panic!("compiler-err:tried-to-codegen-an-unbound-identifier-expression");
+			}
 		}
 	}
 
 	fn stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<Val> {
 		let indent = self.indent();
 		match stmt {
-			Stmt::Declare(_) => todo!(),
+			Stmt::Declare(declare) => {
+				self.assign(declare.identity, &declare.value, into, true);
+				None
+			},
 			Stmt::Expression(expression) => {
 				// The value of the expression is unused inside a statement.
 				// Note that this automatically results in some kinds of
@@ -325,14 +337,18 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn assign(&mut self, var: VarId, expr: &Expr, into: &mut String) {
+	fn assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) {
 		let ctx = self.db.get_var_type(var);
 		self.push(ctx);
 		let value = self.expr(expr, into);
 		self.pop(ctx);
 
+		let (declaration, space) = if is_declaration {
+			(self.db.get_var_ctype(var), " ")
+		} else { ("", "") };
+
 		let indent = self.indent();
-		inf_writeln!(into, "{indent}{} = {value};", self.db.get_cname(var));
+		inf_writeln!(into, "{indent}{declaration}{space}{} = {value};", self.db.get_cname(var));
 	}
 
 	// Does not generate the code for a function declaration (e.g. assigning
@@ -388,7 +404,12 @@ impl<'a> Codegen<'a> {
 			inf_writeln!(out.global_define, "{} {};",
 				self.db.get_var_ctype(global.identity), self.db.get_cname(global.identity));
 
-			self.assign(global.identity, &global.value, &mut out.global_init)
+			// For globals, the initializer is not itself a declaration. So,
+			// do tell self.assign() that it's not a declaration.
+			self.assign(global.identity,
+				&global.value,
+				&mut out.global_init,
+				false);
 		}
 
 		self.indent_level = 0;

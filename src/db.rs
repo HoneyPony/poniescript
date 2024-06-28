@@ -29,6 +29,9 @@ pub struct Db {
 	/// Keep a cache of all generated ctypes so that we can quickly re-use them.
 	ctype_cache: Vec<&'static str>,
 
+	var_cname_cache: Vec<&'static str>,
+	fun_cname_cache: Vec<&'static str>,
+
 	/// Keep a cache of generated type reprs also for re-using them.
 	type_repr_cache: RefCell<HashMap<TypId, &'static str>>,
 
@@ -49,6 +52,9 @@ impl Db {
 			ctype_cache: Vec::new(),
 			type_repr_cache: RefCell::new(HashMap::new()),
 			fun_cparams_cache: Vec::new(),
+
+			var_cname_cache: Vec::new(),
+			fun_cname_cache: Vec::new(),
 		};
 
 		// Technically, this does waste the initially created
@@ -115,9 +121,9 @@ impl Db {
 		return self.new_id(var);
 	}
 
-	pub fn get_cname(&self, var: VarId) -> &str {
+	pub fn get_cname(&self, var: VarId) -> &'static str {
 		// TODO: Cname generation, as well as 'extern C' sort of thing
-		return self.get(self.get(var).name.lexeme);
+		unsafe { self.var_cname_cache.get_unchecked(var.0) }
 	}
 
 	// These should definitely be cached rather than generated each time, but..
@@ -143,7 +149,7 @@ impl Db {
 	
 	pub fn get_fun_cname(&self, fun: FunId) -> &str {
 		// TODO: Cname generation
-		self.get(self.get(fun).name.lexeme)
+		unsafe { self.fun_cname_cache.get_unchecked(fun.0) }
 	}
 
 	pub fn get_fun_return_typid(&self, fun: FunId) -> TypId {
@@ -230,7 +236,38 @@ impl Db {
 		};
 	}
 
-	pub fn generate_fun_cparams_cache(&mut self) {
+	pub fn generate_codegen_caches(&mut self) {
+		// The order matters, as e.g. var cnames are used for fun cparams.
+		self.generate_var_cnames_cache();
+		self.generate_fun_cnames_cache();
+		self.generate_fun_cparams_cache();
+	}
+
+	fn generate_var_cnames_cache(&mut self) {
+		let range = self.arenas.arena_var.len();
+
+		for id in 0..range {
+			let var = VarId(id);
+
+			// TODO: Actual name mangling and such
+			let cname = self.get(self.get(var).name.lexeme).to_string().leak();
+			self.var_cname_cache.push(cname);
+		}
+	}
+
+	fn generate_fun_cnames_cache(&mut self) {
+		let range = self.arenas.arena_fun.len();
+
+		for id in 0..range {
+			let fun = FunId(id);
+
+			// TODO: Actual name mangling and such
+			let cname = self.get(self.get(fun).name.lexeme).to_string().leak();
+			self.fun_cname_cache.push(cname);
+		}
+	}
+
+	fn generate_fun_cparams_cache(&mut self) {
 		let range = self.arenas.arena_fun.len();
 
 		for id in 0..range {

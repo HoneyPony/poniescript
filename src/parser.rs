@@ -1,4 +1,6 @@
+use std::collections::HashMap;
 use std::fs::File;
+use std::hash::Hash;
 use std::io;
 
 use crate::db::*;
@@ -10,12 +12,35 @@ use crate::expr::*;
 use crate::source::SourceLocation;
 use crate::typ::Type;
 
+#[derive(Clone, Copy)]
+enum ScopeEntry {
+	Var(VarId),
+	Fun(FunId),
+
+	None
+}
+
+struct Scope {
+	map: HashMap<StrId, ScopeEntry>,
+}
+
+impl Scope {
+	pub fn new() -> Self {
+		return Scope {
+			map: HashMap::new(),
+		}
+	}
+}
+
 pub struct Parser<'a, 'b> {
 	lexer: Lexer,
 	module: &'a mut Module,
 	db: &'b mut Db,
 
 	current: Token,
+
+	scopes: Vec<Scope>,
+	global_scope: Scope,
 
 	pub had_error: bool,
 }
@@ -87,12 +112,47 @@ impl<'a, 'b> Parser<'a, 'b> {
 			module,
 			db,
 
+			scopes: Vec::new(),
+			global_scope: Scope::new(),
+
 			current,
 
 			had_error: false,
 		};
 
 		Ok(parser)
+	}
+
+	fn scope_put_var(&mut self, name: StrId, var: VarId) {
+		match self.scopes.last_mut() {
+			Some(last) => {
+				last.map.insert(name, ScopeEntry::Var(var));
+			},
+			None => {
+				self.global_scope.map.insert(name, ScopeEntry::Var(var));
+			}
+		}
+	}
+
+	fn scope_lookup(&mut self, name: StrId) -> ScopeEntry {
+		if self.scopes.is_empty() {
+			return *self.global_scope.map.get(&name).unwrap_or(&ScopeEntry::None);
+		}
+
+		// If we do have a scope, then we must NOT look in the global scope
+		// (as it's possible that a global name will later be shadowed
+		// by a class/node field). Instead, only resolve local variables right
+		// now.
+
+		for scope in self.scopes.iter().rev() {
+			match scope.map.get(&name) {
+				Some(entry) => return *entry,
+				_ => { }
+			}
+		}
+
+		// Default to no value if we can't find one.
+		ScopeEntry::None
 	}
 
 	fn save_location(&self) -> SourceLocation {
@@ -146,6 +206,18 @@ impl<'a, 'b> Parser<'a, 'b> {
 			self.db.put_type(typ));
 	}
 
+	fn expr_ident(&mut self) -> Result<Expr> {
+		let ident = expected!(self, Tok::Identifier, "identifier")?;
+
+		// In the future, if we see a dot or a (), we might generate a getter/setter/call.
+		// For now, we just generate either a Variable or some unbound name.
+		match self.scope_lookup(ident.lexeme) {
+			ScopeEntry::Var(identity) => Expr::mk_variable_ok(ident.location, identity),
+			ScopeEntry::Fun(_) => todo!(),
+			ScopeEntry::None => Expr::mk_unbound_ok(ident.location.clone(), ident),
+		}
+	}
+
 	fn expr_prefix(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
 			Tok::DecimalNumber | Tok::WholeNumber => {
@@ -153,6 +225,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			},
 
 			Tok::LeftBrace => self.block(),
+
+			Tok::Identifier => self.expr_ident(),
 
 			_ => {
 				got!(self, "Expected expression")
@@ -251,7 +325,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::Semicolon, "';' after initializer expression")?;
 		
+		let name_str = name.lexeme;
 		let identity = self.db.new_var(name, typ);
+
+		// Note that the var is added to the scope AFTER it is created, so it
+		// by nature can't refer to itself.
+		self.scope_put_var(name_str, identity);
 
 		return Stmt::new_declare_ok(equal.location, identity, initializer);
 	}
@@ -293,7 +372,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 				let inner = self.expression()?;
 				let semicolon = expected!(self, Tok::Semicolon, "';' after return value")?;
 				Stmt::mk_return_ok(key_return.location, Some(inner))
-			}
+			},
+			Tok::Var => {
+				Ok(Stmt::Declare(self.var_declaration()?))
+			},
 			_ => {
 				let loc = self.save_location();
 				let inner = self.expression()?;

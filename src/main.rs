@@ -63,7 +63,7 @@ fn main() {
 
 	// Pass 3: Codegen
 	// Generate any caches that require type checking info.
-	db.generate_fun_cparams_cache();
+	db.generate_codegen_caches();
 	codegen::codegen(&mut db, &modules);
 
 	// Temporary: Print out the type of every var.
