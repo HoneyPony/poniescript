@@ -21,7 +21,10 @@ fn parse_all_modules(db: &mut db::Db, input_paths: Vec<&Path>) -> (Vec<Module>, 
 
 	for path in input_paths {
 		match module::parse_module(db, path) {
-			Ok(module) => { modules.push(module) },
+			Ok((module, false)) => { modules.push(module) },
+			Ok((_, true)) => {
+				had_error = true;
+			}
 			Err(err) => {
 				eprintln!("Unable to parse source file {}: {err}", path.display());
 				had_error = true;

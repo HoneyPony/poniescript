@@ -15,7 +15,9 @@ pub struct Parser<'a, 'b> {
 	module: &'a mut Module,
 	db: &'b mut Db,
 
-	current: Token
+	current: Token,
+
+	pub had_error: bool,
 }
 
 pub enum ParseErr {
@@ -28,6 +30,7 @@ pub type Result<T> = std::result::Result<T, ParseErr>;
 macro_rules! parse_error {
 	($parser:ident, $($arg:tt)*) => {
 		// For now, just eprintln()... TODO Implement error handling system
+		$parser.had_error = true;
 		eprintln!($($arg)*); 
     };
 }
@@ -84,7 +87,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 			module,
 			db,
 
-			current
+			current,
+
+			had_error: false,
 		};
 
 		Ok(parser)

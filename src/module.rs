@@ -21,7 +21,7 @@ impl Module {
 	}
 }
 
-pub fn parse_module(db: &mut Db, path: &Path) -> std::io::Result<Module> {
+pub fn parse_module(db: &mut Db, path: &Path) -> std::io::Result<(Module, bool)> {
 	let source_id = db.put_source_path(path);
 
 	let file = db.get(source_id).to_file()?;
@@ -31,5 +31,7 @@ pub fn parse_module(db: &mut Db, path: &Path) -> std::io::Result<Module> {
 	let mut parser = Parser::new(file, source_id, db, &mut module)?;
 	parser.parse()?;
 
-	return Ok(module);
+	let had_error = parser.had_error;
+
+	Ok((module, had_error))
 }
