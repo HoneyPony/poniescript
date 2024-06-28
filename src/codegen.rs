@@ -232,11 +232,12 @@ impl<'a> Codegen<'a> {
 					0 => 0,
 					n => n - 1,
 				};
+				inf_writeln!(into, "{{");
 				for stmt in &block.stmts[0..all_but_last] {
 					self.stmt(stmt, into);
 				}
 
-				match (block.stmts.last(), val) {
+				let val = match (block.stmts.last(), val) {
 					// If the block has no val, then generate a statement
 					// and return Val::None.
 					(last, Val::Bottom) => {
@@ -256,7 +257,10 @@ impl<'a> Codegen<'a> {
 
 						val
 					}
-				}
+				};
+
+				inf_writeln!(into, "}}");
+				val
 			}
 		}
 	}
