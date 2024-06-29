@@ -12,6 +12,7 @@ use std::env;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::time::SystemTime;
 
 use module::Module;
 use clap::Parser as _;
@@ -47,6 +48,8 @@ fn parse_all_modules(db: &mut db::Db, args: &Args) -> (Vec<Module>, bool) {
 }
 
 fn main() {
+	let timer = SystemTime::now();
+
 	// Use Clap to parse arguments
 	let args = Args::parse();
 
@@ -76,6 +79,13 @@ fn main() {
 	if let Err(err) = codegen::codegen(&mut db, &modules, &mut output) {
 		eprintln!("Unable to write output file: {err}");
 		exit(4);
+	}
+
+	let own_time = SystemTime::now().duration_since(timer);
+	if let Ok(own_time) = own_time {
+		eprintln!("poni: -> {} took {}ms",
+			args.output_path.display(),
+			own_time.as_millis());
 	}
 
 	// Temporary: Print out the type of every var.
