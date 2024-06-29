@@ -21,3 +21,11 @@ Finally, in order to do error codes, the following mechanism is used:
 2. The test simply expects an error with a given UUID. (Perhaps as well with a location, but this is less certain as those may be unstable).
 
 It should be the case that the UUIDs never collide, due to the relatively small number of errors in the compiler. Note importantly that the code for an error should generally not change. If it does, of course, the affected tests will have to be fixed.
+
+## Other checks
+
+Some other test conditions we could consider including in the future include:
+
+1. Checking that certain symbols do / do not appear in the output (e.g. to test constant expression folding and similar)
+2. Checking that certain variables are inferred to be specific types
+3. Checking any other details of the code structure
