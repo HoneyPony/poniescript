@@ -8,11 +8,12 @@ mod parser;
 mod typecheck;
 mod codegen;
 
+use std::alloc::System;
 use std::env;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use module::Module;
 use clap::Parser as _;
@@ -47,6 +48,32 @@ fn parse_all_modules(db: &mut db::Db, args: &Args) -> (Vec<Module>, bool) {
 	(modules, had_error)
 }
 
+struct TimeHelper {
+	duration: Duration
+}
+
+impl std::fmt::Display for TimeHelper {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if self.duration.as_millis() < 10 {
+			write!(f, "{}us", self.duration.as_micros())
+		}
+		else {
+			write!(f, "{}ms", self.duration.as_millis())
+		}
+	}
+}
+
+fn duration(prev: SystemTime, message: &str) -> SystemTime {
+	let now = SystemTime::now();
+
+	if let Ok(duration) = now.duration_since(prev) {
+		eprintln!("{} took {}",
+			message, TimeHelper { duration });
+	}
+
+	now
+}
+
 fn main() {
 	let timer = SystemTime::now();
 
@@ -60,10 +87,14 @@ fn main() {
 
 	if had_error { exit(1); }
 
+	let timer = duration(timer, "poni: parsing");
+
 	// Pass 2: Type check and infer
 	let had_error = typecheck::typecheck(&mut db, &mut modules);
 
 	if had_error { exit(2); }
+
+	let timer = duration(timer, "poni: type check");
 
 	// Pass 3: Codegen
 	// Generate any caches that require type checking info.
@@ -81,15 +112,5 @@ fn main() {
 		exit(4);
 	}
 
-	let own_time = SystemTime::now().duration_since(timer);
-	if let Ok(own_time) = own_time {
-		eprintln!("poni: -> {} took {}ms",
-			args.output_path.display(),
-			own_time.as_millis());
-	}
-
-	// Temporary: Print out the type of every var.
-	//for var in db.var_range() {
-	//	println!("Type of {} -> {}", db.err_var(var), db.err_var_type(var));
-	//}
+	duration(timer, "poni: codegen (to c)");
 }
