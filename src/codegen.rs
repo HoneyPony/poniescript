@@ -426,7 +426,7 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn codegen(&mut self, modules: &Vec<Module>) {
+	fn codegen(&mut self, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 		let mut outputs = CodegenOutputs::new();
 
 		// Strange but important: Any unassigned numeric type needs SOME kind
@@ -442,20 +442,22 @@ impl<'a> Codegen<'a> {
 			self.codegen_to_buffers(module, &mut outputs);
 		}
 
-		println!("// --- global variables ---\n{}", outputs.global_define);
-		println!("// --- function declarations ---\n{}", outputs.fun_declare);
-		println!("// --- function definitions ---");
+		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
+		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
+		writeln!(output, "// --- function definitions ---")?;
 		for fun in &self.functions {
-			println!("{}", fun);
+			writeln!(output, "{}", fun)?;
 		}
-		println!("void poni_init() {{");
-		println!("{}", outputs.global_init);
-		println!("}}");
+		writeln!(output, "void poni_init() {{")?;
+		writeln!(output, "{}", outputs.global_init)?;
+		writeln!(output, "}}")?;
+
+		Ok(())
 	}
 }
 
-pub fn codegen(db: &mut Db, modules: &Vec<Module>) {
+pub fn codegen(db: &mut Db, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 	let mut codegen = Codegen::new(db);
 
-	codegen.codegen(modules);
+	codegen.codegen(modules, output)
 }
