@@ -12,6 +12,8 @@ use crate::source::{Source, SourceLocation};
 
 use crate::lexer::{Tok, Token};
 
+use rustc_hash::{FxHashMap, FxHashSet};
+
 // Include arenas
 include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 
@@ -20,11 +22,11 @@ include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 pub struct Db {
 	arenas: DbArenas,
 
-	str_side_map: HashMap<String, StrId>,
-	source_side_map: HashMap<PathBuf, SourceId>,
-	type_side_map: HashMap<Type, TypId>,
+	str_side_map: FxHashMap<String, StrId>,
+	source_side_map: FxHashMap<PathBuf, SourceId>,
+	type_side_map: FxHashMap<Type, TypId>,
 
-	key_lookup_map: HashMap<StrId, Tok>,
+	key_lookup_map: FxHashMap<StrId, Tok>,
 
 	/// Keep a cache of all generated ctypes so that we can quickly re-use them.
 	ctype_cache: Vec<&'static str>,
@@ -33,7 +35,7 @@ pub struct Db {
 	fun_cname_cache: Vec<&'static str>,
 
 	/// Keep a cache of generated type reprs also for re-using them.
-	type_repr_cache: RefCell<HashMap<TypId, &'static str>>,
+	type_repr_cache: RefCell<FxHashMap<TypId, &'static str>>,
 
 	fun_cparams_cache: Vec<&'static str>,
 }
@@ -43,14 +45,14 @@ impl Db {
 		let mut db = Db {
 			arenas: DbArenas::new(),
 
-			str_side_map: HashMap::new(),
-			source_side_map: HashMap::new(),
-			type_side_map: HashMap::new(),
+			str_side_map: FxHashMap::default(),
+			source_side_map: FxHashMap::default(),
+			type_side_map: FxHashMap::default(),
 
-			key_lookup_map: HashMap::new(),
+			key_lookup_map: FxHashMap::default(),
 
 			ctype_cache: Vec::new(),
-			type_repr_cache: RefCell::new(HashMap::new()),
+			type_repr_cache: RefCell::new(FxHashMap::default()),
 			fun_cparams_cache: Vec::new(),
 
 			var_cname_cache: Vec::new(),

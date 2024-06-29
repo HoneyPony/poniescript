@@ -3,6 +3,8 @@ use std::fs::File;
 use std::io::BufReader;
 use std::io::Read;
 
+use rustc_hash::FxHashMap;
+
 use crate::db::*;
 use crate::source::*;
 
@@ -44,8 +46,8 @@ pub struct Token {
 	pub location: SourceLocation,
 }
 
-pub fn build_key_lookup_map(db: &mut Db) -> HashMap<StrId, Tok> {
-	let mut map = HashMap::new();
+pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {
+	let mut map = FxHashMap::default();
 
 	let mut add = |key, value: Tok| {
 		let key = db.put_str(key);

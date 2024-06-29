@@ -3,6 +3,8 @@ use std::fs::File;
 use std::hash::Hash;
 use std::io;
 
+use rustc_hash::FxHashMap;
+
 use crate::db::*;
 
 use crate::lexer::*;
@@ -21,13 +23,13 @@ enum ScopeEntry {
 }
 
 struct Scope {
-	map: HashMap<StrId, ScopeEntry>,
+	map: FxHashMap<StrId, ScopeEntry>,
 }
 
 impl Scope {
 	pub fn new() -> Self {
 		return Scope {
-			map: HashMap::new(),
+			map: FxHashMap::default(),
 		}
 	}
 }
