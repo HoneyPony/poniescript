@@ -432,10 +432,15 @@ impl<'a> Codegen<'a> {
 
 		self.indent_level = 0;
 		for fun in &module.functions {
-			inf_writeln!(out.fun_declare, "{} {}({});",
-				self.db.get_fun_ret_ctype(fun.identity),
-				self.db.get_fun_cname(fun.identity),
-				self.db.get_fun_cparams(fun.identity));
+			let is_init = Some(fun.identity) == self.db.fun_init;
+
+			// Don't write declaration for the init() function.
+			if !is_init {
+				inf_writeln!(out.fun_declare, "{} {}({});",
+					self.db.get_fun_ret_ctype(fun.identity),
+					self.db.get_fun_cname(fun.identity),
+					self.db.get_fun_cparams(fun.identity));
+			}
 			
 			self.function(fun.identity, &fun.value);
 		}
