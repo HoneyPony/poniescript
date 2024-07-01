@@ -38,6 +38,8 @@ pub struct Db {
 	type_repr_cache: RefCell<FxHashMap<TypId, &'static str>>,
 
 	fun_cparams_cache: Vec<&'static str>,
+
+	pub fun_init: Option<FunId>,
 }
 
 impl Db {
@@ -57,6 +59,8 @@ impl Db {
 
 			var_cname_cache: Vec::new(),
 			fun_cname_cache: Vec::new(),
+
+			fun_init: None,
 		};
 
 		// Technically, this does waste the initially created

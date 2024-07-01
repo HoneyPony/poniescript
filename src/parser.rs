@@ -432,11 +432,23 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 		let value = self.block()?;
 
+		let name_str = name.lexeme;
+
 		let identity = self.db.new_id(Fun {
 			name,
 			parameters,
 			return_type
 		});
+
+		// TODO: Function names that are nested should be <something>.<something>,
+		// so this will work even for methods and other nestedly-named functions.
+		// (same for vars)
+		if name_str == self.db.put_str("init") {
+			if self.db.fun_init.is_some() {
+				parse_error!(self, "Function 'init' redefined");
+			}
+			self.db.fun_init = Some(identity);
+		}
 
 		Stmt::new_fundeclare_ok(key_fun.location, identity, value)
 	}

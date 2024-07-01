@@ -22,6 +22,8 @@ struct Codegen<'a> {
 
 	indent_level: usize,
 
+	fun_init_buffer: String,
+
 	db: &'a mut Db
 }
 
@@ -160,7 +162,9 @@ impl<'a> Codegen<'a> {
 
 			indent_level: 0,
 
-			db
+			db,
+
+			fun_init_buffer: String::new(),
 		}
 	}
 
@@ -357,16 +361,21 @@ impl<'a> Codegen<'a> {
 	// Does not generate the code for a function declaration (e.g. assigning
 	// it to a local).
 	fn function(&mut self, fun: FunId, body: &Expr) {
+		let is_init = Some(fun) == self.db.fun_init;
+
 		let enclosing_indent = self.indent_level;
 		self.indent_level = 1;
 		let indent = self.indent();
 
 		let mut own_buffer = String::new();
 
-		inf_writeln!(own_buffer, "{} {}({}) {{",
-			self.db.get_fun_ret_ctype(fun),
-			self.db.get_fun_cname(fun),
-			self.db.get_fun_cparams(fun));
+		// init() fun has no surrounding definition -- it is poni_init()
+		if !is_init {
+			inf_writeln!(own_buffer, "{} {}({}) {{",
+				self.db.get_fun_ret_ctype(fun),
+				self.db.get_fun_cname(fun),
+				self.db.get_fun_cparams(fun));
+		}
 
 		// Same idea as in codegen()
 		let ctx_type = self.db.get_context_type(
@@ -394,9 +403,15 @@ impl<'a> Codegen<'a> {
 
 		self.indent_level = enclosing_indent;
 
-		inf_writeln!(own_buffer, "}}");
+		// init() fun has no surrounding scope
+		if !is_init { inf_writeln!(own_buffer, "}}"); }
 
-		self.functions.push(own_buffer);
+		if Some(fun) == self.db.fun_init {
+			self.fun_init_buffer = own_buffer;
+		}
+		else {
+			self.functions.push(own_buffer);
+		}
 	}
 
 	fn codegen_to_buffers(&mut self, module: &Module, out: &mut CodegenOutputs) {
@@ -450,6 +465,7 @@ impl<'a> Codegen<'a> {
 		}
 		writeln!(output, "void poni_init() {{")?;
 		writeln!(output, "{}", outputs.global_init)?;
+		writeln!(output, "{}", self.fun_init_buffer)?;
 		writeln!(output, "}}")?;
 
 		Ok(())
