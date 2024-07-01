@@ -457,6 +457,9 @@ impl<'a> Codegen<'a> {
 			self.codegen_to_buffers(module, &mut outputs);
 		}
 
+		writeln!(output, "#include \"poni/poni.h\"")?;
+		writeln!(output, "#include \"poni/poni_standalone.h\"")?;
+
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
 		writeln!(output, "// --- function definitions ---")?;
