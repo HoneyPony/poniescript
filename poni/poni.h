@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define PS_TAG_STRING 1
 
@@ -52,16 +53,18 @@ ps_gc_must_calloc(size_t bytes, uint64_t tag) {
 
 static inline
 ps_str*
-ps_str_from_literal(const char *input, size_t length) {
-	size_t bytes = sizeof(ps_string) + ((length + 1) * sizeof(char));
+ps_str_from_literal_size(const char *input, size_t length) {
+	size_t bytes = sizeof(ps_str) + ((length + 1) * sizeof(char));
 	ps_str *str = ps_gc_must_calloc(bytes, PS_TAG_STRING);
 
-	memcpy(string->contents, input, length);
-	string->contents[length] = '\0';
-	string->length = length;
+	memcpy(str->contents, input, length);
+	str->contents[length] = '\0';
+	str->length = length;
 
-	return string;
+	return str;
 }
+
+#define ps_str_from_literal(lit) ps_str_from_literal_size(lit, sizeof(lit))
 
 static inline
 void
@@ -77,7 +80,7 @@ ps_print_float(float f) {
 
 static inline
 void
-ps_print_str(ps_str *str) {
+ps_print_str(const ps_str *str) {
 	// TODO: Should the NULL check be part of the print() codegen?
 	if(str) {
 		printf("%s", str->contents);

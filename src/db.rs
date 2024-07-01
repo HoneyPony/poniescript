@@ -26,6 +26,11 @@ pub struct Db {
 	source_side_map: FxHashMap<PathBuf, SourceId>,
 	type_side_map: FxHashMap<Type, TypId>,
 
+	// TODO: This may need to change a bit when we actually parse string literals
+	// correctly.
+	str_const_set: FxHashMap<StrId, &'static str>,
+	str_const_id: usize,
+
 	key_lookup_map: FxHashMap<StrId, Tok>,
 
 	/// Keep a cache of all generated ctypes so that we can quickly re-use them.
@@ -52,6 +57,9 @@ impl Db {
 			type_side_map: FxHashMap::default(),
 
 			key_lookup_map: FxHashMap::default(),
+
+			str_const_set: FxHashMap::default(),
+			str_const_id: 0,
 
 			ctype_cache: Vec::new(),
 			type_repr_cache: RefCell::new(FxHashMap::default()),
@@ -114,6 +122,20 @@ impl Db {
 		return id;
 	}
 
+	pub fn new_str_const(&mut self, str: StrId) {
+		let name = format!("ps_str_const{}", self.str_const_id);
+		self.str_const_id += 1;
+		self.str_const_set.insert(str, name.leak());
+	}
+
+	pub fn iter_str_const(&self) -> std::collections::hash_map::Iter<'_, StrId, &'static str> {
+		self.str_const_set.iter()
+	}
+
+	pub fn get_str_const(&mut self, str: StrId) -> &'static str {
+		unsafe { self.str_const_set.get(&str).unwrap_unchecked() }
+	}
+
 	pub fn lookup_key(&self, id: StrId) -> Option<Tok> {
 		self.key_lookup_map.get(&id).map(|tok| *tok)
 	}
@@ -125,6 +147,13 @@ impl Db {
 		};
 
 		return self.new_id(var);
+	}
+
+	pub fn is_type_str_const(&self, typ: TypId) -> bool {
+		match self.get(typ) {
+			Type::StrConst => true,
+			_ => false,
+		}
 	}
 
 	pub fn get_cname(&self, var: VarId) -> &'static str {

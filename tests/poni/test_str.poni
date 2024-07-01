@@ -1,0 +1,5 @@
+fun init() {
+	print("test 1");
+	var x = "test 2";
+	print(x);
+}

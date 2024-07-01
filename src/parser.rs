@@ -267,6 +267,15 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			Tok::Print => self.expr_print(),
 
+			Tok::String => {
+				let lit = self.advance()?;
+				let typ = self.db.put_type(Type::StrConst);
+				self.db.new_str_const(lit.lexeme);
+				// TODO: Make sure the contents of the string literal are
+				// what we expect...
+				Expr::mk_literal_ok(lit.location.clone(), lit, typ)
+			}
+
 			_ => {
 				got!(self, "Expected expression")
 			}

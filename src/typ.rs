@@ -6,6 +6,21 @@ pub enum Type {
 	Float,
 	Void,
 
+	// The constant version of Str. Must be copied, etc to be modified.
+	StrConst,
+
+	// Essentially a constant-sized array of characters.
+	//Str,
+
+	// StrSlice, // Maybe we need three/four String types:
+	// - Str = a raw block of chars, fixed length.
+	// - StrSlice = slice pointing into a Str.
+	// - String / StrBuf = a string that can be pushed/popped/written.
+	// - StringSlice = slice pointing into a String.
+
+	// Block,
+	// 
+
 	Bottom,
 
 	//Class(ClassId),
@@ -30,6 +45,7 @@ impl Type {
 			Type::Int => "int".to_string(),
 			Type::Float => "float".to_string(),
 			Type::Void => "void".to_string(),
+			Type::StrConst => "StrConst".to_string(),
 			Type::Bottom => "<bottom>".to_string(),
 			Type::Unassigned => "<unknown>".to_string(),
 			Type::UnassignedNumeric => "a number".to_string(),
@@ -45,6 +61,7 @@ impl Type {
 			Type::Float => "ps_float".into(),
 
 			Type::Void => "void".into(),
+			Type::StrConst => "const ps_str*".into(),
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 

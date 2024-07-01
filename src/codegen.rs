@@ -37,6 +37,9 @@ struct CodegenOutputs {
 	/// Buffer containing the initialization code for all global variables.
 	global_init: String,
 
+	string_const_define: String,
+	string_const_init: String,
+
 	fun_declare: String,
 
 	fun_define: String,
@@ -47,6 +50,9 @@ impl CodegenOutputs {
 		CodegenOutputs {
 			global_define: String::new(),
 			global_init: String::new(),
+
+			string_const_define: String::new(),
+			string_const_init: String::new(),
 
 			fun_declare: String::new(),
 			fun_define: String::new(),
@@ -75,6 +81,9 @@ enum Val {
 	},
 	DirectVar {
 		name: &'static str
+	},
+	StringLit {
+		lit: &'static str,
 	},
 
 	/// Equivalent to Type::Bottom, sort of.
@@ -129,6 +138,7 @@ impl std::fmt::Display for Val {
 			Val::Tmp(idx) => write!(f, "tmp{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
 			Val::DirectVar { name } => write!(f, "{name}"),
+			Val::StringLit { lit } => write!(f, "{lit}"),
 			Val::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
 			Val::None => Ok(()),
 		}
@@ -246,6 +256,7 @@ impl<'a> Codegen<'a> {
 			Type::Int => inf_writeln!(into, "{indent}ps_print_int({val});"),
 			Type::Float => inf_writeln!(into, "{indent}ps_print_int({val});"),
 			Type::Void => inf_writeln!(into, "{indent}ps_print_int({val});"),
+			Type::StrConst => inf_writeln!(into, "{indent}ps_print_str({val});"),
 			Type::Bottom => { },
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:print-unassigned>"),
 
@@ -271,7 +282,12 @@ impl<'a> Codegen<'a> {
 				self.assign(assign.identity, assign.value, into, false);
 				Val::DirectVar { name: self.db.get_cname(assign.identity) }
 			},
+			// TODO: Consider using a different Expr type for string literals
 			Expr::Literal(lit) => {
+				if self.db.is_type_str_const(lit.typ) {
+					return Val::StringLit { lit: self.db.get_str_const(lit.contents.lexeme) }
+				}
+
 				Val::DirectLit {
 					ctype: self.get_expr_ctype(lit.typ),
 					lit: self.db.get(lit.contents.lexeme),
@@ -451,6 +467,16 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
+	fn compile_string_constant_init(&mut self, define: &mut String, init: &mut String) {
+		inf_writeln!(init, "void poni_init_strings(void) {{");
+		for (value, name) in self.db.iter_str_const() {
+			inf_writeln!(define, "const ps_str* {name} = NULL;");
+			inf_writeln!(init, "\t{name} = ps_str_from_literal({});",
+				self.db.get(*value));
+		}
+		inf_writeln!(init, "}}");
+	}
+
 	fn codegen_to_buffers(&mut self, module: &Module, out: &mut CodegenOutputs) {
 		// Use an indent level of 1 for the initialization code for all global variables.
 		self.indent_level = 1;
@@ -481,6 +507,8 @@ impl<'a> Codegen<'a> {
 			
 			self.function(fun.identity, &fun.value);
 		}
+
+		self.compile_string_constant_init(&mut out.string_const_define, &mut out.string_const_init);
 	}
 
 	fn codegen(&mut self, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
@@ -502,13 +530,16 @@ impl<'a> Codegen<'a> {
 		writeln!(output, "#include \"poni/poni.h\"")?;
 		writeln!(output, "#include \"poni/poni_standalone.h\"")?;
 
+		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
 		writeln!(output, "// --- function definitions ---")?;
 		for fun in &self.functions {
 			writeln!(output, "{}", fun)?;
 		}
+		writeln!(output, "{}", outputs.string_const_init)?;
 		writeln!(output, "void poni_init() {{")?;
+		writeln!(output, "\tponi_init_strings();")?;
 		writeln!(output, "{}", outputs.global_init)?;
 		writeln!(output, "{}", self.fun_init_buffer)?;
 		writeln!(output, "}}")?;
