@@ -234,6 +234,27 @@ impl<'a, 'b> Parser<'a, 'b> {
 		Ok(expr)
 	}
 
+	fn expr_print(&mut self) -> Result<Expr> {
+		let key_print = expected!(self, Tok::Print, "'print'")?;
+
+		expected_after!(self, Tok::LeftParen, key_print, "'('")?;
+
+		let mut exprs = Vec::new();
+		while !self.at(Tok::RightParen) && !self.is_at_end() {
+			let expr = self.expression()?;
+			exprs.push(expr);
+			self.match_(Tok::Comma)?;
+		}
+
+		expected!(self, Tok::RightParen, "')' after print arguments")?;
+
+		if exprs.is_empty() {
+			parse_error!(self, "Expected at least one argument to 'print'");
+		}
+
+		Expr::mk_print_ok(key_print.location, exprs, self.db.put_type(Type::Unassigned))
+	}
+
 	fn expr_prefix(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
 			Tok::DecimalNumber | Tok::WholeNumber => {
@@ -243,6 +264,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::LeftBrace => self.block(),
 
 			Tok::Identifier => self.expr_ident(),
+
+			Tok::Print => self.expr_print(),
 
 			_ => {
 				got!(self, "Expected expression")

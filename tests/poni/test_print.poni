@@ -1,0 +1,6 @@
+fun init() {
+	var a = 3;
+	var b = 4;
+	var c = 5;
+	print(print(a, b, c), print(b, c), print(c));
+}

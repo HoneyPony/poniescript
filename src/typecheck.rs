@@ -326,6 +326,17 @@ impl TypeChecker {
 				block.typ = val;
 				val
 			},
+			Expr::Print(print) => {
+				// At least for now, all possible types are allowed inside the
+				// print. So, simply type check each one. Then, the print is
+				// supposed to return its first argument.
+
+				for expr in &mut print.exprs[1..] {
+					self.do_type(db, expr, false)?;
+				}
+
+				self.do_type(db, &mut print.exprs[0], true)?
+			}
 			Expr::Unbound(_) => {
 				// In theory we will resolve all idents beforehand? But this might
 				// be different if we have function overloading.

@@ -175,6 +175,7 @@ pub fn generate(file: &mut File) {
 	Literal  : Token contents, TypId typ
 	Block    : Vec<Stmt> stmts, TypId typ
 	Unbound  : Token identifier
+	Print    : Vec<Expr> exprs, TypId typ
 
 	"#;
 

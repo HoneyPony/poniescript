@@ -6,6 +6,32 @@ use crate::{db::*, lexer::Token};
 use crate::source::SourceLocation;
 use crate::lexer::Tok;
 
+impl Expr {
+	pub fn typ(&self, db: &Db) -> TypId {
+		match self {
+			Expr::Binary(binary) => {
+				binary.typ
+			},
+			Expr::Variable(var) => {
+				db.get_var_type(var.identity)
+			},
+			Expr::Assign(assign) => {
+				db.get_var_type(assign.identity)
+			},
+			Expr::Literal(lit) => {
+				lit.typ
+			},
+			Expr::Block(block) => {
+				block.typ
+			},
+			Expr::Unbound(_) => todo!(),
+			Expr::Print(print) => {
+				print.exprs[0].typ(db)
+			},
+		}
+	}
+}
+
 /// Information for a variable.
 pub struct Var {
 	pub name: Token,

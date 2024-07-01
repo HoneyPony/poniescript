@@ -234,6 +234,32 @@ impl<'a> Codegen<'a> {
 		val
 	}
 
+	fn compile_partial_print(&mut self, inner_expr: &Expr, into: &mut String) -> Val {
+		let val = self.expr(inner_expr, into);
+
+		let typid = inner_expr.typ(self.db);
+		let typ = self.db.get(typid);
+
+		let indent = self.indent();
+
+		match typ {
+			Type::Int => inf_writeln!(into, "{indent}ps_print_int({val});"),
+			Type::Float => inf_writeln!(into, "{indent}ps_print_int({val});"),
+			Type::Void => inf_writeln!(into, "{indent}ps_print_int({val});"),
+			Type::Bottom => { },
+			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:print-unassigned>"),
+
+			// TODO: Consider simply making 10.0 a float and 10 an int..?
+			// at least, unless assigned differently..?
+			// The context system is getting increasingly awkward.
+			Type::UnassignedNumeric => todo!(),
+			Type::UnassignedDecimal => todo!(),
+			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:print-unbound-ident>"),
+		}
+
+		val
+	}
+
 	fn expr(&mut self, expr: &Expr, into: &mut String) -> Val {
 		let indent = self.indent();
 		match expr {
@@ -298,10 +324,21 @@ impl<'a> Codegen<'a> {
 				self.indent_level -= 1;
 				inf_writeln!(into, "{indent}}}");
 				val
+			},
+			Expr::Print(print) => {
+				let val = self.compile_partial_print(&print.exprs[0], into);
+				for rest in &print.exprs[1..] {
+					self.compile_partial_print(rest, into);
+				}
+
+				// For now, the print expr always adds a newline. This is the
+				// same as GDScript, but we could change it in the future.
+				inf_writeln!(into, "{indent}ps_println();");
+				val
 			}
 			Expr::Unbound(_) => {
 				panic!("compiler-err:tried-to-codegen-an-unbound-identifier-expression");
-			}
+			},
 		}
 	}
 
