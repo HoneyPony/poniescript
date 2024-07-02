@@ -47,6 +47,7 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 		ConstructOpt { wrap_ok: true, to_enum: true } => format!("crate::parser::Result<{enum_name}>"),
 	};
 	
+	writeln!(into, "\t#[allow(unused)]")?;
 	write!(into, "\tpub fn {prefix}{}{suffix}(", ty_name.to_ascii_lowercase())?;
 
 	let mut add_comma = false;
