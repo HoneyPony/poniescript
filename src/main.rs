@@ -8,10 +8,8 @@ mod parser;
 mod typecheck;
 mod codegen;
 
-use std::alloc::System;
-use std::env;
 use std::fs::File;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use std::process::exit;
 use std::time::{Duration, SystemTime};
 

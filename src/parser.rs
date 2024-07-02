@@ -1,6 +1,4 @@
-use std::collections::HashMap;
 use std::fs::File;
-use std::hash::Hash;
 use std::io;
 
 use rustc_hash::FxHashMap;
@@ -213,7 +211,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		// In the future, if we see a dot or a (), we might generate a getter/setter/call.
 		// For now, we just generate either a Variable or some unbound name.
-		let mut expr = match self.scope_lookup(ident.lexeme) {
+		let expr = match self.scope_lookup(ident.lexeme) {
 			ScopeEntry::Var(identity) => Expr::mk_variable(ident.location, identity),
 			ScopeEntry::Fun(_) => todo!(),
 			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),

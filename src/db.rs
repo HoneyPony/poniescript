@@ -1,5 +1,3 @@
-use std::any::TypeId;
-use std::collections::HashMap;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::cell::RefCell;
@@ -12,7 +10,7 @@ use crate::source::{Source, SourceLocation};
 
 use crate::lexer::{Tok, Token};
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap};
 
 // Include arenas
 include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
