@@ -10,6 +10,20 @@ use crate::db::*;
 //	Synthesized,
 //}
 
+use anstream::eprintln;
+use anstream::eprint;
+
+use anstyle::Style;
+use anstyle::Color;
+use anstyle::AnsiColor;
+
+const STYLE_LINE_NUM: Style = Style::new()
+	.fg_color(Some(Color::Ansi(AnsiColor::Magenta)));
+
+// Might change this later. For now: Pony-styled magenta!
+const STYLE_SQUIGGLE: Style = Style::new()
+	.fg_color(Some(Color::Ansi(AnsiColor::Magenta)));
+
 #[derive(Clone)]
 pub struct SourceLocation {
 	pub source: SourceId,
@@ -86,11 +100,14 @@ impl SourceMap {
 		(line as u64 + 1, column as u64 + 1)
 	}
 
-	fn show_underlined_location(&self, location: &SourceLocation) {
+	fn show_underlined_location(&self, location: &SourceLocation, path: &PathBuf) {
 		let mut start = self.get_line_column(location.offset);
 		let end_offset = location.offset + location.length;
 		let mut end = self.get_line_column(end_offset);
 		
+		// Generate the "name" info
+		eprintln!("{STYLE_LINE_NUM}    --- {STYLE_LINE_NUM:#}{}:{}:{}:", path.display(), start.0, start.1);
+		eprintln!("{STYLE_LINE_NUM}     | {STYLE_LINE_NUM:#}");
 
 		// Convert back to indices
 		start.0 -= 1;
@@ -109,10 +126,12 @@ impl SourceMap {
 		let mut at_line_beginning: bool = true;
 		let mut underline = false;
 
+		
+
 		loop {
 			if at_line_beginning {
 				line_start_offset = offset;
-				eprint!("{:>4} | ", line_number);
+				eprint!("{STYLE_LINE_NUM}{:>4} | {STYLE_LINE_NUM:#}", line_number);
 				at_line_beginning = false;
 			}
 
@@ -129,14 +148,15 @@ impl SourceMap {
 					underline = false;
 					eprintln!("");
 					// Line up with the line numbers
-					eprint!("     : ");
+					eprint!("{STYLE_LINE_NUM}     : {STYLE_LINE_NUM:#}");
 					for i in line_start_offset..offset {
 						if self.contents_chars[i] == '\r' { continue; }
 						if i >= start_offset && i < end_offset {
 							if self.contents_chars[i] == '\t' {
-								eprint!("~~~~");
+								// TODO: Only generate the STYLE when needed
+								eprint!("{STYLE_SQUIGGLE}~~~~{STYLE_SQUIGGLE:#}");
 							}
-							else { eprint!("~"); }
+							else { eprint!("{STYLE_SQUIGGLE}~{STYLE_SQUIGGLE:#}"); }
 						}
 						else {
 							if self.contents_chars[i] == '\t' {
@@ -240,6 +260,8 @@ impl Source {
 	pub fn show_underlined_location(&self, location: &SourceLocation) {
 		let Source::Real { name, path, source_map } = self else { return; };
 
-		source_map.borrow().show_underlined_location(location);
+		Self::cache_map(path, source_map);
+
+		source_map.borrow().show_underlined_location(location, path);
 	}
 }
