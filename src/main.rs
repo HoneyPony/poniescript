@@ -7,6 +7,7 @@ mod module;
 mod parser;
 mod typecheck;
 mod codegen;
+mod numerical_concretizer;
 
 use std::fs::File;
 use std::path::{PathBuf};
@@ -95,6 +96,9 @@ fn main() {
 	let timer = duration(timer, "poni: type check");
 
 	// Pass 3: Codegen
+
+	numerical_concretizer::make_concrete(&mut db, &mut modules);
+
 	// Generate any caches that require type checking info.
 	db.generate_codegen_caches();
 

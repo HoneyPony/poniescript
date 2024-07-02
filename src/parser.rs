@@ -196,8 +196,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 		//let number = expected!(self, Tok::Number, "number literal")?;
 
 		let typ = match number.typ {
-			Tok::DecimalNumber => Type::UnassignedDecimal,
-			Tok::WholeNumber => Type::UnassignedNumeric,
+			Tok::DecimalNumber => Type::AssumeFloat,
+			Tok::WholeNumber => Type::AssumeInt,
 			_ => unreachable!()
 		};
 

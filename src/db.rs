@@ -22,6 +22,9 @@ pub struct DbTypes {
 	pub int: TypId,
 	pub float: TypId,
 	pub bottom: TypId,
+
+	pub assume_int: TypId,
+	pub assume_float: TypId,
 }
 
 /// The Db stores all of the arena-allocated objects that can be referenced
@@ -80,6 +83,9 @@ impl Db {
 				int: TypId(0),
 				float: TypId(0),
 				bottom: TypId(0),
+
+				assume_int: TypId(0),
+				assume_float: TypId(0),
 			}
 		};
 
@@ -89,6 +95,9 @@ impl Db {
 		db.types.int        = db.put_type(Type::Int);
 		db.types.float      = db.put_type(Type::Float);
 		db.types.bottom     = db.put_type(Type::Bottom);
+
+		db.types.assume_int   = db.put_type(Type::AssumeInt);
+		db.types.assume_float = db.put_type(Type::AssumeFloat);
 
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,

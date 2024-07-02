@@ -121,18 +121,18 @@ impl TypeChecker {
 		let right = db.get(rhs);
 
 		let unified = match (left, right) {
-			(Type::UnassignedDecimal, Type::UnassignedNumeric) => {
+			(Type::AssumeFloat, Type::AssumeInt) => {
 				// Numerics become further constrained by Decimal.
 				lhs
 			}
 
 			// Ints dominate numerics.
-			(Type::Int, Type::UnassignedNumeric) => {
+			(Type::Int, Type::AssumeInt) => {
 				lhs
 			}
 
 			// Floats dominate whole number and decimals.
-			(Type::Float, Type::UnassignedNumeric | Type::UnassignedDecimal) => {
+			(Type::Float, Type::AssumeInt | Type::AssumeFloat) => {
 				lhs
 			}
 
@@ -175,14 +175,14 @@ impl TypeChecker {
 			(Type::Bottom, _) => return Ok(lhs),
 			(_, Type::Bottom) => return Ok(rhs),
 
-			(Type::Int, Type::UnassignedNumeric) => return Ok(lhs),
-			(Type::UnassignedNumeric, Type::Int) => return Ok(rhs),
+			(Type::Int, Type::AssumeInt) => return Ok(lhs),
+			(Type::AssumeInt, Type::Int) => return Ok(rhs),
 
-			(Type::Float, Type::UnassignedNumeric | Type::UnassignedDecimal) => return Ok(lhs),
-			(Type::UnassignedNumeric | Type::UnassignedDecimal, Type::Float) => return Ok(rhs),
+			(Type::Float, Type::AssumeInt | Type::AssumeFloat) => return Ok(lhs),
+			(Type::AssumeInt | Type::AssumeFloat, Type::Float) => return Ok(rhs),
 		
-			(Type::UnassignedDecimal, Type::UnassignedNumeric) => return Ok(lhs),
-			(Type::UnassignedNumeric, Type::UnassignedDecimal) => return Ok(lhs),
+			(Type::AssumeFloat, Type::AssumeInt) => return Ok(lhs),
+			(Type::AssumeInt, Type::AssumeFloat) => return Ok(lhs),
 			_ => { }
 		}
 
@@ -203,7 +203,7 @@ impl TypeChecker {
 		let right = db.get(value);
 
 		let unified = match (left, right, self.global_scope) {
-			(Type::Unassigned, Type::UnassignedNumeric, true) => {
+			(Type::Unassigned, Type::AssumeInt, true) => {
 				// In global scope, if we have an un-inferred var, then the
 				// unassigned numeric must become a concrete type.
 				// For now, we make the dodgy decision that Whole -> Int
@@ -213,23 +213,23 @@ impl TypeChecker {
 				db.types.int
 			},
 
-			(Type::Unassigned, Type::UnassignedDecimal, true) => {
+			(Type::Unassigned, Type::AssumeFloat, true) => {
 				// dodgy global var
 				db.types.float
 			},
 
-			(Type::UnassignedNumeric, Type::UnassignedDecimal, _) => {
+			(Type::AssumeInt, Type::AssumeFloat, _) => {
 				// Numerics become further constrained by Decimal.
 				value
 			}
 
 			// Ints dominate numerics.
-			(Type::Int, Type::UnassignedNumeric, _) => {
+			(Type::Int, Type::AssumeInt, _) => {
 				var_ty
 			}
 
 			// Floats dominate whole number and decimals.
-			(Type::Float, Type::UnassignedNumeric | Type::UnassignedDecimal, _) => {
+			(Type::Float, Type::AssumeInt | Type::AssumeFloat, _) => {
 				var_ty
 			}
 

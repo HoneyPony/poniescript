@@ -11,11 +11,6 @@ use std::io::Write as _;
 struct Codegen<'a> {
 	functions: Vec<String>,
 
-	/// The code generator is responsible for propagating concrete numerical
-	/// types leftward into subexpressions. To do so, we keep a stack of the
-	/// known concrete types, and use the latest one when needed.
-	context_types: Vec<TypId>,
-
 	return_types: Vec<TypId>,
 
 	val_idx: usize,
@@ -166,8 +161,6 @@ impl<'a> Codegen<'a> {
 		return Codegen {
 			functions: Vec::new(),
 
-			context_types: Vec::new(),
-
 			return_types: Vec::new(),
 
 			val_idx: 0,
@@ -187,47 +180,13 @@ impl<'a> Codegen<'a> {
 		self.val_idx += 1;
 		val
 	}
-
-	fn get_expr_ctype(&mut self, ty: TypId) -> &'static str {
-		let ty = match self.db.get(ty) {
-			Type::UnassignedDecimal | Type::UnassignedNumeric => {
-				*self.context_types.last().unwrap()
-			},
-
-			_ => ty
-		};
-
-		self.db.get_ctype(ty)
-	}
-
-	fn push(&mut self, ty: TypId) {
-		match self.db.get(ty) {
-			Type::UnassignedDecimal | Type::UnassignedNumeric => return,
-			_ => {}
-		}
-		let ty = self.db.get_context_type(ty);
-		self.context_types.push(ty);
-	}
-
-	fn pop(&mut self, ty: TypId) {
-		match self.db.get(ty) {
-			Type::UnassignedDecimal | Type::UnassignedNumeric => return,
-			_ => {}
-		}
-		let ty = self.db.get_context_type(ty);
-		self.context_types.pop();
-	}
-
+	
 	fn binary(&mut self, binary: &Binary, into: &mut String) -> Val {
-		self.push(binary.typ);
-
 		let left = self.expr(&binary.left, into);
 		if left.is_bottom() { return Val::Bottom; }
 
 		let right = self.expr(&binary.right, into);
 		if right.is_bottom() { return Val::Bottom; }
-
-		self.pop(binary.typ);
 
 		let op = match binary.op {
 			Tok::Star => '*',
@@ -238,7 +197,7 @@ impl<'a> Codegen<'a> {
 		};
 
 		let val = self.new_val();
-		let ctype = self.get_expr_ctype(binary.typ);
+		let ctype = self.db.get_ctype(binary.typ);
 		let indent = self.indent();
 		// TODO: Indentation system
 		inf_writeln!(into, "{indent}const {ctype} {val} = {left} {op} {right};");
@@ -265,8 +224,8 @@ impl<'a> Codegen<'a> {
 			// TODO: Consider simply making 10.0 a float and 10 an int..?
 			// at least, unless assigned differently..?
 			// The context system is getting increasingly awkward.
-			Type::UnassignedNumeric => todo!(),
-			Type::UnassignedDecimal => todo!(),
+			Type::AssumeInt => todo!(),
+			Type::AssumeFloat => todo!(),
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:print-unbound-ident>"),
 		}
 
@@ -287,7 +246,7 @@ impl<'a> Codegen<'a> {
 			// TODO: Consider using a different Expr type for string literals
 			Expr::NumLiteral(lit) => {
 				Val::DirectLit {
-					ctype: self.get_expr_ctype(lit.typ),
+					ctype: self.db.get_ctype(lit.typ),
 					lit: self.db.get(lit.contents.lexeme),
 				}
 			},
@@ -299,7 +258,7 @@ impl<'a> Codegen<'a> {
 					let val = self.new_val();
 
 					inf_writeln!(into, "{indent}{} {};",
-						self.get_expr_ctype(block.typ),
+						self.db.get_ctype(block.typ),
 						val);
 
 					val
@@ -379,9 +338,7 @@ impl<'a> Codegen<'a> {
 			Stmt::Return(ret) => {
 				match &ret.expression {
 					Some(value) => {
-						self.push(*self.return_types.last().unwrap());
 						let val = self.expr(value, into);
-						self.pop(*self.return_types.last().unwrap());
 						// If the inner value is also a bottom type,
 						// then we can't really generate a return here.
 						if !val.is_bottom() {
@@ -400,9 +357,8 @@ impl<'a> Codegen<'a> {
 
 	fn assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) {
 		let ctx = self.db.get_var_type(var);
-		self.push(ctx);
+
 		let value = self.expr(expr, into);
-		self.pop(ctx);
 
 		let (declaration, space) = if is_declaration {
 			(self.db.get_var_ctype(var), " ")
@@ -435,7 +391,7 @@ impl<'a> Codegen<'a> {
 		let ctx_type = self.db.get_context_type(
 			self.db.get_fun_return_typid(fun)
 		);
-		self.push(ctx_type);
+
 		self.return_types.push(ctx_type);
 
 		let val = self.expr(body, &mut own_buffer);
@@ -453,7 +409,6 @@ impl<'a> Codegen<'a> {
 
 		// Pop type value
 		self.return_types.pop();
-		self.pop(ctx_type);
 
 		self.indent_level = enclosing_indent;
 
@@ -514,14 +469,6 @@ impl<'a> Codegen<'a> {
 
 	fn codegen(&mut self, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 		let mut outputs = CodegenOutputs::new();
-
-		// Strange but important: Any unassigned numeric type needs SOME kind
-		// of assigned type, such as a statement expression 1 + 2;
-		//
-		// This could, to some degree, be handled by some dead code elimination.
-		// But for now, we can just say that any undefined types are by default
-		// floats.
-		self.push(self.db.types.float);
 
 		for module in modules {
 			self.codegen_to_buffers(module, &mut outputs);
