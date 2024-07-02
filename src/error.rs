@@ -18,5 +18,6 @@ impl Error {
 pub fn show_error(error: &Error, db: &Db) {
 	let source = db.get(error.main_location.source);
 	source.show_brief_at(&error.main_location);
+	source.show_underlined_location(&error.main_location);
 	eprintln!("{}", error.main_message);
 }
