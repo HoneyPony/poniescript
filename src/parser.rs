@@ -9,6 +9,7 @@ use crate::lexer::*;
 use crate::module::Module;
 
 use crate::expr::*;
+use crate::error::Error;
 use crate::source::SourceLocation;
 use crate::typ::Type;
 
@@ -56,7 +57,10 @@ macro_rules! parse_error {
 	($parser:ident, $($arg:tt)*) => {
 		// For now, just eprintln()... TODO Implement error handling system
 		$parser.had_error = true;
-		eprintln!($($arg)*); 
+		$parser.db.report_error(Error::simple(
+			format!($($arg)*),
+			&$parser.current.location
+		)) 
     };
 }
 

@@ -1,0 +1,4 @@
+fun test() -> int {
+	var x = 3.0;
+	return x;
+}

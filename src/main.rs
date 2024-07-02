@@ -7,12 +7,14 @@ mod module;
 mod parser;
 mod typecheck;
 mod codegen;
+mod error;
 
 use std::fs::File;
 use std::path::{PathBuf};
 use std::process::exit;
 use std::time::{Duration, SystemTime};
 
+use db::Db;
 use module::Module;
 use clap::Parser as _;
 
@@ -72,6 +74,12 @@ fn duration(prev: SystemTime, message: &str) -> SystemTime {
 	now
 }
 
+fn report_errors(db: &Db) {
+	for error in &db.errors {
+		crate::error::show_error(&error, db);
+	}
+}
+
 fn main() {
 	let timer = SystemTime::now();
 
@@ -83,14 +91,20 @@ fn main() {
 	// Pass 1: Parse
 	let (mut modules, had_error) = parse_all_modules(&mut db, &args);
 
-	if had_error { exit(1); }
+	if had_error {
+		report_errors(&db);
+		exit(1);
+	}
 
 	let timer = duration(timer, "poni: parsing");
 
 	// Pass 2: Type check and infer
 	let had_error = typecheck::typecheck(&mut db, &mut modules);
 
-	if had_error { exit(2); }
+	if had_error {
+		report_errors(&db);
+		exit(2);
+	}
 
 	let timer = duration(timer, "poni: type check");
 

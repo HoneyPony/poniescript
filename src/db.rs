@@ -2,6 +2,7 @@ use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::cell::RefCell;
 
+use crate::error::Error;
 // Import relevant things.
 use crate::expr::Var;
 use crate::expr::Fun;
@@ -52,6 +53,8 @@ pub struct Db {
 	pub types: DbTypes,
 
 	pub synthetic: SourceId,
+
+	pub errors: Vec<Error>
 }
 
 impl Db {
@@ -73,6 +76,8 @@ impl Db {
 
 			var_cname_cache: Vec::new(),
 			fun_cname_cache: Vec::new(),
+
+			errors: Vec::new(),
 
 			fun_init: None,
 			types: DbTypes {
@@ -272,6 +277,10 @@ impl Db {
 	pub fn err_locate(&self, location: &SourceLocation) {
 		// TODO: Implement an actual system for showing error locations.
 		eprintln!("at {}, offset {}", location.source.0, location.offset);
+	}
+
+	pub fn report_error(&mut self, error: Error) {
+		self.errors.push(error);
 	}
 
 	pub fn type_generates_value(&self, id: TypId) -> bool {

@@ -4,6 +4,7 @@ use crate::source::SourceLocation;
 use crate::typ::Type;
 
 use crate::expr::*;
+use crate::error::Error;
 
 // Notes on type inference:
 // I sort of want the type inference rules to be simple, simply because that
@@ -70,8 +71,10 @@ macro_rules! maybe_type_error {
 			Ok(ty) => ty,
 			Err(_) => {
 				$self.had_error = true;
-				$db.err_locate($location);
-				eprintln!($($arg)*);
+				$db.report_error(Error::simple(
+					format!($($arg)*),
+					$location
+				));
 
 				return Err(TypeCheckErr)
 			}
@@ -83,8 +86,10 @@ macro_rules! type_error {
     ($self:ident, $db:ident, $location:expr, $($arg:tt)*) => {
 		{
 			$self.had_error = true;
-			$db.err_locate($location);
-			eprintln!($($arg)*);
+			$db.report_error(Error::simple(
+				format!($($arg)*),
+				$location
+			));
 
 			return Err(TypeCheckErr)
 		}
