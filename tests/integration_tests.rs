@@ -1,22 +1,25 @@
 include!(concat!(env!("OUT_DIR"), "/tests.gen.rs"));
 
-use std::{io::Read, process::{Child, Command, Stdio}};
+use std::{fs::File, io::Read, process::{Child, Command, ExitCode, ExitStatus, Stdio}};
 
 enum Expected {
 	Output(&'static str),
 	Error
 }
 
-fn test_should_print(input_file: &str, output: &str) -> std::io::Result<()> {
-	let c_path = concat!(env!("CARGO_TARGET_TMPDIR"), "/out.c");
-	let exe_path = concat!(env!("CARGO_TARGET_TMPDIR"), "/out");
-
+fn test_should_print(input_file: &str, c_path: &str, exe_path: &str, output: &str) -> std::io::Result<()> {
+	let _ = std::fs::remove_file(c_path);
+	let _ = std::fs::remove_file(exe_path);
+	
 	let mut poniescript = Command::new("target/debug/poniescript")
 		.arg("-o")
 		.arg(c_path)
 		.arg(input_file)
 		.spawn()?;
-	poniescript.wait()?;
+	let code = poniescript.wait()?;
+	if !code.success() {
+		panic!("poniescript should be able to compile this");
+	}
 
 	let mut cc = Command::new("gcc")
 		.arg(c_path)
@@ -25,7 +28,10 @@ fn test_should_print(input_file: &str, output: &str) -> std::io::Result<()> {
 		.arg("-I")
 		.arg(".")
 		.spawn()?;
-	cc.wait()?;
+	let code = cc.wait()?;
+	if !code.success() {
+		panic!("the c compiler should be able to compile this");
+	}
 
 	// Finally, actually test the program.
 	let mut testprog = Command::new(exe_path)
@@ -51,12 +57,13 @@ fn test_should_print(input_file: &str, output: &str) -> std::io::Result<()> {
 	Ok(())
 }
 
-fn run_integration_test(input_file: &str, expect: Expected) {
+fn run_integration_test(input_file: &str, c_path: &str, exe_path: &str, expect: Expected) {
 	// TODO:
 	// - Use CARGO_TARGET_TMPDIR to store compiled programs
 	// - Have the test programs report the expected value/error
 	match expect {
-		Expected::Output(output) => assert!(test_should_print(input_file, output).is_ok()),
+		Expected::Output(output) => 
+			assert!(test_should_print(input_file, c_path, exe_path, output).is_ok()),
 		Expected::Error => todo!(),
 	}
 }

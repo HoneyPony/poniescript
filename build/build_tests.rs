@@ -15,10 +15,15 @@ impl std::fmt::Display for Expected {
 	}
 }
 
-fn generate_test(file: &mut File, test_name: &str, expect: Expected) -> std::io::Result<()> {
+fn generate_test(file: &mut File, path: &str, test_name: &str, expect: Expected) -> std::io::Result<()> {
 	writeln!(file, "#[test]")?;
 	writeln!(file, "fn {test_name}() {{")?;
-	writeln!(file, "\trun_integration_test(\"tests/poni/{test_name}.poni\", {expect});")?;
+
+	// We let the generated test code actually do the concat!.
+	let c_path = format!("concat!(env!(\"CARGO_TARGET_TMPDIR\"), \"/{test_name}.c\")");
+	let exe_path = format!("concat!(env!(\"CARGO_TARGET_TMPDIR\"), \"/{test_name}\")");
+
+	writeln!(file, "\trun_integration_test(\"tests/poni/{path}{test_name}.poni\", {c_path}, {exe_path}, {expect});")?;
 	writeln!(file, "}}")?;
 
 	Ok(())
@@ -26,10 +31,13 @@ fn generate_test(file: &mut File, test_name: &str, expect: Expected) -> std::io:
 
 pub fn generate(tests_file: &mut File) {
 	let tests = [
-		("test_print", Expected::Output("345\n345\n45\n5\n"))
+		("print/", "print_nested", Expected::Output("345\n345\n45\n5\n")),
+		("print/", "print_string_literal", Expected::Output("hello world\n")),
+		("print/", "print_multiple_string_literal", Expected::Output("hello world\n")),
+		("print/", "print_number_literal", Expected::Output("3\n")),
 	];
 
-	for (test, expect) in tests {
-		generate_test(tests_file, test, expect).unwrap();
+	for (path, test, expect) in tests {
+		generate_test(tests_file, path, test, expect).unwrap();
 	}
 }
