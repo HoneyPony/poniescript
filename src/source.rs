@@ -83,7 +83,7 @@ impl SourceMap {
 
 		let column = input - self.lines[line];
 
-		(line as u64 + 1, column as u64)
+		(line as u64 + 1, column as u64 + 1)
 	}
 
 	fn show_underlined_location(&self, location: &SourceLocation) {
