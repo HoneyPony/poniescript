@@ -274,11 +274,6 @@ impl Db {
 		value
 	}
 
-	pub fn err_locate(&self, location: &SourceLocation) {
-		// TODO: Implement an actual system for showing error locations.
-		eprintln!("at {}, offset {}", location.source.0, location.offset);
-	}
-
 	pub fn report_error(&mut self, error: Error) {
 		self.errors.push(error);
 	}

@@ -178,10 +178,6 @@ impl<'a, 'b> Parser<'a, 'b> {
 		ScopeEntry::None
 	}
 
-	fn save_location(&self) -> SourceLocation {
-		return self.current.location.clone();
-	}
-
 	fn peek_typ(&self) -> Tok {
 		return self.current.typ;
 	}
