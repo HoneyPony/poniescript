@@ -50,6 +50,8 @@ pub struct Db {
 
 	pub fun_init: Option<FunId>,
 	pub types: DbTypes,
+
+	pub synthetic: SourceId,
 }
 
 impl Db {
@@ -80,7 +82,9 @@ impl Db {
 				int: TypId(0),
 				float: TypId(0),
 				bottom: TypId(0),
-			}
+			},
+
+			synthetic: SourceId(0),
 		};
 
 		db.types.str_const  = db.put_type(Type::StrConst);
@@ -89,6 +93,8 @@ impl Db {
 		db.types.int        = db.put_type(Type::Int);
 		db.types.float      = db.put_type(Type::Float);
 		db.types.bottom     = db.put_type(Type::Bottom);
+
+		db.synthetic = db.new_id(Source::Synthetic);
 
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,

@@ -26,9 +26,12 @@ impl SourceMap {
 	}
 }
 
-pub struct Source {
-	name: String,
-	path: PathBuf,
+pub enum Source {
+	Real {
+		name: String,
+		path: PathBuf,
+	},
+	Synthetic,
 }
 
 impl Source {
@@ -39,10 +42,13 @@ impl Source {
 			.flatten()
 			.unwrap_or("<unknown>")
 			.to_string();
-		return Source { name, path }
+		return Source::Real { name, path }
 	}
 
 	pub fn to_file(&self) -> io::Result<File> {
-		File::open(&self.path)
+		let Source::Real { path, .. } = self else {
+			panic!("trying to open synthetic source");
+		};
+		File::open(path)
 	}
 }
