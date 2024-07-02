@@ -58,10 +58,13 @@ macro_rules! parse_error {
 	($parser:ident, $($arg:tt)*) => {
 		// For now, just eprintln()... TODO Implement error handling system
 		$parser.had_error = true;
-		$parser.db.report_error(Error::simple(
-			format!($($arg)*),
-			&$parser.current.location
-		)) 
+
+		if $parser.should_report_errors() {
+			$parser.db.report_error(Error::simple(
+				format!($($arg)*),
+				&$parser.current.location
+			)) 
+		}
     };
 }
 
@@ -131,6 +134,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 		};
 
 		Ok(parser)
+	}
+
+	fn should_report_errors(&self) -> bool {
+		// TODO: panic mode, etc
+
+		// Don't report parse errors if the lexer has an error
+		!self.lexer.had_error
 	}
 
 	fn start(&mut self) -> SourceLocation {

@@ -5,6 +5,7 @@ use std::io::Read;
 use rustc_hash::FxHashMap;
 
 use crate::db::*;
+use crate::error::Error;
 use crate::source::*;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -92,6 +93,8 @@ pub struct Lexer {
 	next_char: char,
 
 	at_eof: bool,
+
+	pub had_error: bool,
 }
 
 fn is_whitespace(c: char) -> bool {
@@ -124,11 +127,13 @@ impl Lexer {
 			next_char: ' ',
 
 			at_eof: false,
+
+			had_error: false,
 		}
 	}
 
-	fn mk_token(&self, db: &mut Db, ty: Tok) -> Token {
-		let location = SourceLocation {
+	fn get_current_location(&self) -> SourceLocation {
+		return SourceLocation {
 			source: self.source_id,
 
 			// Because we use one character of lookahead, the 'start' and 'current'
@@ -136,6 +141,10 @@ impl Lexer {
 			offset: self.start - 1,
 			length: (self.current - self.start)
 		};
+	}
+
+	fn mk_token(&self, db: &mut Db, ty: Tok) -> Token {
+		let location = self.get_current_location();
 
 		return Token {
 			typ: ty,
@@ -202,8 +211,12 @@ impl Lexer {
 		})
 	}
 
-	fn error(&self, db: &mut Db, message: String) {
-		eprintln!("Parse error: {message}");
+	fn error(&mut self, db: &mut Db, message: String) {
+		self.had_error = true;
+		db.report_error(Error::simple(
+			format!("Parse error: {}", message),
+			&self.get_current_location()
+		));
 	}
 
 	fn string(&mut self, db: &mut Db) -> std::io::Result<Token> {
