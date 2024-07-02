@@ -256,8 +256,8 @@ impl<'a> Codegen<'a> {
 
 		match typ {
 			Type::Int => inf_writeln!(into, "{indent}ps_print_int({val});"),
-			Type::Float => inf_writeln!(into, "{indent}ps_print_int({val});"),
-			Type::Void => inf_writeln!(into, "{indent}ps_print_int({val});"),
+			Type::Float => inf_writeln!(into, "{indent}ps_print_float({val});"),
+			Type::Void => inf_writeln!(into, "{indent}/* ps_print_void */"),
 			Type::StrConst => inf_writeln!(into, "{indent}ps_print_str({val});"),
 			Type::Bottom => { },
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:print-unassigned>"),

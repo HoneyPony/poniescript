@@ -37,7 +37,8 @@ pub fn generate(tests_file: &mut File) {
 		("print/", "print_number_literal"         , Expected::Output("3\n")),
 
 		("globals/", "global_block", Expected::Output("7\n")),
-		("globals/", "globals_3"   , Expected::Output("3\n4.0\n10\n")),
+		// TODO: Figure out precise float output format we want.
+		("globals/", "globals_3"   , Expected::Output("3\n4.000000\n10\n")),
 	];
 
 	for (path, test, expect) in tests {
