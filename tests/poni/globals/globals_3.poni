@@ -1,0 +1,9 @@
+var x = 3;
+var y = 4.0;
+var z = 3 + 2 + 5;
+
+fun init() {
+	print(x);
+	print(y);
+	print(z);
+}

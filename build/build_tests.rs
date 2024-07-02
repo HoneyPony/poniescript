@@ -31,10 +31,13 @@ fn generate_test(file: &mut File, path: &str, test_name: &str, expect: Expected)
 
 pub fn generate(tests_file: &mut File) {
 	let tests = [
-		("print/", "print_nested", Expected::Output("345\n345\n45\n5\n")),
-		("print/", "print_string_literal", Expected::Output("hello world\n")),
+		("print/", "print_nested"                 , Expected::Output("345\n345\n45\n5\n")),
+		("print/", "print_string_literal"         , Expected::Output("hello world\n")),
 		("print/", "print_multiple_string_literal", Expected::Output("hello world\n")),
-		("print/", "print_number_literal", Expected::Output("3\n")),
+		("print/", "print_number_literal"         , Expected::Output("3\n")),
+
+		("globals/", "global_block", Expected::Output("7\n")),
+		("globals/", "globals_3"   , Expected::Output("3\n4.0\n10\n")),
 	];
 
 	for (path, test, expect) in tests {

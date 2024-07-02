@@ -12,3 +12,8 @@ fun test2() -> float {
 	z = y + z + y + z * 2;
 	return z;
 }
+
+fun init() {
+	print(test());
+	print(test2());
+}

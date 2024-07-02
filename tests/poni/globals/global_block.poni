@@ -1,0 +1,7 @@
+var x = {
+	3 + 4;
+};
+
+fun init() {
+	print(x);
+}
