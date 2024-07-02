@@ -39,6 +39,7 @@ pub struct Parser<'a, 'b> {
 	db: &'b mut Db,
 
 	current: Token,
+	last_location: SourceLocation,
 
 	scopes: Vec<Scope>,
 	global_scope: Scope,
@@ -120,6 +121,11 @@ impl<'a, 'b> Parser<'a, 'b> {
 			global_scope: Scope::new(),
 
 			current,
+			last_location: SourceLocation {
+				source: source_id,
+				offset: 0,
+				length: 0,
+			},
 
 			had_error: false,
 		};
@@ -132,7 +138,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 	}
 
 	fn end(&self, mut location: SourceLocation) -> SourceLocation {
-		location.length += (self.current.location.offset - location.offset) + self.current.location.length;
+		location.length = (self.last_location.offset - location.offset) + self.last_location.length;
 		location
 	}
 
@@ -185,6 +191,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 	}
 
 	fn advance(&mut self) -> Result<Token> {
+		self.last_location = self.current.location.clone();
 		let next = self.lexer
 			.next_token(self.db)
 			.map_err(|err| ParseErr::IoErr(err))?;

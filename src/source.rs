@@ -107,8 +107,7 @@ impl SourceMap {
 
 		let mut line_number = start.0 + 1;
 		let mut at_line_beginning: bool = true;
-
-		eprintln!("start offset = {}", start_offset);
+		let mut underline = false;
 
 		loop {
 			if at_line_beginning {
@@ -117,21 +116,22 @@ impl SourceMap {
 				at_line_beginning = false;
 			}
 
-			if offset >= self.contents_chars.len() { break; }
+			if offset >= start_offset && offset < end_offset {
+				underline = true;
+			}
 
-			if self.contents_chars[offset] == '\n' {
+			if offset >= self.contents_chars.len() || self.contents_chars[offset] == '\n' {
 				at_line_beginning = true;
 				line_number += 1;
 
-				// Read until we hit the end of the line after the end of the block.
-				if offset >= end_offset { break; }
-
 				// Generate underline
-				if offset >= start_offset {
+				if underline {
+					underline = false;
 					eprintln!("");
 					// Line up with the line numbers
 					eprint!("     : ");
 					for i in line_start_offset..offset {
+						if self.contents_chars[i] == '\r' { continue; }
 						if i >= start_offset && i < end_offset {
 							if self.contents_chars[i] == '\t' {
 								eprint!("~~~~");
@@ -146,10 +146,16 @@ impl SourceMap {
 						}
 					}
 				}
+
+				// Read until we hit the end of the line after the end of the block.
+				if offset >= self.contents_chars.len() || offset >= end_offset { break; }
 			}
 
 			if self.contents_chars[offset] == '\t' {
 				eprint!("    ");
+			}
+			else if self.contents_chars[offset] == '\r' {
+				/* do nothing  */
 			}
 			else {
 				eprint!("{}", self.contents_chars[offset]);

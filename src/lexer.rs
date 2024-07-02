@@ -130,7 +130,10 @@ impl Lexer {
 	fn mk_token(&self, db: &mut Db, ty: Tok) -> Token {
 		let location = SourceLocation {
 			source: self.source_id,
-			offset: self.start,
+
+			// Because we use one character of lookahead, the 'start' and 'current'
+			// values are always 1 past where they should be.
+			offset: self.start - 1,
 			length: (self.current - self.start)
 		};
 
