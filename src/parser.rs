@@ -252,7 +252,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			parse_error!(self, "Expected at least one argument to 'print'");
 		}
 
-		Expr::mk_print_ok(key_print.location, exprs, self.db.put_type(Type::Unassigned))
+		Expr::mk_print_ok(key_print.location, exprs, self.db.types.unassigned)
 	}
 
 	fn expr_prefix(&mut self) -> Result<Expr> {
@@ -303,7 +303,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash => {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
-				return Expr::mk_binary_ok(op.location, op.typ, lhs, rhs, self.db.put_type(Type::Unassigned));
+				return Expr::mk_binary_ok(op.location, op.typ, lhs, rhs, self.db.types.unassigned);
 			},
 
 			// We should never call expr_infix() with an invalid operator,
@@ -335,10 +335,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::Identifier => {
 				// TODO: Maybe another lookup table similar to keywords..?
 				if tok.lexeme == self.db.put_str("int") {
-					return Ok(self.db.put_type(Type::Int))
+					return Ok(self.db.types.int)
 				}
 				if tok.lexeme == self.db.put_str("float") {
-					return Ok(self.db.put_type(Type::Float))
+					return Ok(self.db.types.float)
 				}
 
 				self.db.put_type(Type::UnboundIdent(tok.lexeme))
@@ -359,7 +359,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let name = expected_after!(self, Tok::Identifier, key_var,
 			"variable name")?;
 
-		let mut typ = self.db.put_type(Type::Unassigned);
+		let mut typ = self.db.types.unassigned;
 
 		if let Some(colon) = self.match_(Tok::Colon)? {
 			typ = self.typ()?;
@@ -404,7 +404,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// last statement is return; because bottom can be assigned to void.
 		//
 		// We may want to consider simply deleting the Void type.
-		Expr::mk_block_ok(lbrace.location, stmts, self.db.put_type(Type::Bottom))
+		Expr::mk_block_ok(lbrace.location, stmts, self.db.types.bottom)
 	}
 
 	fn stmt(&mut self) -> Result<Stmt> {
@@ -448,7 +448,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::RightParen, "')' after function parameter list")?;
 
-		let mut return_type = self.db.put_type(Type::Void);
+		let mut return_type = self.db.types.void;
 
 		if let Some(arrow) = self.match_(Tok::LeftArrow)? {
 			// Parse return type

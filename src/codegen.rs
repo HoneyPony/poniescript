@@ -521,8 +521,7 @@ impl<'a> Codegen<'a> {
 		// This could, to some degree, be handled by some dead code elimination.
 		// But for now, we can just say that any undefined types are by default
 		// floats.
-		let float = self.db.put_type(Type::Float);
-		self.push(float);
+		self.push(self.db.types.float);
 
 		for module in modules {
 			self.codegen_to_buffers(module, &mut outputs);

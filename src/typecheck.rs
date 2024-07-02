@@ -210,12 +210,12 @@ impl TypeChecker {
 				// and Decimal -> Float.
 				// One other option would be to make global vars require
 				// a type clause.
-				db.put_type(Type::Int)
+				db.types.int
 			},
 
 			(Type::Unassigned, Type::UnassignedDecimal, true) => {
 				// dodgy global var
-				db.put_type(Type::Float)
+				db.types.float
 			},
 
 			(Type::UnassignedNumeric, Type::UnassignedDecimal, _) => {
@@ -308,7 +308,7 @@ impl TypeChecker {
 				// last statement then bail with Void.
 				if !value_used {
 					block.stmts.last_mut().map(|stmt| self.stmt(db, stmt, false));
-					return Ok(db.put_type(Type::Bottom));
+					return Ok(db.types.bottom);
 				}
 
 				// Otherwise, we need to compute a type for the value.
@@ -378,13 +378,13 @@ impl TypeChecker {
 				let inner = match &mut ret.expression {
 					Some(expr) => expr,
 					None => {
-						if return_type != db.put_type(Type::Void) {
+						if return_type != db.types.void {
 							type_error!(self, 
 								db, &ret.location,
 								"Trying to return value in function returning void");
 						}
 
-						return Ok(Some(db.put_type(Type::Bottom)));
+						return Ok(Some(db.types.bottom));
 					},
 				};
 
@@ -400,7 +400,7 @@ impl TypeChecker {
 					db.repr_type(typ),
 					db.repr_type(return_type));
 
-				Ok(Some(db.put_type(Type::Bottom)))
+				Ok(Some(db.types.bottom))
 			}
 		}
 	}
