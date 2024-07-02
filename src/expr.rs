@@ -18,8 +18,11 @@ impl Expr {
 			Expr::Assign(assign) => {
 				db.get_var_type(assign.identity)
 			},
-			Expr::Literal(lit) => {
+			Expr::NumLiteral(lit) => {
 				lit.typ
+			},
+			Expr::StrLiteral(_) => {
+				db.types.str_const
 			},
 			Expr::Block(block) => {
 				block.typ

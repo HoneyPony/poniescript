@@ -17,6 +17,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 // Include arenas
 include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 
+pub struct DbTypes {
+	pub str_const: TypId
+}
+
 /// The Db stores all of the arena-allocated objects that can be referenced
 /// with Ids. Basically all of these objects live for the entire program.
 pub struct Db {
@@ -26,10 +30,7 @@ pub struct Db {
 	source_side_map: FxHashMap<PathBuf, SourceId>,
 	type_side_map: FxHashMap<Type, TypId>,
 
-	// TODO: This may need to change a bit when we actually parse string literals
-	// correctly.
-	str_const_set: FxHashMap<StrId, &'static str>,
-	str_const_id: usize,
+	str_simple_const_map: FxHashMap<String, StrConstId>,
 
 	key_lookup_map: FxHashMap<StrId, Tok>,
 
@@ -45,6 +46,7 @@ pub struct Db {
 	fun_cparams_cache: Vec<&'static str>,
 
 	pub fun_init: Option<FunId>,
+	pub types: DbTypes,
 }
 
 impl Db {
@@ -56,10 +58,9 @@ impl Db {
 			source_side_map: FxHashMap::default(),
 			type_side_map: FxHashMap::default(),
 
-			key_lookup_map: FxHashMap::default(),
+			str_simple_const_map: FxHashMap::default(),
 
-			str_const_set: FxHashMap::default(),
-			str_const_id: 0,
+			key_lookup_map: FxHashMap::default(),
 
 			ctype_cache: Vec::new(),
 			type_repr_cache: RefCell::new(FxHashMap::default()),
@@ -69,7 +70,12 @@ impl Db {
 			fun_cname_cache: Vec::new(),
 
 			fun_init: None,
+			types: DbTypes {
+				str_const: TypId(0),
+			}
 		};
+
+		db.types.str_const = db.put_type(Type::StrConst);
 
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,
@@ -122,19 +128,19 @@ impl Db {
 		return id;
 	}
 
-	pub fn new_str_const(&mut self, str: StrId) {
-		let name = format!("ps_str_const{}", self.str_const_id);
-		self.str_const_id += 1;
-		self.str_const_set.insert(str, name.leak());
+	pub fn put_str_const_simple(&mut self, string: &str) -> StrConstId {
+		if let Some(existing) = self.str_simple_const_map.get(string) {
+			return *existing;
+		}
+
+		let id: StrConstId = IdFuncs::<StrConstId, &'static str>::new_id(self, string.to_string().leak());
+		self.str_simple_const_map.insert(string.to_string(), id);
+		id
 	}
 
-	pub fn iter_str_const(&self) -> std::collections::hash_map::Iter<'_, StrId, &'static str> {
-		self.str_const_set.iter()
-	}
-
-	pub fn get_str_const(&mut self, str: StrId) -> &'static str {
-		unsafe { self.str_const_set.get(&str).unwrap_unchecked() }
-	}
+	//pub fn iter_str_const(&self) -> impl Iterator<Item = (StrConstId, &'static str)> + '_ {
+	//	self.arenas.arena_strconst.iter().enumerate().map(|(k, v)| (StrConstId(k as u32), *v))
+	//}
 
 	pub fn lookup_key(&self, id: StrId) -> Option<Tok> {
 		self.key_lookup_map.get(&id).map(|tok| *tok)
@@ -147,13 +153,6 @@ impl Db {
 		};
 
 		return self.new_id(var);
-	}
-
-	pub fn is_type_str_const(&self, typ: TypId) -> bool {
-		match self.get(typ) {
-			Type::StrConst => true,
-			_ => false,
-		}
 	}
 
 	pub fn get_cname(&self, var: VarId) -> &'static str {
@@ -271,6 +270,13 @@ impl Db {
 		};
 	}
 
+	pub fn str_const_range(&self) -> StrConstIter {
+		return StrConstIter {
+			len: self.arenas.arena_strconst.len() as IdType,
+			current: 0
+		}
+	}
+	
 	pub fn generate_codegen_caches(&mut self) {
 		// The order matters, as e.g. var cnames are used for fun cparams.
 		self.generate_var_cnames_cache();
@@ -341,6 +347,27 @@ impl Iterator for VarIter {
 			None
 		}
 		else { Some(VarId(self.current)) };
+
+		self.current += 1;
+
+		result
+	}
+}
+
+// TODO: Just generate these using build_db.rs
+pub struct StrConstIter {
+	len: IdType,
+	current: IdType,
+}
+
+impl Iterator for StrConstIter {
+	type Item = StrConstId;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let result = if self.current == self.len {
+			None
+		}
+		else { Some(StrConstId(self.current)) };
 
 		self.current += 1;
 

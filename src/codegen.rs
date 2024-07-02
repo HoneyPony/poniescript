@@ -83,7 +83,7 @@ enum Val {
 		name: &'static str
 	},
 	StringLit {
-		lit: &'static str,
+		id: StrConstId,
 	},
 
 	/// Equivalent to Type::Bottom, sort of.
@@ -138,7 +138,9 @@ impl std::fmt::Display for Val {
 			Val::Tmp(idx) => write!(f, "tmp{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
 			Val::DirectVar { name } => write!(f, "{name}"),
-			Val::StringLit { lit } => write!(f, "{lit}"),
+
+			// String literals are always stored in variables with a consistent naming scheme.
+			Val::StringLit { id } => write!(f, "ps_str_const{}", id.to_usize()),
 			Val::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
 			Val::None => Ok(()),
 		}
@@ -283,16 +285,15 @@ impl<'a> Codegen<'a> {
 				Val::DirectVar { name: self.db.get_cname(assign.identity) }
 			},
 			// TODO: Consider using a different Expr type for string literals
-			Expr::Literal(lit) => {
-				if self.db.is_type_str_const(lit.typ) {
-					return Val::StringLit { lit: self.db.get_str_const(lit.contents.lexeme) }
-				}
-
+			Expr::NumLiteral(lit) => {
 				Val::DirectLit {
 					ctype: self.get_expr_ctype(lit.typ),
 					lit: self.db.get(lit.contents.lexeme),
 				}
 			},
+			Expr::StrLiteral(lit) => {
+				return Val::StringLit { id: lit.id }
+			}
 			Expr::Block(block) => {
 				let val = if self.db.type_generates_value(block.typ) {
 					let val = self.new_val();
@@ -469,10 +470,10 @@ impl<'a> Codegen<'a> {
 
 	fn compile_string_constant_init(&mut self, define: &mut String, init: &mut String) {
 		inf_writeln!(init, "void poni_init_strings(void) {{");
-		for (value, name) in self.db.iter_str_const() {
-			inf_writeln!(define, "const ps_str* {name} = NULL;");
-			inf_writeln!(init, "\t{name} = ps_str_from_literal({});",
-				self.db.get(*value));
+		for id in self.db.str_const_range() {
+			inf_writeln!(define, "const ps_str* ps_str_const{} = NULL;", id.to_usize());
+			inf_writeln!(init, "\tps_str_const{} = ps_str_from_literal({});",
+				id.to_usize(), self.db.get(id));
 		}
 		inf_writeln!(init, "}}");
 	}

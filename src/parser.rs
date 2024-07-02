@@ -203,7 +203,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			_ => unreachable!()
 		};
 
-		return Expr::mk_literal_ok(number.location.clone(),
+		return Expr::mk_numliteral_ok(number.location.clone(),
 			number,
 			self.db.put_type(typ));
 	}
@@ -267,13 +267,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			Tok::Print => self.expr_print(),
 
-			Tok::String => {
+			Tok::StringSimple => {
 				let lit = self.advance()?;
-				let typ = self.db.put_type(Type::StrConst);
-				self.db.new_str_const(lit.lexeme);
+				let id = self.db.put_str_const_simple(self.db.get(lit.lexeme));
 				// TODO: Make sure the contents of the string literal are
 				// what we expect...
-				Expr::mk_literal_ok(lit.location.clone(), lit, typ)
+				Expr::mk_strliteral_ok(lit.location.clone(), id)
 			}
 
 			_ => {

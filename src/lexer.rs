@@ -29,7 +29,7 @@ pub enum Tok {
 
 	LeftArrow,
 
-	Identifier, String, WholeNumber, DecimalNumber,
+	Identifier, StringSimple, WholeNumber, DecimalNumber,
 
 	And, Class, Else, False, Fun, For, If, In, Null, Or,
 	Range, Return, Super, KeySelf, True, Using, Var, While,
@@ -212,7 +212,7 @@ impl Lexer {
 				break;
 			}
 		}
-		return self.mk_token_res(db, Tok::String);
+		return self.mk_token_res(db, Tok::StringSimple);
 	}
 
 	fn ident(&mut self, db: &mut Db) -> std::io::Result<Token> {

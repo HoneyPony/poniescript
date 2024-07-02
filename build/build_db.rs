@@ -75,6 +75,7 @@ pub fn generate(db_file: &mut File) {
 	// Modify this array to add new Id types
 	let pairs = vec![
 		("StrId", "&'static str"),
+		("StrConstId", "&'static str"),
 		("VarId", "Var"),
 		("FunId", "Fun"),
 		("TypId", "Type"),

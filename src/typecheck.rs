@@ -287,9 +287,12 @@ impl TypeChecker {
 			Expr::Assign(assign) => {
 				self.do_assign(db, &assign.location, assign.identity, &mut assign.value)?
 			},
-			Expr::Literal(lit) => {
+			Expr::NumLiteral(lit) => {
 				lit.typ
 			},
+			Expr::StrLiteral(_) => {
+				db.types.str_const
+			}
 			Expr::Block(block) => {
 				// We must type-check every statement inside the block.
 				// However, the last statement is checked specially.
