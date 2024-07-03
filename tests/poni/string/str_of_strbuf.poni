@@ -1,0 +1,9 @@
+fun init() {
+	var space = str(" ");
+	var first = str("hello", space);
+	var second = str("my", space);
+	var third = str("little", space, "ponies");
+
+	var message = str(first, second, third);
+	print(message);
+}

@@ -48,6 +48,7 @@ pub fn generate(tests_file: &mut File) {
 		// TODO: Add other tests when we get function calls
 	
 		("string/", "simple_str", Expected::Output("hello world25\n")),
+		("string/", "str_of_strbuf", Expected::Output("hello my little ponies\n")),
 	];
 
 	for (path, test, expect) in tests {
