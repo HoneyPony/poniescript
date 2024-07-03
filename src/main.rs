@@ -55,7 +55,7 @@ struct TimeHelper {
 impl std::fmt::Display for TimeHelper {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if self.duration.as_millis() < 10 {
-			write!(f, "{}us", self.duration.as_micros())
+			write!(f, "{}ms", self.duration.as_micros() as f64 / 1000.0)
 		}
 		else {
 			write!(f, "{}ms", self.duration.as_millis())
@@ -63,12 +63,14 @@ impl std::fmt::Display for TimeHelper {
 	}
 }
 
-fn duration(prev: SystemTime, message: &str) -> SystemTime {
+fn duration(prev: SystemTime, message: &str, duration_set: &mut Vec<&'static str>) -> SystemTime {
 	let now = SystemTime::now();
 
 	if let Ok(duration) = now.duration_since(prev) {
-		eprintln!("{} took {}",
-			message, TimeHelper { duration });
+		// NOTE: Keep padding in sync with longest message
+		let info = format!("{:<18} = {}",
+			message, TimeHelper { duration }).leak();
+		duration_set.push(info);
 	}
 
 	now
@@ -82,6 +84,8 @@ fn report_errors(db: &Db) {
 
 fn main() {
 	let timer = SystemTime::now();
+	let timer_begin = SystemTime::now();
+	let mut duration_set = Vec::new();
 
 	// Use Clap to parse arguments
 	let args = Args::parse();
@@ -96,7 +100,7 @@ fn main() {
 		exit(1);
 	}
 
-	let timer = duration(timer, "poni: parsing");
+	let timer = duration(timer, "parsing", &mut duration_set);
 
 	// Pass 2: Type check and infer
 	let had_error = typecheck::typecheck(&mut db, &mut modules);
@@ -106,7 +110,7 @@ fn main() {
 		exit(2);
 	}
 
-	let timer = duration(timer, "poni: type check");
+	let timer = duration(timer, "type check", &mut duration_set);
 
 	// Pass 3: Codegen
 	// Generate any caches that require type checking info.
@@ -124,5 +128,10 @@ fn main() {
 		exit(4);
 	}
 
-	duration(timer, "poni: codegen (to c)");
+	duration(timer, "codegen (to c)", &mut duration_set);
+	duration(timer_begin, "total compile time", &mut duration_set);
+
+	for info in duration_set {
+		eprintln!("{}", info);
+	}
 }
