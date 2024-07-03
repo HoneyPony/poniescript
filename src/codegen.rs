@@ -110,6 +110,10 @@ impl TypedVal {
 	pub fn is_bottom(&self) -> bool {
 		self.val.is_bottom()
 	}
+
+	pub fn needs_storage(&self) -> bool {
+		self.val.needs_storage()
+	}
 }
 
 enum PromotedVal {
@@ -610,7 +614,7 @@ impl<'a> Codegen<'a> {
 		self.return_types.push(own_return_type);
 
 		let val = self.expr(body, &mut own_buffer);
-		if !val.is_bottom() {
+		if val.needs_storage() {
 			let val = self.promote(val, own_return_type);
 			// If it does have a value, then we write it as a default
 			// return value.
