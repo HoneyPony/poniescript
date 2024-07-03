@@ -1,0 +1,29 @@
+fun make_string(a: StrConst, b: StrConst, c: StrConst) -> StrBuf {
+	str(a, b, c);
+}
+
+fun make_string_buf(a: StrBuf, b: StrBuf, c: StrBuf) -> StrBuf {
+	str(a, b, c);
+}
+
+fun init() {
+	var message = make_string_buf(
+		make_string(
+			"m",
+			"y",
+			" ",
+		),
+		make_string(
+			"lit",
+			"tle",
+			" ",
+		),
+		make_string(
+			"po",
+			"ny",
+			"!"
+		),
+	);
+
+	print(message);
+}

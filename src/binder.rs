@@ -121,7 +121,7 @@ impl<'db> Binder<'db> {
 			}
 
 			// Nothing to resolve.
-			Expr::Variable(_) | Expr::FunCall(_) | Expr::NumLiteral(_) | Expr::StrLiteral(_) => {
+			Expr::Variable(_) | Expr::NumLiteral(_) | Expr::StrLiteral(_) => {
 				return None;
 			}
 			
@@ -130,7 +130,20 @@ impl<'db> Binder<'db> {
 				self.resolve_unbound(ident.identifier.lexeme, ident.location.clone())
 			},
 
+			Expr::FunCall(call) => {
+				// Must visit all the arguments of the call
+				for arg in &mut call.args {
+					self.visit_expr(arg);
+				}
+				None
+			},
+
 			Expr::UnboundCall(unbound) => {
+				// Must visit all the arguments of the call, so that they can
+				// be bound.
+				for arg in &mut unbound.args {
+					self.visit_expr(arg);
+				}
 				self.resolve_unbound_call(unbound)
 			}
 		}
