@@ -56,11 +56,11 @@ impl<'db> Binder<'db> {
 		}
 	}
 
-	fn resolve(&mut self, ident: StrId, location: SourceLocation) -> Option<Expr> {
+	fn resolve_unbound(&mut self, ident: StrId, location: SourceLocation) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
-				ScopeEntry::Fun(_) => todo!(),
+				ScopeEntry::Fun(_) => todo!("resolve unbound fun values to 'that function as a value'"),
 				ScopeEntry::None => continue,
 			}
 		}
@@ -74,48 +74,70 @@ impl<'db> Binder<'db> {
 		None
 	}
 
-	fn visit_expr(&mut self, expr: &mut Expr) {
-		let (identifier, location) = match expr {
+	fn resolve_unbound_call(&mut self, unbound: &mut UnboundCall) -> Option<Expr> {
+		for checker in self.checkers.iter_mut().rev() {
+			match checker.check(self.db, unbound.identifier.lexeme) {
+				ScopeEntry::Var(_) => todo!("resolve unbound var into a call"),
+				ScopeEntry::Fun(fun) =>
+					return Some(Expr::mk_funcall(unbound.location.clone(), fun, 
+					// TODO: Figure out a better way to get the args out of the UnboundCall
+					// then this, as it likely leads to an additional allocation..?
+						std::mem::take(&mut unbound.args))),
+				ScopeEntry::None => continue,
+			}
+		}
+
+		None
+	}
+
+	fn resolve_expr(&mut self, expr: &mut Expr) -> Option<Expr> {
+		match expr {
 			// For most expression types, we simply visit each inner expression
 			// and then return.
 
 			Expr::Binary(binary) => {
 				self.visit_expr(&mut binary.left);
 				self.visit_expr(&mut binary.right);
-				return;
+				return None;
 			},
 			
 			Expr::Assign(assign) => {
 				self.visit_expr(&mut assign.value);
-				return;
+				return None;
 			},
 
 			Expr::Block(block) => {
 				for stmt in &mut block.stmts {
 					self.visit_stmt(stmt);
 				}
-				return;
+				return None;
 			},
 			
 			Expr::Print(Print { exprs, .. }) | Expr::Str(Str { exprs, .. }) => {
 				for expr in exprs {
 					self.visit_expr(expr);
 				}
-				return;
+				return None;
 			}
 
 			// Nothing to resolve.
-			Expr::Variable(_) | Expr::NumLiteral(_) | Expr::StrLiteral(_) => {
-				return;
+			Expr::Variable(_) | Expr::FunCall(_) | Expr::NumLiteral(_) | Expr::StrLiteral(_) => {
+				return None;
 			}
 			
 			Expr::Unbound(ident) => {
 				// TODO: Do we want to avoid the clone here..?
-				(ident.identifier.lexeme, ident.location.clone())
+				self.resolve_unbound(ident.identifier.lexeme, ident.location.clone())
 			},
-		};
 
-		if let Some(resolved) = self.resolve(identifier, location) {
+			Expr::UnboundCall(unbound) => {
+				self.resolve_unbound_call(unbound)
+			}
+		}
+	}
+
+	fn visit_expr(&mut self, expr: &mut Expr) {
+		if let Some(resolved) = self.resolve_expr(expr) {
 			// Replace the unbound identifier with the resolved expression.
 			*expr = resolved;
 		}

@@ -296,9 +296,43 @@ impl<'a, 'b> Parser<'a, 'b> {
 			self.db.put_type(typ));
 	}
 
+	// Expects to be at the first param, after the LeftParen.
+	fn expr_call_finish(&mut self, location: SourceLocation, ident: Token) -> Result<Expr> {
+		let mut args = Vec::new();
+
+		while !self.at(Tok::RightParen) && !self.is_at_end() {
+			args.push(self.expression()?);
+
+			// TODO: Make sure we require a Comma after every param but the
+			// last.
+			self.match_(Tok::Comma)?;
+		}
+
+		expected!(self, Tok::RightParen, "')' after argument list");
+
+		if self.match_(Tok::LeftParen)?.is_some() {
+			todo!("calling the return value of a call");
+		}
+
+		match self.scope_lookup(ident.lexeme) {
+			ScopeEntry::Var(_) => todo!("calling a variable"),
+
+			// It may seem in poor taste to have a specific Expr for function
+			// calls all throughout the syntax tree. But, the hope is that this
+			// makes it easier to generate reasonable code in the common cases.
+			ScopeEntry::Fun(fun) => Expr::mk_funcall_ok(location, fun, args),
+
+			ScopeEntry::None => Expr::mk_unboundcall_ok(location, ident, args),
+		}
+	}
+
 	fn expr_ident(&mut self) -> Result<Expr> {
 		let location = self.start();
 		let ident = expected!(self, Tok::Identifier, "identifier")?;
+
+		if self.match_(Tok::LeftParen)?.is_some() {
+			return self.expr_call_finish(location, ident);
+		}
 
 		// In the future, if we see a dot or a (), we might generate a getter/setter/call.
 		// For now, we just generate either a Variable or some unbound name.

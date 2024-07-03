@@ -290,11 +290,59 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				self.db.types.str_buf
+			},
+			Expr::FunCall(call) => {
+				// Function calls bear a resemblance both to print/str, and also
+				// to variable assignment. This is because we are essentially
+				// "assigning" each of its parameters (which are VarIds!) to
+				// the arguments.
+				//
+				// Of course, we don't mutate the parameter type -- so it's different
+				// in that way, but otherwise very similar.
+;
+				let fun_arity = self.db.get(call.identity).parameters.len();
+
+				if call.args.len() != fun_arity {
+					// TODO: Add a Note about the function definition.
+					type_error!(self,
+						&call.location,
+						"Incorrect arguments to function '{}'. Function expects {} arguments but {} were given",
+						self.db.get_fun_name(call.identity),
+						call.args.len(),
+						fun_arity);
+				}
+
+				for i in 0..fun_arity {
+					// Check each argument against the corresponding parameter.
+					let arg = self.check_expr(&mut call.args[i], true)?;
+
+					let param = self.db.get(call.identity).parameters[i];
+
+					// Note that we do NOT mutate the var type in any way.
+					let computed = self.compute_assignable(
+						self.db.get_var_type(param), arg);
+
+					let computed = maybe_type_error!(self, computed,
+						&call.location,
+						"Incorrect argument to function '{}': Parameter '{}' expects '{}', but was given '{}'",
+						self.db.get_fun_name(call.identity),
+						self.db.repr_var(param),
+						self.db.repr_var_type(param),
+						self.db.repr_type(arg)
+					);
+
+					call.args[i].promote(computed, self.db);
+				}
+
+				self.db.get_fun_ret_type(call.identity)
 			}
 			Expr::Unbound(_) => {
 				// In theory we will resolve all idents beforehand? But this might
 				// be different if we have function overloading.
 				panic!("compiler-err:tried-to-typecheck-an-unbound-identifier-expression");
+			},
+			Expr::UnboundCall(_) => {
+				panic!("compiler-err:tried-to-typecheck-an-unbound-call-expression");
 			}
 		})
 	}

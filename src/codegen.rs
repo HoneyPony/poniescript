@@ -369,6 +369,31 @@ impl<'a> Codegen<'a> {
 				Val::DirectVar { name: self.db.get_cname(assign.identity) }
 					.typed(self.db.get_var_type(assign.identity))
 			},
+			Expr::FunCall(call) => {
+				let val = self.new_val();
+				let ctype = self.db.get_fun_ret_ctype(call.identity);
+				let cname = self.db.get_fun_cname(call.identity);
+
+				// TODO: Figure out a way to re-use PromotedVal buffers, maybe..
+				let mut vals = Vec::new();
+				for idx in 0..call.args.len() {
+					let arg = &call.args[idx];
+					let val = self.expr(arg, into);
+					let val = self.promote(val, self.db.get_fun_param_type(call.identity, idx));
+					vals.push(val);
+				}
+
+				inf_write!(into, "{indent}{ctype} {val} = {cname}(");
+				let mut comma = "";
+				for val in vals {
+					inf_write!(into, "{comma}{val}");
+					comma = ", ";
+				}
+				// TODO: Implement closure, gc scoping, etc
+				inf_writeln!(into, "{comma}NULL);");
+
+				val.typed(self.db.get_fun_ret_type(call.identity))
+			},
 			// TODO: Consider using a different Expr type for string literals
 			Expr::NumLiteral(lit) => {
 				Val::DirectLit {
@@ -453,6 +478,9 @@ impl<'a> Codegen<'a> {
 			Expr::Unbound(_) => {
 				panic!("compiler-err:tried-to-codegen-an-unbound-identifier-expression");
 			},
+			Expr::UnboundCall(_) => {
+				panic!("compiler-err:tried-to-codegen-an-unbound-call");
+			}
 		}
 	}
 

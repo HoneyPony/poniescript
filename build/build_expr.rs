@@ -170,15 +170,17 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 pub fn generate(file: &mut File) {
 	let expr_spec = r#"
 
-	Binary     : Tok op, Expr left, Expr right, TypId typ
-	Variable   : VarId identity
-	Assign     : VarId identity, Expr value
-	NumLiteral : Token contents, TypId typ
-	StrLiteral : StrConstId id
-	Block      : Vec<Stmt> stmts, TypId typ
-	Unbound    : Token identifier
-	Print      : Vec<Expr> exprs, TypId typ
-	Str        : Vec<Expr> exprs
+	Binary      : Tok op, Expr left, Expr right, TypId typ
+	Variable    : VarId identity
+	FunCall     : FunId identity, Vec<Expr> args
+	Assign      : VarId identity, Expr value
+	NumLiteral  : Token contents, TypId typ
+	StrLiteral  : StrConstId id
+	Block       : Vec<Stmt> stmts, TypId typ
+	Unbound     : Token identifier
+	UnboundCall : Token identifier, Vec<Expr> args
+	Print       : Vec<Expr> exprs, TypId typ
+	Str         : Vec<Expr> exprs
 
 	"#;
 

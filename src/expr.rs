@@ -15,6 +15,9 @@ impl Expr {
 			Expr::Variable(var) => {
 				db.get_var_type(var.identity)
 			},
+			Expr::FunCall(call) => {
+				db.get_fun_ret_type(call.identity)
+			}
 			Expr::Assign(assign) => {
 				db.get_var_type(assign.identity)
 			},
@@ -27,7 +30,8 @@ impl Expr {
 			Expr::Block(block) => {
 				block.typ
 			},
-			Expr::Unbound(_) => todo!(),
+			Expr::Unbound(_) => panic!("calling Expr::typ() on Unbound"),
+			Expr::UnboundCall(_) => panic!("calling Expr::typ() on UnboundCall"),
 			Expr::Print(print) => {
 				print.exprs[0].typ(db)
 			},
@@ -52,6 +56,7 @@ impl Expr {
 			}
 			Expr::Variable(_) => false,
 			Expr::Assign(_) => false,
+			Expr::FunCall(_) => false,
 			Expr::NumLiteral(lit) => {
 				lit.typ = typ;
 				true
@@ -65,6 +70,7 @@ impl Expr {
 				true
 			},
 			Expr::Unbound(_) => false,
+			Expr::UnboundCall(_) => false,
 			Expr::Print(print) => {
 				print.exprs[0].promote(typ, db)
 			},

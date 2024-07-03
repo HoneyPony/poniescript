@@ -54,6 +54,7 @@ pub fn generate(tests_file: &mut File) {
 	
 		("functions/", "parse_params", Expected::Output("")),
 		("functions/", "param_trailing_comma", Expected::Output("")),
+		("functions/", "call_basic", Expected::Output("3\n7\n11\n")),
 
 		("scope/", "block_shadow", Expected::Output("hello ponies\nhello again ponies\nhello ponies\n")),
 	];

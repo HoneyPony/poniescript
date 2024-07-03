@@ -264,6 +264,20 @@ impl Db {
 	pub fn get_fun_ret_ctype(&self, fun: FunId) -> &'static str {
 		self.get_ctype(self.get(fun).return_type)
 	}
+
+	pub fn get_fun_ret_type(&self, fun: FunId) -> TypId {
+		self.get(fun).return_type
+	}
+
+	/// Should only be called when we know for sure we have the correct
+	/// index.
+	pub fn get_fun_param_type(&self, fun: FunId, param: usize) -> TypId {
+		self.get_var_type(*unsafe { self.get(fun).parameters.get_unchecked(param) })
+	}
+
+	pub fn get_fun_name(&self, fun: FunId) -> &str {
+		self.get(self.get(fun).name.lexeme)
+	}
 	
 	pub fn get_fun_cname(&self, fun: FunId) -> &str {
 		// TODO: Cname generation
