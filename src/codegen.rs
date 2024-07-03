@@ -93,10 +93,39 @@ enum Val {
 	None,
 }
 
+impl Val {
+	pub fn typed(self, typ: TypId) -> TypedVal {
+		return TypedVal {
+			val: self,
+			typ,
+		}
+	}
+}
+
+struct TypedVal {
+	val: Val,
+	typ: TypId,
+}
+
+impl TypedVal {
+	pub fn is_bottom(&self) -> bool {
+		self.val.is_bottom()
+	}
+}
+
 enum PromotedVal {
 	Simple(Val),
 	Promoted(Val, &'static str),
 	Bottom,
+}
+
+impl PromotedVal {
+	pub fn is_bottom(&self) -> bool {
+		match self {
+			PromotedVal::Bottom => true,
+			PromotedVal::Simple(v) | PromotedVal::Promoted(v, _) => v.is_bottom()
+		}
+	}
 }
 
 impl Val {
@@ -234,34 +263,34 @@ impl<'a> Codegen<'a> {
 		self.context_types.pop();
 	}
 
-	fn promote(&self, val: Val, from: TypId, to: TypId) -> PromotedVal {
-		if from == to {
-			return PromotedVal::Simple(val);
+	fn promote(&self, val: TypedVal, to: TypId) -> PromotedVal {
+		if val.typ == to {
+			return PromotedVal::Simple(val.val);
 		}
 
-		if let Val::Bottom = val {
+		if val.val.is_bottom() {
 			return PromotedVal::Bottom;
 		}
 
-		if from == self.db.types.int && to == self.db.types.float {
-			return PromotedVal::Promoted(val, "ps_promote_int_to_float")
+		if val.typ == self.db.types.int && to == self.db.types.float {
+			return PromotedVal::Promoted(val.val, "ps_promote_int_to_float")
 		}
 
 		panic!("compiler-err:unknown-promotion");
 	}
 
-	fn binary(&mut self, binary: &Binary, into: &mut String) -> Val {
+	fn binary(&mut self, binary: &Binary, into: &mut String) -> TypedVal {
 		self.push(binary.typ);
 
 		let left = self.expr(&binary.left, into);
-		if left.is_bottom() { return Val::Bottom; }
+		if left.is_bottom() { return left; /* Val::Bottom */ }
 		// TODO: Maybe we should have each function return a (Val, TypId) tuple,
 		// so that we can save time here..?
-		let left = self.promote(left, binary.left.typ(self.db), binary.typ);
+		let left = self.promote(left, binary.typ);
 
 		let right = self.expr(&binary.right, into);
-		if right.is_bottom() { return Val::Bottom; }
-		let right = self.promote(right, binary.right.typ(self.db), binary.typ);
+		if right.is_bottom() { return right; /* Val::Bottom */ }
+		let right = self.promote(right, binary.typ);
 
 		self.pop(binary.typ);
 
@@ -279,13 +308,18 @@ impl<'a> Codegen<'a> {
 		// TODO: Indentation system
 		inf_writeln!(into, "{indent}const {ctype} {val} = {left} {op} {right};");
 
-		val
+		val.typed(binary.typ)
 	}
 
-	fn compile_partial_print(&mut self, inner_expr: &Expr, into: &mut String) -> Val {
-		let val = self.expr(inner_expr, into);
+	fn compile_partial_print(&mut self, inner_expr: &Expr, into: &mut String) -> TypedVal {
+		let result = self.expr(inner_expr, into);
 
-		let typid = inner_expr.typ(self.db);
+		let typid = result.typ;
+
+		// No promotion is possible inside a print, so simply unwrap the val
+		// for printing. We will return the result later.
+		let val = &result.val;
+
 		let typ = self.db.get(typid);
 
 		let indent = self.indent();
@@ -306,29 +340,31 @@ impl<'a> Codegen<'a> {
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:print-unbound-ident>"),
 		}
 
-		val
+		result
 	}
 
-	fn expr(&mut self, expr: &Expr, into: &mut String) -> Val {
+	fn expr(&mut self, expr: &Expr, into: &mut String) -> TypedVal {
 		let indent = self.indent();
 		match expr {
 			Expr::Binary(binary) => self.binary(binary, into),
 			Expr::Variable(variable) => {
 				Val::DirectVar { name: self.db.get_cname(variable.identity) }
+					.typed(self.db.get_var_type(variable.identity))
 			},
 			Expr::Assign(assign) => {
 				self.assign(assign.identity, assign.value, into, false);
 				Val::DirectVar { name: self.db.get_cname(assign.identity) }
+					.typed(self.db.get_var_type(assign.identity))
 			},
 			// TODO: Consider using a different Expr type for string literals
 			Expr::NumLiteral(lit) => {
 				Val::DirectLit {
 					ctype: self.get_expr_ctype(lit.typ),
 					lit: self.db.get(lit.contents.lexeme),
-				}
+				}.typed(lit.typ)
 			},
 			Expr::StrLiteral(lit) => {
-				return Val::StringLit { id: lit.id }
+				return Val::StringLit { id: lit.id }.typed(self.db.types.str_const)
 			}
 			Expr::Block(block) => {
 				let val = if self.db.type_generates_value(block.typ) {
@@ -365,6 +401,7 @@ impl<'a> Codegen<'a> {
 					(last, val) => {
 						let last = self.stmt(last.unwrap(), into);
 						let last = last.unwrap();
+						let last = self.promote(last, block.typ);
 						if !val.is_bottom() {
 							// Add one to indent because we're in the block
 							inf_writeln!(into, "{indent}\t{val} = {last};");
@@ -376,7 +413,7 @@ impl<'a> Codegen<'a> {
 
 				self.indent_level -= 1;
 				inf_writeln!(into, "{indent}}}");
-				val
+				val.typed(block.typ)
 			},
 			Expr::Print(print) => {
 				let val = self.compile_partial_print(&print.exprs[0], into);
@@ -395,7 +432,7 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<Val> {
+	fn stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<TypedVal> {
 		let indent = self.indent();
 		match stmt {
 			Stmt::Declare(declare) => {
@@ -415,9 +452,11 @@ impl<'a> Codegen<'a> {
 			Stmt::Return(ret) => {
 				match &ret.expression {
 					Some(value) => {
-						self.push(*self.return_types.last().unwrap());
+						let needed_type = *self.return_types.last().unwrap();
 						let val = self.expr(value, into);
-						self.pop(*self.return_types.last().unwrap());
+
+						// Promote to the needed return type
+						let val = self.promote(val, needed_type);
 						// If the inner value is also a bottom type,
 						// then we can't really generate a return here.
 						if !val.is_bottom() {
@@ -429,16 +468,16 @@ impl<'a> Codegen<'a> {
 					}
 				}
 
-				Some(Val::Bottom)
+				Some(Val::Bottom.typed(self.db.types.bottom))
 			}
 		}
 	}
 
 	fn assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) {
-		let ctx = self.db.get_var_type(var);
-		self.push(ctx);
+		let needed_type = self.db.get_var_type(var);
 		let value = self.expr(expr, into);
-		self.pop(ctx);
+
+		let value = self.promote(value, needed_type);
 
 		let (declaration, space) = if is_declaration {
 			(self.db.get_var_ctype(var), " ")
@@ -468,28 +507,21 @@ impl<'a> Codegen<'a> {
 		}
 
 		// Same idea as in codegen()
-		let ctx_type = self.db.get_context_type(
+		let own_return_type = self.db.get_context_type(
 			self.db.get_fun_return_typid(fun)
 		);
-		self.push(ctx_type);
-		self.return_types.push(ctx_type);
+		self.return_types.push(own_return_type);
 
 		let val = self.expr(body, &mut own_buffer);
-		match val {
-			// If the block has no value, that's fine...
-			// TODO: Consider getting rid of Val::None
-			Val::None | Val::Bottom => { },
-
-			// But if it does have a value, then we write it as a default
+		if !val.is_bottom() {
+			let val = self.promote(val, own_return_type);
+			// If it does have a value, then we write it as a default
 			// return value.
-			val => {
-				inf_writeln!(own_buffer, "{indent}return {val};");
-			}
+			inf_writeln!(own_buffer, "{indent}return {val};");
 		}
 
 		// Pop type value
 		self.return_types.pop();
-		self.pop(ctx_type);
 
 		self.indent_level = enclosing_indent;
 

@@ -1,0 +1,25 @@
+fun test1() {
+	var x: float = 5.0;
+
+	x = {
+		var y: int = 3;
+		y;
+	};
+}
+
+fun test2() {
+	var x: float = 5.0;
+
+	x = {
+		var y: int = 3;
+		{
+			{
+				{
+					{
+						y;
+					};
+				};
+			};
+		};
+	};
+}

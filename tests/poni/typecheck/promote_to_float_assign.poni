@@ -1,0 +1,6 @@
+fun init() {
+	var f: float = 5;
+	var x: int = 10;
+
+	f = x;
+}
