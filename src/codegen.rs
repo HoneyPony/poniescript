@@ -11,11 +11,6 @@ use std::io::Write as _;
 struct Codegen<'a> {
 	functions: Vec<String>,
 
-	/// The code generator is responsible for propagating concrete numerical
-	/// types leftward into subexpressions. To do so, we keep a stack of the
-	/// known concrete types, and use the latest one when needed.
-	context_types: Vec<TypId>,
-
 	return_types: Vec<TypId>,
 
 	val_idx: usize,
@@ -88,9 +83,6 @@ enum Val {
 
 	/// Equivalent to Type::Bottom, sort of.
 	Bottom,
-
-	/// Used in cases where there's no value.
-	None,
 }
 
 impl Val {
@@ -177,7 +169,6 @@ impl std::fmt::Display for Val {
 			// String literals are always stored in variables with a consistent naming scheme.
 			Val::StringLit { id } => write!(f, "ps_str_const{}", id.to_usize()),
 			Val::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
-			Val::None => Ok(()),
 		}
 		
 	}
@@ -211,8 +202,6 @@ impl<'a> Codegen<'a> {
 		return Codegen {
 			functions: Vec::new(),
 
-			context_types: Vec::new(),
-
 			return_types: Vec::new(),
 
 			val_idx: 0,
@@ -233,36 +222,6 @@ impl<'a> Codegen<'a> {
 		val
 	}
 
-	fn get_expr_ctype(&mut self, ty: TypId) -> &'static str {
-		let ty = match self.db.get(ty) {
-			Type::AssumeFloat | Type::AssumeInt => {
-				*self.context_types.last().unwrap()
-			},
-
-			_ => ty
-		};
-
-		self.db.get_ctype(ty)
-	}
-
-	fn push(&mut self, ty: TypId) {
-		match self.db.get(ty) {
-			Type::AssumeFloat | Type::AssumeInt => return,
-			_ => {}
-		}
-		let ty = self.db.get_context_type(ty);
-		self.context_types.push(ty);
-	}
-
-	fn pop(&mut self, ty: TypId) {
-		match self.db.get(ty) {
-			Type::AssumeFloat | Type::AssumeInt => return,
-			_ => {}
-		}
-		let ty = self.db.get_context_type(ty);
-		self.context_types.pop();
-	}
-
 	fn promote(&self, val: TypedVal, to: TypId) -> PromotedVal {
 		if val.typ == to {
 			return PromotedVal::Simple(val.val);
@@ -280,8 +239,6 @@ impl<'a> Codegen<'a> {
 	}
 
 	fn binary(&mut self, binary: &Binary, into: &mut String) -> TypedVal {
-		self.push(binary.typ);
-
 		let left = self.expr(&binary.left, into);
 		if left.is_bottom() { return left; /* Val::Bottom */ }
 		// TODO: Maybe we should have each function return a (Val, TypId) tuple,
@@ -292,8 +249,6 @@ impl<'a> Codegen<'a> {
 		if right.is_bottom() { return right; /* Val::Bottom */ }
 		let right = self.promote(right, binary.typ);
 
-		self.pop(binary.typ);
-
 		let op = match binary.op {
 			Tok::Star => '*',
 			Tok::Plus => '+',
@@ -303,7 +258,7 @@ impl<'a> Codegen<'a> {
 		};
 
 		let val = self.new_val();
-		let ctype = self.get_expr_ctype(binary.typ);
+		let ctype = self.db.get_ctype(binary.typ);
 		let indent = self.indent();
 		// TODO: Indentation system
 		inf_writeln!(into, "{indent}const {ctype} {val} = {left} {op} {right};");
@@ -359,7 +314,7 @@ impl<'a> Codegen<'a> {
 			// TODO: Consider using a different Expr type for string literals
 			Expr::NumLiteral(lit) => {
 				Val::DirectLit {
-					ctype: self.get_expr_ctype(lit.typ),
+					ctype: self.db.get_ctype(lit.typ),
 					lit: self.db.get(lit.contents.lexeme),
 				}.typed(lit.typ)
 			},
@@ -371,7 +326,7 @@ impl<'a> Codegen<'a> {
 					let val = self.new_val();
 
 					inf_writeln!(into, "{indent}{} {};",
-						self.get_expr_ctype(block.typ),
+						self.db.get_ctype(block.typ),
 						val);
 
 					val
@@ -582,14 +537,6 @@ impl<'a> Codegen<'a> {
 
 	fn codegen(&mut self, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 		let mut outputs = CodegenOutputs::new();
-
-		// Strange but important: Any unassigned numeric type needs SOME kind
-		// of assigned type, such as a statement expression 1 + 2;
-		//
-		// This could, to some degree, be handled by some dead code elimination.
-		// But for now, we can just say that any undefined types are by default
-		// floats.
-		self.push(self.db.types.float);
 
 		for module in modules {
 			self.codegen_to_buffers(module, &mut outputs);
