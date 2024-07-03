@@ -27,8 +27,14 @@ typedef struct ps_str {
 	char contents[];
 } ps_str;
 
+#ifdef __TINYC__
+	#define PONI_NORETURN __attribute__((noreturn))
+#else
+	#define PONI_NORETURN _Noreturn
+#endif
+
 static inline
-void _Noreturn
+PONI_NORETURN void
 ps_fatal_error(const char *message) {
 	printf("fatal error: %s\n", message);
 	exit(1);

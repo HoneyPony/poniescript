@@ -2,6 +2,8 @@ include!(concat!(env!("OUT_DIR"), "/tests.gen.rs"));
 
 use std::{fs::File, io::Read, process::{Child, Command, ExitCode, ExitStatus, Stdio}};
 
+const CC: Option<&str> = option_env!("PONI_CC");
+
 enum Expected {
 	Output(&'static str),
 	Error
@@ -22,7 +24,8 @@ fn test_should_print(input_file: &str, c_path: &str, exe_path: &str, output: &st
 		panic!("poniescript should be able to compile this");
 	}
 
-	let mut cc = Command::new("gcc")
+	let mut cc = Command::new(CC.unwrap_or("gcc"))
+		.arg("-std=c11")
 		.arg(c_path)
 		.arg("-o")
 		.arg(exe_path)
