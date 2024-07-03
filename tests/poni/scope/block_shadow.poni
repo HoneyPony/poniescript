@@ -1,0 +1,11 @@
+fun init() {
+	var message = "hello ponies";
+	print(message);
+
+	{
+		var message = "hello again ponies";
+		print(message);
+	};
+
+	print(message);
+}

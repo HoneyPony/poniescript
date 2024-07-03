@@ -330,11 +330,25 @@ impl Db {
 	fn generate_var_cnames_cache(&mut self) {
 		let range = self.arenas.arena_var.len() as IdType;
 
+		let mut used_set = FxHashMap::<StrId, u64>::default();
+
 		for id in 0..range {
 			let var = VarId(id);
 
-			// TODO: Actual name mangling and such
-			let cname = self.get(self.get(var).name.lexeme).to_string().leak();
+			let str_id = self.get(var).name.lexeme;
+			let cname = match used_set.entry(str_id) {
+				std::collections::hash_map::Entry::Occupied(mut val) => {
+					let result = *val.get();
+					*val.get_mut() += 1;
+					format!("{}{}", self.get(str_id), result)
+				},
+				std::collections::hash_map::Entry::Vacant(val) => {
+					val.insert(0);
+					self.get(str_id).to_string()
+				},
+			};
+			let cname = cname.leak();
+
 			self.var_cname_cache.push(cname);
 		}
 	}
