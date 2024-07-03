@@ -23,6 +23,9 @@ pub struct DbTypes {
 	pub int: TypId,
 	pub float: TypId,
 	pub bottom: TypId,
+
+	pub assume_int: TypId,
+	pub assume_float: TypId,
 }
 
 /// The Db stores all of the arena-allocated objects that can be referenced
@@ -87,6 +90,9 @@ impl Db {
 				int: TypId(0),
 				float: TypId(0),
 				bottom: TypId(0),
+
+				assume_int: TypId(0),
+				assume_float: TypId(0),
 			},
 
 			synthetic: SourceId(0),
@@ -99,6 +105,9 @@ impl Db {
 		db.types.float      = db.put_type(Type::Float);
 		db.types.bottom     = db.put_type(Type::Bottom);
 
+		db.types.assume_float = db.put_type(Type::AssumeFloat);
+		db.types.assume_int = db.put_type(Type::AssumeInt);
+
 		db.synthetic = db.new_id(Source::Synthetic);
 
 		// Technically, this does waste the initially created
@@ -107,6 +116,14 @@ impl Db {
 		db.key_lookup_map = crate::lexer::build_key_lookup_map(&mut db);
 
 		return db;
+	}
+
+	pub fn is_not_concrete(&self, id: TypId) -> bool {
+		return id == self.types.assume_float || id == self.types.assume_int;
+	}
+
+	pub fn is_concrete(&self, id: TypId) -> bool {
+		return !self.is_not_concrete(id)
 	}
 
 	pub fn put_str(&mut self, str: &str) -> StrId {

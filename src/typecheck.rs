@@ -145,7 +145,7 @@ impl<'db> TypeChecker<'db> {
 		);
 
 		self.db.get_mut(var).typ = computed;
-		expr.promote(computed);
+		expr.promote(computed, self.db);
 
 		Ok(computed)
 	}
@@ -167,8 +167,8 @@ impl<'db> TypeChecker<'db> {
 				);
 
 				binary.typ = computed;
-				binary.left.promote(computed);
-				binary.right.promote(computed);
+				binary.left.promote(computed, self.db);
+				binary.right.promote(computed, self.db);
 				
 				computed
 			},
@@ -224,10 +224,28 @@ impl<'db> TypeChecker<'db> {
 				// supposed to return its first argument.
 
 				for expr in &mut print.exprs[1..] {
-					self.check_expr(expr, false)?;
+					let inner = self.check_expr(expr, false)?;
+
+					// The idea here is that each argument to the print is essentially
+					// an assignment to an Unassigned variable. As such, the arguments
+					// should automatically promote to Int or Float if they're AssumeInt
+					// or AssumeFloat.
+					//
+					// We could special-case this logic, as it might speed up type-checking
+					// print statements slightly.
+					let computed = self.compute_assignable(self.db.types.unassigned, inner)
+						.unwrap_or_else(|_| panic!("compute_assignable should always succeed with LHS of unassigned"));
+
+					expr.promote(computed, self.db);
 				}
 
-				self.check_expr(&mut print.exprs[0], true)?
+				let inner = self.check_expr(&mut print.exprs[0], true)?;
+				let computed = self.compute_assignable(self.db.types.unassigned, inner)
+						.unwrap_or_else(|_| panic!("compute_assignable should always succeed with LHS of unassigned"));
+
+				expr.promote(computed, self.db);
+
+				computed 
 			}
 			Expr::Unbound(_) => {
 				// In theory we will resolve all idents beforehand? But this might

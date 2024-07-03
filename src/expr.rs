@@ -34,9 +34,18 @@ impl Expr {
 		}
 	}
 
-	pub fn promote(&mut self, typ: TypId) -> bool {
+	pub fn promote(&mut self, typ: TypId, db: &Db) -> bool {
 		match self {
 			Expr::Binary(binary) => {
+				if db.is_not_concrete(binary.typ) && db.is_concrete(typ) {
+					// Recursively promote to any concrete type.
+					//
+					// NOTE that this is still O(n) in the number of AST nodes,
+					// because once a type is promoted to concrete once, it cannot
+					// have to do it again.
+					binary.left.promote(typ, db);
+					binary.right.promote(typ, db);
+				}
 				binary.typ = typ;
 				true
 			}
@@ -53,7 +62,7 @@ impl Expr {
 			},
 			Expr::Unbound(_) => false,
 			Expr::Print(print) => {
-				print.exprs[0].promote(typ)
+				print.exprs[0].promote(typ, db)
 			},
 		}
 	}
