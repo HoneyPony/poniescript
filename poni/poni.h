@@ -93,4 +93,8 @@ ps_println(void) {
 	putc('\n', stdout);
 }
 
+static inline
+float
+ps_promote_int_to_float(ps_int v) { return (ps_float)v; }
+
 #endif

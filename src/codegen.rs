@@ -93,6 +93,12 @@ enum Val {
 	None,
 }
 
+enum PromotedVal {
+	Simple(Val),
+	Promoted(Val, &'static str),
+	Bottom,
+}
+
 impl Val {
 	pub fn is_bottom(&self) -> bool {
 		match self {
@@ -145,6 +151,16 @@ impl std::fmt::Display for Val {
 			Val::None => Ok(()),
 		}
 		
+	}
+}
+
+impl std::fmt::Display for PromotedVal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			PromotedVal::Simple(inner) => write!(f, "{}", inner),
+			PromotedVal::Promoted(inner, promo_fn) => write!(f, "{promo_fn}({inner})"),
+			PromotedVal::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
+		}
 	}
 }
 
@@ -218,14 +234,34 @@ impl<'a> Codegen<'a> {
 		self.context_types.pop();
 	}
 
+	fn promote(&self, val: Val, from: TypId, to: TypId) -> PromotedVal {
+		if from == to {
+			return PromotedVal::Simple(val);
+		}
+
+		if let Val::Bottom = val {
+			return PromotedVal::Bottom;
+		}
+
+		if from == self.db.types.int && to == self.db.types.float {
+			return PromotedVal::Promoted(val, "ps_promote_int_to_float")
+		}
+
+		panic!("compiler-err:unknown-promotion");
+	}
+
 	fn binary(&mut self, binary: &Binary, into: &mut String) -> Val {
 		self.push(binary.typ);
 
 		let left = self.expr(&binary.left, into);
 		if left.is_bottom() { return Val::Bottom; }
+		// TODO: Maybe we should have each function return a (Val, TypId) tuple,
+		// so that we can save time here..?
+		let left = self.promote(left, binary.left.typ(self.db), binary.typ);
 
 		let right = self.expr(&binary.right, into);
 		if right.is_bottom() { return Val::Bottom; }
+		let right = self.promote(right, binary.right.typ(self.db), binary.typ);
 
 		self.pop(binary.typ);
 
