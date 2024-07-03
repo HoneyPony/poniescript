@@ -47,14 +47,20 @@ enum CompileMode {
 
 impl CompileMode {
 	pub fn parse(output_path: &PathBuf) -> CompileMode {
-		if output_path.ends_with(".c") { return CompileMode::ToCFile; }
-		if output_path.ends_with(".exe") { return CompileMode::ToExeFile; }
-		if output_path.ends_with(".o") { todo!("outputting to .o files"); }
-		if output_path.ends_with(".dll") { todo!("outputting to .dll files"); }
-		if output_path.ends_with(".so") { todo!("outputting to .so files"); }
-
 		// By default, return ToExeFile. This corresponds to, for example,
 		// -o my_program (which on Linux would suggest an executable)
+		let Some(extension) = output_path.extension() else {
+			return CompileMode::ToExeFile;
+		};
+
+		if extension == "c" { return CompileMode::ToCFile; }
+		if extension == "exe" { return CompileMode::ToExeFile; }
+		if extension == "o" { todo!("outputting to .o files"); }
+		if extension == "dll" { todo!("outputting to .dll files"); }
+		if extension == "so" { todo!("outputting to .so files"); }
+
+		// Any other extension, we'll happily do Exe, but also print a warning.
+		eprintln!("warning: unknown output file extension '.{}' -- generating executable.", extension.to_string_lossy());
 		return CompileMode::ToExeFile;
 	}
 
