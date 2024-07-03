@@ -1,6 +1,7 @@
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::cell::RefCell;
+use std::thread::Scope;
 
 use crate::error::Error;
 // Import relevant things.
@@ -15,6 +16,15 @@ use rustc_hash::{FxHashMap};
 
 // Include arenas
 include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
+
+#[derive(Clone, Copy)]
+pub enum ScopeEntry {
+	Var(VarId),
+	Fun(FunId),
+
+	None
+}
+
 
 pub struct DbTypes {
 	pub str_const: TypId,
@@ -59,7 +69,11 @@ pub struct Db {
 
 	pub synthetic: SourceId,
 
-	pub errors: Vec<Error>
+	pub errors: Vec<Error>,
+
+	/// Maps names of the form "scope.scope.Item" to ScopeEntries. Used to bind
+	/// names to specific objects.
+	name_map: FxHashMap<StrId, ScopeEntry>,
 }
 
 impl Db {
@@ -100,6 +114,8 @@ impl Db {
 			},
 
 			synthetic: SourceId(0),
+
+			name_map: FxHashMap::default(),
 		};
 
 		db.types.str_const  = db.put_type(Type::StrConst);
@@ -191,6 +207,20 @@ impl Db {
 
 	pub fn lookup_key(&self, id: StrId) -> Option<Tok> {
 		self.key_lookup_map.get(&id).map(|tok| *tok)
+	}
+
+	/// Performs an efficient lookup by not generating new StrIds for names
+	/// that do not exist.
+	pub fn lookup_full_name(&self, name: &str) -> ScopeEntry {
+		let Some(id) = self.str_side_map.get(name) else {
+			return ScopeEntry::None;
+		};
+
+		let Some(entry) = self.name_map.get(id) else {
+			return ScopeEntry::None;
+		};
+
+		return *entry;
 	}
 
 	pub fn new_var(&mut self, name: Token, typ: TypId) -> VarId {

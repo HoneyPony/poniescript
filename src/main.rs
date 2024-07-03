@@ -8,6 +8,7 @@ mod parser;
 mod typecheck;
 mod codegen;
 mod error;
+mod binder;
 
 use std::fs::File;
 use std::path::{PathBuf};
@@ -183,7 +184,17 @@ fn main() {
 
 	let timer = duration(timer, "parsing", &mut duration_set);
 
-	// Pass 2: Type check and infer
+	// Pass 2: Binding
+	let had_error = binder::bind(&mut db, &mut modules);
+
+	if had_error {
+		report_errors(&db);
+		exit(1);
+	}
+
+	let timer = duration(timer, "binding", &mut duration_set);
+
+	// Pass 3: Type check and infer
 	let had_error = typecheck::typecheck(&mut db, &mut modules);
 
 	if had_error {
@@ -193,7 +204,7 @@ fn main() {
 
 	let timer = duration(timer, "type check", &mut duration_set);
 
-	// Pass 3: Codegen
+	// Pass 4: Codegen
 	// Generate any caches that require type checking info.
 	db.generate_codegen_caches();
 

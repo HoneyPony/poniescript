@@ -12,15 +12,6 @@ use crate::expr::*;
 use crate::error::Error;
 use crate::source::SourceLocation;
 use crate::typ::Type;
-
-#[derive(Clone, Copy)]
-enum ScopeEntry {
-	Var(VarId),
-	Fun(FunId),
-
-	None
-}
-
 struct Scope {
 	map: FxHashMap<StrId, ScopeEntry>,
 }
