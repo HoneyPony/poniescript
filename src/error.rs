@@ -9,15 +9,26 @@ use anstyle::Color;
 use anstyle::AnsiColor;
 
 const STYLE_ERROR: Style = Style::new()
-	.fg_color(Some(Color::Ansi(AnsiColor::Red)));
+	.fg_color(Some(Color::Ansi(AnsiColor::Red)))
+	.bold();
 const STYLE_WARNING: Style = Style::new()
-	.fg_color(Some(Color::Ansi(AnsiColor::Yellow)));
+	.fg_color(Some(Color::Ansi(AnsiColor::Yellow)))
+	.bold();
+const STYLE_NOTE: Style = Style::new()
+	.bold();
+
+struct Note {
+	note: String,
+	location: Option<SourceLocation>,
+}
 
 pub struct Error {
 	main_message: String,
 	main_location: SourceLocation,
 
 	is_warning: bool,
+
+	notes: Vec<Note>
 }
 
 impl Error {
@@ -27,7 +38,15 @@ impl Error {
 			main_location: location.clone(),
 
 			is_warning: false,
+
+			notes: vec![],
 		}
+	}
+
+	pub fn add_note(mut self, note: String, location: Option<&SourceLocation>) -> Error {
+		self.notes.push(Note { note, location: location.cloned() });
+
+		self
 	}
 }
 
@@ -42,4 +61,12 @@ pub fn show_error(error: &Error, db: &Db) {
 	eprintln!("{}", error.main_message);
 
 	source.show_underlined_location(&error.main_location);
+
+	for note in &error.notes {
+		eprintln!("{STYLE_NOTE}note: {STYLE_NOTE:#}{}", note.note);
+		if let Some(location) = &note.location {
+			db.get(location.source)
+				.show_underlined_location(&location);
+		}
+	}
 }

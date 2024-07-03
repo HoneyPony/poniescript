@@ -54,6 +54,36 @@ pub enum ParseErr {
 
 pub type Result<T> = std::result::Result<T, ParseErr>;
 
+macro_rules! begin_error {
+	($parser:ident, $($arg:tt)*) => {
+		Error::simple(
+			format!($($arg)*),
+			&$parser.current.location
+		)
+	}
+}
+
+macro_rules! note {
+	($error:ident, $location:expr, $($arg:tt)*) => {
+		$error = $error.add_note(
+			format!($($arg)*),
+			$location
+		);
+	}
+}
+
+// NOTE: We should either come up with a way to easily do Error::simple() when
+// the passed expr is not an error, or come up with a better name than "with".
+macro_rules! semantic_error_with {
+	($parser:ident, $error:expr) => {
+		$parser.had_error = true;
+
+		// Semantic errors are always reported, because they should not be able
+		// to cascade, generally.
+		$parser.db.report_error($error);
+    };
+}
+
 macro_rules! parse_error {
 	($parser:ident, $($arg:tt)*) => {
 		// For now, just eprintln()... TODO Implement error handling system
@@ -164,6 +194,14 @@ impl<'a, 'b> Parser<'a, 'b> {
 		self.end(location.clone())
 	}
 
+	fn location_of(&self, entry: &ScopeEntry) -> &SourceLocation {
+		match entry {
+			ScopeEntry::Var(var) => &self.db.get(*var).name.location,
+			ScopeEntry::Fun(_) => todo!(),
+			ScopeEntry::None => todo!(),
+		}
+	}
+
 	fn scope_put_var(&mut self, name: StrId, var: VarId) {
 		match self.scopes.last_mut() {
 			Some(last) => {
@@ -173,11 +211,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 			},
 			None => {
 				// For global scopes, redefining a name is not allowed.
-				let exists = self.global_scope.map.insert(name, ScopeEntry::Var(var))
-					.is_some();
+				let old = self.global_scope.map.insert(name, ScopeEntry::Var(var));
 
-				if exists {
-					parse_error!(self, "Redefinition of global variable {}", self.db.get(name));
+				if let Some(old) = old {
+					let mut error = begin_error!(self, "Redefinition of global variable {}", self.db.get(name));
+					note!(error, Some(self.location_of(&old)), "Previous definition was here");
+					semantic_error_with!(self, error);
 				}
 			}
 		}
