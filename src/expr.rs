@@ -33,6 +33,30 @@ impl Expr {
 			},
 		}
 	}
+
+	pub fn promote(&mut self, typ: TypId) -> bool {
+		match self {
+			Expr::Binary(binary) => {
+				binary.typ = typ;
+				true
+			}
+			Expr::Variable(_) => false,
+			Expr::Assign(_) => false,
+			Expr::NumLiteral(lit) => {
+				lit.typ = typ;
+				true
+			},
+			Expr::StrLiteral(_) => false,
+			Expr::Block(block) => {
+				block.typ = typ;
+				true
+			},
+			Expr::Unbound(_) => false,
+			Expr::Print(print) => {
+				print.exprs[0].promote(typ)
+			},
+		}
+	}
 }
 
 /// Information for a variable.

@@ -190,7 +190,7 @@ impl<'a> Codegen<'a> {
 
 	fn get_expr_ctype(&mut self, ty: TypId) -> &'static str {
 		let ty = match self.db.get(ty) {
-			Type::UnassignedDecimal | Type::UnassignedNumeric => {
+			Type::AssumeFloat | Type::AssumeInt => {
 				*self.context_types.last().unwrap()
 			},
 
@@ -202,7 +202,7 @@ impl<'a> Codegen<'a> {
 
 	fn push(&mut self, ty: TypId) {
 		match self.db.get(ty) {
-			Type::UnassignedDecimal | Type::UnassignedNumeric => return,
+			Type::AssumeFloat | Type::AssumeInt => return,
 			_ => {}
 		}
 		let ty = self.db.get_context_type(ty);
@@ -211,7 +211,7 @@ impl<'a> Codegen<'a> {
 
 	fn pop(&mut self, ty: TypId) {
 		match self.db.get(ty) {
-			Type::UnassignedDecimal | Type::UnassignedNumeric => return,
+			Type::AssumeFloat | Type::AssumeInt => return,
 			_ => {}
 		}
 		let ty = self.db.get_context_type(ty);
@@ -265,8 +265,8 @@ impl<'a> Codegen<'a> {
 			// TODO: Consider simply making 10.0 a float and 10 an int..?
 			// at least, unless assigned differently..?
 			// The context system is getting increasingly awkward.
-			Type::UnassignedNumeric => todo!(),
-			Type::UnassignedDecimal => todo!(),
+			Type::AssumeFloat => todo!(),
+			Type::AssumeInt => todo!(),
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:print-unbound-ident>"),
 		}
 
