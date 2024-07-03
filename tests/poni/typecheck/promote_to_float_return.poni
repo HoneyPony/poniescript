@@ -1,0 +1,6 @@
+
+
+fun test() -> float {
+	var x: int = 5;
+	return x;
+}
