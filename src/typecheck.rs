@@ -70,6 +70,30 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	// Takes an expression, and promotes its type as if it were just assigned
+	// to an unassigned value.
+	//
+	// Should be called on any expression that is otherwise not used, which
+	// includes:
+	// - arguments to print()
+	// - statement expressions whose value is not used
+	fn promote_from_unassigned(&mut self, expr: &mut Expr) -> TypId {
+		let ty = expr.typ(self.db);
+
+		if ty == self.db.types.assume_float {
+			expr.promote(self.db.types.float, self.db);
+		}
+
+		if ty == self.db.types.assume_int {
+			expr.promote(self.db.types.int, self.db);
+		}
+
+		// Add other promotions as needed. Note that this should correspond
+		// in part to the match() in compute_assignable.
+
+		ty
+	}
+
 	// Returns what the new "from" type would be.
 	fn compute_assignable(&mut self, to: TypId, from: TypId) -> Result<TypId> {
 		if to == from { return Ok(to); }
@@ -150,6 +174,10 @@ impl<'db> TypeChecker<'db> {
 		Ok(computed)
 	}
 
+
+	// TODO: We could, inside this function, just directly call
+	// promote_from_unassigned on any expr that has value_used = false -- we
+	// should consider if that would make sense.
 	fn check_expr(&mut self, expr: &mut Expr, value_used: bool) -> Result<TypId> {
 		Ok(match expr {
 			Expr::Binary(binary) => {
@@ -224,27 +252,22 @@ impl<'db> TypeChecker<'db> {
 				// supposed to return its first argument.
 
 				for expr in &mut print.exprs[1..] {
-					let inner = self.check_expr(expr, false)?;
-
 					// The idea here is that each argument to the print is essentially
 					// an assignment to an Unassigned variable. As such, the arguments
 					// should automatically promote to Int or Float if they're AssumeInt
 					// or AssumeFloat.
 					//
-					// We could special-case this logic, as it might speed up type-checking
-					// print statements slightly.
-					let computed = self.compute_assignable(self.db.types.unassigned, inner)
-						.unwrap_or_else(|_| panic!("compute_assignable should always succeed with LHS of unassigned"));
-
-					expr.promote(computed, self.db);
+					// This logic is the same as unused statement expressions and the like,
+					// so it gets its own helper function.
+					self.check_expr(expr, false)?;
+					self.promote_from_unassigned(expr);
 				}
 
-				let inner = self.check_expr(&mut print.exprs[0], true)?;
-				let computed = self.compute_assignable(self.db.types.unassigned, inner)
-						.unwrap_or_else(|_| panic!("compute_assignable should always succeed with LHS of unassigned"));
+				self.check_expr(&mut print.exprs[0], true)?;
+				let computed = self.promote_from_unassigned(expr);
 
-				expr.promote(computed, self.db);
-
+				// TODO: We could store this type directly on the print() if we
+				// wanted to -- that's what other ast nodes do...
 				computed 
 			}
 			Expr::Unbound(_) => {
@@ -262,7 +285,14 @@ impl<'db> TypeChecker<'db> {
 				Ok(None)
 			},
 			Stmt::Expression(expr) => {
-				Ok(Some(self.check_expr(&mut expr.expression, value_used)?))
+				let mut typ = self.check_expr(&mut expr.expression, value_used)?;
+				if !value_used {
+					// Non-value-used exprs should be promoted from unassigned.
+					// If their value is used, the value-user will be responsible
+					// for calling promote() with the proper type.
+					typ = self.promote_from_unassigned(&mut expr.expression);
+				}
+				Ok(Some(typ))
 			},
 			Stmt::FunDeclare(_) => todo!(),
 			Stmt::Return(ret) => {
