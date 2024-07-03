@@ -1,6 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/tests.gen.rs"));
 
-use std::{fs::File, io::Read, process::{Child, Command, ExitCode, ExitStatus, Stdio}};
+use std::{fs::File, io::Read, path::PathBuf, process::{Child, Command, ExitCode, ExitStatus, Stdio}};
 
 const CC: Option<&str> = option_env!("PONI_CC");
 
@@ -12,6 +12,11 @@ enum Expected {
 fn test_should_print(input_file: &str, c_path: &str, exe_path: &str, output: &str) -> std::io::Result<()> {
 	let _ = std::fs::remove_file(c_path);
 	let _ = std::fs::remove_file(exe_path);
+
+	// Additionally remove the exe path extended with ".exe", as on Windows
+	// gcc will output the executable file to this path instead.
+	let mut exe_path_exe = PathBuf::from(exe_path).with_extension("exe");
+	let _ = std::fs::remove_file(exe_path_exe);
 	
 	let mut poniescript = Command::new(env!("CARGO_BIN_EXE_poniescript"))
 		.arg("-o")
