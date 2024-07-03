@@ -1,7 +1,7 @@
 fun test1(x: int, y: int) {
-
+	print(x, y);
 }
 
 fun test2(x: float, y: float, z: float) {
-
+	print(x, y, z);
 }

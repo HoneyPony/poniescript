@@ -143,6 +143,14 @@ impl<'a, 'b> Parser<'a, 'b> {
 		!self.lexer.had_error
 	}
 
+	fn push_scope(&mut self) {
+		self.scopes.push(Scope::new());
+	}
+
+	fn pop_scope(&mut self) {
+		self.scopes.pop();
+	}
+
 	fn start(&mut self) -> SourceLocation {
 		self.current.location.clone()
 	}
@@ -159,10 +167,18 @@ impl<'a, 'b> Parser<'a, 'b> {
 	fn scope_put_var(&mut self, name: StrId, var: VarId) {
 		match self.scopes.last_mut() {
 			Some(last) => {
+				// For local scopes, it is OK to redefine the name with a new
+				// value -- that's just shadowing.
 				last.map.insert(name, ScopeEntry::Var(var));
 			},
 			None => {
-				self.global_scope.map.insert(name, ScopeEntry::Var(var));
+				// For global scopes, redefining a name is not allowed.
+				let exists = self.global_scope.map.insert(name, ScopeEntry::Var(var))
+					.is_some();
+
+				if exists {
+					parse_error!(self, "Redefinition of global variable {}", self.db.get(name));
+				}
 			}
 		}
 	}
@@ -430,9 +446,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let mut stmts = Vec::new();
 
+		self.push_scope();
+
 		while !self.at(Tok::RightBrace) && !self.is_at_end() {
 			stmts.push(self.stmt()?);
 		}
+
+		self.pop_scope();
 
 		expected!(self, Tok::RightBrace, "'}}' at end of block");
 
@@ -480,7 +500,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 		expected!(self, Tok::Colon, "':' after parameter name");
 		let typ = self.typ()?;
 
-		Ok(self.db.new_var(name, typ))
+		let name_str = name.lexeme;
+
+		let identity = self.db.new_var(name, typ);
+		self.scope_put_var(name_str, identity);
+
+		Ok(identity)
 	}
 
 	fn named_fun_declaration(&mut self) -> Result<FunDeclare> {
@@ -491,6 +516,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			"function name")?;
 
 		expected!(self, Tok::LeftParen, "'(' after function name")?;
+
+		self.push_scope();
 
 		let mut parameters = vec![];
 
@@ -519,6 +546,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			got!(self, "Expected '{{' after function parameter list");
 		}
 		let value = self.block()?;
+
+		self.pop_scope();
 
 		let name_str = name.lexeme;
 
