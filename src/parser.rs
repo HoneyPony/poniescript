@@ -12,6 +12,7 @@ use crate::expr::*;
 use crate::error::Error;
 use crate::source::SourceLocation;
 use crate::typ::Type;
+
 struct Scope {
 	map: FxHashMap<StrId, ScopeEntry>,
 }
@@ -33,6 +34,7 @@ pub struct Parser<'a, 'b> {
 	last_location: SourceLocation,
 
 	scopes: Vec<Scope>,
+	scope_name: String,
 	global_scope: Scope,
 
 	pub had_error: bool,
@@ -142,6 +144,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			db,
 
 			scopes: Vec::new(),
+			// TODO: Push and pop things from this name
+			scope_name: String::new(),
 			global_scope: Scope::new(),
 
 			current,
@@ -203,6 +207,14 @@ impl<'a, 'b> Parser<'a, 'b> {
 			None => {
 				// For global scopes, redefining a name is not allowed.
 				let old = self.global_scope.map.insert(name, ScopeEntry::Var(var));
+
+				// TODO: Can this concatenation be made more efficient..?
+				// Maybe the DB could have a buffer for this purpose...
+				let full_name = format!("{}{}", self.scope_name, self.db.get(name));
+				self.db.add_full_name(&full_name, ScopeEntry::Var(var));
+
+				// TODO: We will also have to add_full_name for functions,
+				// fields, etc... not sure where though yet.
 
 				if let Some(old) = old {
 					let mut error = begin_error!(self, "Redefinition of global variable {}", self.db.get(name));
