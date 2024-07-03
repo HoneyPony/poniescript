@@ -58,12 +58,29 @@ impl Expr {
 			Expr::StrLiteral(_) => false,
 			Expr::Block(block) => {
 				block.typ = typ;
+				if let Some(last) = block.stmts.last_mut() {
+					return last.promote(typ, db);
+				}
 				true
 			},
 			Expr::Unbound(_) => false,
 			Expr::Print(print) => {
 				print.exprs[0].promote(typ, db)
 			},
+		}
+	}
+}
+
+impl Stmt {
+	pub fn promote(&mut self, typ: TypId, db: &Db) -> bool {
+		match self {
+			Stmt::Declare(_) => return false,
+			Stmt::Expression(expr) => expr.expression.promote(typ, db),
+			Stmt::FunDeclare(_) => return false,
+
+			// The value of a Return is always Bottom, and so it cannot be
+			// affected by promote().
+			Stmt::Return(_) => return false,
 		}
 	}
 }
