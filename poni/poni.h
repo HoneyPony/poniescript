@@ -109,7 +109,8 @@ ps_str_from_length(size_t length) {
 	return str;
 }
 
-#define ps_str_from_literal(lit) ps_str_from_literal_size(lit, sizeof(lit))
+// Use sizeof(lit) - 1 because the length value does not include NUL terminator
+#define ps_str_from_literal(lit) ps_str_from_literal_size(lit, (sizeof(lit) - 1))
 
 static inline
 ps_strbuf*
