@@ -15,6 +15,7 @@ fn test_should_print(input_file: &str, c_path: &str, exe_path: &str, output: &st
 		.arg("-o")
 		.arg(c_path)
 		.arg(input_file)
+		.arg("--no-timing")
 		.spawn()?;
 	let code = poniescript.wait()?;
 	if !code.success() {

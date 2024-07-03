@@ -21,9 +21,15 @@ use clap::Parser as _;
 #[derive(clap::Parser)]
 struct Args {
 	#[arg(short = 'o', long = "output")]
+	/// Where the output file should be written.
 	output_path: PathBuf,
 
+	#[arg(long = "no-timing")]
+	/// Whether to hide the timing information.
+	no_timing: bool,
+
 	#[arg(required = true)]
+	/// The list of input files to compile into one .C file or executable.
 	input_paths: Vec<PathBuf>,
 }
 
@@ -131,7 +137,9 @@ fn main() {
 	duration(timer, "codegen (to c)", &mut duration_set);
 	duration(timer_begin, "total compile time", &mut duration_set);
 
-	for info in duration_set {
-		eprintln!("{}", info);
+	if !args.no_timing {
+		for info in duration_set {
+			eprintln!("{}", info);
+		}
 	}
 }
