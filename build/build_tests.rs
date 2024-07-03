@@ -44,6 +44,7 @@ pub fn generate(tests_file: &mut File) {
 		("typecheck/", "promote_assumes_inside_block", Expected::Output("15\n")),
 		("typecheck/", "promote_to_float_arithmetic", Expected::Output("30.000000\n")),
 		("typecheck/", "promote_to_float_assign", Expected::Output("10.000000\n")),
+		("typecheck/", "str_types", Expected::Output("hello my little ponies\n")),
 		("typecheck/", "return_block_return", Expected::Output("")), // Make sure this one at least compiles
 		// TODO: Add other tests when we get function calls
 	
