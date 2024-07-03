@@ -324,17 +324,19 @@ impl<'db> TypeChecker<'db> {
 				};
 
 				let typ = self.check_expr(inner, true)?;
-				let valid = self.compute_assignable( 
+				let computed = self.compute_assignable( 
 					return_type,
 					typ);
 
-				maybe_type_error!(self, 
-					valid,
+				let computed = maybe_type_error!(self, 
+					computed,
 					&ret.location,
 					"Trying to return {} in function returning {}",
 
 					self.db.repr_type(typ),
 					self.db.repr_type(return_type));
+
+				inner.promote(computed, self.db);
 
 				Ok(Some(self.db.types.bottom))
 			}

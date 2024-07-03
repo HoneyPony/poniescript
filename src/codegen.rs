@@ -227,9 +227,14 @@ impl<'a> Codegen<'a> {
 			return PromotedVal::Simple(val.val);
 		}
 
-		if val.val.is_bottom() {
+		if val.is_bottom() {
 			return PromotedVal::Bottom;
 		}
+
+		// TODO: Does Any type automatically promote to Bottom?
+		//if to == self.db.types.bottom {
+		//	return PromotedVal::Bottom;
+		//}
 
 		if val.typ == self.db.types.int && to == self.db.types.float {
 			return PromotedVal::Promoted(val.val, "ps_promote_int_to_float")
