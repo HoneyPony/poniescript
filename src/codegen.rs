@@ -83,6 +83,13 @@ enum Val {
 
 	/// Equivalent to Type::Bottom, sort of.
 	Bottom,
+
+	/// Equivalent to Type::Void. The kind of val produced in:
+	/// fun test() { }
+	/// print(test())
+	/// 
+	/// As test() returns void.
+	Void,
 }
 
 impl Val {
@@ -109,13 +116,23 @@ enum PromotedVal {
 	Simple(Val),
 	Promoted(Val, &'static str),
 	Bottom,
+	Void,
 }
 
 impl PromotedVal {
 	pub fn is_bottom(&self) -> bool {
 		match self {
 			PromotedVal::Bottom => true,
-			PromotedVal::Simple(v) | PromotedVal::Promoted(v, _) => v.is_bottom()
+			PromotedVal::Simple(v) | PromotedVal::Promoted(v, _) => v.is_bottom(),
+			PromotedVal::Void => false,
+		}
+	}
+
+	pub fn is_void(&self) -> bool {
+		match self {
+			PromotedVal::Bottom => false,
+			PromotedVal::Simple(v) | PromotedVal::Promoted(v, _) => v.is_void(),
+			PromotedVal::Void => true,
 		}
 	}
 }
@@ -125,6 +142,20 @@ impl Val {
 		match self {
 			Val::Bottom => true,
 			_ => false,
+		}
+	}
+
+	pub fn is_void(&self) -> bool {
+		match self {
+			Val::Void => true,
+			_ => false,
+		}
+	}
+
+	pub fn needs_storage(&self) -> bool {
+		match self {
+			Val::Bottom | Val::Void => false,
+			_ => true,
 		}
 	}
 }
@@ -169,6 +200,9 @@ impl std::fmt::Display for Val {
 			// String literals are always stored in variables with a consistent naming scheme.
 			Val::StringLit { id } => write!(f, "ps_str_const{}", id.to_usize()),
 			Val::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
+
+			// Void values have no representation.
+			Val::Void => Ok(())
 		}
 		
 	}
@@ -180,6 +214,7 @@ impl std::fmt::Display for PromotedVal {
 			PromotedVal::Simple(inner) => write!(f, "{}", inner),
 			PromotedVal::Promoted(inner, promo_fn) => write!(f, "{promo_fn}({inner})"),
 			PromotedVal::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
+			PromotedVal::Void => Ok(()),
 		}
 	}
 }
@@ -370,7 +405,11 @@ impl<'a> Codegen<'a> {
 					.typed(self.db.get_var_type(assign.identity))
 			},
 			Expr::FunCall(call) => {
-				let val = self.new_val();
+				let ret_type = self.db.get_fun_ret_type(call.identity);
+				let val = if self.db.type_generates_value(ret_type) {
+					self.new_val()
+				} else { Val::Void };
+				
 				let ctype = self.db.get_fun_ret_ctype(call.identity);
 				let cname = self.db.get_fun_cname(call.identity);
 
@@ -379,11 +418,19 @@ impl<'a> Codegen<'a> {
 				for idx in 0..call.args.len() {
 					let arg = &call.args[idx];
 					let val = self.expr(arg, into);
+					if val.is_bottom() {
+						return val;
+					}
+
 					let val = self.promote(val, self.db.get_fun_param_type(call.identity, idx));
 					vals.push(val);
 				}
 
-				inf_write!(into, "{indent}{ctype} {val} = {cname}(");
+				inf_write!(into, "{indent}");
+				if val.needs_storage() {
+					inf_write!(into, "{ctype} {val} = ");
+				}
+				inf_write!(into, "{cname}(");
 				let mut comma = "";
 				for val in vals {
 					inf_write!(into, "{comma}{val}");
