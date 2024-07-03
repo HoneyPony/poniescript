@@ -1,0 +1,13 @@
+fun takes_float(a: float) {
+	print(a);
+}
+
+fun takes_int(a: int) {
+	takes_float(a);
+}
+
+fun init() {
+	takes_float(1.0);
+	takes_float(2);
+	takes_int(3);
+}
