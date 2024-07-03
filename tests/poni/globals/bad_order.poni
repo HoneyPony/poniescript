@@ -1,0 +1,2 @@
+var first = second;
+var second = 5;

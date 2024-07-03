@@ -36,9 +36,10 @@ pub fn generate(tests_file: &mut File) {
 		("print/", "print_multiple_string_literal", Expected::Output("hello world\n")),
 		("print/", "print_number_literal"         , Expected::Output("3\n")),
 
-		("globals/", "global_block", Expected::Output("7\n")),
+		("globals/", "global_block" , Expected::Output("7\n")),
 		// TODO: Figure out precise float output format we want.
-		("globals/", "globals_3"   , Expected::Output("3\n4.000000\n10\n")),
+		("globals/", "globals_3"    , Expected::Output("3\n4.000000\n10\n")),
+		("globals/", "global_global", Expected::Output("55\n")),
 
 		("typecheck/", "print_assume_int", Expected::Output("10\n")),
 		("typecheck/", "promote_assumes_inside_block", Expected::Output("15\n")),

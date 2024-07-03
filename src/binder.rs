@@ -47,14 +47,12 @@ struct Binder<'db> {
 
 impl<'db> Binder<'db> {
 	pub fn new(db: &'db mut Db) -> Self {
-		let checkers = vec![NameChecker::global()];
-
 		return Binder {
 			db,
 
 			had_error: false,
 
-			checkers
+			checkers: Vec::new(),
 		}
 	}
 
@@ -148,12 +146,16 @@ impl<'db> Binder<'db> {
 	}
 
 	pub fn visit_module(&mut self, module: &mut Module) {
-		for fun in &mut module.functions {
-			self.visit_function(fun);
-		}
-
 		for global in &mut module.globals {
 			self.visit_expr(&mut global.value);
+		}
+
+		// Don't add the global() checker until after the globals have been
+		// visited. This prevents cyclic references in the globals.
+		self.checkers.push(NameChecker::global());
+
+		for fun in &mut module.functions {
+			self.visit_function(fun);
 		}
 	}
 }
