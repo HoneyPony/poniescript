@@ -1,0 +1,7 @@
+fun first() { }
+
+var first = 3;
+
+var second = 5;
+
+fun second() { }

@@ -224,10 +224,10 @@ impl Db {
 	}
 
 	// TODO: Return the old name for error reporting..?
-	pub fn add_full_name(&mut self, name: &str, entry: ScopeEntry) {
+	pub fn add_full_name(&mut self, name: &str, entry: ScopeEntry) -> Option<ScopeEntry> {
 		let name = self.put_str(name);
 
-		self.name_map.insert(name, entry);
+		self.name_map.insert(name, entry)
 	}
 
 	pub fn new_var(&mut self, name: Token, typ: TypId) -> VarId {

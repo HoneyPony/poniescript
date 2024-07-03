@@ -192,38 +192,40 @@ impl<'a, 'b> Parser<'a, 'b> {
 	fn location_of(&self, entry: &ScopeEntry) -> &SourceLocation {
 		match entry {
 			ScopeEntry::Var(var) => &self.db.get(*var).name.location,
-			ScopeEntry::Fun(_) => todo!(),
+			ScopeEntry::Fun(fun) => &self.db.get(*fun).name.location,
 			ScopeEntry::None => todo!(),
 		}
 	}
 
-	fn scope_put_var(&mut self, name: StrId, var: VarId) {
+	fn scope_put_entry(&mut self, name: StrId, entry: ScopeEntry) {
 		match self.scopes.last_mut() {
 			Some(last) => {
 				// For local scopes, it is OK to redefine the name with a new
 				// value -- that's just shadowing.
-				last.map.insert(name, ScopeEntry::Var(var));
+				last.map.insert(name, entry);
 			},
 			None => {
-				// For global scopes, redefining a name is not allowed.
-				let old = self.global_scope.map.insert(name, ScopeEntry::Var(var));
+				self.global_scope.map.insert(name, entry);
 
 				// TODO: Can this concatenation be made more efficient..?
 				// Maybe the DB could have a buffer for this purpose...
 				let full_name = format!("{}{}", self.scope_name, self.db.get(name));
-				self.db.add_full_name(&full_name, ScopeEntry::Var(var));
+				let old =  self.db.add_full_name(&full_name, entry);
 
-				// TODO: We will also have to add_full_name for functions,
-				// fields, etc... not sure where though yet.
-
+				// For global scopes, redefining a name is not allowed.
 				if let Some(old) = old {
-					let mut error = begin_error!(self, "Redefinition of global variable {}", self.db.get(name));
+					// NOTE: If we eventually support global function overloading,
+					// then that WILL have to be allowed.
+					let mut error = begin_error!(self, "Redefinition of global name '{}'", self.db.get(name));
 					note!(error, Some(self.location_of(&old)), "Previous definition was here");
 					semantic_error_with!(self, error);
 				}
 			}
 		}
 	}
+
+	// TODO: We will also have to add_full_name for functions,
+	// fields, etc... not sure where though yet.
 
 	fn scope_lookup(&mut self, name: StrId) -> ScopeEntry {
 		if self.scopes.is_empty() {
@@ -488,7 +490,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
-		self.scope_put_var(name_str, identity);
+		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		return Stmt::new_declare_ok(self.end(location), identity, initializer);
 	}
@@ -556,7 +558,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let name_str = name.lexeme;
 
 		let identity = self.db.new_var(name, typ);
-		self.scope_put_var(name_str, identity);
+		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		Ok(identity)
 	}
@@ -609,6 +611,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 			parameters,
 			return_type
 		});
+
+		// Put the identity in to the current scope. For lexical scoped function
+		// names, they can't be used until they're defined...
+		// TODO: Do we want to be able to have mutually recursive functions local
+		// to a function...?
+		self.scope_put_entry(name_str, ScopeEntry::Fun(identity));
 
 		// TODO: Function names that are nested should be <something>.<something>,
 		// so this will work even for methods and other nestedly-named functions.
