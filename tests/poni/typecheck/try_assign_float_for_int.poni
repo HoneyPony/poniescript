@@ -1,0 +1,8 @@
+fun fun1() {
+	var a = 10;
+	a = 5.0;
+}
+
+fun fun2() {
+	var b: int = 5.0;
+}
