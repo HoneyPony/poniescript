@@ -509,9 +509,7 @@ impl<'a> Codegen<'a> {
 		}
 
 		// Same idea as in codegen()
-		let own_return_type = self.db.get_context_type(
-			self.db.get_fun_return_typid(fun)
-		);
+		let own_return_type = self.db.get_fun_return_typid(fun);
 		self.return_types.push(own_return_type);
 
 		let val = self.expr(body, &mut own_buffer);
