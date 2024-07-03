@@ -1,3 +1,4 @@
 fun init() {
 	var test = str("hello", " ", "world", 25);
+	print(test);
 }

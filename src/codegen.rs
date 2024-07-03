@@ -322,7 +322,7 @@ impl<'a> Codegen<'a> {
 			Type::Float => inf_writeln!(into, "{indent}ps_strfmt_float({buf_val}, {val});"),
 			Type::Void => inf_writeln!(into, "{indent}/* ps_strfmt_void */"),
 			Type::StrConst => inf_writeln!(into, "{indent}ps_strfmt_str({buf_val}, {val});"),
-			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_str({buf_val}, {val}->buffer);"),
+			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_strbuf({buf_val}, {val});"),
 			Type::Bottom => { },
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unassigned>"),
 			Type::AssumeFloat => todo!(),

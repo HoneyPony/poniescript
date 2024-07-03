@@ -57,6 +57,13 @@ static inline
 void*
 ps_gc_must_calloc(size_t bytes, uint64_t tag) {
 	// TODO: Implement GC
+	// Consideration: For realloc(), it would be helpful if it could extend
+	// an existing allocation further in to the arena.
+	//
+	// This would be especially useful for str(), because if it has no
+	// inner allocating expressions, it will be able to essentially extend
+	// its buffer "for free" when needed. (And we could even make it so
+	// that it computes all inner expressions first).
 	void *result = calloc(bytes, 1);
 	if(!result) {
 		ps_fatal_error("infallible calloc could not allocate");
@@ -64,6 +71,17 @@ ps_gc_must_calloc(size_t bytes, uint64_t tag) {
 
 	ps_object *header = result;
 	header->todo = tag;
+
+	return result;
+}
+
+static inline
+void*
+ps_gc_must_realloc(void *previous, size_t bytes) {
+	void *result = realloc(previous, bytes);
+	if(!result) {
+		ps_fatal_error("infallible realloc could not allocate");
+	}
 
 	return result;
 }
@@ -105,6 +123,90 @@ ps_strbuf_new(size_t prealloc) {
 
 static inline
 void
+ps_strbuf_reserve(ps_strbuf *buf, size_t needed) {
+	size_t new_len = buf->buffer->length;
+	needed = buf->length + needed;
+
+	while(new_len < needed) {
+		new_len *= 2;
+	}
+
+	// Note that we are NOT including the NUL terminator here. That should
+	// be included in the 'needed' value.
+	size_t bytes = sizeof(ps_str) + ((new_len) * sizeof(char));
+
+	buf->buffer = ps_gc_must_realloc(buf->buffer, bytes);
+}
+
+static inline
+void
+ps_strfmt_int(ps_strbuf *buf, ps_int i) {
+	// We will compare the snprintf() result against the total chars -1,
+	// because snprintf() returns the length of everything BUT the NUL
+	// terminator.
+	size_t rem = (buf->buffer->length - buf->length) - 1;
+	int needed = snprintf(buf->buffer->contents + buf->length, rem, "%d", i);
+
+	if(rem < needed) {
+		// If we didn't have enough room, we will reallocate and do the
+		// snprintf() again. Reserve needed + 1 so that we include the NUL terminator.
+		ps_strbuf_reserve(buf, needed + 1);
+
+		// Do the snprintf again. The output should not change.
+		snprintf(buf->buffer->contents + buf->length, rem, "%d", i);
+	}
+
+	// Finally, the length of the string should increase by needed.
+	// Then, we should write a NUL terminator.
+	buf->length += needed;
+	buf->buffer->contents[buf->length] = '\0';
+}
+
+static inline
+void
+ps_strfmt_float(ps_strbuf *buf, float f) {
+	// Same idea as ps_strfmt_int
+	size_t rem = (buf->buffer->length - buf->length) - 1;
+	int needed = snprintf(buf->buffer->contents + buf->length, rem, "%f", f);
+
+	if(rem < needed) {
+		ps_strbuf_reserve(buf, needed + 1);
+
+		snprintf(buf->buffer->contents + buf->length, rem, "%f", f);
+	}
+
+	buf->length += needed;
+	buf->buffer->contents[buf->length] = '\0';
+}
+
+static inline
+void
+ps_strfmt_str(ps_strbuf *buf, const ps_str *str) {
+	// TODO: Do we need the +1 here for the nul terminator?
+	ps_strbuf_reserve(buf, str->length + 1);
+
+	// Copy the string and NUL terminator
+	memcpy(buf->buffer->contents + buf->length, str->contents, str->length + 1);
+
+	buf->length += str->length;
+}
+
+// We need a separate ps_strfmt method for strbuf, because the strbuf has
+// a separate length from its internal str.
+static inline
+void
+ps_strfmt_strbuf(ps_strbuf *buf, const ps_strbuf *other) {
+	// TODO: Do we need the +1 here for the nul terminator?
+	ps_strbuf_reserve(buf, other->length + 1);
+
+	// Copy the string and NUL terminator
+	memcpy(buf->buffer->contents + buf->length, other->buffer->contents, other->length + 1);
+
+	buf->length += other->length;
+}
+
+static inline
+void
 ps_print_int(ps_int i) {
 	printf("%d", i);
 }
@@ -115,6 +217,12 @@ ps_print_float(float f) {
 	printf("%f", f);
 }
 
+// NOTE: We can currently use ps_print_str for StrBufs as well. This is
+// because right now ps_print_str does not use the length value.
+//
+// If we do eventually use the length value, we will have to add a
+// ps_print_strbuf() method, as the length value will be different from its
+// internal str.
 static inline
 void
 ps_print_str(const ps_str *str) {
