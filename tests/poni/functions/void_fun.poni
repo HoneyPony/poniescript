@@ -1,0 +1,14 @@
+fun ponies() {
+	print("ponies");
+}
+
+fun horses() {
+	print("horses");
+}
+
+fun init() {
+	ponies();
+	horses();
+	ponies();
+	horses();
+}

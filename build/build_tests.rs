@@ -58,6 +58,7 @@ pub fn generate(tests_file: &mut File) {
 		("functions/", "call_basic", Expected::Output("3\n7\n11\n")),
 		("functions/", "call_nested", Expected::Output("my little pony!\n")),
 		("functions/", "call_promote", Expected::Output("1.000000\n2.000000\n3.000000\n")),
+		("functions/", "void_fun", Expected::Output("ponies\nhorses\nponies\nhorses\n")),
 
 		("scope/", "block_shadow", Expected::Output("hello ponies\nhello again ponies\nhello ponies\n")),
 	];
