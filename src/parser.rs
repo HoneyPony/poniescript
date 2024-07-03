@@ -475,6 +475,14 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 	}
 
+	fn parameter(&mut self) -> Result<VarId> {
+		let name = expected!(self, Tok::Identifier, "parameter name")?;
+		expected!(self, Tok::Colon, "':' after parameter name");
+		let typ = self.typ()?;
+
+		Ok(self.db.new_var(name, typ))
+	}
+
 	fn named_fun_declaration(&mut self) -> Result<FunDeclare> {
 		let location = self.start();
 		let key_fun = expected!(self, Tok::Fun, "'fun'")?;
@@ -484,10 +492,15 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::LeftParen, "'(' after function name")?;
 
-		let parameters = vec![];
+		let mut parameters = vec![];
 
 		while !self.at(Tok::RightParen) && !self.is_at_end() {
+			parameters.push(self.parameter()?);
 
+			// NOTE: Right now, this means you can have a trailing comma
+			// in a parameter list. That might be fine though -- trailing commas
+			// are useful in a lot of places -- maybe we should try it?
+			self.match_(Tok::Comma)?;
 		}
 
 		expected!(self, Tok::RightParen, "')' after function parameter list")?;

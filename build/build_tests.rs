@@ -49,6 +49,9 @@ pub fn generate(tests_file: &mut File) {
 	
 		("string/", "simple_str", Expected::Output("hello world25\n")),
 		("string/", "str_of_strbuf", Expected::Output("hello my little ponies\n")),
+	
+		("functions/", "parse_params", Expected::Output("")),
+		("functions/", "param_trailing_comma", Expected::Output("")),
 	];
 
 	for (path, test, expect) in tests {

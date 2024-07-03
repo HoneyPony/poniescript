@@ -1,0 +1,7 @@
+fun test1(x: int, y: int) {
+
+}
+
+fun test2(x: float, y: float, z: float) {
+
+}

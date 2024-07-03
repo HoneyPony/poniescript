@@ -1,0 +1,3 @@
+fun example(x: int, y: int, z: int,) { }
+
+fun example2(x: int, y: float,) { }
