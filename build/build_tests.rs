@@ -35,6 +35,7 @@ pub fn generate(tests_file: &mut File) {
 		("print/", "print_string_literal"         , Expected::Output("hello world\n")),
 		("print/", "print_multiple_string_literal", Expected::Output("hello world\n")),
 		("print/", "print_number_literal"         , Expected::Output("3\n")),
+		("print/", "print_block"                  , Expected::Output("hello pony folk\n")),
 
 		("globals/", "global_block" , Expected::Output("7\n")),
 		// TODO: Figure out precise float output format we want.
