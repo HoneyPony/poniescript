@@ -64,6 +64,8 @@ impl SourceMap {
 			}
 		}
 
+		self.created = true;
+
 		Ok(())
 	}
 
@@ -75,13 +77,15 @@ impl SourceMap {
 		let mut low = 0;
 		let mut high = self.lines.len();
 		loop {
-			// If the line is at the end, we can't be past it or before it.
+			// If the line is at the end, check the "current line" condition specially.
 			if line == self.lines.len() - 1 {
-				break;
+				// If the input is on the current line, break.
+				if self.lines[line] <= input {
+					break;
+				}
 			}
-
 			// If the input is "on the current line," we're done.
-			if self.lines[line] <= input && input < self.lines[line + 1] {
+			else if self.lines[line] <= input && input < self.lines[line + 1] {
 				break;
 			}
 
