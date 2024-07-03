@@ -19,7 +19,7 @@ struct Codegen<'a> {
 
 	fun_init_buffer: String,
 
-	db: &'a mut Db
+	db: &'a Db
 }
 
 /// Some of the output buffers used for code generation. Separate from
@@ -198,7 +198,7 @@ impl std::fmt::Display for Indenter {
 }
 
 impl<'a> Codegen<'a> {
-	fn new(db: &'a mut Db) -> Self {
+	fn new(db: &'a Db) -> Self {
 		return Codegen {
 			functions: Vec::new(),
 
