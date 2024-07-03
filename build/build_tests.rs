@@ -41,6 +41,10 @@ pub fn generate(tests_file: &mut File) {
 		("globals/", "globals_3"   , Expected::Output("3\n4.000000\n10\n")),
 
 		("typecheck/", "print_assume_int", Expected::Output("10\n")),
+		("typecheck/", "promote_assumes_inside_block", Expected::Output("15\n")),
+		("typecheck/", "promote_to_float_arithmetic", Expected::Output("30.000000\n")),
+		("typecheck/", "promote_to_float_assign", Expected::Output("10.000000\n")),
+		// TODO: Add other tests when we get function calls
 	];
 
 	for (path, test, expect) in tests {

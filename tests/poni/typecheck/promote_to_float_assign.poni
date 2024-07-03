@@ -3,4 +3,6 @@ fun init() {
 	var x: int = 10;
 
 	f = x;
+
+	print(f);
 }
