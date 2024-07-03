@@ -11,7 +11,7 @@ mod error;
 
 use std::fs::File;
 use std::path::{PathBuf};
-use std::process::exit;
+use std::process::{exit, Command, Stdio};
 use std::time::{Duration, SystemTime};
 
 use db::Db;
@@ -28,9 +28,78 @@ struct Args {
 	/// Whether to hide the timing information.
 	no_timing: bool,
 
+	#[arg(short = 'c', long = "compiler")]
+	/// The C compiler to use (if generating an executable or object file).
+	/// Expects gcc-style arguments.
+	c_compiler: Option<String>,
+
 	#[arg(required = true)]
 	/// The list of input files to compile into one .C file or executable.
 	input_paths: Vec<PathBuf>,
+}
+
+enum CompileMode {
+	ToCFile,
+	ToExeFile,
+	// Will be useful if we can do hot code reloading
+	// ToSharedLibrary,
+}
+
+impl CompileMode {
+	pub fn parse(output_path: &PathBuf) -> CompileMode {
+		if output_path.ends_with(".c") { return CompileMode::ToCFile; }
+		if output_path.ends_with(".exe") { return CompileMode::ToExeFile; }
+		if output_path.ends_with(".o") { todo!("outputting to .o files"); }
+		if output_path.ends_with(".dll") { todo!("outputting to .dll files"); }
+		if output_path.ends_with(".so") { todo!("outputting to .so files"); }
+
+		// By default, return ToExeFile. This corresponds to, for example,
+		// -o my_program (which on Linux would suggest an executable)
+		return CompileMode::ToExeFile;
+	}
+
+	pub fn get_output(&self, args: &Args) -> Box<dyn std::io::Write> {
+		match self {
+			CompileMode::ToCFile => {
+				match File::create(&args.output_path) {
+					Ok(f) => Box::new(f),
+					Err(err) => {
+						eprintln!("Unable to create output file {}: {}", args.output_path.display(), err);
+						exit(3);
+					}
+				}
+			},
+			CompileMode::ToExeFile => {
+				// TODO: Why is as_deref giving &str?? As long as it works...
+				let compiler = args.c_compiler.as_deref().unwrap_or("gcc");
+				let cc = Command::new(compiler)
+					.stdin(Stdio::piped())
+					// .arg("-std=c11") // TODO: Do we want this? It seems tcc does not support it.
+					.arg("-o")
+					.arg(&args.output_path)
+					.arg("-I.")
+					.arg("-x")
+					.arg("c")
+					.arg("-")
+					.spawn();
+				let mut cc = match cc {
+					Ok(cc) => cc,
+					Err(err) => {
+						eprintln!("Unable to spawn C compiler: {}", err);
+						exit(4);
+					}
+				};
+
+				match cc.stdin.take() {
+					Some(stdin) => Box::new(stdin),
+					None => {
+						eprintln!("Unable to feed C compiler with input");
+						exit(5);
+					}
+				}
+			},
+		}
+	}
 }
 
 fn parse_all_modules(db: &mut db::Db, args: &Args) -> (Vec<Module>, bool) {
@@ -122,13 +191,9 @@ fn main() {
 	// Generate any caches that require type checking info.
 	db.generate_codegen_caches();
 
-	let mut output = match File::create(&args.output_path) {
-		Ok(f) => f,
-		Err(err) => {
-			eprintln!("Unable to create output file {}: {}", args.output_path.display(), err);
-			exit(3);
-		}
-	};
+	let compile_mode = CompileMode::parse(&args.output_path);
+	let mut output = compile_mode.get_output(&args);
+
 	if let Err(err) = codegen::codegen(&mut db, &modules, &mut output) {
 		eprintln!("Unable to write output file: {err}");
 		exit(4);
