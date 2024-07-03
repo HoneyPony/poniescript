@@ -31,6 +31,7 @@ impl Expr {
 			Expr::Print(print) => {
 				print.exprs[0].typ(db)
 			},
+			Expr::Str(_) => db.types.str_buf,
 		}
 	}
 
@@ -67,6 +68,7 @@ impl Expr {
 			Expr::Print(print) => {
 				print.exprs[0].promote(typ, db)
 			},
+			Expr::Str(_) => false,
 		}
 	}
 }

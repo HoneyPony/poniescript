@@ -18,6 +18,7 @@ include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 
 pub struct DbTypes {
 	pub str_const: TypId,
+	pub str_buf: TypId,
 	pub void: TypId,
 	pub unassigned: TypId,
 	pub int: TypId,
@@ -85,6 +86,7 @@ impl Db {
 			fun_init: None,
 			types: DbTypes {
 				str_const: TypId(0),
+				str_buf: TypId(0),
 				void: TypId(0),
 				unassigned: TypId(0),
 				int: TypId(0),
@@ -99,6 +101,7 @@ impl Db {
 		};
 
 		db.types.str_const  = db.put_type(Type::StrConst);
+		db.types.str_buf    = db.put_type(Type::StrBuf);
 		db.types.void       = db.put_type(Type::Void);
 		db.types.unassigned = db.put_type(Type::Unassigned);
 		db.types.int        = db.put_type(Type::Int);

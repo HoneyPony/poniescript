@@ -9,6 +9,8 @@ pub enum Type {
 	// The constant version of Str. Must be copied, etc to be modified.
 	StrConst,
 
+	StrBuf,
+
 	// Essentially a constant-sized array of characters.
 	//Str,
 
@@ -46,6 +48,7 @@ impl Type {
 			Type::Float => "float".to_string(),
 			Type::Void => "void".to_string(),
 			Type::StrConst => "StrConst".to_string(),
+			Type::StrBuf => "StrBuf".to_string(),
 			Type::Bottom => "<bottom>".to_string(),
 			Type::Unassigned => "<unknown>".to_string(),
 			Type::AssumeInt => "a number".to_string(),
@@ -62,6 +65,7 @@ impl Type {
 
 			Type::Void => "void".into(),
 			Type::StrConst => "const ps_str*".into(),
+			Type::StrBuf => "ps_strbuf*".into(),
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 

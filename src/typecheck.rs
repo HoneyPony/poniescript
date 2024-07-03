@@ -269,6 +269,21 @@ impl<'db> TypeChecker<'db> {
 				// TODO: We could store this type directly on the print() if we
 				// wanted to -- that's what other ast nodes do...
 				computed 
+			},
+			Expr::Str(str) => {
+				// Str is very similar to print(), except it always return StrBuf instead
+				// of its first argument.
+				for expr in &mut str.exprs {
+					// TODO: Should value_used be false here? It should probably
+					// be true, as we are using the value for computing something...?
+					//
+					// We should probably make a test like print({ "something" })
+					// and str({ "something "})
+					self.check_expr(expr, false)?;
+					self.promote_from_unassigned(expr);
+				}
+
+				self.db.types.str_buf
 			}
 			Expr::Unbound(_) => {
 				// In theory we will resolve all idents beforehand? But this might

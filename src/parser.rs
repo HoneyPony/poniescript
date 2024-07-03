@@ -263,9 +263,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 		Ok(expr)
 	}
 
-	fn expr_print(&mut self) -> Result<Expr> {
+	fn expr_print_or_str(&mut self, is_print: bool) -> Result<Expr> {
+		let kind = if is_print { "print" } else { "str" };
+
 		let location = self.start();
-		let key_print = expected!(self, Tok::Print, "'print'")?;
+		let key_print = expected!(self,
+			if is_print { Tok::Print } else { Tok::Str },
+			"'{kind}'")?;
 
 		expected_after!(self, Tok::LeftParen, key_print, "'('")?;
 
@@ -276,13 +280,18 @@ impl<'a, 'b> Parser<'a, 'b> {
 			self.match_(Tok::Comma)?;
 		}
 
-		expected!(self, Tok::RightParen, "')' after print arguments")?;
+		expected!(self, Tok::RightParen, "')' after '{kind}' arguments")?;
 
 		if exprs.is_empty() {
-			parse_error!(self, "Expected at least one argument to 'print'");
+			parse_error!(self, "Expected at least one argument to '{kind}'");
 		}
 
-		Expr::mk_print_ok(self.end(location), exprs, self.db.types.unassigned)
+		if is_print {
+			Expr::mk_print_ok(self.end(location), exprs, self.db.types.unassigned)
+		}
+		else {
+			Expr::mk_str_ok(self.end(location), exprs)
+		}
 	}
 
 	fn expr_prefix(&mut self) -> Result<Expr> {
@@ -295,7 +304,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			Tok::Identifier => self.expr_ident(),
 
-			Tok::Print => self.expr_print(),
+			Tok::Print => self.expr_print_or_str(true),
+			Tok::Str => self.expr_print_or_str(false),
 
 			Tok::StringSimple => {
 				let lit = self.advance()?;

@@ -289,6 +289,7 @@ impl<'a> Codegen<'a> {
 			Type::Float => inf_writeln!(into, "{indent}ps_print_float({val});"),
 			Type::Void => inf_writeln!(into, "{indent}/* ps_print_void */"),
 			Type::StrConst => inf_writeln!(into, "{indent}ps_print_str({val});"),
+			Type::StrBuf => inf_writeln!(into, "{indent}ps_print_str({val}->buffer);"),
 			Type::Bottom => { },
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:print-unassigned>"),
 
@@ -302,6 +303,36 @@ impl<'a> Codegen<'a> {
 
 		result
 	}
+
+	fn compile_partial_str(&mut self, inner_expr: &Expr, buf_val: &Val, into: &mut String) -> TypedVal {
+		let result = self.expr(inner_expr, into);
+
+		let typid = result.typ;
+
+		// No promotion is possible inside a print, so simply unwrap the val
+		// for printing. We will return the result later.
+		let val = &result.val;
+
+		let typ = self.db.get(typid);
+
+		let indent = self.indent();
+
+		match typ {
+			Type::Int => inf_writeln!(into, "{indent}ps_strfmt_int({buf_val}, {val});"),
+			Type::Float => inf_writeln!(into, "{indent}ps_strfmt_float({buf_val}, {val});"),
+			Type::Void => inf_writeln!(into, "{indent}/* ps_strfmt_void */"),
+			Type::StrConst => inf_writeln!(into, "{indent}ps_strfmt_str({buf_val}, {val});"),
+			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_str({buf_val}, {val}->buffer);"),
+			Type::Bottom => { },
+			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unassigned>"),
+			Type::AssumeFloat => todo!(),
+			Type::AssumeInt => todo!(),
+			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unbound-ident>"),
+		}
+
+		result
+	}
+
 
 	fn expr(&mut self, expr: &Expr, into: &mut String) -> TypedVal {
 		let indent = self.indent();
@@ -385,6 +416,17 @@ impl<'a> Codegen<'a> {
 				// same as GDScript, but we could change it in the future.
 				inf_writeln!(into, "{indent}ps_println();");
 				val
+			},
+			Expr::Str(str) => {
+				let buf_val = self.new_val();
+				// TODO: We can count the size of any literals and prealloc at
+				// least that much space, for efficiency.
+				inf_writeln!(into, "{indent}ps_strbuf *{buf_val} = ps_strbuf_new(8);");
+				for expr in &str.exprs {
+					self.compile_partial_str(expr, &buf_val, into);
+				}
+
+				buf_val.typed(self.db.types.str_buf)
 			}
 			Expr::Unbound(_) => {
 				panic!("compiler-err:tried-to-codegen-an-unbound-identifier-expression");

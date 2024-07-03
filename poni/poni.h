@@ -6,13 +6,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PS_TAG_STRING 1
+#define PS_TAG_STRCONST 1
+#define PS_TAG_STR      2
+#define PS_TAG_STRBUF   3
 
 typedef float   ps_float;
 typedef int32_t ps_int;
 
 struct ps_object;
-struct ps_string;
+struct ps_str;
+struct ps_strbuf;
 
 typedef struct ps_object {
 	uint64_t todo;
@@ -26,6 +29,14 @@ typedef struct ps_str {
 
 	char contents[];
 } ps_str;
+
+typedef struct ps_strbuf {
+	ps_object object;
+
+	// Note: buffer->length == allocated, essentially
+	ps_str *buffer;
+	size_t length;
+} ps_strbuf;
 
 #ifdef __TINYC__
 	#define PONI_NORETURN __attribute__((noreturn))
@@ -61,7 +72,7 @@ static inline
 ps_str*
 ps_str_from_literal_size(const char *input, size_t length) {
 	size_t bytes = sizeof(ps_str) + ((length + 1) * sizeof(char));
-	ps_str *str = ps_gc_must_calloc(bytes, PS_TAG_STRING);
+	ps_str *str = ps_gc_must_calloc(bytes, PS_TAG_STRCONST);
 
 	memcpy(str->contents, input, length);
 	str->contents[length] = '\0';
@@ -70,7 +81,27 @@ ps_str_from_literal_size(const char *input, size_t length) {
 	return str;
 }
 
+static inline
+ps_str*
+ps_str_from_length(size_t length) {
+	size_t bytes = sizeof(ps_str) + ((length + 1) * sizeof(char));
+	ps_str *str = ps_gc_must_calloc(bytes, PS_TAG_STRCONST);
+
+	str->length = length;
+	return str;
+}
+
 #define ps_str_from_literal(lit) ps_str_from_literal_size(lit, sizeof(lit))
+
+static inline
+ps_strbuf*
+ps_strbuf_new(size_t prealloc) {
+	ps_strbuf *result = ps_gc_must_calloc(sizeof(*result), PS_TAG_STRBUF);
+	result->buffer = ps_str_from_length(prealloc);
+	result->length = 0;
+
+	return result;
+}
 
 static inline
 void
