@@ -11,7 +11,7 @@ fn test_should_print(input_file: &str, c_path: &str, exe_path: &str, output: &st
 	let _ = std::fs::remove_file(c_path);
 	let _ = std::fs::remove_file(exe_path);
 	
-	let mut poniescript = Command::new("target/debug/poniescript")
+	let mut poniescript = Command::new(env!("CARGO_BIN_EXE_poniescript"))
 		.arg("-o")
 		.arg(c_path)
 		.arg(input_file)
