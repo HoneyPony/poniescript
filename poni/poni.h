@@ -128,6 +128,9 @@ ps_strbuf_reserve(ps_strbuf *buf, size_t needed) {
 	size_t new_len = buf->buffer->length;
 	needed = buf->length + needed;
 
+	// Don't reallocate if it's already big enough
+	if(new_len >= needed) { return; }
+
 	while(new_len < needed) {
 		new_len *= 2;
 	}
@@ -137,6 +140,7 @@ ps_strbuf_reserve(ps_strbuf *buf, size_t needed) {
 	size_t bytes = sizeof(ps_str) + ((new_len) * sizeof(char));
 
 	buf->buffer = ps_gc_must_realloc(buf->buffer, bytes);
+	buf->buffer->length = new_len;
 }
 
 static inline
@@ -154,6 +158,9 @@ ps_strfmt_int(ps_strbuf *buf, ps_int i) {
 		ps_strbuf_reserve(buf, needed + 1);
 
 		// Do the snprintf again. The output should not change.
+		// We will recompute rem, although it should be the case that
+		// there's always enough room.
+		rem = (buf->buffer->length - buf->length) - 1;
 		snprintf(buf->buffer->contents + buf->length, rem, "%d", i);
 	}
 
