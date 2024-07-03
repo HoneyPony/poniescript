@@ -240,6 +240,28 @@ impl<'a> Codegen<'a> {
 			return PromotedVal::Promoted(val.val, "ps_promote_int_to_float")
 		}
 
+		if val.typ == self.db.types.str_const &&
+		        to == self.db.types.str_buf
+		{
+			return PromotedVal::Promoted(val.val, "ps_promote_str_to_buf")	
+		}
+
+		if val.typ == self.db.types.str &&
+		        to == self.db.types.str_buf
+		{
+			return PromotedVal::Promoted(val.val, "ps_promote_str_to_buf")	
+		}
+
+		if val.typ == self.db.types.str_const &&
+		        to == self.db.types.str
+		{
+			return PromotedVal::Promoted(val.val, "ps_promote_str_const_to_str")	
+		}
+
+		// Note: We will only actually try to promote() if the type check stage
+		// at some point creates code where we need a promotion. So we should
+		// generally get this panic if something is either missing in the typechecker,
+		// or if we're missing a promotion corresponding to a case in compute_assignable.
 		panic!("compiler-err:unknown-promotion");
 	}
 
@@ -288,7 +310,7 @@ impl<'a> Codegen<'a> {
 			Type::Int => inf_writeln!(into, "{indent}ps_print_int({val});"),
 			Type::Float => inf_writeln!(into, "{indent}ps_print_float({val});"),
 			Type::Void => inf_writeln!(into, "{indent}/* ps_print_void */"),
-			Type::StrConst => inf_writeln!(into, "{indent}ps_print_str({val});"),
+			Type::StrConst | Type::Str => inf_writeln!(into, "{indent}ps_print_str({val});"),
 			Type::StrBuf => inf_writeln!(into, "{indent}ps_print_str({val}->buffer);"),
 			Type::Bottom => { },
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:print-unassigned>"),
@@ -321,7 +343,7 @@ impl<'a> Codegen<'a> {
 			Type::Int => inf_writeln!(into, "{indent}ps_strfmt_int({buf_val}, {val});"),
 			Type::Float => inf_writeln!(into, "{indent}ps_strfmt_float({buf_val}, {val});"),
 			Type::Void => inf_writeln!(into, "{indent}/* ps_strfmt_void */"),
-			Type::StrConst => inf_writeln!(into, "{indent}ps_strfmt_str({buf_val}, {val});"),
+			Type::StrConst | Type::Str => inf_writeln!(into, "{indent}ps_strfmt_str({buf_val}, {val});"),
 			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_strbuf({buf_val}, {val});"),
 			Type::Bottom => { },
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unassigned>"),

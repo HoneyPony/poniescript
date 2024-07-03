@@ -109,6 +109,12 @@ impl<'db> TypeChecker<'db> {
 			// Ints and all Assume types promote to float.
 			(Type::Float, Type::AssumeInt | Type::AssumeFloat | Type::Int) => return Ok(to),
 
+			// StrConst promotes to Str.
+			(Type::Str, Type::StrConst) => return Ok(to),
+
+			// StrConst and Str both promote to StrBuf.
+			(Type::StrBuf, Type::StrConst | Type::Str) => return Ok(to),
+
 			// An unassigned clashing with an Assume resolves the Assume to its
 			// assumed value.
 			(Type::Unassigned, Type::AssumeInt) => return Ok(self.db.types.int),

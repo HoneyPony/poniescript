@@ -436,6 +436,17 @@ impl<'a, 'b> Parser<'a, 'b> {
 				if tok.lexeme == self.db.put_str("float") {
 					return Ok(self.db.types.float)
 				}
+				// TODO: These names should probably be resolved at the binding
+				// pass, otherwise we cannot shadow them...
+				if tok.lexeme == self.db.put_str("StrBuf") {
+					return Ok(self.db.types.str_buf)
+				}
+				if tok.lexeme == self.db.put_str("Str") {
+					return Ok(self.db.types.str)
+				}
+				if tok.lexeme == self.db.put_str("StrConst") {
+					return Ok(self.db.types.str_const)
+				}
 
 				self.db.put_type(Type::UnboundIdent(tok.lexeme))
 			},

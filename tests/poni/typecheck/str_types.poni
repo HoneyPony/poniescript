@@ -1,7 +1,8 @@
 fun init() {
 	var as_const: StrConst = "hello";
 	var as_buf: StrBuf = str("my");
-	var as_buf_promote: StrBuf = "little ponies";
+	var as_str_promote: Str = "little";
+	var as_buf_promote: StrBuf = "ponies";
 
-	print(as_const, " ", as_buf, " ", as_buf_promote);
+	print(as_const, " ", as_buf, " ", as_str_promote, " ", as_buf_promote);
 }

@@ -101,8 +101,9 @@ ps_str_from_literal_size(const char *input, size_t length) {
 
 static inline
 ps_str*
-ps_str_from_length(size_t length) {
-	size_t bytes = sizeof(ps_str) + ((length + 1) * sizeof(char));
+ps_str_from_alloc(size_t length) {
+	// For from_alloc, do not add 1 to length.
+	size_t bytes = sizeof(ps_str) + ((length) * sizeof(char));
 	ps_str *str = ps_gc_must_calloc(bytes, PS_TAG_STRCONST);
 
 	str->length = length;
@@ -116,7 +117,7 @@ static inline
 ps_strbuf*
 ps_strbuf_new(size_t prealloc) {
 	ps_strbuf *result = ps_gc_must_calloc(sizeof(*result), PS_TAG_STRBUF);
-	result->buffer = ps_str_from_length(prealloc);
+	result->buffer = ps_str_from_alloc(prealloc);
 	result->length = 0;
 
 	return result;
@@ -211,6 +212,28 @@ ps_strfmt_strbuf(ps_strbuf *buf, const ps_strbuf *other) {
 	memcpy(buf->buffer->contents + buf->length, other->buffer->contents, other->length + 1);
 
 	buf->length += other->length;
+}
+
+// Promotes a Str or a StrConst to a StrBuf by allocating a new buffer and copying
+// the characters over.
+static inline
+ps_strbuf*
+ps_promote_str_to_buf(const ps_str* input) {
+	// TODO: Maybe consider rounding to nearest power-of-two somewhere?
+
+	// Add 1 so that we have room for the NUL terminator.
+	ps_strbuf *buf = ps_strbuf_new(input->length + 1);
+	buf->length = input->length;
+
+	memcpy(buf->buffer->contents, input->contents, input->length + 1);
+
+	return buf;
+}
+
+static inline
+ps_str*
+ps_promote_str_const_to_str(const ps_str* input) {
+	return ps_str_from_literal_size(input->contents, input->length);
 }
 
 static inline
