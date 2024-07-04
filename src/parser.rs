@@ -637,15 +637,16 @@ impl<'a, 'b> Parser<'a, 'b> {
 			_ => {
 				let inner = self.expression()?;
 
-				let mut expect_semicolon = true;
+				let mut expect_semicolon = match inner {
+					// If the inner expression is a block or a similar "block-like"
+					// thing, then we don't need a semicolon.
+					Expr::Block(_) | Expr::If(_) => false,
+					_ => true,
+				};
 
 				// If we're the last statement in a { } block, then we don't need
 				// a semicolon.
 				if self.at(Tok::RightBrace) { expect_semicolon = false; }
-
-				// If the inner expression is a block, then we don't need a
-				// semicolon.
-				if let Expr::Block(_) = inner { expect_semicolon = false; }
 				
 				if expect_semicolon {
 					expected!(self, Tok::Semicolon, "';' after statement expression")?;

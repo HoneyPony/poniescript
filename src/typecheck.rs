@@ -260,7 +260,8 @@ impl<'db> TypeChecker<'db> {
 				compare.left.promote(computed, self.db);
 				compare.right.promote(computed, self.db);
 
-				computed
+				// Comparisons always return bool.
+				self.db.types.bool
 			},
 			Expr::If(if_) => {
 				let condition_ty = self.check_expr(&mut if_.condition, true)?;
