@@ -243,6 +243,28 @@ impl std::fmt::Display for Indenter {
 	}
 }
 
+macro_rules! define_val {
+	($self:ident, $into:ident, $val:expr, $($arg:tt)*) => {
+		if $val.needs_storage() {
+			inf_write!($into, "{}{} {}",
+				$self.indent(),
+				$self.db.get_ctype($val.typ),
+				$val
+			);
+			inf_write!($into, $($arg)*);
+		}
+	}
+}
+
+macro_rules! set_val {
+	($self:ident, $into:ident, $val:expr, $($arg:tt)*) => {
+		if $val.needs_storage() {
+			inf_write!($into, "{}{}", $self.indent(), $val);
+			inf_write!($into, $($arg)*);
+		}
+	}
+}
+
 impl<'a> Codegen<'a> {
 	fn new(db: &'a Db) -> Self {
 		return Codegen {
