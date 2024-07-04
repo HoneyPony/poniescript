@@ -1,0 +1,11 @@
+fun test() {
+	print("hello ", {
+		return;
+		"everybody";
+	});
+}
+
+fun init() {
+	test();
+	print("afterwards");
+}
