@@ -43,6 +43,20 @@ macro_rules! maybe_type_error {
     };
 }
 
+macro_rules! maybe_type_error_with {
+	($self:ident, $expr:expr, $error:block) => {
+		match $expr {
+			Ok(ty) => ty,
+			Err(_) => {
+				$self.had_error = true;
+				$self.db.report_error($error);
+
+				return Err(TypeCheckErr)
+			}
+		}
+    };
+}
+
 macro_rules! type_error {
     ($self:ident, $location:expr, $($arg:tt)*) => {
 		{
@@ -249,9 +263,19 @@ impl<'db> TypeChecker<'db> {
 				// intersection.
 				let computed = self.compute_intersect(then_ty, else_ty);
 
-				let computed = maybe_type_error!(self, computed, &if_.location,
-					"Branches of 'if' expression are incompatible: 'then' has type {} but 'else' has type {}",
-					self.db.repr_type(then_ty), self.db.repr_type(else_ty));
+				let computed = maybe_type_error_with!(self, computed, {
+					let error = Error::simple(
+						format!("Branches of 'if' expression are incompatible: then has type '{}' but else has type '{}'",
+							self.db.repr_type(then_ty), self.db.repr_type(else_ty)),
+						&if_.location.begin()
+					);
+					let error = error.add_note(format!("then branch has type '{}'", self.db.repr_type(then_ty)),
+						Some(if_.then_branch.val_location()));
+					let error = error.add_note(format!("else branch has type '{}'", self.db.repr_type(else_ty)),
+						Some(else_branch.val_location()));
+
+					error
+				});
 
 				if_.then_branch.promote(computed, &self.db);
 				else_branch.promote(computed, &self.db);

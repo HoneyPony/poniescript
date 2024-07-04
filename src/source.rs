@@ -31,6 +31,18 @@ pub struct SourceLocation {
 	pub length: u64,
 }
 
+impl SourceLocation {
+	/// Returns a new SourceLocation pointing just to the beginning of the current
+	/// SourceLocation, useful for indicating the start of an expression.
+	pub fn begin(&self) -> SourceLocation {
+		return SourceLocation {
+			source: self.source,
+			offset: self.offset,
+			length: 1
+		};
+	}
+}
+
 pub struct SourceMap {
 	created: bool,
 	contents_chars: Vec<char>,
