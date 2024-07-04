@@ -31,7 +31,8 @@ fn generate_test(file: &mut File, path: &str, test_name: &str, expect: Expected)
 
 pub fn generate(tests_file: &mut File) {
 	let tests = [
-		("print/", "print_nested"                 , Expected::Output("345\n345\n45\n5\n")),
+		// print_nested: the last line is 345 because it should re-print each of the inner print()s.
+		("print/", "print_nested"                 , Expected::Output("345\n45\n5\n345\n")),
 		("print/", "print_string_literal"         , Expected::Output("hello world\n")),
 		("print/", "print_multiple_string_literal", Expected::Output("hello world\n")),
 		("print/", "print_number_literal"         , Expected::Output("3\n")),

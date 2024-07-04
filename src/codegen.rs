@@ -332,14 +332,12 @@ impl<'a> Codegen<'a> {
 		val.typed(binary.typ)
 	}
 
-	fn compile_partial_print(&mut self, inner_expr: &Expr, into: &mut String) -> TypedVal {
-		let result = self.expr(inner_expr, into);
-
-		let typid = result.typ;
+	fn compile_partial_print(&mut self, val: &TypedVal, into: &mut String) {
+		let typid = val.typ;
 
 		// No promotion is possible inside a print, so simply unwrap the val
 		// for printing. We will return the result later.
-		let val = &result.val;
+		let val = &val.val;
 
 		let typ = self.db.get(typid);
 
@@ -361,20 +359,14 @@ impl<'a> Codegen<'a> {
 			Type::AssumeInt => todo!(),
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:print-unbound-ident>"),
 		}
-
-		result
 	}
 
-	fn compile_partial_str(&mut self, inner_expr: &Expr, buf_val: &Val, into: &mut String) -> TypedVal {
-		let result = self.expr(inner_expr, into);
+	fn compile_partial_str(&mut self, val: &TypedVal, buf_val: &Val, into: &mut String) {
+		let typ = self.db.get(val.typ);
 
-		let typid = result.typ;
-
-		// No promotion is possible inside a print, so simply unwrap the val
-		// for printing. We will return the result later.
-		let val = &result.val;
-
-		let typ = self.db.get(typid);
+		// No promotion is possible inside a str(), so simply unwrap the val
+		// for printing.
+		let val = &val.val;
 
 		let indent = self.indent();
 
@@ -390,8 +382,6 @@ impl<'a> Codegen<'a> {
 			Type::AssumeInt => todo!(),
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unbound-ident>"),
 		}
-
-		result
 	}
 
 
@@ -505,23 +495,57 @@ impl<'a> Codegen<'a> {
 				val.typed(block.typ)
 			},
 			Expr::Print(print) => {
-				let val = self.compile_partial_print(&print.exprs[0], into);
-				for rest in &print.exprs[1..] {
-					self.compile_partial_print(rest, into);
+				let mut vals = Vec::new();
+
+				for expr in &print.exprs {
+					let val = self.expr(expr, into);
+
+					// Propogate bottom values up. As a rule of thumb, always
+					// bail from compiling as early as possible, for the dead-code
+					// elimination that results...
+					if val.is_bottom() {
+						return val;	
+					}
+
+					vals.push(val);
+				}
+
+				for val in &vals {
+					self.compile_partial_print(val, into);
 				}
 
 				// For now, the print expr always adds a newline. This is the
 				// same as GDScript, but we could change it in the future.
 				inf_writeln!(into, "{indent}ps_println();");
-				val
+				
+				// The print returns its first value. Right now, prints always
+				// require at least one argument.
+				return unsafe { vals.into_iter().nth(0).unwrap_unchecked() }
 			},
 			Expr::Str(str) => {
-				let buf_val = self.new_val();
 				// TODO: We can count the size of any literals and prealloc at
 				// least that much space, for efficiency.
-				inf_writeln!(into, "{indent}ps_strbuf *{buf_val} = ps_strbuf_new(8);");
+
+				let mut vals = Vec::new();
+
 				for expr in &str.exprs {
-					self.compile_partial_str(expr, &buf_val, into);
+					let val = self.expr(expr, into);
+
+					// Propogate bottom values up. 
+					if val.is_bottom() {
+						return val;	
+					}
+
+					vals.push(val);
+				}
+
+				// str() always returns a StrBuf, so we can easily generate a new
+				// one unconditionally.
+				let buf_val = self.new_val();
+				inf_writeln!(into, "{indent}ps_strbuf *{buf_val} = ps_strbuf_new(8);");
+				
+				for val in &vals {
+					self.compile_partial_str(val, &buf_val, into);
 				}
 
 				buf_val.typed(self.db.types.str_buf)
