@@ -474,12 +474,7 @@ impl<'a> Codegen<'a> {
 			},
 			Expr::FunCall(call) => {
 				let ret_type = self.db.get_fun_ret_type(call.identity);
-				let val = if self.db.type_generates_value(ret_type) {
-					self.new_val()
-				} else { Val::Void };
-				
-				let ctype = self.db.get_fun_ret_ctype(call.identity);
-				let cname = self.db.get_fun_cname(call.identity);
+				let val = self.new_val_typed(ret_type);
 
 				// TODO: Figure out a way to re-use PromotedVal buffers, maybe..
 				let mut vals = Vec::new();
@@ -494,11 +489,13 @@ impl<'a> Codegen<'a> {
 					vals.push(val);
 				}
 
-				inf_write!(into, "{indent}");
-				if val.needs_storage() {
-					inf_write!(into, "{ctype} {val} = ");
-				}
-				inf_write!(into, "{cname}(");
+				// TODO: An awkward thing about the define_val! syntax is that
+				// it must be remembed that it does not always print. So,
+				// for a function call, we have to be sure to always generate
+				// the cname separately.
+				define_val!(self, into, val, " = ");
+				inf_write!(into, "{}(", self.db.get_fun_cname(call.identity));
+
 				let mut comma = "";
 				for val in vals {
 					inf_write!(into, "{comma}{val}");
@@ -507,7 +504,7 @@ impl<'a> Codegen<'a> {
 				// TODO: Implement closure, gc scoping, etc
 				inf_writeln!(into, "{comma}NULL);");
 
-				val.typed(self.db.get_fun_ret_type(call.identity))
+				val
 			},
 			// TODO: Consider using a different Expr type for string literals
 			Expr::NumLiteral(lit) => {
