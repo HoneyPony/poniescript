@@ -66,6 +66,11 @@ pub fn generate(tests_file: &mut File) {
 		("functions/", "void_fun", Expected::Output("ponies\nhorses\nponies\nhorses\n")),
 
 		("scope/", "block_shadow", Expected::Output("hello ponies\nhello again ponies\nhello ponies\n")),
+
+		("if/", "basic_if_expr_ret", Expected::Output("10\n3\n")),
+		("if/", "basic_if_expr_var", Expected::Output("3\n10\n")),
+		("if/", "basic_if_expr"    , Expected::Output("10\n3\n")),
+		("if/", "basic_if"         , Expected::Output("true\n")),
 	];
 
 	for (path, test, expect) in tests {
