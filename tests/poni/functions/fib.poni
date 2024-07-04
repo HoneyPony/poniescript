@@ -3,3 +3,7 @@ fun fib(n: int) -> int {
 
 	fib(n - 1) + fib(n - 2);
 }
+
+fun init() {
+	print(fib(35));
+}
