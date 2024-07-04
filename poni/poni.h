@@ -191,6 +191,22 @@ ps_strfmt_float(ps_strbuf *buf, float f) {
 
 static inline
 void
+ps_strfmt_bool(ps_strbuf *buf, ps_bool b) {
+	// TODO: Consider using a helper function for this.
+	if(b) {
+		ps_strbuf_reserve(buf, sizeof("true"));
+		memcpy(buf->buffer->contents + buf->length, "true", sizeof("true"));
+		buf->length += sizeof("true");
+	}
+	else {
+		ps_strbuf_reserve(buf, sizeof("false"));
+		memcpy(buf->buffer->contents + buf->length, "false", sizeof("false"));
+		buf->length += sizeof("false");
+	}
+}
+
+static inline
+void
 ps_strfmt_str(ps_strbuf *buf, const ps_str *str) {
 	// TODO: Do we need the +1 here for the nul terminator?
 	ps_strbuf_reserve(buf, str->length + 1);
@@ -247,6 +263,12 @@ static inline
 void
 ps_print_float(float f) {
 	printf("%f", f);
+}
+
+static inline
+void
+ps_print_bool(ps_bool b) {
+	if(b) { printf("true"); } else { printf("false"); }
 }
 
 // NOTE: We can currently use ps_print_str for StrBufs as well. This is
