@@ -1,7 +1,6 @@
 use crate::db::*;
 use crate::error::Error;
 use crate::expr::*;
-use crate::lexer::Token;
 use crate::module::Module;
 use crate::source::SourceLocation;
 

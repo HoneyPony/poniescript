@@ -1,14 +1,13 @@
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::cell::RefCell;
-use std::thread::Scope;
 
 use crate::error::Error;
 // Import relevant things.
 use crate::expr::Var;
 use crate::expr::Fun;
 use crate::typ::Type;
-use crate::source::{Source, SourceLocation};
+use crate::source::{Source};
 
 use crate::lexer::{Tok, Token};
 
