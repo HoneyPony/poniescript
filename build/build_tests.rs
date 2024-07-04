@@ -62,8 +62,8 @@ pub fn generate(tests_file: &mut File) {
 		// Shows that the plain 'if' never returns a value.
 		//("if/", "if_no_else_in_print" , Expected::Output("my little pony\n")),
 
-		//("comparison/", "compare_basic", Expected::Output("false\ntrue\ntrue\ntrue\n")),
-		//("comparison/", "compare_constants", Expected::Output("true\ntrue\nfalse\nfalse\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\n"))
+		("comparison/", "compare_basic"),
+		("comparison/", "compare_constants")
 	];
 
 	for (path, test) in tests {

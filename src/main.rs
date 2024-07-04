@@ -287,8 +287,17 @@ fn test_compiled(exe_path: &Path, db: &Db) -> std::io::Result<()> {
 	// Check every line.
 	let mut idx = 0;
 	for line in got.lines() {
+		if idx >= db.test_lines.len() {
+			eprintln!("Test failure: Wrong number of output lines");
+			exit(15);
+		}
 		assert_eq!(line, db.test_lines[idx]);
 		idx += 1;
+	}
+
+	if idx != db.test_lines.len() {
+		eprintln!("Test failure: Wrong number of output lines");
+		exit(15);
 	}
 
 	Ok(())

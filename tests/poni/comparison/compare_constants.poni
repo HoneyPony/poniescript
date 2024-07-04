@@ -1,16 +1,26 @@
 fun init() {
+	//! true
+	//! true
 	print(1 < 2);
 	print(2 < 3);
 
+	//! false
+	//! false
 	print(1 < 0);
 	print(10.0 < 0);
 
+	//! false
+	//! true
 	print(1 + 2 > 5);
 	print(4 > 2);
 
+	//! false
+	//! true
 	print(9.0 <= 3.0 + 3.0);
 	print(9.0 <= 6.0 + 3.0);
 	
+	//! true
+	//! true
 	print(100 > 50);
 	print(50 >= 50.0);
 }

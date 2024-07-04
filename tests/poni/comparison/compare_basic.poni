@@ -1,8 +1,12 @@
 fun init() {
 	var val = 1.0;
 
+	//! false
 	print(val < 0);
+	//! true
 	print(val > 0);
+	//! true
 	print(val <= 1.0);
+	//! true
 	print(val >= 1.0);
 }
