@@ -100,6 +100,12 @@ impl<'db> Binder<'db> {
 				return None;
 			},
 
+			Expr::Comparison(compare) => {
+				self.visit_expr(&mut compare.left);
+				self.visit_expr(&mut compare.right);
+				return None;
+			}
+
 			Expr::If(if_) => {
 				self.visit_expr(&mut if_.condition);
 				self.visit_expr(&mut if_.then_branch);

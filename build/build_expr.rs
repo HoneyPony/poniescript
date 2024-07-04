@@ -190,6 +190,7 @@ pub fn generate(file: &mut File) {
 	let expr_spec = r#"
 
 	Binary      : Tok op, Expr left, Expr right, TypId typ
+	Comparison  : Tok op, Expr left, Expr right, TypId compare_as
 	Variable    : VarId identity
 	FunCall     : FunId identity, Vec<Expr> args
 	Assign      : VarId identity, Expr value

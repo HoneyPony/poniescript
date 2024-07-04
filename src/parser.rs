@@ -466,8 +466,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// Note: This matches up with expr_infix().
 		// If (a, b) a < b this operator is left-associative, else right-associative.
 		match self.peek_typ() {
-			Tok::Plus | Tok::Minus => (1, 2),
-			Tok::Star | Tok::Slash => (3, 4),
+			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual => (1, 2),
+
+			Tok::Plus | Tok::Minus => (3, 4),
+			Tok::Star | Tok::Slash => (5, 6),
 
 			// Any other tokens should not be parsed as infix.
 			_ => (0, 0)
@@ -487,6 +489,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::mk_binary_ok(self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
 			},
+
+			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual => {
+				let op = self.advance()?;
+				let rhs = self.expr_precedence(cur_prec)?;
+				return Expr::mk_comparison_ok(self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
+			}
 
 			// We should never call expr_infix() with an invalid operator,
 			// because we have to go through the peek_precedence() table to

@@ -365,6 +365,32 @@ impl<'a> Codegen<'a> {
 		val.typed(binary.typ)
 	}
 
+	fn compile_comparison(&mut self, compare: &Comparison, into: &mut String) -> TypedVal {
+		let left = self.expr(&compare.left, into);
+		if left.is_bottom() { return left; }
+
+		let right = self.expr(&compare.right, into);
+		if right.is_bottom() { return right; }
+
+		let op = match compare.op {
+			Tok::Less => "<",
+			Tok::LessEqual => "<=",
+			Tok::Greater => ">",
+			Tok::GreaterEqual => ">=",
+			_ => unreachable!(),
+		};
+
+		let val = self.new_val();
+
+		let left = self.promote(left, compare.compare_as);
+		let right = self.promote(right, compare.compare_as);
+		let indent = self.indent();
+
+		inf_writeln!(into, "{indent}const ps_bool {val} = (ps_bool)({left} {op} {right});");
+
+		val.typed(self.db.types.bool)
+	}
+
 	fn compile_partial_print(&mut self, val: &TypedVal, into: &mut String) {
 		let typid = val.typ;
 
@@ -458,6 +484,7 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 		match expr {
 			Expr::Binary(binary) => self.compile_binary(binary, into),
+			Expr::Comparison(compare) => self.compile_comparison(compare, into),
 			Expr::If(if_) => self.compile_if(if_, into),
 			Expr::Variable(variable) => {
 				Val::DirectVar { name: self.db.get_cname(variable.identity) }

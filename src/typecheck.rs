@@ -99,13 +99,22 @@ impl<'db> TypeChecker<'db> {
 	// - statement expressions whose value is not used
 	fn promote_from_unassigned(&mut self, expr: &mut Expr) -> TypId {
 		let ty = expr.typ(self.db);
+		let promoted = self.promote_ty_from_unassigned(ty);
 
+		if promoted != ty {
+			expr.promote(promoted, &self.db);
+		}
+
+		promoted
+	}
+
+	fn promote_ty_from_unassigned(&mut self, ty: TypId) -> TypId {
 		if ty == self.db.types.assume_float {
-			expr.promote(self.db.types.float, self.db);
+			return self.db.types.float;
 		}
 
 		if ty == self.db.types.assume_int {
-			expr.promote(self.db.types.int, self.db);
+			return self.db.types.int;
 		}
 
 		// Add other promotions as needed. Note that this should correspond
@@ -224,6 +233,33 @@ impl<'db> TypeChecker<'db> {
 				binary.left.promote(computed, self.db);
 				binary.right.promote(computed, self.db);
 				
+				computed
+			},
+			Expr::Comparison(compare) => {
+				let left = self.check_expr(&mut compare.left, value_used)?;
+				let right = self.check_expr(&mut compare.right, value_used)?;
+
+				let computed = maybe_type_error!(
+					self,
+					self.compute_intersect(left, right),
+
+					&compare.location,
+					"Invalid operands to comparison: LHS is {}, RHS is {}",
+					self.db.repr_type(left),
+					self.db.repr_type(right)
+				);
+
+				// The comparison, besides promoting its operands as needed,
+				// also "consumes" them like a function, so they should be
+				// promoted from AssumeInt, etc.
+				let computed = self.promote_ty_from_unassigned(computed);	
+				
+				// Keep track of the type that we're "doing the comparison as."
+				compare.compare_as = computed;
+
+				compare.left.promote(computed, self.db);
+				compare.right.promote(computed, self.db);
+
 				computed
 			},
 			Expr::If(if_) => {

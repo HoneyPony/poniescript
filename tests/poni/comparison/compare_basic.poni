@@ -1,0 +1,8 @@
+fun init() {
+	var val = 1.0;
+
+	print(val < 0);
+	print(val > 0);
+	print(val <= 1.0);
+	print(val >= 1.0);
+}
