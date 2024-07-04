@@ -265,7 +265,7 @@ impl<'db> TypeChecker<'db> {
 					//
 					// This logic is the same as unused statement expressions and the like,
 					// so it gets its own helper function.
-					self.check_expr(expr, false)?;
+					self.check_expr(expr, true)?;
 					self.promote_from_unassigned(expr);
 				}
 
@@ -280,12 +280,7 @@ impl<'db> TypeChecker<'db> {
 				// Str is very similar to print(), except it always return StrBuf instead
 				// of its first argument.
 				for expr in &mut str.exprs {
-					// TODO: Should value_used be false here? It should probably
-					// be true, as we are using the value for computing something...?
-					//
-					// We should probably make a test like print({ "something" })
-					// and str({ "something "})
-					self.check_expr(expr, false)?;
+					self.check_expr(expr, true)?;
 					self.promote_from_unassigned(expr);
 				}
 
