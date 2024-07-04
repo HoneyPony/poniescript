@@ -341,7 +341,7 @@ impl<'a> Codegen<'a> {
 		panic!("compiler err: unknown promotion {} -> {}", self.db.repr_type(val.typ), self.db.repr_type(to));
 	}
 
-	fn binary(&mut self, binary: &Binary, into: &mut String) -> TypedVal {
+	fn compile_binary(&mut self, binary: &Binary, into: &mut String) -> TypedVal {
 		let left = self.expr(&binary.left, into);
 		if left.is_bottom() { return left; /* Val::Bottom */ }
 		// TODO: Maybe we should have each function return a (Val, TypId) tuple,
@@ -461,14 +461,14 @@ impl<'a> Codegen<'a> {
 	fn expr(&mut self, expr: &Expr, into: &mut String) -> TypedVal {
 		let indent = self.indent();
 		match expr {
-			Expr::Binary(binary) => self.binary(binary, into),
+			Expr::Binary(binary) => self.compile_binary(binary, into),
 			Expr::If(if_) => self.compile_if(if_, into),
 			Expr::Variable(variable) => {
 				Val::DirectVar { name: self.db.get_cname(variable.identity) }
 					.typed(self.db.get_var_type(variable.identity))
 			},
 			Expr::Assign(assign) => {
-				self.assign(assign.identity, assign.value, into, false);
+				self.compile_assign(assign.identity, assign.value, into, false);
 				Val::DirectVar { name: self.db.get_cname(assign.identity) }
 					.typed(self.db.get_var_type(assign.identity))
 			},
@@ -537,14 +537,14 @@ impl<'a> Codegen<'a> {
 				inf_writeln!(into, "{indent}{{");
 				self.indent_level += 1;
 				for stmt in &block.stmts[0..all_but_last] {
-					self.stmt(stmt, into);
+					self.compile_stmt(stmt, into);
 				}
 
 				let val = match (block.stmts.last(), val) {
 					// If the block has no val, then generate a statement
 					// and return Val::None.
 					(last, Val::Bottom) => {
-						last.map(|last| self.stmt(last, into));
+						last.map(|last| self.compile_stmt(last, into));
 						Val::Bottom
 					},
 
@@ -552,7 +552,7 @@ impl<'a> Codegen<'a> {
 					// (otherwise the type checker is broken)
 					// so return its value.
 					(last, val) => {
-						let last = self.stmt(last.unwrap(), into);
+						let last = self.compile_stmt(last.unwrap(), into);
 						let last = last.unwrap();
 						let last = self.promote(last, block.typ);
 						if !val.is_bottom() {
@@ -633,11 +633,11 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<TypedVal> {
+	fn compile_stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<TypedVal> {
 		let indent = self.indent();
 		match stmt {
 			Stmt::Declare(declare) => {
-				self.assign(declare.identity, &declare.value, into, true);
+				self.compile_assign(declare.identity, &declare.value, into, true);
 				None
 			},
 			Stmt::Expression(expression) => {
@@ -674,7 +674,7 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) {
+	fn compile_assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) {
 		let needed_type = self.db.get_var_type(var);
 		let value = self.expr(expr, into);
 
@@ -690,7 +690,7 @@ impl<'a> Codegen<'a> {
 
 	// Does not generate the code for a function declaration (e.g. assigning
 	// it to a local).
-	fn function(&mut self, fun: FunId, body: &Expr) {
+	fn compile_function(&mut self, fun: FunId, body: &Expr) {
 		let is_init = Some(fun) == self.db.fun_init;
 
 		let enclosing_indent = self.indent_level;
@@ -754,8 +754,8 @@ impl<'a> Codegen<'a> {
 				self.db.get_var_ctype(global.identity), self.db.get_cname(global.identity));
 
 			// For globals, the initializer is not itself a declaration. So,
-			// do tell self.assign() that it's not a declaration.
-			self.assign(global.identity,
+			// do tell self.compile_assign() that it's not a declaration.
+			self.compile_assign(global.identity,
 				&global.value,
 				&mut out.global_init,
 				false);
@@ -773,7 +773,7 @@ impl<'a> Codegen<'a> {
 					self.db.get_fun_cparams(fun.identity));
 			}
 			
-			self.function(fun.identity, &fun.value);
+			self.compile_function(fun.identity, &fun.value);
 		}
 
 		self.compile_string_constant_init(&mut out.string_const_define, &mut out.string_const_init);
