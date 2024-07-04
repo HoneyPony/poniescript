@@ -95,9 +95,14 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 	let mut enum_def = String::new();
 	let mut struct_defs = String::new();
 	let mut enum_impl = String::new();
+	let mut loc_match = String::new();
 
 	writeln!(enum_def, "pub enum {name} {{")?;
 	writeln!(enum_impl, "impl {name} {{")?;
+
+	writeln!(loc_match, "\t#[allow(unused)]")?;
+	writeln!(loc_match, "\tpub fn location(&self) -> &SourceLocation {{")?;
+	writeln!(loc_match, "\t\tmatch self {{")?;
 
 	while let Some(ty_name) = token(&mut spec) {
 		token(&mut spec);
@@ -132,8 +137,6 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 			fields.push((ty, name));
 		}
 
-		
-
 		writeln!(struct_defs, "pub struct {ty_name} {{")?;
 		for field in &fields {
 			writeln!(struct_defs, "\tpub {}: {},", field.1, field.0)?;
@@ -141,6 +144,8 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 		writeln!(struct_defs, "}}")?;
 
 		writeln!(enum_def, "\t{ty_name}({ty_name}),")?;
+
+		writeln!(loc_match, "\t\t\t{name}::{ty_name}(inner) => &inner.location,")?;
 
 		generate_constructor(name,
 			ty_name,
@@ -160,9 +165,16 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 			&opt, &fields, &mut enum_impl)?;
 	}
 
-	writeln!(enum_def, "}}")?;
+	writeln!(loc_match, "\t\t}}")?;
+	writeln!(loc_match, "\t}}")?;
+	
+	writeln!(enum_impl, "{}", loc_match)?;
 
 	writeln!(enum_impl, "}}")?;
+
+	writeln!(enum_def, "}}")?;
+
+	
 
 	{
 		use std::io::Write;
