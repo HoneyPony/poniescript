@@ -1,0 +1,11 @@
+fun test(val: bool) {
+	if val {
+		print("my");
+	}
+	print("little pony");
+}
+
+fun init() {
+	test(false);
+	test(true);
+}

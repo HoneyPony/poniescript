@@ -203,6 +203,12 @@ impl<'db> TypeChecker<'db> {
 			self.db.repr_type(value)
 		);
 
+		if computed == self.db.types.void {
+			type_error!(self, at,
+			"Variable '{}' is type 'void' which is not a valid type for a variable.",
+			self.db.repr_var(var));
+		}
+
 		self.db.get_mut(var).typ = computed;
 		expr.promote(computed, self.db);
 

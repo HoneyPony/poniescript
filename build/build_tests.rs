@@ -69,10 +69,13 @@ pub fn generate(tests_file: &mut File) {
 
 		("scope/", "block_shadow", Expected::Output("hello ponies\nhello again ponies\nhello ponies\n")),
 
-		("if/", "basic_if_expr_ret", Expected::Output("10\n3\n")),
-		("if/", "basic_if_expr_var", Expected::Output("3\n10\n")),
-		("if/", "basic_if_expr"    , Expected::Output("10\n3\n")),
-		("if/", "basic_if"         , Expected::Output("true\n")),
+		("if/", "basic_if_expr_ret"   , Expected::Output("10\n3\n")),
+		("if/", "basic_if_expr_var"   , Expected::Output("3\n10\n")),
+		("if/", "basic_if_expr"       , Expected::Output("10\n3\n")),
+		("if/", "basic_if"            , Expected::Output("true\n")),
+		("if/", "if_no_else"          , Expected::Output("little pony\nmy\nlittle pony\n")),
+		// Shows that the plain 'if' never returns a value.
+		("if/", "if_no_else_in_print" , Expected::Output("my little pony\n")),
 
 		("comparison/", "compare_basic", Expected::Output("false\ntrue\ntrue\ntrue\n")),
 		("comparison/", "compare_constants", Expected::Output("true\ntrue\nfalse\nfalse\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\n"))

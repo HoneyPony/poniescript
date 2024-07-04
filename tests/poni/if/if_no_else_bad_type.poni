@@ -1,0 +1,5 @@
+fun init() {
+	var x = if true {
+		"hello"
+	};
+}
