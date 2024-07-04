@@ -38,6 +38,7 @@ pub fn generate(tests_file: &mut File) {
 		("print/", "print_block"                  , Expected::Output("hello pony folk\n")),
 		("print/", "print_void_first"             , Expected::Output("oh no my pony\n")),
 		("print/", "print_void_others"            , Expected::Output("oh no my pony\n")),
+		("print/", "print_dif_funs"               , Expected::Output("debug: 123\ndebug behavior: calling helper: 10\n")),
 
 		("globals/", "global_block" , Expected::Output("7\n")),
 		// TODO: Figure out precise float output format we want.

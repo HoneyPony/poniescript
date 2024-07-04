@@ -1,0 +1,12 @@
+fun helper() -> int {
+	print("debug: 123");
+	return 10;
+}
+
+fun behavior() {
+	print("debug behavior: calling helper: ", helper());
+}
+
+fun init() {
+	behavior();
+}
