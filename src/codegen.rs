@@ -35,8 +35,6 @@ struct CodegenOutputs {
 	string_const_init: String,
 
 	fun_declare: String,
-
-	fun_define: String,
 }
 
 impl CodegenOutputs {
@@ -49,7 +47,6 @@ impl CodegenOutputs {
 			string_const_init: String::new(),
 
 			fun_declare: String::new(),
-			fun_define: String::new(),
 		}
 	}
 }
@@ -235,7 +232,7 @@ struct Indenter {
 
 impl std::fmt::Display for Indenter {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		for i in 0..self.level {
+		for _ in 0..self.level {
 			write!(f, "\t")?;
 		}
 		Ok(())
