@@ -259,6 +259,17 @@ impl Lexer {
 		return self.mk_token_res(db, ty);
 	}
 
+	fn line_comment(&mut self, db: &mut Db) -> std::io::Result<()> {
+		// Here we also handle special kinds of comments.
+		while !self.at_eof {
+			if self.advance()? == '\n' {
+				break;
+			}
+		}
+
+		Ok(())
+	}
+
 	pub fn next_token(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		if self.at_eof {
 			return self.mk_token_res(db, Tok::Eof);
@@ -298,7 +309,16 @@ impl Lexer {
 				}
 			},
 			'+' => self.tok_eq(Tok::Plus, Tok::PlusEqual)?,
-			'/' => self.tok_eq(Tok::Slash, Tok::SlashEqual)?,
+			'/' => {
+				if self.advance_if('/')? {
+					self.line_comment(db)?;
+					// TODO: Speed this up in the case of multiline comments...
+					// we really don't want to recurse here...
+					return self.next_token(db);
+				}
+
+				self.tok_eq(Tok::Slash, Tok::SlashEqual)?
+			},
 			'*' => self.tok_eq(Tok::Star, Tok::StarEqual)?,
 
 			'!' => self.tok_eq(Tok::Bang, Tok::BangEqual)?,
