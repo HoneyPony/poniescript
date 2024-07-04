@@ -459,8 +459,6 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(typ),
 					self.db.repr_type(return_type));
 
-				eprintln!("in return: promote {} to {}",
-				self.db.repr_type(inner.typ(self.db)), self.db.repr_type(computed));
 				inner.promote(computed, self.db);
 
 				Ok(Some(self.db.types.bottom))
