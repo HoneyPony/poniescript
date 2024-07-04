@@ -700,6 +700,9 @@ impl<'a> Codegen<'a> {
 	fn compile_assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) {
 		let needed_type = self.db.get_var_type(var);
 		let value = self.expr(expr, into);
+		if value.is_bottom() {
+			return;
+		}
 
 		let value = self.promote(value, needed_type);
 

@@ -478,7 +478,12 @@ impl<'db> TypeChecker<'db> {
 	fn check_stmt(&mut self, stmt: &mut Stmt, value_used: bool) -> Result<Option<TypId>> {
 		match stmt {
 			Stmt::Declare(declare) => {
-				self.check_declare(declare);
+				let typ = self.check_declare(declare)?;
+
+				if typ == self.db.types.bottom {
+					return Ok(Some(typ));
+				}
+
 				Ok(None)
 			},
 			Stmt::Expression(expr) => {
@@ -540,8 +545,8 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
-	fn check_declare(&mut self, declare: &mut Declare) {
-		let _ = self.check_assign(&declare.location, declare.identity, &mut declare.value);
+	fn check_declare(&mut self, declare: &mut Declare) -> Result<TypId> {
+		self.check_assign(&declare.location, declare.identity, &mut declare.value)
 	}
 
 	fn check_fun_declare(&mut self, fun: &mut FunDeclare) -> Result<()> {

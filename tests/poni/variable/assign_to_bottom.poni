@@ -1,0 +1,7 @@
+fun test() -> int {
+	var x = { return 5; };
+}
+
+fun init() {
+	print(test());
+}
