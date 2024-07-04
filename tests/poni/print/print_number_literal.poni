@@ -1,3 +1,4 @@
+//! 3
 fun init() {
 	print(3);
 }

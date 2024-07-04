@@ -1,3 +1,4 @@
+//! oh no my pony
 fun returns_void() { }
 
 fun init() {

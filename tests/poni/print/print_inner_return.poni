@@ -1,3 +1,4 @@
+//! afterwards
 fun test() {
 	print("hello ", {
 		return;

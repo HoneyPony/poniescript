@@ -17,15 +17,15 @@ fn generate_test(file: &mut File, path: &str, test_name: &str) -> std::io::Resul
 pub fn generate(tests_file: &mut File) {
 	let tests = [
 		// print_nested: the last line is 345 because it should re-print each of the inner print()s.
-		//("print/", "print_nested"                 , Expected::Output("345\n45\n5\n345\n")),
+		("print/", "print_nested"),
 		("print/", "print_string_literal"),
-		//("print/", "print_multiple_string_literal", Expected::Output("hello world\n")),
-		//("print/", "print_number_literal"         , Expected::Output("3\n")),
-		//("print/", "print_block"                  , Expected::Output("hello pony folk\n")),
-		//("print/", "print_void_first"             , Expected::Output("oh no my pony\n")),
-		//("print/", "print_void_others"            , Expected::Output("oh no my pony\n")),
-		//("print/", "print_dif_funs"               , Expected::Output("debug: 123\ndebug behavior: calling helper: 10\n")),
-		//("print/", "print_inner_return"           , Expected::Output("afterwards\n")),
+		("print/", "print_multiple_string_literal"),
+		("print/", "print_number_literal"),
+		("print/", "print_block"),
+		("print/", "print_void_first"),
+		("print/", "print_void_others"),
+		("print/", "print_dif_funs"),
+		("print/", "print_inner_return"),
 
 		//("globals/", "global_block" , Expected::Output("7\n")),
 		// TODO: Figure out precise float output format we want.

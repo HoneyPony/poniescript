@@ -1,3 +1,6 @@
+//! debug: 123
+//! debug behavior: calling helper: 10
+
 fun helper() -> int {
 	print("debug: 123");
 	return 10;

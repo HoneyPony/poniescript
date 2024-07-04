@@ -1,3 +1,4 @@
+//! hello pony folk
 fun init() {
 	print({ "hello"; }, " ", { "pony"; }, " ", { "folk"; });
 }
