@@ -71,6 +71,14 @@ pub struct Db {
 
 	pub errors: Vec<Error>,
 
+	/// Whether we're compiling in a mode where we're testing the compiler.
+	/// Useful for comments to support the "expected value" of the test.
+	pub test_mode: bool,
+	/// The expected lines of output from the program.
+	/// Note that these do NOT include the newlines or carriage returns. Those
+	/// are assumed to already exist.
+	pub test_lines: Vec<String>,
+
 	/// Maps names of the form "scope.scope.Item" to ScopeEntries. Used to bind
 	/// names to specific objects.
 	name_map: FxHashMap<StrId, ScopeEntry>,
@@ -117,6 +125,9 @@ impl Db {
 			synthetic: SourceId(0),
 
 			name_map: FxHashMap::default(),
+
+			test_mode: false,
+			test_lines: Vec::new(),
 		};
 
 		db.types.str_const  = db.put_type(Type::StrConst);

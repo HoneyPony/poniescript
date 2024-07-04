@@ -261,9 +261,35 @@ impl Lexer {
 
 	fn line_comment(&mut self, db: &mut Db) -> std::io::Result<()> {
 		// Here we also handle special kinds of comments.
+		enum CommentKind {
+			None,
+			TestLine,
+		}
+
+		let mut kind = CommentKind::None;
+
+		if db.test_mode {
+			if self.advance_if('!')? {
+				kind = CommentKind::TestLine;
+
+				// Start the buffer at the beginning of the line.
+				self.buffer.clear();
+			}
+		}
+
 		while !self.at_eof {
 			if self.advance()? == '\n' {
 				break;
+			}
+		}
+
+		match kind {
+			CommentKind::None => { },
+
+			// For test lines, we add them to the expected output in the Db.
+			CommentKind::TestLine => {
+				let line = self.buffer.trim();
+				db.test_lines.push(line.to_string());
 			}
 		}
 

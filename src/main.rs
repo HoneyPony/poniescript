@@ -11,8 +11,9 @@ mod error;
 mod binder;
 
 use std::fs::File;
-use std::path::{PathBuf};
-use std::process::{exit, Command, Stdio};
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::process::{exit, Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, SystemTime};
 
 use db::Db;
@@ -37,6 +38,11 @@ struct Args {
 	#[arg(required = true)]
 	/// The list of input files to compile into one .C file or executable.
 	input_paths: Vec<PathBuf>,
+
+	#[arg(long = "test")]
+	/// Whether to run the PonieScript in "test mode," a special mode used
+	/// for integration testing the compiler.
+	test_mode: bool,
 }
 
 enum CompileMode {
@@ -65,11 +71,18 @@ impl CompileMode {
 		return CompileMode::ToExeFile;
 	}
 
-	pub fn get_output(&self, args: &Args) -> Box<dyn std::io::Write> {
+	pub fn get_output(&self, args: &Args) -> (Box<dyn std::io::Write>, Option<Child>) {
 		match self {
 			CompileMode::ToCFile => {
+				// Don't let us run in test mode if we're trying to output a C
+				// file.
+				if args.test_mode {
+					eprintln!("Error: Running in test mode, but output is a C file.");
+					exit(10);
+				}
+
 				match File::create(&args.output_path) {
-					Ok(f) => Box::new(f),
+					Ok(f) => (Box::new(f), None),
 					Err(err) => {
 						eprintln!("Unable to create output file {}: {}", args.output_path.display(), err);
 						exit(3);
@@ -98,7 +111,7 @@ impl CompileMode {
 				};
 
 				match cc.stdin.take() {
-					Some(stdin) => Box::new(stdin),
+					Some(stdin) => (Box::new(stdin), Some(cc)),
 					None => {
 						eprintln!("Unable to feed C compiler with input");
 						exit(5);
@@ -173,6 +186,7 @@ fn main() {
 	let args = Args::parse();
 
 	let mut db = db::Db::new();
+	db.test_mode = args.test_mode;
 
 	// Pass 1: Parse
 	let (mut modules, had_error) = parse_all_modules(&mut db, &args);
@@ -209,11 +223,28 @@ fn main() {
 	db.generate_codegen_caches();
 
 	let compile_mode = CompileMode::parse(&args.output_path);
-	let mut output = compile_mode.get_output(&args);
+	let (mut output, cc) = compile_mode.get_output(&args);
 
 	if let Err(err) = codegen::codegen(&mut db, &modules, &mut output) {
 		eprintln!("Unable to write output file: {err}");
 		exit(4);
+	}
+
+	// Wait for the C compiler and exit with an error if it failed.
+	if let Some(mut cc) = cc {
+		drop(output);
+
+		match cc.wait() {
+			Ok(status) => {
+				if !status.success() {
+					eprintln!("Internal compiler error. C compiler failed.");
+					exit(12);
+				}
+			},
+			Err(err) => {
+				eprintln!("C compiler IO error: {}", err);
+			},
+		}
 	}
 
 	duration(timer, "codegen (to c)", &mut duration_set);
@@ -224,4 +255,41 @@ fn main() {
 			eprintln!("{}", info);
 		}
 	}
+
+	// If we're in test mode, then we want to run the program and check its
+	// output.
+	if args.test_mode {
+		// We've already checked the output is an Exe, so just run it at
+		// that path.
+		match test_compiled(&args.output_path, &db) {
+			Ok(_) => { eprintln!("Test succeeded"); },
+			Err(err) => { 
+				eprintln!("Test encountered IO error: {err}");
+				exit(11);
+			},
+		}
+	}
+}
+
+fn test_compiled(exe_path: &Path, db: &Db) -> std::io::Result<()> {
+	// TODO: We may have a problem if we e.g. get an exe file on Windows.
+	// But, so far it seems to work as expected.
+	let mut testprog = Command::new(exe_path)
+		.stdout(Stdio::piped())
+		.spawn()?;
+
+	let mut stdout = testprog.stdout.take().expect("stdout");
+	testprog.wait()?;
+
+	let mut got = String::new();
+	stdout.read_to_string(&mut got)?;
+
+	// Check every line.
+	let mut idx = 0;
+	for line in got.lines() {
+		assert_eq!(line, db.test_lines[idx]);
+		idx += 1;
+	}
+
+	Ok(())
 }

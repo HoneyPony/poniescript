@@ -1,3 +1,4 @@
+//! hello worlda
 fun init() {
 	print("hello world");
 }
