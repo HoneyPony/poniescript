@@ -26,6 +26,12 @@ struct TypeChecker<'db> {
 struct TypeCheckErr;
 type Result<T> = std::result::Result<T, TypeCheckErr>;
 
+// In order to make sure we correctly use the value of each compute() function,
+// use a separate error type from TypeCheckErr. Essentially, we have to transform
+// Result<.., TypeComputeErr> to Result<.., TypeCheckErr>, which is easiest through
+// the maybe_type_error! and similar macros.
+struct TypeComputeErr;
+
 macro_rules! maybe_type_error {
     ($self:ident, $expr:expr, $location:expr, $($arg:tt)*) => {
 		match $expr {
@@ -109,7 +115,7 @@ impl<'db> TypeChecker<'db> {
 	}
 
 	// Returns what the new "from" type would be.
-	fn compute_assignable(&mut self, to: TypId, from: TypId) -> Result<TypId> {
+	fn compute_assignable(&mut self, to: TypId, from: TypId) -> std::result::Result<TypId, TypeComputeErr> {
 		if to == from { return Ok(to); }
 
 		let ty_to = self.db.get(to);
@@ -138,7 +144,7 @@ impl<'db> TypeChecker<'db> {
 			(Type::Unassigned, _) => return Ok(from),
 
 			// Everything else is an error.
-			_ => return Err(TypeCheckErr)
+			_ => return Err(TypeComputeErr)
 		}
 	}
 
@@ -149,7 +155,7 @@ impl<'db> TypeChecker<'db> {
 	//
 	// Finally, one thing to note is the intersection of Bottom with anything
 	// is itself.
-	fn compute_intersect(&mut self, left: TypId, right: TypId) -> Result<TypId> {
+	fn compute_intersect(&mut self, left: TypId, right: TypId) -> std::result::Result<TypId, TypeComputeErr> {
 		if left == right { return Ok(left); }
 
 		let ty_left = self.db.get(left);
@@ -168,7 +174,7 @@ impl<'db> TypeChecker<'db> {
 			(Type::AssumeFloat, Type::AssumeInt) => return Ok(left),
 			(Type::AssumeInt, Type::AssumeFloat) => return Ok(right),
 
-			_ => return Err(TypeCheckErr)
+			_ => return Err(TypeComputeErr)
 		}
 	}
 
