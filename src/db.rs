@@ -34,6 +34,7 @@ pub struct DbTypes {
 	pub unassigned: TypId,
 	pub int: TypId,
 	pub float: TypId,
+	pub bool: TypId,
 	pub bottom: TypId,
 
 	pub assume_int: TypId,
@@ -107,6 +108,7 @@ impl Db {
 				unassigned: TypId(0),
 				int: TypId(0),
 				float: TypId(0),
+				bool: TypId(0),
 				bottom: TypId(0),
 
 				assume_int: TypId(0),
@@ -125,6 +127,7 @@ impl Db {
 		db.types.unassigned = db.put_type(Type::Unassigned);
 		db.types.int        = db.put_type(Type::Int);
 		db.types.float      = db.put_type(Type::Float);
+		db.types.bool       = db.put_type(Type::Bool);
 		db.types.bottom     = db.put_type(Type::Bottom);
 
 		db.types.assume_float = db.put_type(Type::AssumeFloat);

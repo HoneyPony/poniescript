@@ -388,6 +388,49 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 	}
 
+	fn expr_if(&mut self) -> Result<Expr> {
+		let location = self.start();
+
+		expected!(self, Tok::If, "'if'")?;
+
+		let condition = self.expression()?;
+
+		// Like functions, for now we will expect an LBrace and then parse
+		// a block. But, we could also add some sort of non-Block ifs later.
+
+		if !self.at(Tok::LeftBrace) {
+			got!(self, "'{{' after if condition");
+		}
+
+		let then_branch = self.expression()?;
+
+		// Now we are at the point where there might be an else.
+		let else_branch = if self.match_(Tok::Else)?.is_some() {
+			// If there's an immediate 'if', then parse another if/else, and
+			// make that our else branch.
+			if self.at(Tok::If) {
+				Some(self.expr_if()?)
+			}
+			else {
+				if !self.at(Tok::LeftBrace) {
+					// Now we have the same "left brace or something" conundrum.
+					got!(self, "'{{' or 'if' after 'else'");
+				}
+				// Then branch is an expression
+				Some(self.expression()?)
+			}
+		} else { None };
+
+		Expr::mk_if_ok(self.end(location),
+			condition, 
+			then_branch,
+			else_branch,
+
+			// We have to start at bottom, which is a little bit weird.
+			self.db.types.bottom
+		)
+	}
+
 	fn expr_prefix(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
 			Tok::DecimalNumber | Tok::WholeNumber => {
@@ -400,6 +443,11 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			Tok::Print => self.expr_print_or_str(true),
 			Tok::Str => self.expr_print_or_str(false),
+
+			Tok::If => self.expr_if(),
+
+			Tok::True => Expr::mk_boolliteral_ok(self.advance()?.location, true),
+			Tok::False => Expr::mk_boolliteral_ok(self.advance()?.location, false),
 
 			Tok::StringSimple => {
 				let lit = self.advance()?;
@@ -474,6 +522,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 				}
 				if tok.lexeme == self.db.put_str("float") {
 					return Ok(self.db.types.float)
+				}
+				if tok.lexeme == self.db.put_str("bool") {
+					return Ok(self.db.types.bool)
 				}
 				// TODO: These names should probably be resolved at the binding
 				// pass, otherwise we cannot shadow them...

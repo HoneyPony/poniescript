@@ -5,6 +5,7 @@ pub enum Type {
 	Int,
 	Float,
 	Void,
+	Bool,
 
 	/// The constant version of Str. Must be copied, etc to be modified.
 	StrConst,
@@ -52,6 +53,7 @@ impl Type {
 			Type::Int => "int".to_string(),
 			Type::Float => "float".to_string(),
 			Type::Void => "void".to_string(),
+			Type::Bool => "bool".to_string(),
 			Type::StrConst => "StrConst".to_string(),
 			Type::Str => "Str".to_string(),
 			Type::StrBuf => "StrBuf".to_string(),
@@ -70,6 +72,7 @@ impl Type {
 			Type::Float => "ps_float".into(),
 
 			Type::Void => "void".into(),
+			Type::Bool => "ps_bool".into(),
 			Type::StrConst => "const ps_str*".into(),
 			Type::Str => "ps_str*".into(),
 			Type::StrBuf => "ps_strbuf*".into(),

@@ -1,0 +1,8 @@
+fun init() {
+	if true {
+		print("true");
+	}
+	else {
+		print("false");
+	};
+}

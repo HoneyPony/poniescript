@@ -12,6 +12,10 @@ impl Expr {
 			Expr::Binary(binary) => {
 				binary.typ
 			},
+			Expr::If(if_) => {
+				// Note that ifs are similar to binary expressions.
+				if_.typ
+			}
 			Expr::Variable(var) => {
 				db.get_var_type(var.identity)
 			},
@@ -27,6 +31,9 @@ impl Expr {
 			Expr::StrLiteral(_) => {
 				db.types.str_const
 			},
+			Expr::BoolLiteral(_) => {
+				db.types.bool
+			}
 			Expr::Block(block) => {
 				block.typ
 			},
@@ -53,6 +60,15 @@ impl Expr {
 				}
 				binary.typ = typ;
 				true
+			},
+			Expr::If(if_) => {
+				if db.is_not_concrete(if_.typ) && db.is_concrete(typ) {
+					// Same idea as binary.
+					if_.then_branch.promote(typ, db);
+					if_.else_branch.as_mut().map(|b| b.promote(typ, db));
+				}
+				if_.typ = typ;
+				true
 			}
 			Expr::Variable(_) => false,
 			Expr::Assign(_) => false,
@@ -62,6 +78,7 @@ impl Expr {
 				true
 			},
 			Expr::StrLiteral(_) => false,
+			Expr::BoolLiteral(_) => false,
 			Expr::Block(block) => {
 				block.typ = typ;
 				if let Some(last) = block.stmts.last_mut() {

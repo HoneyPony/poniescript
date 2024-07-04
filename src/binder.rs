@@ -100,6 +100,13 @@ impl<'db> Binder<'db> {
 				self.visit_expr(&mut binary.right);
 				return None;
 			},
+
+			Expr::If(if_) => {
+				self.visit_expr(&mut if_.condition);
+				self.visit_expr(&mut if_.then_branch);
+				if_.else_branch.as_mut().map(|e| self.visit_expr(e));
+				None
+			}
 			
 			Expr::Assign(assign) => {
 				self.visit_expr(&mut assign.value);
@@ -121,7 +128,7 @@ impl<'db> Binder<'db> {
 			}
 
 			// Nothing to resolve.
-			Expr::Variable(_) | Expr::NumLiteral(_) | Expr::StrLiteral(_) => {
+			Expr::Variable(_) | Expr::NumLiteral(_) | Expr::StrLiteral(_) | Expr::BoolLiteral(_) => {
 				return None;
 			}
 			

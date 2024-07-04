@@ -80,6 +80,9 @@ enum Val {
 	StringLit {
 		id: StrConstId,
 	},
+	BoolLit {
+		val: bool,
+	},
 
 	/// Equivalent to Type::Bottom, sort of.
 	Bottom,
@@ -203,6 +206,10 @@ impl std::fmt::Display for Val {
 
 			// String literals are always stored in variables with a consistent naming scheme.
 			Val::StringLit { id } => write!(f, "ps_str_const{}", id.to_usize()),
+			Val::BoolLit { val } => match val {
+				true => write!(f, "((ps_bool)1)"),
+				false => write!(f, "((ps_bool)0)"),
+			}
 			Val::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
 
 			// Void values have no representation.
@@ -261,6 +268,14 @@ impl<'a> Codegen<'a> {
 		val
 	}
 
+	// TODO: MOve all uses of new_val() to this function
+	fn new_val_typed(&mut self, typ: TypId) -> Val {
+		if typ == self.db.types.void { return Val::Void; }
+		if typ == self.db.types.bottom { return Val::Bottom; }
+
+		self.new_val()
+	}
+
 	fn promote(&self, val: TypedVal, to: TypId) -> PromotedVal {
 		if val.typ == to {
 			return PromotedVal::Simple(val.val);
@@ -301,7 +316,7 @@ impl<'a> Codegen<'a> {
 		// at some point creates code where we need a promotion. So we should
 		// generally get this panic if something is either missing in the typechecker,
 		// or if we're missing a promotion corresponding to a case in compute_assignable.
-		panic!("compiler-err:unknown-promotion");
+		panic!("compiler err: unknown promotion {} -> {}", self.db.repr_type(val.typ), self.db.repr_type(to));
 	}
 
 	fn binary(&mut self, binary: &Binary, into: &mut String) -> TypedVal {
@@ -346,6 +361,7 @@ impl<'a> Codegen<'a> {
 		match typ {
 			Type::Int => inf_writeln!(into, "{indent}ps_print_int({val});"),
 			Type::Float => inf_writeln!(into, "{indent}ps_print_float({val});"),
+			Type::Bool => inf_writeln!(into, "{indent}ps_print_bool({val});"),
 			Type::Void => inf_writeln!(into, "{indent}/* ps_print_void */"),
 			Type::StrConst | Type::Str => inf_writeln!(into, "{indent}ps_print_str({val});"),
 			Type::StrBuf => inf_writeln!(into, "{indent}ps_print_str({val}->buffer);"),
@@ -374,6 +390,7 @@ impl<'a> Codegen<'a> {
 			Type::Int => inf_writeln!(into, "{indent}ps_strfmt_int({buf_val}, {val});"),
 			Type::Float => inf_writeln!(into, "{indent}ps_strfmt_float({buf_val}, {val});"),
 			Type::Void => inf_writeln!(into, "{indent}/* ps_strfmt_void */"),
+			Type::Bool => inf_writeln!(into, "{indent}ps_strfmt_bool({buf_val}, {val});"),
 			Type::StrConst | Type::Str => inf_writeln!(into, "{indent}ps_strfmt_str({buf_val}, {val});"),
 			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_strbuf({buf_val}, {val});"),
 			Type::Bottom => { },
@@ -384,11 +401,58 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
+	fn compile_if(&mut self, if_: &If, into: &mut String) -> TypedVal {
+		let indent = self.indent();
+
+		let cond = self.expr(&if_.condition, into);
+		let cond = self.promote(cond, self.db.types.bool);
+
+		// Generate storage for the value of the expression, if relevant.
+		let own_val = self.new_val_typed(if_.typ);
+		if own_val.needs_storage() {
+			// TODO: We should move this VERY COMMON PATTERN to a helper function.
+			let ctype = self.db.get_ctype(if_.typ);
+			inf_writeln!(into, "{indent}{ctype} {own_val};");
+		}
+
+		inf_writeln!(into, "{indent}if ({cond}) {{");
+		self.indent_level += 1;
+		let then_val = self.expr(&if_.then_branch, into);
+		
+		// Save the value, if relevant.
+		if own_val.needs_storage() {
+			// Add one to indent.
+			let then_val = self.promote(then_val, if_.typ);
+			inf_writeln!(into, "{indent}\t{own_val} = {then_val};");
+		}
+		self.indent_level -= 1;
+		inf_writeln!(into, "{indent}}}");
+
+		// Generate else branch.
+		if let Some(else_branch) = if_.else_branch.as_ref() {
+			inf_writeln!(into, "{indent}else {{");
+			self.indent_level += 1;
+
+			let else_val = self.expr(&else_branch, into);
+			// Save the value, if relevant.
+			if own_val.needs_storage() {
+				// Add one to indent.
+				let else_val = self.promote(else_val, if_.typ);
+				inf_writeln!(into, "{indent}\t{own_val} = {else_val};");
+			}
+
+			self.indent_level -= 1;
+			inf_writeln!(into, "{indent}}}");
+		}
+
+		own_val.typed(if_.typ)
+	}
 
 	fn expr(&mut self, expr: &Expr, into: &mut String) -> TypedVal {
 		let indent = self.indent();
 		match expr {
 			Expr::Binary(binary) => self.binary(binary, into),
+			Expr::If(if_) => self.compile_if(if_, into),
 			Expr::Variable(variable) => {
 				Val::DirectVar { name: self.db.get_cname(variable.identity) }
 					.typed(self.db.get_var_type(variable.identity))
@@ -444,6 +508,9 @@ impl<'a> Codegen<'a> {
 			},
 			Expr::StrLiteral(lit) => {
 				return Val::StringLit { id: lit.id }.typed(self.db.types.str_const)
+			},
+			Expr::BoolLiteral(lit) => {
+				return Val::BoolLit { val: lit.value }.typed(self.db.types.bool);
 			}
 			Expr::Block(block) => {
 				let val = if self.db.type_generates_value(block.typ) {
