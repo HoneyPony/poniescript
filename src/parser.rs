@@ -643,6 +643,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 				if expect_semicolon {
 					expected!(self, Tok::Semicolon, "';' after statement expression")?;
 				}
+				else {
+					// Still consume a semicolon if needed.
+					self.match_(Tok::Semicolon)?;
+				}
 				Stmt::mk_expression_ok(self.end(location), inner)
 			}
 		}

@@ -494,22 +494,24 @@ impl<'db> TypeChecker<'db> {
 		self.return_types.push(return_type);
 
 		let inner = self.check_expr(&mut fun.value, value_used)?;
-		fun.value.promote(return_type, self.db);
 
 		self.return_types.pop();
 
 		// If we're using the value of the expression, it must match the return
 		// type.
 		if value_used {
-			let valid = self.compute_assignable(
+			let computed = self.compute_assignable(
 				self.db.get_fun_return_typid(fun.identity),
 				inner);
-			maybe_type_error!(self, 
-				valid,
+
+			let computed = maybe_type_error!(self, 
+				computed,
 				&fun.location,
 				"Value of function body is {} but function returns {}",
 				self.db.repr_type(inner),
 				self.db.repr_type(self.db.get_fun_return_typid(fun.identity)));
+		
+			fun.value.promote(computed, self.db);
 		}
 
 		Ok(())
