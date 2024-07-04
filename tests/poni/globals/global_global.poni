@@ -2,5 +2,5 @@ var first = 5;
 var second = first;
 
 fun init() {
-	print(first, second);
+	print(first, second); //! 55
 }

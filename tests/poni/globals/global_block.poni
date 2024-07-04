@@ -3,5 +3,5 @@ var x = {
 };
 
 fun init() {
-	print(x);
+	print(x); //! 7
 }

@@ -7,7 +7,7 @@ fun takes_int(a: int) {
 }
 
 fun init() {
-	takes_float(1.0);
-	takes_float(2);
-	takes_int(3);
+	takes_float(1.0); //! 1.000000
+	takes_float(2);   //! 2.000000
+	takes_int(3);     //! 3.000000
 }

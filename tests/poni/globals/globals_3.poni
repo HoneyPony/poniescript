@@ -3,7 +3,7 @@ var y = 4.0;
 var z = 3 + 2 + 5;
 
 fun init() {
-	print(x);
-	print(y);
-	print(z);
+	print(x); //! 3
+	print(y); //! 4.000000
+	print(z); //! 10
 }

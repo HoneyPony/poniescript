@@ -27,10 +27,10 @@ pub fn generate(tests_file: &mut File) {
 		("print/", "print_dif_funs"),
 		("print/", "print_inner_return"),
 
-		//("globals/", "global_block" , Expected::Output("7\n")),
+		("globals/", "global_block"),
 		// TODO: Figure out precise float output format we want.
-		//("globals/", "globals_3"    , Expected::Output("3\n4.000000\n10\n")),
-		//("globals/", "global_global", Expected::Output("55\n")),
+		("globals/", "globals_3"),
+		("globals/", "global_global"),
 
 		//("typecheck/", "print_assume_int", Expected::Output("10\n")),
 		//("typecheck/", "promote_assumes_inside_block", Expected::Output("15\n")),
@@ -43,14 +43,13 @@ pub fn generate(tests_file: &mut File) {
 		//("string/", "simple_str", Expected::Output("hello world25\n")),
 		//("string/", "str_of_strbuf", Expected::Output("hello my little ponies\n")),
 	
-		//("functions/", "parse_params", Expected::Output("")),
-		//("functions/", "param_trailing_comma", Expected::Output("")),
-		//("functions/", "call_basic", Expected::Output("3\n7\n11\n")),
-		//("functions/", "call_nested", Expected::Output("my little pony!\n")),
-		//("functions/", "call_promote", Expected::Output("1.000000\n2.000000\n3.000000\n")),
-		//("functions/", "void_fun", Expected::Output("ponies\nhorses\nponies\nhorses\n")),
-		// Note: Test inspired by Crafting Interpreters 
-		//("functions/", "fib", Expected::Output("9227465\n")),
+		("functions/", "parse_params"),
+		("functions/", "param_trailing_comma"),
+		("functions/", "call_basic"),
+		("functions/", "call_nested"),
+		("functions/", "call_promote"),
+		("functions/", "void_fun"),
+		("functions/", "fib"),
 
 		//("scope/", "block_shadow", Expected::Output("hello ponies\nhello again ponies\nhello ponies\n")),
 

@@ -7,8 +7,8 @@ fun horses() {
 }
 
 fun init() {
-	ponies();
-	horses();
-	ponies();
-	horses();
+	ponies(); //! ponies
+	horses(); //! horses
+	ponies(); //! ponies
+	horses(); //! horses
 }
