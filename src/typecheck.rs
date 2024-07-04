@@ -494,6 +494,7 @@ impl<'db> TypeChecker<'db> {
 		self.return_types.push(return_type);
 
 		let inner = self.check_expr(&mut fun.value, value_used)?;
+		fun.value.promote(return_type, self.db);
 
 		self.return_types.pop();
 
