@@ -1,0 +1,5 @@
+fun returns_void() { }
+
+fun init() {
+	print(returns_void(), "oh no my pony");
+}
