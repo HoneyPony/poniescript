@@ -249,7 +249,7 @@ macro_rules! define_val {
 			inf_write!($into, "{}{} {}",
 				$self.indent(),
 				$self.db.get_ctype($val.typ),
-				$val
+				$val.val
 			);
 			inf_write!($into, $($arg)*);
 		}
@@ -259,7 +259,7 @@ macro_rules! define_val {
 macro_rules! set_val {
 	($self:ident, $into:ident, $val:expr, $($arg:tt)*) => {
 		if $val.needs_storage() {
-			inf_write!($into, "{}{}", $self.indent(), $val);
+			inf_write!($into, "{}{}", $self.indent(), $val.val);
 			inf_write!($into, $($arg)*);
 		}
 	}
@@ -291,11 +291,11 @@ impl<'a> Codegen<'a> {
 	}
 
 	// TODO: MOve all uses of new_val() to this function
-	fn new_val_typed(&mut self, typ: TypId) -> Val {
-		if typ == self.db.types.void { return Val::Void; }
-		if typ == self.db.types.bottom { return Val::Bottom; }
+	fn new_val_typed(&mut self, typ: TypId) -> TypedVal {
+		if typ == self.db.types.void { return Val::Void.typed(typ); }
+		if typ == self.db.types.bottom { return Val::Bottom.typed(typ); }
 
-		self.new_val()
+		self.new_val().typed(typ)
 	}
 
 	fn promote(&self, val: TypedVal, to: TypId) -> PromotedVal {
@@ -431,22 +431,15 @@ impl<'a> Codegen<'a> {
 
 		// Generate storage for the value of the expression, if relevant.
 		let own_val = self.new_val_typed(if_.typ);
-		if own_val.needs_storage() {
-			// TODO: We should move this VERY COMMON PATTERN to a helper function.
-			let ctype = self.db.get_ctype(if_.typ);
-			inf_writeln!(into, "{indent}{ctype} {own_val};");
-		}
+		define_val!(self, into, own_val, ";\n");
 
 		inf_writeln!(into, "{indent}if ({cond}) {{");
 		self.indent_level += 1;
 		let then_val = self.expr(&if_.then_branch, into);
 		
 		// Save the value, if relevant.
-		if own_val.needs_storage() {
-			// Add one to indent.
-			let then_val = self.promote(then_val, if_.typ);
-			inf_writeln!(into, "{indent}\t{own_val} = {then_val};");
-		}
+		// IMPORTANT: set_val will only call promote() if the value is needed.
+		set_val!(self, into, own_val, " = {};\n", self.promote(then_val, if_.typ));
 		self.indent_level -= 1;
 		inf_writeln!(into, "{indent}}}");
 
@@ -457,17 +450,12 @@ impl<'a> Codegen<'a> {
 
 			let else_val = self.expr(&else_branch, into);
 			// Save the value, if relevant.
-			if own_val.needs_storage() {
-				// Add one to indent.
-				let else_val = self.promote(else_val, if_.typ);
-				inf_writeln!(into, "{indent}\t{own_val} = {else_val};");
-			}
-
+			set_val!(self, into, own_val, " = {};\n", self.promote(else_val, if_.typ));
 			self.indent_level -= 1;
 			inf_writeln!(into, "{indent}}}");
 		}
 
-		own_val.typed(if_.typ)
+		own_val
 	}
 
 	fn expr(&mut self, expr: &Expr, into: &mut String) -> TypedVal {
