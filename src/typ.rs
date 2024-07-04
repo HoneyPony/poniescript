@@ -62,7 +62,7 @@ impl Type {
 			Type::AssumeInt => "a number".to_string(),
 			Type::AssumeFloat => "a decimal number".to_string(),
 
-			Type::UnboundIdent(id) => "<unknown named>".to_string(),
+			Type::UnboundIdent(_) => "<unknown named>".to_string(),
 		}
 	}
 

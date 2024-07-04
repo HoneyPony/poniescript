@@ -353,7 +353,7 @@ impl<'db> TypeChecker<'db> {
 				//
 				// Of course, we don't mutate the parameter type -- so it's different
 				// in that way, but otherwise very similar.
-;
+
 				let fun_arity = self.db.get(call.identity).parameters.len();
 
 				if call.args.len() != fun_arity {
@@ -521,7 +521,8 @@ impl<'db> TypeChecker<'db> {
 		}
 
 		for fun in &mut module.functions {
-			self.check_fun_declare(fun);
+			// Ignore errors at this point as there's no need to unwind the stack.
+			let _ = self.check_fun_declare(fun);
 		}
 	}
 

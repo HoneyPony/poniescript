@@ -6,7 +6,6 @@ use crate::typ::Type;
 use crate::expr::*;
 
 use std::fmt::Write as _;
-use std::io::Write as _;
 
 struct Codegen<'a> {
 	functions: Vec<String>,

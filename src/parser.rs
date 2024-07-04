@@ -103,6 +103,9 @@ macro_rules! consume {
     };
 }
 
+// Note: A somewhat helpful regex for finding places where we forgot the question
+// mark:
+//    expected!\([^\)]+\)[^?]
 macro_rules! expected {
 	($parser:ident, $ty:expr, $($arg:tt)*) => {
 		consume!($parser, $ty, "Expected {}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()))
@@ -183,10 +186,6 @@ impl<'a, 'b> Parser<'a, 'b> {
 	fn end(&self, mut location: SourceLocation) -> SourceLocation {
 		location.length = (self.last_location.offset - location.offset) + self.last_location.length;
 		location
-	}
-
-	fn end_clone(&self, location: &SourceLocation) -> SourceLocation {
-		self.end(location.clone())
 	}
 
 	fn location_of(&self, entry: &ScopeEntry) -> &SourceLocation {
@@ -308,7 +307,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			self.match_(Tok::Comma)?;
 		}
 
-		expected!(self, Tok::RightParen, "')' after argument list");
+		expected!(self, Tok::RightParen, "')' after argument list")?;
 
 		if self.match_(Tok::LeftParen)?.is_some() {
 			todo!("calling the return value of a call");
@@ -342,7 +341,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
 		};
 
-		if let Some(equal) = self.match_(Tok::Equal)? {
+		if self.match_(Tok::Equal)?.is_some() {
 			let rhs = self.expression()?;
 
 			// Assignment
@@ -559,12 +558,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let mut typ = self.db.types.unassigned;
 
-		if let Some(colon) = self.match_(Tok::Colon)? {
+		if self.match_(Tok::Colon)?.is_some() {
 			typ = self.typ()?;
 		}
 
 		// TODO: This should be after the typ if we see a type declaration...
-		let equal = expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
+		expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
 
 		let initializer = self.expression()?;
 
@@ -594,7 +593,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		self.pop_scope();
 
-		expected!(self, Tok::RightBrace, "'}}' at end of block");
+		expected!(self, Tok::RightBrace, "'}}' at end of block")?;
 
 		// Note: This needs to start out as Bottom in the case that
 		// it ends up actually being Bottom, in an expression.
@@ -654,7 +653,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 	fn parameter(&mut self) -> Result<VarId> {
 		let name = expected!(self, Tok::Identifier, "parameter name")?;
-		expected!(self, Tok::Colon, "':' after parameter name");
+		expected!(self, Tok::Colon, "':' after parameter name")?;
 		let typ = self.typ()?;
 
 		let name_str = name.lexeme;
@@ -691,7 +690,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let mut return_type = self.db.types.void;
 
-		if let Some(arrow) = self.match_(Tok::LeftArrow)? {
+		if self.match_(Tok::LeftArrow)?.is_some() {
 			// Parse return type
 			return_type = self.typ()?;
 		}
