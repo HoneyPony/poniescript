@@ -1,4 +1,4 @@
-use std::cell::{RefCell};
+use std::cell::RefCell;
 use std::{fs::File, path::PathBuf};
 use std::io::{self, Read};
 use crate::db::*;
@@ -31,7 +31,7 @@ pub struct SourceLocation {
 	pub length: u64,
 }
 
-struct SourceMap {
+pub struct SourceMap {
 	created: bool,
 	contents_chars: Vec<char>,
 	lines: Vec<u64>,
@@ -194,7 +194,6 @@ impl SourceMap {
 
 pub enum Source {
 	Real {
-		name: String,
 		path: PathBuf,
 		source_map: RefCell<SourceMap>,
 	},
@@ -203,13 +202,7 @@ pub enum Source {
 
 impl Source {
 	pub fn new(path: PathBuf) -> Source {
-		let name = path.file_name()
-			// TODO: Consider using to_string_lossy..?
-			.map(|name| name.to_str())
-			.flatten()
-			.unwrap_or("<unknown>")
-			.to_string();
-		return Source::Real { name, path, source_map: RefCell::new(SourceMap::empty()) }
+		return Source::Real { path, source_map: RefCell::new(SourceMap::empty()) }
 	}
 
 	pub fn to_file(&self) -> io::Result<File> {
@@ -231,38 +224,8 @@ impl Source {
 		false
 	}
 
-	pub fn get_line_column(&self, location: u64) -> Option<(u64, u64)> {
-		match self {
-			Source::Real { name, path, source_map } => {
-				if Self::cache_map(path, source_map) {
-					Some(source_map.borrow().get_line_column(location))
-				}
-				else { None }
-			},
-			Source::Synthetic => None,
-		}
-	}
-
-	fn name(&self) -> &str {
-		match self {
-			Source::Real { name, path, source_map } => &name,
-			Source::Synthetic => "<unknown>",
-		}
-	}
-
-	pub fn show_brief_at(&self, location: &SourceLocation) {
-		match self.get_line_column(location.offset) {
-			Some((line, column)) => {
-				eprintln!("in {}:{}:{}:", self.name(), line, column);
-			},
-			None => {
-				eprintln!("in <unknown>:");
-			}
-		}
-	}
-
 	pub fn show_underlined_location(&self, location: &SourceLocation) {
-		let Source::Real { name, path, source_map } = self else { return; };
+		let Source::Real { path, source_map } = self else { return; };
 
 		Self::cache_map(path, source_map);
 
