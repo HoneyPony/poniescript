@@ -4,5 +4,5 @@ fun init() {
 	}
 	else {
 		print("false");
-	};
+	}
 }
