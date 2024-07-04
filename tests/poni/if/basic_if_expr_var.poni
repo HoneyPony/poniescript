@@ -1,0 +1,9 @@
+fun test(val: bool) -> int {
+	var x = if val { 3; } else { 10; };
+	print(x);
+}
+
+fun init() {
+	test(true);
+	test(false);
+}

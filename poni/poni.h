@@ -12,6 +12,7 @@
 
 typedef float   ps_float;
 typedef int32_t ps_int;
+typedef int8_t  ps_bool;
 
 struct ps_object;
 struct ps_str;
