@@ -255,6 +255,8 @@ impl<'db> TypeChecker<'db> {
 				if_.then_branch.promote(computed, &self.db);
 				else_branch.promote(computed, &self.db);
 
+				if_.typ = computed;
+
 				computed
 			},
 			Expr::Variable(var) => self.db.get(var.identity).typ,
@@ -304,6 +306,9 @@ impl<'db> TypeChecker<'db> {
 
 				// Return the computed TypId.
 				block.typ = val;
+
+				stmt.promote(val, self.db);
+
 				val
 			},
 			Expr::Print(print) => {
@@ -454,6 +459,8 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(typ),
 					self.db.repr_type(return_type));
 
+				eprintln!("in return: promote {} to {}",
+				self.db.repr_type(inner.typ(self.db)), self.db.repr_type(computed));
 				inner.promote(computed, self.db);
 
 				Ok(Some(self.db.types.bottom))
