@@ -71,6 +71,9 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "basic_if_expr_var", Expected::Output("3\n10\n")),
 		("if/", "basic_if_expr"    , Expected::Output("10\n3\n")),
 		("if/", "basic_if"         , Expected::Output("true\n")),
+
+		("comparison/", "compare_basic", Expected::Output("false\ntrue\ntrue\ntrue\n")),
+		("comparison/", "compare_constants", Expected::Output("true\ntrue\nfalse\nfalse\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\n"))
 	];
 
 	for (path, test, expect) in tests {

@@ -1,0 +1,16 @@
+fun init() {
+	print(1 < 2);
+	print(2 < 3);
+
+	print(1 < 0);
+	print(10.0 < 0);
+
+	print(1 + 2 > 5);
+	print(4 > 2);
+
+	print(9.0 <= 3.0 + 3.0);
+	print(9.0 <= 6.0 + 3.0);
+	
+	print(100 > 50);
+	print(50 >= 50.0);
+}
