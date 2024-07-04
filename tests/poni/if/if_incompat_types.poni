@@ -1,0 +1,8 @@
+fun test(val: bool) {
+	var x = if val {
+		3;
+	}
+	else {
+		"hello";
+	};
+}
