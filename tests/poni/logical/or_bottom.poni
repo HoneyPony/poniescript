@@ -1,0 +1,15 @@
+fun test1(val: bool) {
+	print(val) or { return; };
+}
+
+fun test2(val: bool) {
+	{ return; } or print(val);
+}
+
+fun init() {
+	test1(false); //! false 
+	test1(true);  //! true
+
+	test2(false);
+	test2(true);
+}

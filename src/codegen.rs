@@ -491,6 +491,8 @@ impl<'a> Codegen<'a> {
 				// Compute the left value up-front. The right value will be
 				// computed inside the if, for short-circuiting.
 				let left = self.expr(&logical.left, into);
+				if left.is_bottom() { return left; }
+
 				let left = self.promote(left, self.db.types.bool);
 
 				let own_val = self.new_val_typed(self.db.types.bool);
@@ -511,10 +513,14 @@ impl<'a> Codegen<'a> {
 
 				// Generate the right expression inside the if.
 				let right = self.expr(&logical.right, into);
-				let right = self.promote(right, self.db.types.bool);
 
-				// Our value now evalutes to this other one.
-				set_val!(self, into, own_val, " = {right};\n");
+				// Only store the value if not Bottom.
+				if !right.is_bottom() {
+					let right = self.promote(right, self.db.types.bool);
+
+					// Our value now evalutes to this other one.
+					set_val!(self, into, own_val, " = {right};\n");
+				}
 
 				self.indent_level -= 1;
 				inf_writeln!(into, "{indent}}}");
