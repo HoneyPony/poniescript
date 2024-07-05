@@ -104,6 +104,12 @@ impl<'db> Binder<'db> {
 				self.visit_expr(&mut compare.left);
 				self.visit_expr(&mut compare.right);
 				return None;
+			},
+
+			Expr::Logical(logical) => {
+				self.visit_expr(&mut logical.left);
+				self.visit_expr(&mut logical.right);
+				return None;
 			}
 
 			Expr::If(if_) => {

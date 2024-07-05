@@ -192,6 +192,7 @@ pub fn generate(file: &mut File) {
 	Binary      : Tok op, Expr left, Expr right, TypId typ
 	Comparison  : Tok op, Expr left, Expr right, TypId compare_as
 	Variable    : VarId identity
+	Logical     : Tok op, Expr left, Expr right
 	FunCall     : FunId identity, Vec<Expr> args
 	Assign      : VarId identity, Expr value
 	NumLiteral  : Token contents, TypId typ

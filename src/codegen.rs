@@ -486,6 +486,42 @@ impl<'a> Codegen<'a> {
 			Expr::Binary(binary) => self.compile_binary(binary, into),
 			Expr::Comparison(compare) => self.compile_comparison(compare, into),
 			Expr::If(if_) => self.compile_if(if_, into),
+
+			Expr::Logical(logical) => {
+				// Compute the left value up-front. The right value will be
+				// computed inside the if, for short-circuiting.
+				let left = self.expr(&logical.left, into);
+				let left = self.promote(left, self.db.types.bool);
+
+				let own_val = self.new_val_typed(self.db.types.bool);
+				define_val!(self, into, own_val, " = {left};");
+
+				// Short-circuiting behavior:
+				// If we're 'and', and lhs is false, we don't evaluate rhs.
+				// If we're 'or', and lhs is true, we don't evaluate rhs.
+				let bang = match logical.op {
+					Tok::And => "",
+					Tok::Or => "!",
+					_ => unreachable!(),
+				};
+
+				// Safe because own_val is bool
+				inf_writeln!(into, "{indent}if({bang}{}) {{", own_val.val);
+				self.indent_level += 1;
+
+				// Generate the right expression inside the if.
+				let right = self.expr(&logical.right, into);
+				let right = self.promote(right, self.db.types.bool);
+
+				// Our value now evalutes to this other one.
+				set_val!(self, into, own_val, " = {right};");
+
+				self.indent_level -= 1;
+				inf_writeln!(into, "{indent}}}");
+
+				own_val
+			}
+
 			Expr::Variable(variable) => {
 				Val::DirectVar { name: self.db.get_cname(variable.identity) }
 					.typed(self.db.get_var_type(variable.identity))

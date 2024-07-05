@@ -1,0 +1,24 @@
+fun test_print_in(a: bool, b: bool) {
+	if a and b {
+		print("horse");
+	}
+	else {
+		print("pony");
+	}
+}
+
+fun test_print_out(a: bool, b: bool) {
+	print(if a and b { "horse" } else { "pony" });
+}
+
+fun init() {
+	test_print_in(false, false); //! pony
+	test_print_in(false, true ); //! pony
+	test_print_in(true , false); //! pony
+	test_print_in(true , true ); //! horse
+
+	test_print_out(false, false); //! pony
+	test_print_out(false, true ); //! pony
+	test_print_out(true , false); //! pony
+	test_print_out(true , true ); //! horse
+}

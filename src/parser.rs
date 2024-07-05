@@ -466,10 +466,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// Note: This matches up with expr_infix().
 		// If (a, b) a < b this operator is left-associative, else right-associative.
 		match self.peek_typ() {
-			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual => (1, 2),
+			// Or has lower precedence than And.
+			Tok::Or => (1, 2),
+			Tok::And => (3, 4),
+			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual => (5, 6),
 
-			Tok::Plus | Tok::Minus => (3, 4),
-			Tok::Star | Tok::Slash => (5, 6),
+			Tok::Plus | Tok::Minus => (7, 8),
+			Tok::Star | Tok::Slash => (9, 10),
 
 			// Any other tokens should not be parsed as infix.
 			_ => (0, 0)
@@ -477,9 +480,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 	}
 
 	fn expr_infix(&mut self, lhs: Expr) -> Result<Expr> {
+		// TODO: Pass location downwards so that we get the correct value for
+		// infix operators.
+		let location = self.start();
+
 		// We want to bind rightward to any expressions that left-associate
 		// towards us, so we use the right-hand precedence.
-		let location = self.start();
 		let cur_prec = self.peek_precedence().1;
 
 		match self.peek_typ() {
@@ -494,6 +500,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::mk_comparison_ok(self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
+			}
+
+			Tok::And | Tok::Or => {
+				let op = self.advance()?;
+				let rhs = self.expr_precedence(cur_prec)?;
+				return Expr::mk_logical_ok(self.end(location), op.typ, lhs, rhs);
 			}
 
 			// We should never call expr_infix() with an invalid operator,

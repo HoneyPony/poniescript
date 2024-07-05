@@ -61,6 +61,7 @@ impl Expr {
 			Expr::Comparison(_) => {
 				db.types.bool
 			},
+			Expr::Logical(_) => db.types.bool,
 			Expr::Block(block) => {
 				block.typ
 			},
@@ -92,7 +93,11 @@ impl Expr {
 				// Types do not propagate down into the comparison. It will
 				// promote its own operands, though.
 				false
-			}
+			},
+			Expr::Logical(_) => {
+				// Does not promote.
+				false
+			},
 			Expr::If(if_) => {
 				if db.is_not_concrete(if_.typ) && db.is_concrete(typ) {
 					// Same idea as binary.

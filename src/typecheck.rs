@@ -269,6 +269,30 @@ impl<'db> TypeChecker<'db> {
 				// Comparisons always return bool.
 				self.db.types.bool
 			},
+			Expr::Logical(logical) => {
+				// TODO: Look in to value_used and if we're actually doing this right.
+				let left = self.check_expr(&mut logical.left, value_used)?;
+				let right = self.check_expr(&mut logical.right, value_used)?;
+
+				let left_check = self.compute_assignable(self.db.types.bool, left);
+				let right_check = self.compute_assignable(self.db.types.bool, right);
+
+				let left_check = maybe_type_error!(self, left_check,
+					logical.left.location(),
+					"Invalid conditional expression in LHS to logical operator: Expression has type '{}'",
+					self.db.repr_type(left));
+
+				let right_check = maybe_type_error!(self, right_check,
+					logical.right.location(),
+					"Invalid conditional expression in RHS to logical operator: Expression has type '{}'",
+					self.db.repr_type(right));
+
+				logical.left.promote(left_check, self.db);
+				logical.right.promote(right_check, self.db);
+
+				// Logical operators always return bool.
+				self.db.types.bool
+			}
 			Expr::If(if_) => {
 				let condition_ty = self.check_expr(&mut if_.condition, true)?;
 				let cond_computed =
