@@ -1,3 +1,6 @@
+// This test shows tha tplain 'if' never returns a value,
+// even when inside a print (which could be unintuitive).
 fun init() {
+	//! my little pony
 	print(if true { "hello" }, "my little pony");
 }

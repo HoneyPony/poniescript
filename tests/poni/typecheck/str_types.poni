@@ -4,5 +4,6 @@ fun init() {
 	var as_str_promote: Str = "little";
 	var as_buf_promote: StrBuf = "ponies";
 
+	//! hello my little ponies
 	print(as_const, " ", as_buf, " ", as_str_promote, " ", as_buf_promote);
 }

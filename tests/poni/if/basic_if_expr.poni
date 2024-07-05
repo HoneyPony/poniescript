@@ -3,6 +3,6 @@ fun test(val: bool) -> int {
 }
 
 fun init() {
-	print(test(false));
-	print(test(true));
+	print(test(false)); //! 10
+	print(test(true));  //! 3
 }

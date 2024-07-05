@@ -32,16 +32,16 @@ pub fn generate(tests_file: &mut File) {
 		("globals/", "globals_3"),
 		("globals/", "global_global"),
 
-		//("typecheck/", "print_assume_int", Expected::Output("10\n")),
-		//("typecheck/", "promote_assumes_inside_block", Expected::Output("15\n")),
-		//("typecheck/", "promote_to_float_arithmetic", Expected::Output("30.000000\n")),
-		//("typecheck/", "promote_to_float_assign", Expected::Output("10.000000\n")),
-		//("typecheck/", "str_types", Expected::Output("hello my little ponies\n")),
-		//("typecheck/", "return_block_return", Expected::Output("")), // Make sure this one at least compiles
+		("typecheck/", "print_assume_int"),
+		("typecheck/", "promote_assumes_inside_block"),
+		("typecheck/", "promote_to_float_arithmetic"),
+		("typecheck/", "promote_to_float_assign"),
+		("typecheck/", "str_types"),
+		("typecheck/", "return_block_return"), // Make sure this one at least compiles
 		// TODO: Add other tests when we get function calls
 	
-		//("string/", "simple_str", Expected::Output("hello world25\n")),
-		//("string/", "str_of_strbuf", Expected::Output("hello my little ponies\n")),
+		("string/", "simple_str"),
+		("string/", "str_of_strbuf"),
 	
 		("functions/", "parse_params"),
 		("functions/", "param_trailing_comma"),
@@ -51,15 +51,14 @@ pub fn generate(tests_file: &mut File) {
 		("functions/", "void_fun"),
 		("functions/", "fib"),
 
-		//("scope/", "block_shadow", Expected::Output("hello ponies\nhello again ponies\nhello ponies\n")),
+		("scope/", "block_shadow"),
 
-		//("if/", "basic_if_expr_ret"   , Expected::Output("10\n3\n")),
-		//("if/", "basic_if_expr_var"   , Expected::Output("3\n10\n")),
-		//("if/", "basic_if_expr"       , Expected::Output("10\n3\n")),
-		//("if/", "basic_if"            , Expected::Output("true\n")),
-		//("if/", "if_no_else"          , Expected::Output("little pony\nmy\nlittle pony\n")),
-		// Shows that the plain 'if' never returns a value.
-		//("if/", "if_no_else_in_print" , Expected::Output("my little pony\n")),
+		("if/", "basic_if_expr_ret"),
+		("if/", "basic_if_expr_var"),
+		("if/", "basic_if_expr"),
+		("if/", "basic_if"),
+		("if/", "if_no_else"),
+		("if/", "if_no_else_in_print"),
 
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants")

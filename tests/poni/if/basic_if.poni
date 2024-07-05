@@ -1,4 +1,5 @@
 fun init() {
+	//! true
 	if true {
 		print("true");
 	}

@@ -1,11 +1,11 @@
 fun init() {
 	var message = "hello ponies";
-	print(message);
+	print(message); //! hello ponies
 
 	{
 		var message = "hello again ponies";
-		print(message);
+		print(message); //! hello again ponies
 	};
 
-	print(message);
+	print(message); //! hello ponies
 }

@@ -6,6 +6,9 @@ fun test(val: bool) {
 }
 
 fun init() {
-	test(false);
+	test(false); //! little pony
+
+	//! my
+	//! little pony
 	test(true);
 }

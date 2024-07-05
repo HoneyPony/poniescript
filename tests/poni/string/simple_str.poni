@@ -1,4 +1,5 @@
 fun init() {
 	var test = str("hello", " ", "world", 25);
+	//! hello world25
 	print(test);
 }

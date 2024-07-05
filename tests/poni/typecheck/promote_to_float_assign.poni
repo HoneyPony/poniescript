@@ -4,5 +4,5 @@ fun init() {
 
 	f = x;
 
-	print(f);
+	print(f); //! 10.000000
 }

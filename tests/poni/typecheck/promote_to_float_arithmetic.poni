@@ -2,5 +2,5 @@ fun init() {
 	var x: float = 10;
 	var y: int = 20;
 
-	print(x + y);
+	print(x + y); //! 30.000000
 }
