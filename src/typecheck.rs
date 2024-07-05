@@ -270,9 +270,11 @@ impl<'db> TypeChecker<'db> {
 				self.db.types.bool
 			},
 			Expr::Logical(logical) => {
-				// TODO: Look in to value_used and if we're actually doing this right.
-				let left = self.check_expr(&mut logical.left, value_used)?;
-				let right = self.check_expr(&mut logical.right, value_used)?;
+				// We are expecting a real kind of value from the sub-expressions
+				// (namely a bool, or promotable to bool), so we must say that the
+				// value is used.
+				let left = self.check_expr(&mut logical.left, true)?;
+				let right = self.check_expr(&mut logical.right, true)?;
 
 				let left_check = self.compute_assignable(self.db.types.bool, left);
 				let right_check = self.compute_assignable(self.db.types.bool, right);
@@ -385,7 +387,7 @@ impl<'db> TypeChecker<'db> {
 				// last statement then bail with Void.
 				if !value_used {
 					block.stmts.last_mut().map(|stmt| self.check_stmt(stmt, false));
-					return Ok(self.db.types.bottom);
+					return Ok(self.db.types.void);
 				}
 
 				// Otherwise, we need to compute a type for the value.
