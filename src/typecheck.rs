@@ -242,8 +242,8 @@ impl<'db> TypeChecker<'db> {
 				computed
 			},
 			Expr::Comparison(compare) => {
-				let left = self.check_expr(&mut compare.left, value_used)?;
-				let right = self.check_expr(&mut compare.right, value_used)?;
+				let left = self.check_expr(&mut compare.left, true)?;
+				let right = self.check_expr(&mut compare.right, true)?;
 
 				let computed = maybe_type_error!(
 					self,

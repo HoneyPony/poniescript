@@ -64,6 +64,7 @@ pub fn generate(tests_file: &mut File) {
 
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants"),
+		("comparison/", "compare_doubleblock"),
 
 		("logical/", "basic_and"),
 		("logical/", "basic_or"),

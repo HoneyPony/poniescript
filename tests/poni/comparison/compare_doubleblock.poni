@@ -1,0 +1,4 @@
+fun init() {
+	{ 1 < { 2 } }
+	print("success"); //! success
+}
