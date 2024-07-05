@@ -16,6 +16,8 @@ fn generate_test(file: &mut File, path: &str, test_name: &str) -> std::io::Resul
 
 pub fn generate(tests_file: &mut File) {
 	let tests = [
+		("binary/", "binary_doubleblock"),
+
 		// print_nested: the last line is 345 because it should re-print each of the inner print()s.
 		("print/", "print_nested"),
 		("print/", "print_string_literal"),

@@ -222,8 +222,8 @@ impl<'db> TypeChecker<'db> {
 	fn check_expr(&mut self, expr: &mut Expr, value_used: bool) -> Result<TypId> {
 		Ok(match expr {
 			Expr::Binary(binary) => {
-				let left = self.check_expr(&mut binary.left, value_used)?;
-				let right = self.check_expr(&mut binary.right, value_used)?;
+				let left = self.check_expr(&mut binary.left, true)?;
+				let right = self.check_expr(&mut binary.right, true)?;
 
 				let computed = maybe_type_error!(
 					self,
