@@ -288,7 +288,7 @@ fn test_compiled(exe_path: &Path, db: &Db) -> std::io::Result<()> {
 	let mut idx = 0;
 	for line in got.lines() {
 		if idx >= db.test_lines.len() {
-			eprintln!("Test failure: Wrong number of output lines");
+			eprintln!("Test failure: Too many output lines");
 			exit(15);
 		}
 		assert_eq!(line, db.test_lines[idx]);
@@ -296,7 +296,7 @@ fn test_compiled(exe_path: &Path, db: &Db) -> std::io::Result<()> {
 	}
 
 	if idx != db.test_lines.len() {
-		eprintln!("Test failure: Wrong number of output lines");
+		eprintln!("Test failure: Too few output lines");
 		exit(15);
 	}
 
