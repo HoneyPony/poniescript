@@ -1,0 +1,34 @@
+fun print_true() -> bool {
+	print("true");
+	return true;
+}
+
+fun print_false() -> bool {
+	print("false");
+	return false;
+}
+
+fun test(v: bool) {
+	print(if v { "horse" } else { "pony"});
+}
+
+fun init() {
+	// False should not short-circuit, so both expressions should have side effects.
+	//! false
+	//! false
+	//! pony
+	test(print_false() or print_false());
+	//! false
+	//! true
+	//! horse
+	test(print_false() or print_true());
+
+	// True should short-circuit, so we only see the first expression having
+	// side effects.
+	//! true
+	//! horse
+	test(print_true() or print_false());
+	//! true
+	//! horse
+	test(print_true() or print_true());
+}

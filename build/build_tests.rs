@@ -64,6 +64,9 @@ pub fn generate(tests_file: &mut File) {
 		("comparison/", "compare_constants"),
 
 		("logical/", "basic_and"),
+		("logical/", "basic_or"),
+		("logical/", "short_and"),
+		("logical/", "short_or"),
 	];
 
 	for (path, test) in tests {
