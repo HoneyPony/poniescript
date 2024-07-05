@@ -79,6 +79,7 @@ pub fn generate(db_file: &mut File) {
 		("VarId", "Var"),
 		("FunId", "Fun"),
 		("TypId", "Type"),
+		("SigId", "Sig"),
 		("SourceId", "Source"),
 	];
 

@@ -76,7 +76,11 @@ impl<'db> Binder<'db> {
 	fn resolve_unbound_call(&mut self, unbound: &mut UnboundCall) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, unbound.identifier.lexeme) {
-				ScopeEntry::Var(_) => todo!("resolve unbound var into a call"),
+				ScopeEntry::Var(v) => {
+					let inner = Expr::mk_variable(unbound.location.clone(), v);
+					return Some(Expr::mk_valcall(unbound.location.clone(), inner,
+						std::mem::take(&mut unbound.args)));
+				}
 				ScopeEntry::Fun(fun) =>
 					return Some(Expr::mk_funcall(unbound.location.clone(), fun, 
 					// TODO: Figure out a better way to get the args out of the UnboundCall
@@ -155,6 +159,16 @@ impl<'db> Binder<'db> {
 				}
 				None
 			},
+
+			Expr::ValCall(call) => {
+				for arg in &mut call.args {
+					self.visit_expr(arg);
+				}
+				None
+			},
+
+			// Nothing to visit.
+			Expr::FunCapture(capt) => None,
 
 			Expr::UnboundCall(unbound) => {
 				// Must visit all the arguments of the call, so that they can

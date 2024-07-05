@@ -314,7 +314,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 
 		match self.scope_lookup(ident.lexeme) {
-			ScopeEntry::Var(_) => todo!("calling a variable"),
+			ScopeEntry::Var(v) => {
+				let inner = Expr::mk_variable(location, v);
+				return Expr::mk_valcall_ok(self.end(location), inner, args)
+			},
 
 			// It may seem in poor taste to have a specific Expr for function
 			// calls all throughout the syntax tree. But, the hope is that this

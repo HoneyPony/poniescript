@@ -17,7 +17,12 @@ pub enum Type {
 	/// A string with a dynamic size. Can have characters added and removed.
 	StrBuf,
 
-	
+	/// A function type that cannot have a closure or bound this.
+	FunRaw(SigId),
+
+	/// A function type that can store any function with a matching signature.
+	/// This includes closures and bound this.
+	Fun(SigId),
 	//Str,
 
 	// StrSlice, // Maybe we need three/four String types:
@@ -48,7 +53,7 @@ pub enum Type {
 }
 
 impl Type {
-	pub fn to_string(&self) -> String {
+	pub fn to_string(&self, db: &Db) -> String {
 		match self {
 			Type::Int => "int".to_string(),
 			Type::Float => "float".to_string(),
@@ -59,6 +64,38 @@ impl Type {
 			Type::StrBuf => "StrBuf".to_string(),
 			Type::Bottom => "<bottom>".to_string(),
 			Type::Unassigned => "<unknown>".to_string(),
+
+			Type::FunRaw(sig) => {
+				let mut result = "fun*(".to_string();
+				let mut comma = false;
+				for ty in &db.get(*sig).parameters {
+					if comma { result.push_str(", "); }
+					comma = true;
+
+					let ty = db.get(*ty);
+					result.push_str(&ty.to_string(db));
+				}
+				result.push(')');
+
+				result
+			},
+
+			// TODO: Deduplicate the code
+			Type::Fun(sig) => {
+				let mut result = "fun(".to_string();
+				let mut comma = false;
+				for ty in &db.get(*sig).parameters {
+					if comma { result.push_str(", "); }
+					comma = true;
+
+					let ty = db.get(*ty);
+					result.push_str(&ty.to_string(db));
+				}
+				result.push(')');
+
+				result
+			},
+
 			Type::AssumeInt => "a number".to_string(),
 			Type::AssumeFloat => "a decimal number".to_string(),
 
@@ -76,6 +113,10 @@ impl Type {
 			Type::StrConst => "const ps_str*".into(),
 			Type::Str => "ps_str*".into(),
 			Type::StrBuf => "ps_strbuf*".into(),
+
+			// TODO: MAybe take &mut db, and then we can use format! and such
+			Type::FunRaw(sig) => String::from(db.get_sig_raw_ctype(*sig)),
+			Type::Fun(sig) => String::from(db.get_sig_ctype(*sig)),
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 

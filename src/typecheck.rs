@@ -489,7 +489,12 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				self.db.get_fun_ret_type(call.identity)
+			},
+
+			Expr::ValCall(call) => {
+				
 			}
+
 			Expr::Unbound(_) => {
 				// In theory we will resolve all idents beforehand? But this might
 				// be different if we have function overloading.

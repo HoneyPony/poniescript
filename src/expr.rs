@@ -45,7 +45,15 @@ impl Expr {
 			},
 			Expr::FunCall(call) => {
 				db.get_fun_ret_type(call.identity)
-			}
+			},
+			Expr::ValCall(call) => {
+				db.get(call.sig).return_type
+			},
+			Expr::FunCapture(capt) => {
+				// db.put_type(Type::Fun(db.get(capt.identity).sig))
+				// Maybe store the type on the FunCapture..?
+				todo!()
+			},
 			Expr::Assign(assign) => {
 				db.get_var_type(assign.identity)
 			},
@@ -110,6 +118,8 @@ impl Expr {
 			Expr::Variable(_) => false,
 			Expr::Assign(_) => false,
 			Expr::FunCall(_) => false,
+			Expr::ValCall(_) => false,
+			Expr::FunCapture(_) => false,
 			Expr::NumLiteral(lit) => {
 				lit.typ = typ;
 				true
@@ -155,10 +165,18 @@ pub struct Var {
 
 pub struct Fun {
 	pub name: Token,
+	pub sig: SigId,
 
 	/// Parameters are the values when the function is defined, arguments
 	/// are the values passed by the caller.
 	pub parameters: Vec<VarId>,
+	pub return_type: TypId,
+}
+
+/// Represents a function signature. Includes the types of all parameters
+/// and of the return value.
+pub struct Sig {
+	pub parameters: Vec<TypId>,
 	pub return_type: TypId,
 }
 

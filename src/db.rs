@@ -6,6 +6,7 @@ use crate::error::Error;
 // Import relevant things.
 use crate::expr::Var;
 use crate::expr::Fun;
+use crate::expr::Sig;
 use crate::typ::Type;
 use crate::source::{Source};
 
@@ -328,7 +329,7 @@ impl Db {
 			return cached;
 		}
 
-		let value = self.get(typ).to_string().leak();
+		let value = self.get(typ).to_string(self).leak();
 
 		// Note: Using &'static str as the hash map value makes it possible
 		// to do this with interior mutability. Maybe we should also do that
@@ -371,6 +372,19 @@ impl Db {
 		self.generate_var_cnames_cache();
 		self.generate_fun_cnames_cache();
 		self.generate_fun_cparams_cache();
+	}
+
+	/// Gets a C type corresponding to the given SigId. Should be created
+	/// when the Sig is created.
+	pub fn get_sig_ctype(&self, sig: SigId) -> &'static str {
+		todo!("sig ctype generation");
+	}
+
+	/// Gets the c type corresponding to a given function signature. This is
+	/// some generated function pointer type. Should be created when the Sig
+	/// is created.
+	pub fn get_sig_raw_ctype(&self, sig: SigId) -> &'static str {
+		todo!("sig raw ctype generation");
 	}
 
 	fn generate_var_cnames_cache(&mut self) {
