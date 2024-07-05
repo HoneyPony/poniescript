@@ -15,6 +15,8 @@ fn test_should_print(input_file: &str, exe_path: &str) -> std::io::Result<()> {
 	let mut poniescript = Command::new(env!("CARGO_BIN_EXE_poniescript"))
 		.arg("-o")
 		.arg(exe_path)
+		.arg("-c")
+		.arg(CC.unwrap_or("gcc"))
 		.arg(input_file)
 		.arg("--no-timing")
 		.arg("--test")
