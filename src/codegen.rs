@@ -494,7 +494,7 @@ impl<'a> Codegen<'a> {
 				let left = self.promote(left, self.db.types.bool);
 
 				let own_val = self.new_val_typed(self.db.types.bool);
-				define_val!(self, into, own_val, " = {left};");
+				define_val!(self, into, own_val, " = {left};\n");
 
 				// Short-circuiting behavior:
 				// If we're 'and', and lhs is false, we don't evaluate rhs.
@@ -514,7 +514,7 @@ impl<'a> Codegen<'a> {
 				let right = self.promote(right, self.db.types.bool);
 
 				// Our value now evalutes to this other one.
-				set_val!(self, into, own_val, " = {right};");
+				set_val!(self, into, own_val, " = {right};\n");
 
 				self.indent_level -= 1;
 				inf_writeln!(into, "{indent}}}");
