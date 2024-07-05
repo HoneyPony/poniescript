@@ -1,0 +1,26 @@
+fun print_true() -> bool {
+	print("true");
+	return true;
+}
+
+fun print_false() -> bool {
+	print("false");
+	return false;
+}
+
+fun init() {
+	// False should short-circuit, so we only see the first expression having
+	// side effects.
+	//! false
+	print_false() and print_false();
+	//! false
+	print_false() and print_true();
+
+	// True should not short-circuit, so both expressions should have side effects.
+	//! true
+	//! false
+	print_true() and print_false();
+	//! true
+	//! true
+	print_true() and print_true();
+}

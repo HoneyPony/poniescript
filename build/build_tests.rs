@@ -67,6 +67,10 @@ pub fn generate(tests_file: &mut File) {
 		("logical/", "basic_or"),
 		("logical/", "short_and"),
 		("logical/", "short_or"),
+		("logical/", "short_and_expr"),
+		("logical/", "short_or_expr"),
+		("logical/", "short_or_expr_block"),
+		("logical/", "short_or_expr_doubleblock"),
 	];
 
 	for (path, test) in tests {

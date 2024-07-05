@@ -1,0 +1,30 @@
+fun print_true() -> bool {
+	print("true");
+	return true;
+}
+
+fun print_false() -> bool {
+	print("false");
+	return false;
+}
+
+// This test is used to weed out one little thing:
+// The and/or operators should probably always say their value_used is true,
+// because we need them to be able to compare it against a boolean.
+
+fun init() {
+	// False should not short-circuit, so both expressions should have side effects.
+	//! false
+	//! false
+	{ { print_false() } or { print_false() } }
+	//! false
+	//! true
+	{ { print_false() } or { print_true() } }
+
+	// True should short-circuit, so we only see the first expression having
+	// side effects.
+	//! true
+	{ { print_true() } or { print_false() } }
+	//! true
+	{ { print_true() } or { print_true() } }
+}
