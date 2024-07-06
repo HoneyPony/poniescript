@@ -315,8 +315,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		match self.scope_lookup(ident.lexeme) {
 			ScopeEntry::Var(v) => {
-				let inner = Expr::mk_variable(location, v);
-				return Expr::mk_valcall_ok(self.end(location), inner, args)
+				let inner = Expr::mk_variable(location.clone(), v);
+				return Expr::mk_valcall_ok(self.end(location), inner, args, self.db.sig_unassigned)
 			},
 
 			// It may seem in poor taste to have a specific Expr for function
@@ -731,10 +731,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name_str = name.lexeme;
 
+		// TODO: Maybe make this also take a non-ref for speed?
 		let identity = self.db.new_id(Fun {
 			name,
 			parameters,
-			return_type
+			return_type,
+			sig: self.db.sig_unassigned
 		});
 
 		// Put the identity in to the current scope. For lexical scoped function

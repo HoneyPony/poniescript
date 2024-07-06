@@ -175,6 +175,7 @@ pub struct Fun {
 
 /// Represents a function signature. Includes the types of all parameters
 /// and of the return value.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Sig {
 	pub parameters: Vec<TypId>,
 	pub return_type: TypId,

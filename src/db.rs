@@ -49,6 +49,9 @@ pub struct Db {
 	str_side_map: FxHashMap<String, StrId>,
 	source_side_map: FxHashMap<PathBuf, SourceId>,
 	type_side_map: FxHashMap<Type, TypId>,
+	sig_side_map: FxHashMap<Sig, SigId>,
+
+	sig_cname_cache: Vec<(&'static str, &'static str)>,
 
 	str_simple_const_map: FxHashMap<String, StrConstId>,
 
@@ -69,6 +72,7 @@ pub struct Db {
 	pub types: DbTypes,
 
 	pub synthetic: SourceId,
+	pub sig_unassigned: SigId,
 
 	pub errors: Vec<Error>,
 
@@ -93,6 +97,9 @@ impl Db {
 			str_side_map: FxHashMap::default(),
 			source_side_map: FxHashMap::default(),
 			type_side_map: FxHashMap::default(),
+			sig_side_map: FxHashMap::default(),
+
+			sig_cname_cache: Vec::new(),
 
 			str_simple_const_map: FxHashMap::default(),
 
@@ -124,6 +131,7 @@ impl Db {
 			},
 
 			synthetic: SourceId(0),
+			sig_unassigned: SigId(0),
 
 			name_map: FxHashMap::default(),
 
@@ -146,12 +154,41 @@ impl Db {
 
 		db.synthetic = db.new_id(Source::Synthetic);
 
+		db.sig_unassigned = db.put_sig(&Sig {
+			parameters: vec![],
+			return_type: db.types.unassigned
+		});
+
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,
 		// so it's not a huge inefficiency.
 		db.key_lookup_map = crate::lexer::build_key_lookup_map(&mut db);
 
 		return db;
+	}
+
+	pub fn put_sig(&mut self, sig: &Sig) -> SigId {
+		if let Some(existing) = self.sig_side_map.get(sig) {
+			return *existing;
+		}
+
+		let id = self.new_id(sig.clone());
+
+		self.sig_side_map.insert(sig.clone(), id);
+
+		id
+	}
+
+	/// Gets a C type corresponding to the given SigId. Should be created
+	/// at some point. (Sort of a graph traversal problem).
+	pub fn get_sig_ctype(&self, sig: SigId) -> &'static str {
+		todo!("sig ctype generation");
+	}
+
+	/// Gets the c type corresponding to a given function signature. This is
+	/// some generated function pointer type.
+	pub fn get_sig_raw_ctype(&self, sig: SigId) -> &'static str {
+		todo!("sig raw ctype generation");
 	}
 
 	pub fn is_not_concrete(&self, id: TypId) -> bool {
@@ -372,19 +409,6 @@ impl Db {
 		self.generate_var_cnames_cache();
 		self.generate_fun_cnames_cache();
 		self.generate_fun_cparams_cache();
-	}
-
-	/// Gets a C type corresponding to the given SigId. Should be created
-	/// when the Sig is created.
-	pub fn get_sig_ctype(&self, sig: SigId) -> &'static str {
-		todo!("sig ctype generation");
-	}
-
-	/// Gets the c type corresponding to a given function signature. This is
-	/// some generated function pointer type. Should be created when the Sig
-	/// is created.
-	pub fn get_sig_raw_ctype(&self, sig: SigId) -> &'static str {
-		todo!("sig raw ctype generation");
 	}
 
 	fn generate_var_cnames_cache(&mut self) {
