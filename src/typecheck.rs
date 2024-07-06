@@ -564,7 +564,8 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				// TODO: Also support FunRaw captures.
-				self.db.put_type(Type::Fun(sig))
+				capt.typ = self.db.put_type(Type::Fun(sig));
+				capt.typ
 			},
 
 			Expr::Unbound(_) => {

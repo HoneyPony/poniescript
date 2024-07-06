@@ -699,6 +699,19 @@ impl<'a> Codegen<'a> {
 			},
 			Expr::UnboundCall(_) => {
 				panic!("compiler-err:tried-to-codegen-an-unbound-call");
+			},
+
+			Expr::FunCapture(capt) => {
+				let val = self.new_val_typed(capt.typ);
+
+				// BIG TODO: Support closures. Not exactly clear how that will work.
+
+				define_val!(self, into, val,
+					" = ({}) {{ .fun = {}, .closure = NULL }};\n",
+					self.db.get_ctype(capt.typ), // TODO: Maybe use a sig-specific fucntion
+					self.db.get_fun_cname(capt.identity));
+
+				val
 			}
 		}
 	}

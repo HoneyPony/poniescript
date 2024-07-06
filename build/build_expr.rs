@@ -195,7 +195,7 @@ pub fn generate(file: &mut File) {
 	Logical     : Tok op, Expr left, Expr right
 	FunCall     : FunId identity, Vec<Expr> args
 	ValCall     : Expr value, Vec<Expr> args, SigId sig
-	FunCapture  : FunId identity
+	FunCapture  : FunId identity, TypId typ
 	Assign      : VarId identity, Expr value
 	NumLiteral  : Token contents, TypId typ
 	StrLiteral  : StrConstId id
