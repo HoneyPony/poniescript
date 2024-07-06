@@ -75,6 +75,9 @@ pub fn generate(tests_file: &mut File) {
 		("logical/", "short_or_expr_block"),
 		("logical/", "short_or_expr_doubleblock"),
 		("logical/", "or_bottom"),
+
+		("call/", "call_captured_rev"),
+		("call/", "call_captured"),
 	];
 
 	for (path, test) in tests {
