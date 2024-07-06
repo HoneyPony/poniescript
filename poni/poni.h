@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 #define PS_TAG_STRCONST 1
 #define PS_TAG_STR      2
@@ -269,6 +270,14 @@ static inline
 void
 ps_print_bool(ps_bool b) {
 	if(b) { printf("true"); } else { printf("false"); }
+}
+
+// Note: functions are like, struct { fun; closure; }
+
+static inline
+void
+ps_print_ptr(const char *tag, uintptr_t ptr) {
+	printf("<%s " PRIxPTR ">", tag, ptr);
 }
 
 // NOTE: We can currently use ps_print_str for StrBufs as well. This is

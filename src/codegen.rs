@@ -412,6 +412,9 @@ impl<'a> Codegen<'a> {
 			Type::Bottom => { },
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:print-unassigned>"),
 
+			Type::Fun(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun\", (uintptr_t){val}.fun);"),
+			Type::FunRaw(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun*\", (uintptr_t){val});"),
+
 			// TODO: Consider simply making 10.0 a float and 10 an int..?
 			// at least, unless assigned differently..?
 			// The context system is getting increasingly awkward.
@@ -439,6 +442,8 @@ impl<'a> Codegen<'a> {
 			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_strbuf({buf_val}, {val});"),
 			Type::Bottom => { },
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unassigned>"),
+			Type::Fun(_) => todo!("str() for functions"),
+			Type::FunRaw(_) => todo!("str() for function pointers"),
 			Type::AssumeFloat => todo!(),
 			Type::AssumeInt => todo!(),
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unbound-ident>"),
