@@ -729,9 +729,16 @@ impl<'db> TypeChecker<'db> {
 	}
 
 	fn check_module(&mut self, module: &mut Module) {
+		// For now, in order to get FunCaptures working correctly, we make a first
+		// pass which "fix"es functions, which must be done for all functions
+		// (e.g. call_captured_rev.poni). We might come up with a more sophisticated
+		// system later...
+		for fun in &mut module.functions {
+			self.fix_fun_declare(fun);
+		}
+
 		for fun in &mut module.functions {
 			// Ignore errors at this point as there's no need to unwind the stack.
-			self.fix_fun_declare(fun);
 			let _ = self.check_fun_declare(fun);
 		}
 
