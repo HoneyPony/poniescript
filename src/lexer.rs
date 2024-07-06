@@ -27,6 +27,7 @@ pub enum Tok {
 	Greater, GreaterEqual,
 	Less, LessEqual,
 
+	// TODO: Rename this to RightArrow... Oops...
 	LeftArrow,
 
 	Identifier, StringSimple, WholeNumber, DecimalNumber,

@@ -1,0 +1,23 @@
+fun aa() { print("aa"); }
+fun ab() { print("ab"); }
+fun ba() { print("ba"); }
+fun bb() { print("bb"); }
+
+fun a_fun(v: bool) -> fun() {
+	if v { aa } else { ab }
+}
+
+fun b_fun(v: bool) -> fun() {
+	if v { ba } else { bb } 
+}
+
+fun get(v: bool) -> fun(bool) -> fun() {
+	if v { a_fun } else { b_fun }
+}
+
+fun init() {
+	get(true )(true )(); //! aa
+	get(true )(false)(); //! ab
+	get(false)(true )(); //! ba
+	get(false)(false)(); //! bb
+}

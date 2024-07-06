@@ -623,6 +623,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 				expected!(self, Tok::RightParen, "')' after parameter list for fun type");
 
+				if self.match_(Tok::LeftArrow)?.is_some() {
+					sig.return_type = self.typ()?;
+				}
+
 				// TODO: put_sig REALLY should not take a reference, as
 				// we have not used that once.
 				let sig = self.db.put_sig(&sig);
