@@ -1,0 +1,8 @@
+fun init() {
+	var fn = test1;
+	fn(); //! hello
+}
+
+fun test1() {
+	print("hello");
+}
