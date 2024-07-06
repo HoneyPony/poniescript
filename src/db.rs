@@ -39,6 +39,8 @@ pub struct DbTypes {
 
 	pub assume_int: TypId,
 	pub assume_float: TypId,
+
+	pub fun_sig_unassigned: TypId,
 }
 
 /// The Db stores all of the arena-allocated objects that can be referenced
@@ -159,6 +161,8 @@ impl Db {
 			return_type: db.types.unassigned
 		});
 
+		db.types.fun_sig_unassigned = db.put_type(Type::Fun(db.sig_unassigned));
+
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,
 		// so it's not a huge inefficiency.
@@ -177,6 +181,11 @@ impl Db {
 		self.sig_side_map.insert(sig.clone(), id);
 
 		id
+	}
+
+	// TODO: Return a string, etc..
+	pub fn repr_nth_idx(&mut self, idx: usize) -> usize {
+		idx
 	}
 
 	/// Gets a C type corresponding to the given SigId. Should be created

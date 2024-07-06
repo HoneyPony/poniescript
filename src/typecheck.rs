@@ -149,6 +149,22 @@ impl<'db> TypeChecker<'db> {
 			(Type::Unassigned, Type::AssumeInt) => return Ok(self.db.types.int),
 			(Type::Unassigned, Type::AssumeFloat) => return Ok(self.db.types.float),
 
+			(Type::Fun(sig), Type::Fun(sig2)) => {
+				if *sig == self.db.sig_unassigned {
+					return Ok(from);
+				}
+
+				if *sig == *sig2 {
+					return Ok(to);
+				}
+
+				// TODO: Compute if each sig arg is assignable, e.g.
+				// class Dog extends Animal, fun(Animal) may be assigned to fun(Dog)
+				// (contravariance)
+
+				return Err(TypeComputeErr);
+			}
+
 			// If the 'to' is unassigned, then anything is assignable to it.
 			(Type::Unassigned, _) => return Ok(from),
 
@@ -492,7 +508,51 @@ impl<'db> TypeChecker<'db> {
 			},
 
 			Expr::ValCall(call) => {
-				
+				let value = self.check_expr(&mut call.value, true)?;
+			
+				// Now, we need to make sure that the value is Assignable to
+				// a function type.
+				let computed = self.compute_assignable(self.db.types.fun_sig_unassigned, value);
+
+				let computed = maybe_type_error!(self, computed, &call.location,
+					"Cannot call a value of type '{}'",
+					self.db.repr_type(value));
+
+				// TODO: Also support FunRaw calling..?
+				call.value.promote(computed, &self.db);
+
+				let fun_arity = self.db.get(call.sig).parameters.len();
+
+				if call.args.len() != fun_arity {
+					type_error!(self,
+						&call.location,
+						"Incorrect arguments to call. A value of type '{}' expects {} arguments but {} were given",
+						self.db.repr_type(value),
+						call.args.len(),
+						fun_arity);
+				}
+
+				// Check each argument against the corresponding parameter.
+				for i in 0..fun_arity {
+					let arg = self.check_expr(&mut call.args[i], true)?;
+
+					let param = self.db.get(call.sig).parameters[i];
+
+					let computed = self.compute_assignable(
+						param, arg);
+
+					let computed = maybe_type_error!(self, computed,
+						&call.location,
+						"Incorrect argument to call: The {}th parameter expects '{}', but was given '{}'",
+						self.db.repr_nth_idx(i),
+						self.db.repr_type(param),
+						self.db.repr_type(arg)
+					);
+
+					call.args[i].promote(computed, self.db);
+				}
+
+				self.db.get(call.sig).return_type
 			}
 
 			Expr::Unbound(_) => {
