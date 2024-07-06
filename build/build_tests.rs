@@ -80,7 +80,7 @@ pub fn generate(tests_file: &mut File) {
 		("call/", "call_captured_rev"),
 		("call/", "call_captured"),
 		("call/", "call_if_simple"),
-		// TODO: Fix the non-blocked version
+		("call/", "call_if_as_expr"),
 		("call/", "call_if_as_expr_blocked"),
 		("call/", "returns_fun"),
 		("call/", "returns_fun_fun"),

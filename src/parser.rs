@@ -413,7 +413,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			got!(self, "'{{' after if condition");
 		}
 
-		let then_branch = self.expression()?;
+		let then_branch = self.block()?;
 
 		// Now we are at the point where there might be an else.
 		let else_branch = if self.match_(Tok::Else)?.is_some() {
@@ -427,8 +427,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 					// Now we have the same "left brace or something" conundrum.
 					got!(self, "'{{' or 'if' after 'else'");
 				}
-				// Then branch is an expression
-				Some(self.expression()?)
+				// Else branch is a block.
+				Some(self.block()?)
 			}
 		} else { None };
 

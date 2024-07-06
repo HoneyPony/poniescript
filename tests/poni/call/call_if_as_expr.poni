@@ -1,11 +1,6 @@
 fun tester(v: bool) {
-	// Right now, this is getting parsed something like:
-	// if (v) { left } else { right(); }
-	// Although for some reason that results in an Unbound not getting bound.
-	// But still...
-	//
-	// I suppose we need some kind of "parse block but it should end at the
-	// block" rule.
+	// Note that for this to parse correctly requires the If parser to expect
+	// a block(), not an expression() (because expression() will eat the call).
 	if v { left } else { right }();
 }
 
