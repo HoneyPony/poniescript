@@ -340,7 +340,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// For now, we just generate either a Variable or some unbound name.
 		let expr = match self.scope_lookup(ident.lexeme) {
 			ScopeEntry::Var(identity) => Expr::mk_variable(ident.location.clone(), identity),
-			ScopeEntry::Fun(_) => todo!(),
+			ScopeEntry::Fun(identity) =>
+				Expr::mk_funcapture(ident.location.clone(), identity, self.db.types.unassigned),
 			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
 		};
 
@@ -348,9 +349,16 @@ impl<'a, 'b> Parser<'a, 'b> {
 			let rhs = self.expression()?;
 
 			// Assignment
-			return match expr {
+			match expr {
 				Expr::Variable(variable) => 
-					Expr::mk_assign_ok(self.end(location), variable.identity, rhs),
+					return Expr::mk_assign_ok(self.end(location), variable.identity, rhs),
+				Expr::FunCapture(_) => {
+					let error = Error::simple(format!("Cannot assign to a function"), &self.end(location));
+					semantic_error_with!(self, error);
+
+					// semantic error, but the parse tree is still basically fine.
+					return Ok(expr);
+				}
 				Expr::Unbound(_) => todo!(),
 				_ => unreachable!()
 			}
