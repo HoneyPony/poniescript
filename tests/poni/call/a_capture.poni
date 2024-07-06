@@ -1,0 +1,7 @@
+fun test_fun(x: int) -> int {
+	x + 1
+}
+
+fun init() {
+	var y = test_fun;
+}

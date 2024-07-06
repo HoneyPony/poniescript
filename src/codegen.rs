@@ -712,7 +712,9 @@ impl<'a> Codegen<'a> {
 					self.db.get_fun_cname(capt.identity));
 
 				val
-			}
+			},
+
+			Expr::ValCall(_) => todo!("codegen for val calls"),
 		}
 	}
 
