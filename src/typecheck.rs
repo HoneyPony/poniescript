@@ -698,14 +698,35 @@ impl<'db> TypeChecker<'db> {
 		Ok(())
 	}
 
-	fn check_module(&mut self, module: &mut Module) {
-		for global in &mut module.globals {
-			self.check_declare(global);
-		}
+	/// Takes a FunDeclare and ensures that its Sig matches its actual
+	/// value.
+	/// TODO: Make sure binder binds type names.... and so forth...
+	/// 
+	/// I suppose the signature could be generated in the parser, and then
+	/// the unbound type names in that signature would be fixed by binder?
+	fn fix_fun_declare(&mut self, fun_declare: &mut FunDeclare) {
+		let mut sig = Sig { parameters: vec![], return_type: self.db.types.unassigned };
 
+		for param in &self.db.get(fun_declare.identity).parameters {
+			// We're essentially assuming that the type of param is good so far...
+			// which is probably not true...
+			sig.parameters.push(self.db.get_var_type(*param));
+		}
+		sig.return_type = self.db.get(fun_declare.identity).return_type;
+
+		let sig = self.db.put_sig(&sig);
+		self.db.get_mut(fun_declare.identity).sig = sig;
+	}
+
+	fn check_module(&mut self, module: &mut Module) {
 		for fun in &mut module.functions {
 			// Ignore errors at this point as there's no need to unwind the stack.
+			self.fix_fun_declare(fun);
 			let _ = self.check_fun_declare(fun);
+		}
+
+		for global in &mut module.globals {
+			self.check_declare(global);
 		}
 	}
 

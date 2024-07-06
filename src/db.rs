@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::cell::RefCell;
@@ -246,17 +247,43 @@ impl Db {
 		return id;
 	}
 
-	fn gen_sig_ctype_impl(&mut self, sig: SigId) -> (&'static str, &'static str) {
-		if let Some(existing) = self.sig_cname_cache.get(&sig) {
+	fn gen_sig_ctype_impl(&mut self, sig_id: SigId) -> (&'static str, &'static str) {
+		if let Some(existing) = self.sig_cname_cache.get(&sig_id) {
 			return *existing;
 		}
 
-		let struct_name = format!("ps_sig_{}", sig.0);
-		let fnptr_name = format!("ps_sigraw_{}", sig.0);
+		let struct_name = format!("ps_sig_{}", sig_id.0);
+		let fnptr_name = format!("ps_sigraw_{}", sig_id.0);
+
+		let sig = &self.arenas.arena_sig[sig_id.0 as usize];
+
+		use crate::inf_write;
+		use crate::inf_writeln;
+
+		// TODO: We have to topologically sort these declarations so that ones
+		// that use earlier ones work correctly.
+		inf_write!(self.sig_declare_code, "typedef {} (*{})(",
+			self.get_ctype(sig.return_type),
+			fnptr_name);
+
+		let mut comma = false;
+		for param in &sig.parameters {
+			if comma { inf_write!(self.sig_declare_code, ", "); }
+			comma = true;
+
+			inf_write!(self.sig_declare_code, "{}", self.get_ctype(*param));
+		}
+
+		// Add closure param
+		if comma { inf_write!(self.sig_declare_code, ", "); }
+		inf_writeln!(self.sig_declare_code, "void*);");
+
+		inf_writeln!(self.sig_declare_code, "typedef struct {} {{ {} fun; void* closure; }} {};",
+			struct_name, fnptr_name, struct_name);
 
 		let result: (&'static str, &'static str) = (fnptr_name.leak(), struct_name.leak());
 
-		self.sig_cname_cache.insert(sig, result);
+		self.sig_cname_cache.insert(sig_id, result);
 	
 		result
 	}

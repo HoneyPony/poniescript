@@ -170,6 +170,7 @@ impl Val {
 /// As such, there is very little reason to try to handle those errors. Instead,
 /// we should basically unwrap() every single one. This macro helps make that
 /// kind of idea easier to write.
+#[macro_export]
 macro_rules! inf_write {
 	($into:expr, $($arg:tt)*) => {
 		match write!($into, $($arg)*) {
@@ -181,6 +182,7 @@ macro_rules! inf_write {
 	}
 }
 
+#[macro_export]
 macro_rules! inf_writeln {
 	($into:expr, $($arg:tt)*) => {
 		match writeln!($into, $($arg)*) {
@@ -878,6 +880,7 @@ impl<'a> Codegen<'a> {
 		writeln!(output, "#include \"poni/poni_standalone.h\"")?;
 
 		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
+		writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
 		writeln!(output, "// --- function definitions ---")?;
