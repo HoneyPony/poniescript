@@ -180,15 +180,21 @@ impl<'db> TypeChecker<'db> {
 	//
 	// Finally, one thing to note is the intersection of Bottom with anything
 	// is itself.
-	fn compute_intersect(&mut self, left: TypId, right: TypId) -> std::result::Result<TypId, TypeComputeErr> {
+	fn compute_intersect(&mut self, bottom_eats: bool, left: TypId, right: TypId) -> std::result::Result<TypId, TypeComputeErr> {
 		if left == right { return Ok(left); }
 
 		let ty_left = self.db.get(left);
 		let ty_right = self.db.get(right);
 
 		match (ty_left, ty_right) {
-			(Type::Bottom, _) => return Ok(left),
-			(_, Type::Bottom) => return Ok(right),
+			// For something like 5 + return; we do want the bottom to take over
+			// the expression.
+			//
+			// But for something like x = if blah { 5 } else { return }; we 
+			// actually want the type to be integer. So, Bottom sort of needs
+			// its own rule here...
+			(Type::Bottom, _) => if bottom_eats { return Ok(left) } else { return Ok(right) },
+			(_, Type::Bottom) => if bottom_eats { return Ok(right) } else { return Ok(left) },
 		
 			(Type::Float, Type::AssumeInt | Type::AssumeFloat | Type::Int) => return Ok(left),
 			(Type::AssumeInt | Type::AssumeFloat | Type::Int, Type::Float) => return Ok(right),
@@ -243,7 +249,7 @@ impl<'db> TypeChecker<'db> {
 
 				let computed = maybe_type_error!(
 					self,
-					self.compute_intersect(left, right),
+					self.compute_intersect(true, left, right),
 
 					&binary.location,
 					"Invalid operands to binary operator: LHS is {}, RHS is {}",
@@ -263,7 +269,7 @@ impl<'db> TypeChecker<'db> {
 
 				let computed = maybe_type_error!(
 					self,
-					self.compute_intersect(left, right),
+					self.compute_intersect(true, left, right),
 
 					&compare.location,
 					"Invalid operands to comparison: LHS is {}, RHS is {}",
@@ -351,8 +357,10 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				// Okay, we do need the types to be compatible, so compute an 
-				// intersection.
-				let computed = self.compute_intersect(then_ty, else_ty);
+				// intersection. Note that Bottom should not take over, because
+				// in the case that one branch is Bottom, the other branch simply
+				// is "unconditional" in terms of typing.
+				let computed = self.compute_intersect(false, then_ty, else_ty);
 
 				let computed = maybe_type_error_with!(self, computed, {
 					let error = Error::simple(
@@ -522,11 +530,15 @@ impl<'db> TypeChecker<'db> {
 				call.value.promote(computed, &self.db);
 
 				let correct_sig = match self.db.get(computed) {
-					Type::Fun(sig) => sig,
-					Type::FunRaw(sig) => sig,
+					Type::Fun(sig) => *sig,
+					Type::FunRaw(sig) => *sig,
+					Type::Bottom => {
+						// If our type is bottom, bail.
+						return Ok(self.db.types.bottom);
+					},
 					_ => unreachable!()
 				};
-				call.sig = *correct_sig;
+				call.sig = correct_sig;
 
 				let fun_arity = self.db.get(call.sig).parameters.len();
 

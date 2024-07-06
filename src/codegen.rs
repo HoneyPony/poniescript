@@ -626,8 +626,8 @@ impl<'a> Codegen<'a> {
 					(last, val) => {
 						let last = self.compile_stmt(last.unwrap(), into);
 						let last = last.unwrap();
-						let last = self.promote(last, block.typ);
-						if !val.is_bottom() {
+						if last.needs_storage() && val.needs_storage() {
+							let last = self.promote(last, block.typ);
 							// Add one to indent because we're in the block
 							inf_writeln!(into, "{indent}\t{val} = {last};");
 						}

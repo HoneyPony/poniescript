@@ -1,0 +1,16 @@
+fun call(v: bool) {
+	var my_fun = if v { fun_fun } else { return; };
+
+	my_fun();
+}
+
+fun fun_fun() {
+	print("fun fun");
+}
+
+fun init() {
+	call(true);  //! fun fun
+	call(false); //  <nothing>
+	call(true);  //! fun fun
+	call(false); //  <nothing>
+}
