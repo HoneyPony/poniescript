@@ -59,7 +59,7 @@ impl<'db> Binder<'db> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
-				ScopeEntry::Fun(_) => todo!("resolve unbound fun values to 'that function as a value'"),
+				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location, fun, self.db.types.fun_sig_unassigned)),
 				ScopeEntry::None => continue,
 			}
 		}

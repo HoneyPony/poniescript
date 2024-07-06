@@ -103,7 +103,7 @@ impl Type {
 		}
 	}
 
-	pub fn gen_ctype(&self, db: &Db) -> String {
+	pub fn gen_ctype(&self, db: &mut Db) -> String {
 		match self {
 			Type::Int => "ps_int".into(),
 			Type::Float => "ps_float".into(),
@@ -115,8 +115,8 @@ impl Type {
 			Type::StrBuf => "ps_strbuf*".into(),
 
 			// TODO: MAybe take &mut db, and then we can use format! and such
-			Type::FunRaw(sig) => String::from(db.get_sig_raw_ctype(*sig)),
-			Type::Fun(sig) => String::from(db.get_sig_ctype(*sig)),
+			Type::FunRaw(sig) => String::from(db.gen_sig_raw_ctype(*sig)),
+			Type::Fun(sig) => String::from(db.gen_sig_ctype(*sig)),
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 

@@ -53,7 +53,7 @@ pub struct Db {
 	type_side_map: FxHashMap<Type, TypId>,
 	sig_side_map: FxHashMap<Sig, SigId>,
 
-	sig_cname_cache: Vec<(&'static str, &'static str)>,
+	sig_cname_cache: FxHashMap<SigId, (&'static str, &'static str)>,
 
 	str_simple_const_map: FxHashMap<String, StrConstId>,
 
@@ -89,6 +89,9 @@ pub struct Db {
 	/// Maps names of the form "scope.scope.Item" to ScopeEntries. Used to bind
 	/// names to specific objects.
 	name_map: FxHashMap<StrId, ScopeEntry>,
+
+	/// Some C code to declare each Sig type.
+	pub sig_declare_code: String,
 }
 
 impl Db {
@@ -101,7 +104,7 @@ impl Db {
 			type_side_map: FxHashMap::default(),
 			sig_side_map: FxHashMap::default(),
 
-			sig_cname_cache: Vec::new(),
+			sig_cname_cache: FxHashMap::default(),
 
 			str_simple_const_map: FxHashMap::default(),
 
@@ -141,6 +144,8 @@ impl Db {
 
 			test_mode: false,
 			test_lines: Vec::new(),
+
+			sig_declare_code: String::new(),
 		};
 
 		db.types.str_const  = db.put_type(Type::StrConst);
@@ -188,18 +193,6 @@ impl Db {
 	// TODO: Return a string, etc..
 	pub fn repr_nth_idx(&self, idx: usize) -> usize {
 		idx + 1 // 0 -> 1st
-	}
-
-	/// Gets a C type corresponding to the given SigId. Should be created
-	/// at some point. (Sort of a graph traversal problem).
-	pub fn get_sig_ctype(&self, sig: SigId) -> &'static str {
-		todo!("sig ctype generation");
-	}
-
-	/// Gets the c type corresponding to a given function signature. This is
-	/// some generated function pointer type.
-	pub fn get_sig_raw_ctype(&self, sig: SigId) -> &'static str {
-		todo!("sig raw ctype generation");
 	}
 
 	pub fn is_not_concrete(&self, id: TypId) -> bool {
@@ -251,6 +244,33 @@ impl Db {
 		self.type_side_map.insert(typ, id);
 
 		return id;
+	}
+
+	fn gen_sig_ctype_impl(&mut self, sig: SigId) -> (&'static str, &'static str) {
+		if let Some(existing) = self.sig_cname_cache.get(&sig) {
+			return *existing;
+		}
+
+		let struct_name = format!("ps_sig_{}", sig.0);
+		let fnptr_name = format!("ps_sigraw_{}", sig.0);
+
+		let result: (&'static str, &'static str) = (fnptr_name.leak(), struct_name.leak());
+
+		self.sig_cname_cache.insert(sig, result);
+	
+		result
+	}
+
+	/// Generates the ctype for a Sig. Note that this ctype might be nonsense,
+	/// but that's OK.
+	pub fn gen_sig_ctype(&mut self, sig: SigId) -> &'static str {
+		self.gen_sig_ctype_impl(sig).1
+	}
+
+	/// Generates the raw ctype for a Sig. Note that this ctype might be nonsense,
+	/// but that's OK.
+	pub fn gen_sig_raw_ctype(&mut self, sig: SigId) -> &'static str {
+		self.gen_sig_ctype_impl(sig).0
 	}
 
 	pub fn put_str_const_simple(&mut self, string: &str) -> StrConstId {
