@@ -578,10 +578,12 @@ impl<'db> TypeChecker<'db> {
 				capt.typ
 			},
 
-			Expr::Unbound(_) => {
+			Expr::Unbound(unbound) => {
 				// In theory we will resolve all idents beforehand? But this might
 				// be different if we have function overloading.
-				panic!("compiler-err:tried-to-typecheck-an-unbound-identifier-expression");
+				panic!("Internal compiler error: Tried to typecheck an unbound identifier expression '{}' at {}",
+					self.db.get(unbound.identifier.lexeme),
+					unbound.location.offset);
 			},
 			Expr::UnboundCall(_) => {
 				panic!("compiler-err:tried-to-typecheck-an-unbound-call-expression");

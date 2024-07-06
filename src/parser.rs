@@ -441,20 +441,48 @@ impl<'a, 'b> Parser<'a, 'b> {
 		)
 	}
 
-	fn expr_prefix(&mut self) -> Result<Expr> {
+	fn expr_prefix_callable(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
-			Tok::DecimalNumber | Tok::WholeNumber => {
-				self.number()
-			},
-
 			Tok::LeftBrace => self.block(),
 
 			Tok::Identifier => self.expr_ident(),
 
+			Tok::If => self.expr_if(),
+
+			_ => unreachable!()
+		}
+	}
+
+	fn expr_prefix(&mut self) -> Result<Expr> {
+		match self.peek_typ() {
+			Tok::LeftBrace | Tok::Identifier | Tok::If => {
+				let location = self.start();
+				let mut inner = self.expr_prefix_callable()?;
+				while self.match_(Tok::LeftParen)?.is_some() {
+					// Parse args
+					let mut args = Vec::new();
+
+					while !self.at(Tok::RightParen) && !self.is_at_end() {
+						args.push(self.expression()?);
+
+						// TODO: Make sure we require a Comma after every param but the
+						// last.
+						self.match_(Tok::Comma)?;
+					}
+
+					expected!(self, Tok::RightParen, "')' after argument list")?;
+					inner = Expr::mk_valcall(self.end(location.clone()), inner, args, self.db.sig_unassigned);
+				}
+
+				return Ok(inner);
+			}
+
+			Tok::DecimalNumber | Tok::WholeNumber => {
+				self.number()
+			},
+
 			Tok::Print => self.expr_print_or_str(true),
 			Tok::Str => self.expr_print_or_str(false),
-
-			Tok::If => self.expr_if(),
 
 			Tok::True => Expr::mk_boolliteral_ok(self.advance()?.location, true),
 			Tok::False => Expr::mk_boolliteral_ok(self.advance()?.location, false),

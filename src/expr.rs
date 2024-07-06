@@ -52,7 +52,7 @@ impl Expr {
 			Expr::FunCapture(capt) => {
 				// db.put_type(Type::Fun(db.get(capt.identity).sig))
 				// Maybe store the type on the FunCapture..?
-				todo!()
+				capt.typ
 			},
 			Expr::Assign(assign) => {
 				db.get_var_type(assign.identity)
