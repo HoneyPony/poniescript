@@ -1,0 +1,37 @@
+fun aa() { print("aa"); }
+fun ab() { print("ab"); }
+fun ba() { print("ba"); }
+fun bb() { print("bb"); }
+
+fun a_fun(v: bool) -> fun() {
+	if v { aa } else { ab }
+}
+
+fun b_fun(v: bool) -> fun() {
+	if v { ba } else { bb } 
+}
+
+fun get(v: bool) -> fun(bool) -> fun() {
+	if v { a_fun } else { b_fun }
+}
+
+fun caller(a: bool, b: bool, inner: fun(bool) -> fun(bool) -> fun()) -> fun() {
+	inner(a)(b)
+}
+
+// This one is hard to justify using without closures... Maybe once we 
+// add closures we can create a test involving this signature
+// fun outer() -> fun(fun(bool) -> fun(bool) -> fun()) -> fun() {
+//	return caller;
+//}
+
+fun outer() -> fun(bool, bool, fun(bool) -> fun(bool) -> fun()) -> fun() {
+	return caller;
+}
+
+fun init() {
+	outer()(true,  true , get)(); //! aa
+	outer()(true,  false, get)(); //! ab
+	outer()(false, true , get)(); //! ba
+	outer()(false, false, get)(); //! bb
+}

@@ -84,6 +84,7 @@ pub fn generate(tests_file: &mut File) {
 		("call/", "call_if_as_expr_blocked"),
 		("call/", "returns_fun"),
 		("call/", "returns_fun_fun"),
+		("call/", "returns_fun_fun_weirder"),
 	];
 
 	for (path, test) in tests {
