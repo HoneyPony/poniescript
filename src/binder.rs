@@ -119,7 +119,10 @@ impl<'db> Binder<'db> {
 			Expr::If(if_) => {
 				self.visit_expr(&mut if_.condition);
 				self.visit_expr(&mut if_.then_branch);
-				if_.else_branch.as_mut().map(|e| self.visit_expr(e));
+				//if_.else_branch.as_mut().map(|e| self.visit_expr(e));
+				if let Some(else_b) = &mut if_.else_branch {
+					self.visit_expr(else_b);
+				}
 				None
 			}
 			
