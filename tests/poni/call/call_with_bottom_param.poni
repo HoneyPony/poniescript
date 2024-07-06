@@ -1,0 +1,21 @@
+fun fun1(what: StrConst) {
+	print(what, "1");
+}
+
+fun fun2(what: StrConst) {
+	print(what, "2");
+}
+
+fun call(a: bool, b: bool) {
+	{
+		if a { fun1 } else { fun2 }
+	}
+	(if b { "cool" } else { return; });
+}
+
+fun init() {
+	call(false, false); // <nothing>
+	call(false, true ); //! cool2
+	call(true,  false); // <nothing>
+	call(true,  true ); //! cool1
+}

@@ -87,6 +87,7 @@ pub fn generate(tests_file: &mut File) {
 		("call/", "returns_fun_fun_weirder"),
 		("call/", "call_bottom"),
 		("call/", "call_bottom_notreal"),
+		("call/", "call_with_bottom_param"),
 	];
 
 	for (path, test) in tests {
