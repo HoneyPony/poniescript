@@ -521,6 +521,13 @@ impl<'db> TypeChecker<'db> {
 				// TODO: Also support FunRaw calling..?
 				call.value.promote(computed, &self.db);
 
+				let correct_sig = match self.db.get(computed) {
+					Type::Fun(sig) => sig,
+					Type::FunRaw(sig) => sig,
+					_ => unreachable!()
+				};
+				call.sig = *correct_sig;
+
 				let fun_arity = self.db.get(call.sig).parameters.len();
 
 				if call.args.len() != fun_arity {
