@@ -249,6 +249,10 @@ impl Db {
 		return id;
 	}
 
+	pub fn must_get_type(&self, typ: Type) -> TypId {
+		*self.type_side_map.get(&typ).unwrap()
+	}
+
 	fn gen_sig_ctype_impl(&mut self, sig_id: SigId) -> (&'static str, &'static str) {
 		if let Some(existing) = self.sig_cname_cache.get(&sig_id) {
 			return *existing;
@@ -419,6 +423,10 @@ impl Db {
 	/// index.
 	pub fn get_fun_param_type(&self, fun: FunId, param: usize) -> TypId {
 		self.get_var_type(*unsafe { self.get(fun).parameters.get_unchecked(param) })
+	}
+
+	pub fn get_sig_param_type(&self, sig: SigId, param: usize) -> TypId {
+		*unsafe { self.get(sig).parameters.get_unchecked(param) }
 	}
 
 	pub fn get_fun_name(&self, fun: FunId) -> &str {

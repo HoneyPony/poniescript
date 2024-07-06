@@ -91,7 +91,8 @@ impl Type {
 					let ty = db.get(*ty);
 					result.push_str(&ty.to_string(db));
 				}
-				result.push(')');
+				result.push_str(") -> ");
+				result.push_str(&db.get(db.get(*sig).return_type).to_string(db));
 
 				result
 			},

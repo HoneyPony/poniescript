@@ -716,7 +716,47 @@ impl<'a> Codegen<'a> {
 				val
 			},
 
-			Expr::ValCall(_) => todo!("codegen for val calls"),
+			Expr::ValCall(call) => {
+				let fun_val = self.expr(call.value, into);
+				if fun_val.is_bottom() {
+					return fun_val;
+				}
+				// TODO: Support FunRaw, etc
+				let fun_val = self.promote(fun_val, self.db.must_get_type(Type::Fun(call.sig)));
+
+				let ret_type = self.db.get(call.sig).return_type;
+				let val = self.new_val_typed(ret_type);
+
+				// TODO: Figure out a way to re-use PromotedVal buffers, maybe..
+				let mut vals = Vec::new();
+				for idx in 0..call.args.len() {
+					let arg = &call.args[idx];
+					let val = self.expr(arg, into);
+					if val.is_bottom() {
+						return val;
+					}
+
+					let val = self.promote(val, self.db.get_sig_param_type(call.sig, idx));
+					vals.push(val);
+				}
+
+				// TODO: An awkward thing about the define_val! syntax is that
+				// it must be remembed that it does not always print. So,
+				// for a function call, we have to be sure to always generate
+				// the cname separately.
+				define_val!(self, into, val, " = ");
+				inf_write!(into, "{fun_val}.fun(");
+
+				let mut comma = "";
+				for val in vals {
+					inf_write!(into, "{comma}{val}");
+					comma = ", ";
+				}
+				// TODO: Implement closure, gc scoping, etc
+				inf_writeln!(into, "{comma}{fun_val}.closure);");
+
+				val
+			},
 		}
 	}
 
