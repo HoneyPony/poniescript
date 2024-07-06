@@ -130,6 +130,8 @@ impl Db {
 
 				assume_int: TypId(0),
 				assume_float: TypId(0),
+
+				fun_sig_unassigned: TypId(0),
 			},
 
 			synthetic: SourceId(0),

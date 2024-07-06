@@ -79,7 +79,7 @@ impl<'db> Binder<'db> {
 				ScopeEntry::Var(v) => {
 					let inner = Expr::mk_variable(unbound.location.clone(), v);
 					return Some(Expr::mk_valcall(unbound.location.clone(), inner,
-						std::mem::take(&mut unbound.args)));
+						std::mem::take(&mut unbound.args), self.db.sig_unassigned));
 				}
 				ScopeEntry::Fun(fun) =>
 					return Some(Expr::mk_funcall(unbound.location.clone(), fun, 
