@@ -1,0 +1,16 @@
+fun get(v: bool) -> fun() {
+	if v { left } else { right }
+}
+
+fun left() {
+	print("left");
+}
+
+fun right() {
+	print("right");
+}
+
+fun init() {
+	get(true)();  //! left
+	get(false)(); //! right
+}

@@ -309,9 +309,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::RightParen, "')' after argument list")?;
 
-		if self.match_(Tok::LeftParen)?.is_some() {
-			todo!("calling the return value of a call");
-		}
+		// Note: This is handled by expr_prefix() now.
+		//if self.match_(Tok::LeftParen)?.is_some() {
+		//	todo!("calling the return value of a call");
+		//}
 
 		match self.scope_lookup(ident.lexeme) {
 			ScopeEntry::Var(v) => {
@@ -598,6 +599,36 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 				self.db.put_type(Type::UnboundIdent(tok.lexeme))
 			},
+
+			Tok::Fun => {
+				// Sig. Note that we still need to support actually re-visiting
+				// sigs to resolve the names...
+				//
+				// Also some syntax: fun() is equivalent to fun() -> void
+				let mut sig = Sig { parameters: vec![], return_type: self.db.types.void };
+				
+				// fun* means a "raw" function.
+				let raw = self.match_(Tok::Star)?.is_some();
+
+				expected!(self, Tok::LeftParen, "'(' after 'fun' in type name");
+
+				while !self.at(Tok::RightParen) && !self.is_at_end() {
+					let next_ty = self.typ()?;
+
+					sig.parameters.push(next_ty);
+
+					// TODO: Expect comma or rightparen
+					self.match_(Tok::Comma)?;
+				}
+
+				expected!(self, Tok::RightParen, "')' after parameter list for fun type");
+
+				// TODO: put_sig REALLY should not take a reference, as
+				// we have not used that once.
+				let sig = self.db.put_sig(&sig);
+				
+				if raw { self.db.put_type(Type::FunRaw(sig)) } else { self.db.put_type(Type::Fun(sig)) }
+			}
 
 			// More type syntax to come...
 
