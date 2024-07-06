@@ -4,4 +4,5 @@ fun test_fun(x: int) -> int {
 
 fun init() {
 	var y = test_fun;
+	print(y);
 }

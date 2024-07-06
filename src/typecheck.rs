@@ -563,6 +563,9 @@ impl<'db> TypeChecker<'db> {
 					panic!("FunCapture captured a function with unassigned sig. This will not work.");
 				}
 
+				// Make sure we use this sig.
+				self.db.use_sig(sig);
+
 				// TODO: Also support FunRaw captures.
 				capt.typ = self.db.put_type(Type::Fun(sig));
 				capt.typ

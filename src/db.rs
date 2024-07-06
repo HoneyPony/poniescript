@@ -55,6 +55,7 @@ pub struct Db {
 	sig_side_map: FxHashMap<Sig, SigId>,
 
 	sig_cname_cache: FxHashMap<SigId, (&'static str, &'static str)>,
+	sig_cdeclared: FxHashMap<SigId, bool>,
 
 	str_simple_const_map: FxHashMap<String, StrConstId>,
 
@@ -106,6 +107,7 @@ impl Db {
 			sig_side_map: FxHashMap::default(),
 
 			sig_cname_cache: FxHashMap::default(),
+			sig_cdeclared: FxHashMap::default(),
 
 			str_simple_const_map: FxHashMap::default(),
 
@@ -255,10 +257,51 @@ impl Db {
 		let struct_name = format!("ps_sig_{}", sig_id.0);
 		let fnptr_name = format!("ps_sigraw_{}", sig_id.0);
 
-		let sig = &self.arenas.arena_sig[sig_id.0 as usize];
+		let result: (&'static str, &'static str) = (fnptr_name.leak(), struct_name.leak());
 
+		self.sig_cname_cache.insert(sig_id, result);
+	
+		result
+	}
+
+	fn gen_type_dependencies(&mut self, typ: TypId) {
+		match self.get(typ) {
+			Type::FunRaw(sig) | Type::Fun(sig) => {
+				self.use_sig(*sig)
+			},
+
+			_ => { }
+		}
+	}
+
+	pub fn use_sig(&mut self, sig_id: SigId) {
 		use crate::inf_write;
 		use crate::inf_writeln;
+
+		if *self.sig_cdeclared.get(&sig_id).unwrap_or(&false) {
+			// Return if we've already done it.
+			// TODO: This could just be an FxHashSet...
+			// Other TODO: Figure out cyclic references (e.g. throw an error
+			// if gen_type_dependcies calls use_sig on the same value again)
+			return;
+		}
+
+		// Now the sig has been used
+		self.sig_cdeclared.insert(sig_id, true);
+
+		let (fnptr_name, struct_name) = self.gen_sig_ctype_impl(sig_id);
+
+		// First, if that sig itself references any other sigs, we have to
+		// use_sig() them. This is effectively a topological sort.
+		let param_count = self.get(sig_id).parameters.len();
+		self.gen_type_dependencies(self.get(sig_id).return_type);
+		for i in 0..param_count {
+			let param = self.get(sig_id).parameters[i];
+			self.gen_type_dependencies(param);
+		}
+
+		// Now, we can generate the actual code for that sig.
+		let sig = &self.arenas.arena_sig[sig_id.0 as usize];
 
 		// TODO: We have to topologically sort these declarations so that ones
 		// that use earlier ones work correctly.
@@ -280,12 +323,6 @@ impl Db {
 
 		inf_writeln!(self.sig_declare_code, "typedef struct {} {{ {} fun; void* closure; }} {};",
 			struct_name, fnptr_name, struct_name);
-
-		let result: (&'static str, &'static str) = (fnptr_name.leak(), struct_name.leak());
-
-		self.sig_cname_cache.insert(sig_id, result);
-	
-		result
 	}
 
 	/// Generates the ctype for a Sig. Note that this ctype might be nonsense,
