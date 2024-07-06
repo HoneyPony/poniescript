@@ -184,8 +184,8 @@ impl Db {
 	}
 
 	// TODO: Return a string, etc..
-	pub fn repr_nth_idx(&mut self, idx: usize) -> usize {
-		idx
+	pub fn repr_nth_idx(&self, idx: usize) -> usize {
+		idx + 1 // 0 -> 1st
 	}
 
 	/// Gets a C type corresponding to the given SigId. Should be created

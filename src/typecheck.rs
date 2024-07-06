@@ -543,7 +543,7 @@ impl<'db> TypeChecker<'db> {
 
 					let computed = maybe_type_error!(self, computed,
 						&call.location,
-						"Incorrect argument to call: The {}th parameter expects '{}', but was given '{}'",
+						"Incorrect argument to call: The {} parameter expects '{}', but was given '{}'",
 						self.db.repr_nth_idx(i),
 						self.db.repr_type(param),
 						self.db.repr_type(arg)
@@ -553,7 +553,19 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				self.db.get(call.sig).return_type
-			}
+			},
+
+			Expr::FunCapture(capt) => {
+				// TODO: Ensure all functions have sigs.
+				let sig = self.db.get(capt.identity).sig;
+
+				if sig == self.db.sig_unassigned {
+					panic!("FunCapture captured a function with unassigned sig. This will not work.");
+				}
+
+				// TODO: Also support FunRaw captures.
+				self.db.put_type(Type::Fun(sig))
+			},
 
 			Expr::Unbound(_) => {
 				// In theory we will resolve all idents beforehand? But this might
