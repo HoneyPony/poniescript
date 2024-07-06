@@ -164,6 +164,7 @@ impl<'db> Binder<'db> {
 			},
 
 			Expr::ValCall(call) => {
+				self.visit_expr(&mut call.value);
 				for arg in &mut call.args {
 					self.visit_expr(arg);
 				}
