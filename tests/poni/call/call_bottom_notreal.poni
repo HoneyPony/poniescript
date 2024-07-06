@@ -1,0 +1,9 @@
+fun go() {
+	var my_fun: fun(int, float) -> fun(float, int, int, fun(int)) -> fun(bool)
+		= { return; };
+}
+
+fun init() {
+	go();
+	print("success"); //! success
+}
