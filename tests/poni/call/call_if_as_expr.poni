@@ -1,0 +1,16 @@
+fun tester(v: bool) {
+	if v { left } else { right }();
+}
+
+fun left() {
+	print("left");
+}
+
+fun right() {
+	print("right");
+}
+
+fun init() {
+	tester(true);  //! left
+	tester(false); //! right
+}
