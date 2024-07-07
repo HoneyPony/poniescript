@@ -757,6 +757,8 @@ impl<'a> Codegen<'a> {
 
 				val
 			},
+
+			Expr::FunDeclare(declare) => todo!(),
 		}
 	}
 
@@ -776,7 +778,6 @@ impl<'a> Codegen<'a> {
 				// this function simply has to delegate to it.
 				Some(self.expr(&expression.expression, into))
 			},
-			Stmt::FunDeclare(_) => todo!(),
 			Stmt::Return(ret) => {
 				match &ret.expression {
 					Some(value) => {

@@ -194,6 +194,7 @@ pub fn generate(file: &mut File) {
 	Variable    : VarId identity
 	Logical     : Tok op, Expr left, Expr right
 	FunCall     : FunId identity, Vec<Expr> args
+	FunDeclare  : FunId identity, Expr value
 	ValCall     : Expr value, Vec<Expr> args, SigId sig
 	FunCapture  : FunId identity, TypId typ
 	Assign      : VarId identity, Expr value
@@ -214,7 +215,6 @@ pub fn generate(file: &mut File) {
 	
 	Declare    : VarId identity, Expr value
 	Expression : Expr expression
-	FunDeclare : FunId identity, Expr value
 	Return     : Option<Expr> expression
 
 	"#;

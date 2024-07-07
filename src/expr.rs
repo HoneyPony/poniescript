@@ -54,6 +54,10 @@ impl Expr {
 				// Maybe store the type on the FunCapture..?
 				capt.typ
 			},
+			Expr::FunDeclare(declare) => {
+				// Maybe do it like FunCapture..?
+				todo!()
+			}
 			Expr::Assign(assign) => {
 				db.get_var_type(assign.identity)
 			},
@@ -120,6 +124,7 @@ impl Expr {
 			Expr::FunCall(_) => false,
 			Expr::ValCall(_) => false,
 			Expr::FunCapture(_) => false,
+			Expr::FunDeclare(_) => false,
 			Expr::NumLiteral(lit) => {
 				lit.typ = typ;
 				true
@@ -148,7 +153,6 @@ impl Stmt {
 		match self {
 			Stmt::Declare(_) => return false,
 			Stmt::Expression(expr) => expr.expression.promote(typ, db),
-			Stmt::FunDeclare(_) => return false,
 
 			// The value of a Return is always Bottom, and so it cannot be
 			// affected by promote().

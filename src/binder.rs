@@ -181,7 +181,12 @@ impl<'db> Binder<'db> {
 					self.visit_expr(arg);
 				}
 				self.resolve_unbound_call(unbound)
-			}
+			},
+
+			Expr::FunDeclare(fun_declare) => {
+				self.visit_function(fun_declare);
+				return None;
+			},
 		}
 	}
 
@@ -199,9 +204,6 @@ impl<'db> Binder<'db> {
 			},
 			Stmt::Expression(expr) => {
 				self.visit_expr(&mut expr.expression);
-			},
-			Stmt::FunDeclare(fun_declare) => {
-				self.visit_function(fun_declare);
 			},
 			Stmt::Return(ret) => {
 				if let Some(expr) = &mut ret.expression {

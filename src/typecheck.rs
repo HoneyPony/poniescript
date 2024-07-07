@@ -590,6 +590,10 @@ impl<'db> TypeChecker<'db> {
 				capt.typ
 			},
 
+			Expr::FunDeclare(declare) => {
+				todo!()
+			},
+
 			Expr::Unbound(unbound) => {
 				// In theory we will resolve all idents beforehand? But this might
 				// be different if we have function overloading.
@@ -624,7 +628,6 @@ impl<'db> TypeChecker<'db> {
 				}
 				Ok(Some(typ))
 			},
-			Stmt::FunDeclare(_) => todo!(),
 			Stmt::Return(ret) => {
 				// The return statement is interesting in that it entirely
 				// ignores value_used. Because 'return' always returns

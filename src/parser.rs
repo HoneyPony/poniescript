@@ -826,7 +826,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			self.db.fun_init = Some(identity);
 		}
 
-		Stmt::new_fundeclare_ok(self.end(location), identity, value)
+		Expr::new_fundeclare_ok(self.end(location), identity, value)
 	}
 
 	fn parse_top_level(&mut self) -> Result<()> {
