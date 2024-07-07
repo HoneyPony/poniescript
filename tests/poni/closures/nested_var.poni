@@ -1,0 +1,14 @@
+fun has_nested() {
+	var x = 10;
+
+	fun increment() {
+		x += 1;
+	}
+
+	increment();
+	print(x);
+}
+
+fun init() {
+	has_nested(); //! 11
+}
