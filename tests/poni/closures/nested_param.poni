@@ -1,6 +1,6 @@
 fun has_nested(x: int) {
 	fun increment() {
-		x += 1;
+		x = x + 1;
 	}
 
 	increment();
@@ -8,5 +8,5 @@ fun has_nested(x: int) {
 }
 
 fun init() {
-	has_nested(); //! 11
+	has_nested(10); //! 11
 }

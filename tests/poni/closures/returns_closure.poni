@@ -3,7 +3,7 @@ fun make_counter() -> fun() -> int {
 	var x = 0;
 
 	fun counter() -> int {
-		x += 1;
+		x = x + 1;
 		return x;
 	}
 

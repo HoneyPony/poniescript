@@ -2,7 +2,7 @@ fun has_nested() {
 	var x = 10;
 
 	fun increment() {
-		x += 1;
+		x = x + 1;
 	}
 
 	increment();
