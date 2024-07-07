@@ -1,0 +1,24 @@
+fun do_print(x: fun()) {
+	x();
+	x();
+	x();
+}
+
+fun test() {
+	var helper = fun() {
+		print("hello");
+	};
+
+	do_print(helper);
+	do_print(helper);
+}
+
+fun init() {
+	//! hello
+	//! hello
+	//! hello
+	//! hello
+	//! hello
+	//! hello
+	test();
+}
