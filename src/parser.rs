@@ -191,7 +191,14 @@ impl<'a, 'b> Parser<'a, 'b> {
 	fn location_of(&self, entry: &ScopeEntry) -> &SourceLocation {
 		match entry {
 			ScopeEntry::Var(var) => &self.db.get(*var).name.location,
-			ScopeEntry::Fun(fun) => &self.db.get(*fun).name.location,
+			ScopeEntry::Fun(fun) => {
+				if let Some(name) = &self.db.get(*fun).name {
+					&name.location
+				}
+				else {
+					todo!("how do we location_of() for functions without names..?")
+				}
+			}
 			ScopeEntry::None => todo!(),
 		}
 	}
@@ -450,13 +457,18 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			Tok::If => self.expr_if(),
 
+			Tok::Fun => {
+				let fun = self.fun_declaration(false)?;
+				return Ok(Expr::FunDeclare(fun));
+			}
+
 			_ => unreachable!()
 		}
 	}
 
 	fn expr_prefix(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
-			Tok::LeftBrace | Tok::Identifier | Tok::If => {
+			Tok::LeftBrace | Tok::Identifier | Tok::If | Tok::Fun => {
 				let location = self.start();
 				let mut inner = self.expr_prefix_callable()?;
 				while self.match_(Tok::LeftParen)?.is_some() {
@@ -723,10 +735,15 @@ impl<'a, 'b> Parser<'a, 'b> {
 			_ => {
 				let inner = self.expression()?;
 
-				let mut expect_semicolon = match inner {
+				let mut expect_semicolon = match &inner {
 					// If the inner expression is a block or a similar "block-like"
 					// thing, then we don't need a semicolon.
 					Expr::Block(_) | Expr::If(_) => false,
+					Expr::FunDeclare(declare) => {
+						// Named function declarations don't need a semicolon.
+						// Lambda ones are more expression-like, so they do..?
+						!self.db.get(declare.identity).name.is_some()
+					},
 					_ => true,
 				};
 
@@ -759,14 +776,26 @@ impl<'a, 'b> Parser<'a, 'b> {
 		Ok(identity)
 	}
 
-	fn named_fun_declaration(&mut self) -> Result<FunDeclare> {
+	fn fun_declaration(&mut self, require_name: bool) -> Result<FunDeclare> {
 		let location = self.start();
 		let key_fun = expected!(self, Tok::Fun, "'fun'")?;
 
-		let name = expected_after!(self, Tok::Identifier, key_fun,
-			"function name")?;
+		let mut name = None;
 
-		expected!(self, Tok::LeftParen, "'(' after function name")?;
+		if let Some(name_) = self.match_(Tok::Identifier)? {
+			name = Some(name_);
+		}
+		else {
+			if require_name {
+				let error = Error::simple(
+					format!("Expected function name after 'fun'"),
+					&self.current.location
+				);
+				semantic_error_with!(self, error);
+			}
+		}
+
+		expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
 
 		self.push_scope();
 
@@ -800,7 +829,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		self.pop_scope();
 
-		let name_str = name.lexeme;
+		let name_str = name.as_ref().map(|t| t.lexeme);
 
 		// TODO: Maybe make this also take a non-ref for speed?
 		let identity = self.db.new_id(Fun {
@@ -814,19 +843,21 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// names, they can't be used until they're defined...
 		// TODO: Do we want to be able to have mutually recursive functions local
 		// to a function...?
-		self.scope_put_entry(name_str, ScopeEntry::Fun(identity));
+		if let Some(name_str) = name_str {
+			self.scope_put_entry(name_str, ScopeEntry::Fun(identity));
 
-		// TODO: Function names that are nested should be <something>.<something>,
-		// so this will work even for methods and other nestedly-named functions.
-		// (same for vars)
-		if name_str == self.db.put_str("init") {
-			if self.db.fun_init.is_some() {
-				parse_error!(self, "Function 'init' redefined");
+			// TODO: Function names that are nested should be <something>.<something>,
+			// so this will work even for methods and other nestedly-named functions.
+			// (same for vars)
+			if name_str == self.db.put_str("init") {
+				if self.db.fun_init.is_some() {
+					parse_error!(self, "Function 'init' redefined");
+				}
+				self.db.fun_init = Some(identity);
 			}
-			self.db.fun_init = Some(identity);
 		}
 
-		Expr::new_fundeclare_ok(self.end(location), identity, value)
+		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned)
 	}
 
 	fn parse_top_level(&mut self) -> Result<()> {
@@ -841,7 +872,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::Fun => {
 				// At the top level, unless preceded by a var .. = , a function
 				// must have a name.
-				let fun = self.named_fun_declaration()?;
+				let fun = self.fun_declaration(true)?;
 				self.module.functions.push(fun);
 			}
 

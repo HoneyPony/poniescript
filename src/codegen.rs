@@ -758,7 +758,23 @@ impl<'a> Codegen<'a> {
 				val
 			},
 
-			Expr::FunDeclare(declare) => todo!(),
+			Expr::FunDeclare(declare) => {
+				let val = self.new_val_typed(declare.typ);
+
+				self.compile_function(declare.identity, declare.value);
+
+				// BIG TODO: Support closures. Not exactly clear how that will work.
+				// Also, when we do this, either we probably want to desugar
+				// FunDeclare to somehow be wrapped in FunCapture, or at least
+				// have some helper methods..
+
+				define_val!(self, into, val,
+					" = ({}) {{ .fun = {}, .closure = NULL }};\n",
+					self.db.get_ctype(declare.typ), // TODO: Maybe use a sig-specific fucntion
+					self.db.get_fun_cname(declare.identity));
+
+				val
+			},
 		}
 	}
 

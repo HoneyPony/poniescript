@@ -591,7 +591,26 @@ impl<'db> TypeChecker<'db> {
 			},
 
 			Expr::FunDeclare(declare) => {
-				todo!()
+				self.fix_fun_declare(declare);
+				self.check_fun_declare(declare)?;
+
+				let sig = self.db.get(declare.identity).sig;
+
+				// This is basically the same idea as FunCapture.
+				if sig == self.db.sig_unassigned {
+					panic!("FunDeclare declared a function with unassigned sig. This will not work.");
+				}
+
+				// If we're capturing the value from the function, make sure
+				// the sig is used.
+				if value_used {
+					self.db.use_sig(sig);
+				}
+
+				// TODO: Also support FunRaw -- in this case, I suppose the
+				// function would itself know if it is FunRaw..?
+				declare.typ = self.db.put_type(Type::Fun(sig));
+				declare.typ
 			},
 
 			Expr::Unbound(unbound) => {

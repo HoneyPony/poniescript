@@ -56,7 +56,7 @@ impl Expr {
 			},
 			Expr::FunDeclare(declare) => {
 				// Maybe do it like FunCapture..?
-				todo!()
+				declare.typ
 			}
 			Expr::Assign(assign) => {
 				db.get_var_type(assign.identity)
@@ -168,7 +168,7 @@ pub struct Var {
 }
 
 pub struct Fun {
-	pub name: Token,
+	pub name: Option<Token>,
 	pub sig: SigId,
 
 	/// Parameters are the values when the function is defined, arguments

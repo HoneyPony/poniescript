@@ -430,7 +430,12 @@ impl Db {
 	}
 
 	pub fn get_fun_name(&self, fun: FunId) -> &str {
-		self.get(self.get(fun).name.lexeme)
+		if let Some(name) = &self.get(fun).name {
+			self.get(name.lexeme)
+		}
+		else {
+			"<anonymous>"
+		}
 	}
 	
 	pub fn get_fun_cname(&self, fun: FunId) -> &str {
@@ -547,7 +552,13 @@ impl Db {
 			let fun = FunId(id);
 
 			// TODO: Actual name mangling and such
-			let cname = self.get(self.get(fun).name.lexeme).to_string().leak();
+			let cname = if let Some(name) = &self.get(fun).name {
+				self.get(name.lexeme).to_string().leak()
+			}
+			else {
+				// We DEFINITELY need name mangling here
+				"ps_lambda".to_string().leak()
+			};
 			self.fun_cname_cache.push(cname);
 		}
 	}
