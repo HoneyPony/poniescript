@@ -233,6 +233,25 @@ impl<'a, 'b> Parser<'a, 'b> {
 	// TODO: We will also have to add_full_name for functions,
 	// fields, etc... not sure where though yet.
 
+	fn maybe_capture(&mut self, entry: ScopeEntry, captured: bool) -> ScopeEntry {
+		if !captured { return entry; }
+
+		match entry {
+			ScopeEntry::Var(var) => {
+				self.db.get_mut(var).captured = true;
+			},
+			ScopeEntry::Fun(fun) => {
+				self.db.get_mut(fun).captured = true;
+			},
+			ScopeEntry::None => {
+				// I believe this shouldn't happen, but we should at least see.
+				panic!("Tried to capture None")
+			},
+		}
+
+		entry
+	}
+
 	fn scope_lookup(&mut self, name: StrId) -> ScopeEntry {
 		if self.scopes.is_empty() {
 			return *self.global_scope.map.get(&name).unwrap_or(&ScopeEntry::None);
@@ -243,11 +262,15 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// by a class/node field). Instead, only resolve local variables right
 		// now.
 
+		let mut is_captured = false;
 		for scope in self.scopes.iter().rev() {
 			match scope.map.get(&name) {
-				Some(entry) => return *entry,
+				Some(entry) => {
+					return self.maybe_capture(*entry, is_captured)
+				}
 				_ => { }
 			}
+			is_captured = true;
 		}
 
 		// Default to no value if we can't find one.
@@ -836,7 +859,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 			name,
 			parameters,
 			return_type,
-			sig: self.db.sig_unassigned
+			sig: self.db.sig_unassigned,
+
+			captured: false,
 		});
 
 		// Put the identity in to the current scope. For lexical scoped function

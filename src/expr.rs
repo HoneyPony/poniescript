@@ -165,6 +165,8 @@ impl Stmt {
 pub struct Var {
 	pub name: Token,
 	pub typ: TypId,
+
+	pub captured: bool,
 }
 
 pub struct Fun {
@@ -175,6 +177,8 @@ pub struct Fun {
 	/// are the values passed by the caller.
 	pub parameters: Vec<VarId>,
 	pub return_type: TypId,
+
+	pub captured: bool,
 }
 
 /// Represents a function signature. Includes the types of all parameters

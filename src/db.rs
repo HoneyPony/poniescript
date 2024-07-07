@@ -405,6 +405,8 @@ impl Db {
 		let var = Var {
 			name,
 			typ,
+
+			captured: false,
 		};
 
 		return self.new_id(var);
