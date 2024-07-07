@@ -706,12 +706,11 @@ impl<'a> Codegen<'a> {
 			Expr::FunCapture(capt) => {
 				let val = self.new_val_typed(capt.typ);
 
-				// BIG TODO: Support closures. Not exactly clear how that will work.
-
+				// Conveniently, all that FunCapture has to do is grab the existing
+				// fun_val_cname.
 				define_val!(self, into, val,
-					" = ({}) {{ .fun = {}, .closure = NULL }};\n",
-					self.db.get_ctype(capt.typ), // TODO: Maybe use a sig-specific fucntion
-					self.db.get_fun_cname(capt.identity));
+					" = {};\n",
+					self.db.get_fun_val_cname(capt.identity));
 
 				val
 			},
@@ -745,7 +744,7 @@ impl<'a> Codegen<'a> {
 				// for a function call, we have to be sure to always generate
 				// the cname separately.
 				define_val!(self, into, val, " = ");
-				inf_write!(into, "{fun_val}.fun(");
+				inf_write!(into, "{fun_val}->fun(");
 
 				let mut comma = "";
 				for val in vals {
@@ -753,7 +752,7 @@ impl<'a> Codegen<'a> {
 					comma = ", ";
 				}
 				// TODO: Implement closure, gc scoping, etc
-				inf_writeln!(into, "{comma}{fun_val}.closure);");
+				inf_writeln!(into, "{comma}{fun_val}->closure);");
 
 				val
 			},
@@ -763,15 +762,31 @@ impl<'a> Codegen<'a> {
 
 				self.compile_function(declare.identity, declare.value);
 
-				// BIG TODO: Support closures. Not exactly clear how that will work.
-				// Also, when we do this, either we probably want to desugar
-				// FunDeclare to somehow be wrapped in FunCapture, or at least
-				// have some helper methods..
+				// The FunDeclare also initializes the local that stores the "value"
+				// of the function, i.e. a single pointer value that contains
+				// the function and its closure. That way, all FunCaptures basically
+				// boil down to just returning that same value.
+
+				inf_writeln!(into, "{indent}{} {} = ({}) {{ .fun = {}, .closure = NULL }};",
+					self.db.get_fun_sig_as_val_type(declare.identity),
+					self.db.get_fun_val_cname(declare.identity),
+					self.db.get_fun_sig_as_val_type(declare.identity),
+					self.db.get_fun_cname(declare.identity));
+				// FOR NOW: Same hack with #define... we might keep this permanently,
+				// at least for functions that don't have closures.
+				inf_writeln!(into, "{indent}#define {} &{}",
+					self.db.get_fun_val_cname(declare.identity),
+					self.db.get_fun_val_cname(declare.identity));
+				// The nice trick with closures is that we just have the closure value point
+				// back at the allocated object. TODO Actually allocate the object and such,
+				// and don't allocate it if there's no closure. (In which case the value will
+				// have to be global...)
+
+				// BIG TODO: Support closures.
 
 				define_val!(self, into, val,
-					" = ({}) {{ .fun = {}, .closure = NULL }};\n",
-					self.db.get_ctype(declare.typ), // TODO: Maybe use a sig-specific fucntion
-					self.db.get_fun_cname(declare.identity));
+					" = {};\n",
+					self.db.get_fun_val_cname(declare.identity));
 
 				val
 			},
@@ -913,11 +928,24 @@ impl<'a> Codegen<'a> {
 			let is_init = Some(fun.identity) == self.db.fun_init;
 
 			// Don't write declaration for the init() function.
+			// TODO: Handle init() as a value...
 			if !is_init {
 				inf_writeln!(out.fun_declare, "{} {}({});",
 					self.db.get_fun_ret_ctype(fun.identity),
 					self.db.get_fun_cname(fun.identity),
 					self.db.get_fun_cparams(fun.identity));
+				inf_writeln!(out.fun_declare, "{} {} = {{ .fun = {}, .closure = NULL }};",
+					self.db.get_fun_sig_as_val_type(fun.identity),
+					self.db.get_fun_val_cname(fun.identity),
+					self.db.get_fun_cname(fun.identity));
+
+				// This is very hacky. TODO decide if we care.
+				// Essentially, because the rest of the codegen is expecting
+				// sigs to be reference types, we just make our sig automatically
+				// turn into a ref type...
+				inf_writeln!(out.fun_declare, "#define {} &{}",
+					self.db.get_fun_val_cname(fun.identity),
+					self.db.get_fun_val_cname(fun.identity));
 			}
 			
 			self.compile_function(fun.identity, &fun.value);

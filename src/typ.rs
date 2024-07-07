@@ -115,9 +115,9 @@ impl Type {
 			Type::Str => "ps_str*".into(),
 			Type::StrBuf => "ps_strbuf*".into(),
 
-			// TODO: MAybe take &mut db, and then we can use format! and such
-			Type::FunRaw(sig) => String::from(db.gen_sig_raw_ctype(*sig)),
-			Type::Fun(sig) => String::from(db.gen_sig_ctype(*sig)),
+			// We take the ctype for the sig and make it into a pointer.
+			Type::FunRaw(sig) =>  format!("{}*", db.gen_sig_raw_ctype(*sig)),
+			Type::Fun(sig) => format!("{}*", db.gen_sig_ctype(*sig)),
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 

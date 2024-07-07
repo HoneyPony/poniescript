@@ -601,11 +601,8 @@ impl<'db> TypeChecker<'db> {
 					panic!("FunDeclare declared a function with unassigned sig. This will not work.");
 				}
 
-				// If we're capturing the value from the function, make sure
-				// the sig is used.
-				if value_used {
-					self.db.use_sig(sig);
-				}
+				// Note: Our sig was use()d in fix_fun_declare.
+				// self.db.use_sig(sig);
 
 				// TODO: Also support FunRaw -- in this case, I suppose the
 				// function would itself know if it is FunRaw..?
@@ -762,6 +759,10 @@ impl<'db> TypeChecker<'db> {
 
 		let sig = self.db.put_sig(&sig);
 		self.db.get_mut(fun_declare.identity).sig = sig;
+
+		// We have to use any sig that we declare with a function, so that we can
+		// generate the corresponding "value" in C later (even if it goes unused).
+		self.db.use_sig(sig);
 	}
 
 	fn check_module(&mut self, module: &mut Module) {

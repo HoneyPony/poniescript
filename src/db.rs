@@ -66,6 +66,9 @@ pub struct Db {
 
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
+	/// A cache of the local / global name for each function's sig object.
+	/// These names are referenced in FunCapture and similar expressions.
+	fun_val_cname_cache: Vec<&'static str>,
 
 	/// Keep a cache of generated type reprs also for re-using them.
 	type_repr_cache: RefCell<FxHashMap<TypId, &'static str>>,
@@ -122,6 +125,7 @@ impl Db {
 
 			var_cname_cache: Vec::new(),
 			fun_cname_cache: Vec::new(),
+			fun_val_cname_cache: Vec::new(),
 
 			errors: Vec::new(),
 
@@ -344,10 +348,18 @@ impl Db {
 		self.gen_sig_ctype_impl(sig).1
 	}
 
+	pub fn must_get_sig_ctype(&self, sig: SigId) -> &'static str {
+		self.sig_cname_cache.get(&sig).unwrap().1
+	}
+
 	/// Generates the raw ctype for a Sig. Note that this ctype might be nonsense,
 	/// but that's OK.
 	pub fn gen_sig_raw_ctype(&mut self, sig: SigId) -> &'static str {
 		self.gen_sig_ctype_impl(sig).0
+	}
+
+	pub fn must_get_sig_raw_ctype(&self, sig: SigId) -> &'static str {
+		self.sig_cname_cache.get(&sig).unwrap().0
 	}
 
 	pub fn put_str_const_simple(&mut self, string: &str) -> StrConstId {
@@ -424,6 +436,19 @@ impl Db {
 		self.get_ctype(self.get(fun).return_type)
 	}
 
+	pub fn get_fun_sig_ctype(&self, fun: FunId) -> &'static str {
+		// TODO: Is there any way to make this a little bit cleaner..?
+		self.get_ctype(self.must_get_type(Type::Fun(self.get(fun).sig)))
+	}
+
+	/// Every sig type in PonieScript is a pointer, e.g. ps_sig_1* something = function;
+	/// But, to define the vals for the global functions, we need to be able to 
+	/// define these as value types.
+	/// So, we also have a value type version for each sig.
+	pub fn get_fun_sig_as_val_type(&self, fun: FunId) -> &'static str {
+		self.must_get_sig_ctype(self.get(fun).sig)
+	}
+
 	pub fn get_fun_ret_type(&self, fun: FunId) -> TypId {
 		self.get(fun).return_type
 	}
@@ -448,8 +473,11 @@ impl Db {
 	}
 	
 	pub fn get_fun_cname(&self, fun: FunId) -> &str {
-		// TODO: Cname generation
 		unsafe { self.fun_cname_cache.get_unchecked(fun.to_usize()) }
+	}
+
+	pub fn get_fun_val_cname(&self, fun: FunId) -> &str {
+		unsafe { self.fun_val_cname_cache.get_unchecked(fun.to_usize()) }
 	}
 
 	pub fn get_fun_return_typid(&self, fun: FunId) -> TypId {
@@ -581,6 +609,9 @@ impl Db {
 
 			let cname = cname.leak();
 			self.fun_cname_cache.push(cname);
+
+			let val_cname = format!("v{cname}").leak();
+			self.fun_val_cname_cache.push(val_cname);
 		}
 	}
 
