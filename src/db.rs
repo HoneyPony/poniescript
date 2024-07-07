@@ -94,6 +94,9 @@ pub struct Db {
 
 	/// Some C code to declare each Sig type.
 	pub sig_declare_code: String,
+
+	pub str_anonymous: StrId,
+	pub str_lambda: StrId,
 }
 
 impl Db {
@@ -149,6 +152,9 @@ impl Db {
 			test_lines: Vec::new(),
 
 			sig_declare_code: String::new(),
+
+			str_anonymous: StrId(0),
+			str_lambda: StrId(0),
 		};
 
 		db.types.str_const  = db.put_type(Type::StrConst);
@@ -172,6 +178,9 @@ impl Db {
 		});
 
 		db.types.fun_sig_unassigned = db.put_type(Type::Fun(db.sig_unassigned));
+
+		db.str_anonymous = db.put_str("<anonymous>");
+		db.str_lambda = db.put_str("lambda");
 
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,
@@ -532,11 +541,11 @@ impl Db {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
 					let result = *val.get();
 					*val.get_mut() += 1;
-					format!("{}{}", self.get(str_id), result)
+					format!("v_{}{}", self.get(str_id), result)
 				},
 				std::collections::hash_map::Entry::Vacant(val) => {
 					val.insert(0);
-					self.get(str_id).to_string()
+					format!("v_{}", self.get(str_id))
 				},
 			};
 			let cname = cname.leak();
@@ -548,17 +557,29 @@ impl Db {
 	fn generate_fun_cnames_cache(&mut self) {
 		let range = self.arenas.arena_fun.len() as IdType;
 
+		let mut used_set = FxHashMap::<StrId, u64>::default();
+
 		for id in 0..range {
 			let fun = FunId(id);
 
 			// TODO: Actual name mangling and such
-			let cname = if let Some(name) = &self.get(fun).name {
-				self.get(name.lexeme).to_string().leak()
-			}
-			else {
-				// We DEFINITELY need name mangling here
-				"ps_lambda".to_string().leak()
+			let cname_id = if let Some(name) = &self.get(fun).name {
+				name.lexeme
+			} else { self.str_lambda };
+
+			let cname = match used_set.entry(cname_id) {
+				std::collections::hash_map::Entry::Occupied(mut val) => {
+					let result = *val.get();
+					*val.get_mut() += 1;
+					format!("f_{}{}", self.get(cname_id), result)
+				},
+				std::collections::hash_map::Entry::Vacant(val) => {
+					val.insert(0);
+					format!("f_{}", self.get(cname_id))
+				},
 			};
+
+			let cname = cname.leak();
 			self.fun_cname_cache.push(cname);
 		}
 	}

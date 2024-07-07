@@ -1,5 +1,5 @@
 fun tester(v: bool) {
-	var c = if v {
+	var my_fun = if v {
 		fun() {
 			print("left")
 		}
@@ -9,6 +9,8 @@ fun tester(v: bool) {
 			print("right")
 		}
 	};
+
+	my_fun();
 }
 
 fun init() {
