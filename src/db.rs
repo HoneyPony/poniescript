@@ -649,7 +649,7 @@ impl Db {
 			}
 
 			if comma { buffer.push_str(", "); }
-			buffer.push_str("void* closure");
+			buffer.push_str("void* closure_ptr");
 
 			self.fun_cparams_cache.push(buffer.leak());
 		}

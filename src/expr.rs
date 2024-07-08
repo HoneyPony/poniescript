@@ -2,6 +2,8 @@ include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 
 use std::mem::MaybeUninit;
 
+use rustc_hash::FxHashSet;
+
 use crate::{db::*, lexer::Token};
 use crate::source::SourceLocation;
 use crate::lexer::Tok;
@@ -180,6 +182,7 @@ pub struct Fun {
 	pub return_type: TypId,
 
 	pub captured: bool,
+	pub closure_vars: FxHashSet<VarId>,
 }
 
 /// Represents a function signature. Includes the types of all parameters

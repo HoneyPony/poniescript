@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io;
 
 use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 
 use crate::db::*;
 
@@ -243,6 +244,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 		match entry {
 			ScopeEntry::Var(var) => {
 				self.db.get_mut(var).captured = true;
+				if let Some(cur) = self.current_function {
+					self.db.get_mut(cur).closure_vars.insert(var);
+				}
 			},
 			ScopeEntry::Fun(fun) => {
 				self.db.get_mut(fun).captured = true;
@@ -832,6 +836,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			sig: self.db.sig_unassigned,
 
 			captured: false,
+			closure_vars: FxHashSet::default(),
 		});
 		let enclosing_function = self.current_function;
 		self.current_function = Some(identity);

@@ -905,12 +905,29 @@ impl<'a> Codegen<'a> {
 
 		let mut own_buffer = String::new();
 
+		// If we have a closure, define the corresponding struct.
+		if self.db.get(fun).closure_vars.len() > 0 {
+			inf_writeln!(own_buffer, "struct c{} {{", self.db.get_fun_cname(fun));
+			inf_writeln!(own_buffer, "\tps_object object;");
+			inf_writeln!(own_buffer, "\t{} fun;", self.db.must_get_sig_raw_ctype(self.db.get(fun).sig));
+			inf_writeln!(own_buffer, "\tvoid *closure;");
+			for &var in &self.db.get(fun).closure_vars {
+				inf_writeln!(own_buffer, "\t{} {};",
+					self.db.get_capture_ctype(self.db.get(var).typ),
+					self.db.get_cname(var));
+			}
+			inf_writeln!(own_buffer, "}};");
+		}
+
 		// init() fun has no surrounding definition -- it is poni_init()
 		if !is_init {
 			inf_writeln!(own_buffer, "{} {}({}) {{",
 				self.db.get_fun_ret_ctype(fun),
 				self.db.get_fun_cname(fun),
 				self.db.get_fun_cparams(fun));
+		}
+		if self.db.get(fun).closure_vars.len() > 0 {
+			inf_writeln!(own_buffer, "\tstruct c{} *closure = closure_ptr;", self.db.get_fun_cname(fun));
 		}
 
 		// Same idea as in codegen()
