@@ -1,0 +1,5 @@
+fun bind(x: int, other: fun(int, int) -> int) -> fun(int) -> int {
+	fun(y: int) -> int {
+		other(x, y)
+	}
+}

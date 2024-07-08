@@ -1,0 +1,28 @@
+// Note: This example based in part on crafting interpreters
+fun make_counter() -> fun() -> int {
+	var x = 0;
+
+	fun counter() -> int {
+		x = x + 1;
+		return x;
+	}
+
+	return counter;
+}
+
+fun not_init() {
+	var a = make_counter();
+	print(a()); //! 1
+	print(a()); //! 2
+	print(a()); //! 3
+
+	var b = make_counter();
+	print(b()); //! 1
+	print(b()); //! 2
+
+	print(a(), b()); //! 43
+}
+
+fun init() {
+	not_init();
+}
