@@ -14,6 +14,9 @@
 // Tag for closure captures that have no garbage collected data themselves.
 #define PS_TAG_CLOSURE_NOGC 4
 
+// Tag for closure objects.
+#define PS_TAG_CLOSURE 5
+
 typedef float   ps_float;
 typedef int32_t ps_int;
 typedef int8_t  ps_bool;

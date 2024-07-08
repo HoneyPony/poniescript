@@ -342,7 +342,7 @@ impl Db {
 		if comma { inf_write!(self.sig_declare_code, ", "); }
 		inf_writeln!(self.sig_declare_code, "void*);");
 
-		inf_writeln!(self.sig_declare_code, "typedef struct {} {{ {} fun; void* closure; }} {};",
+		inf_writeln!(self.sig_declare_code, "typedef struct {} {{ ps_object object; {} fun; void* closure; }} {};",
 			struct_name, fnptr_name, struct_name);
 	}
 

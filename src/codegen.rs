@@ -598,8 +598,9 @@ impl<'a> Codegen<'a> {
 					inf_write!(into, "{comma}{val}");
 					comma = ", ";
 				}
-				// TODO: Implement closure, gc scoping, etc
-				inf_writeln!(into, "{comma}NULL);");
+
+				// TODO: Maybe generate NULL for the closure if we know for sure it's NULL
+				inf_writeln!(into, "{comma}{}->closure);", self.db.get_fun_val_cname(call.identity));
 
 				val
 			},
@@ -791,21 +792,56 @@ impl<'a> Codegen<'a> {
 				// of the function, i.e. a single pointer value that contains
 				// the function and its closure. That way, all FunCaptures basically
 				// boil down to just returning that same value.
+				if self.db.get(declare.identity).closure_vars.len() > 0 {
+					let fun = declare.identity;
 
-				inf_writeln!(into, "{indent}{} {} = ({}) {{ .fun = {}, .closure = NULL }};",
-					self.db.get_fun_sig_as_val_type(declare.identity),
-					self.db.get_fun_val_cname(declare.identity),
-					self.db.get_fun_sig_as_val_type(declare.identity),
-					self.db.get_fun_cname(declare.identity));
-				// FOR NOW: Same hack with #define... we might keep this permanently,
-				// at least for functions that don't have closures.
-				inf_writeln!(into, "{indent}#define {} &{}",
-					self.db.get_fun_val_cname(declare.identity),
-					self.db.get_fun_val_cname(declare.identity));
-				// The nice trick with closures is that we just have the closure value point
-				// back at the allocated object. TODO Actually allocate the object and such,
-				// and don't allocate it if there's no closure. (In which case the value will
-				// have to be global...)
+					inf_writeln!(into, "{indent}struct c{} *c{} = ps_gc_must_calloc(sizeof(struct c{}), PS_TAG_CLOSURE);",
+						self.db.get_fun_cname(fun),
+						self.db.get_fun_val_cname(fun),
+						self.db.get_fun_cname(fun));
+
+					for &var in &self.db.get(fun).closure_vars {
+						let owned = self.db.get(var).owning_fun == self.current_fun;
+
+						// If the variable is owned by the current function, then
+						// we have a local of the form <something> *<name>. OTherwise,
+						// that <name> is in our own closure.
+						let closure = if owned { "" } else { "closure->" };
+
+						inf_writeln!(into, "{indent}c{}->{} = {closure}{};",
+							self.db.get_fun_val_cname(fun),
+							self.db.get_cname(var),
+							self.db.get_cname(var));
+					}
+
+					inf_writeln!(into, "{indent}{} *{} = &c{}->as_sig;",
+						// TODO: Maybe use the fun_sig_type or something?
+						self.db.get_fun_sig_as_val_type(declare.identity),
+						self.db.get_fun_val_cname(fun),
+						self.db.get_fun_val_cname(fun));
+
+					// We must set the closure value to point back to itself
+					// so it can find itself.
+					inf_writeln!(into, "{indent}{}->closure = {};",
+						self.db.get_fun_val_cname(fun),
+						self.db.get_fun_val_cname(fun));
+				}
+				else {
+					inf_writeln!(into, "{indent}{} {} = ({}) {{ .fun = {}, .closure = NULL }};",
+						self.db.get_fun_sig_as_val_type(declare.identity),
+						self.db.get_fun_val_cname(declare.identity),
+						self.db.get_fun_sig_as_val_type(declare.identity),
+						self.db.get_fun_cname(declare.identity));
+					// FOR NOW: Same hack with #define... we might keep this permanently,
+					// at least for functions that don't have closures.
+					inf_writeln!(into, "{indent}#define {} (&{})",
+						self.db.get_fun_val_cname(declare.identity),
+						self.db.get_fun_val_cname(declare.identity));
+					// The nice trick with closures is that we just have the closure value point
+					// back at the allocated object. TODO Actually allocate the object and such,
+					// and don't allocate it if there's no closure. (In which case the value will
+					// have to be global...)
+				}
 
 				// BIG TODO: Support closures.
 
@@ -908,11 +944,9 @@ impl<'a> Codegen<'a> {
 		// If we have a closure, define the corresponding struct.
 		if self.db.get(fun).closure_vars.len() > 0 {
 			inf_writeln!(own_buffer, "struct c{} {{", self.db.get_fun_cname(fun));
-			inf_writeln!(own_buffer, "\tps_object object;");
-			inf_writeln!(own_buffer, "\t{} fun;", self.db.must_get_sig_raw_ctype(self.db.get(fun).sig));
-			inf_writeln!(own_buffer, "\tvoid *closure;");
+			inf_writeln!(own_buffer, "\t{} as_sig;", self.db.must_get_sig_ctype(self.db.get(fun).sig));
 			for &var in &self.db.get(fun).closure_vars {
-				inf_writeln!(own_buffer, "\t{} {};",
+				inf_writeln!(own_buffer, "\t{} *{};",
 					self.db.get_capture_ctype(self.db.get(var).typ),
 					self.db.get_cname(var));
 			}
@@ -1005,7 +1039,7 @@ impl<'a> Codegen<'a> {
 				// Essentially, because the rest of the codegen is expecting
 				// sigs to be reference types, we just make our sig automatically
 				// turn into a ref type...
-				inf_writeln!(out.fun_declare, "#define {} &{}",
+				inf_writeln!(out.fun_declare, "#define {} (&{})",
 					self.db.get_fun_val_cname(fun.identity),
 					self.db.get_fun_val_cname(fun.identity));
 			}
