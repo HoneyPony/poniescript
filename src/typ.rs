@@ -128,4 +128,23 @@ impl Type {
 				format!("<pony:compiler-err:unassigned-named-type[{}]>", db.get(*name)),
 		}
 	}
+
+	pub fn gen_capt_ctype(&self, db: &mut Db) -> String {
+		match self {
+			Type::Int => "ps_intval".into(),
+			Type::Float => "ps_floatval".into(),
+			Type::Void => "<pony:compiler-err:captured-void>".into(),
+			Type::StrConst => "ps_strconstval".into(),
+
+			// All captures of a single reference type can use the same capturing
+			// type.
+			// TODO: Only generate this &str once...
+			Type::Str => "ps_refval".into(),
+			Type::StrBuf => "ps_refval".into(),
+			Type::FunRaw(_) => "ps_refval".into(),
+			Type::Fun(_) => "ps_refval".into(),
+
+			_ => "<pony:compiler-err:bad-captured-type>".into(),
+		}
+	}
 }

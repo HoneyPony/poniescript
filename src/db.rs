@@ -63,6 +63,7 @@ pub struct Db {
 
 	/// Keep a cache of all generated ctypes so that we can quickly re-use them.
 	ctype_cache: Vec<&'static str>,
+	capt_ctype_cache: Vec<&'static str>,
 
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
@@ -120,6 +121,7 @@ impl Db {
 			key_lookup_map: FxHashMap::default(),
 
 			ctype_cache: Vec::new(),
+			capt_ctype_cache: Vec::new(),
 			type_repr_cache: RefCell::new(FxHashMap::default()),
 			fun_cparams_cache: Vec::new(),
 
@@ -252,9 +254,11 @@ impl Db {
 		}
 
 		let ctype = typ.gen_ctype(self);
+		let capt_ctype = typ.gen_capt_ctype(self);
 
 		// IMPORTANT: The pushes() here must line up with new_id() -> TypId
 		self.ctype_cache.push(ctype.leak());
+		self.capt_ctype_cache.push(capt_ctype.leak());
 
 		let id = self.new_id(typ.clone());
 		self.type_side_map.insert(typ, id);
@@ -413,6 +417,10 @@ impl Db {
 		return self.new_id(var);
 	}
 
+	pub fn is_var_owned_captured(&self, var: VarId, fun: Option<FunId>) -> bool {
+		self.get(var).owning_fun == fun
+	}
+
 	pub fn get_cname(&self, var: VarId) -> &'static str {
 		// TODO: Cname generation, as well as 'extern C' sort of thing
 		unsafe { self.var_cname_cache.get_unchecked(var.to_usize()) }
@@ -425,6 +433,10 @@ impl Db {
 		// Safety: AS LONG AS we don't call new_id outside of put_type,
 		// the index must be valid.
 		unsafe { self.ctype_cache.get_unchecked(typ.to_usize()) }
+	}
+
+	pub fn get_capture_ctype(&self, typ: TypId) -> &'static str {
+		unsafe { self.capt_ctype_cache.get_unchecked(typ.to_usize()) }
 	}
 
 	pub fn get_var_ctype(&self, var: VarId) -> &'static str {

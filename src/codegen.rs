@@ -820,7 +820,21 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 		match stmt {
 			Stmt::Declare(declare) => {
-				self.compile_assign(declare.identity, &declare.value, into, true);
+				let mut is_declaration = true;
+				if self.db.is_var_owned_captured(declare.identity, self.current_fun) {
+					// If the variable is a captured variable, we have to allocate it
+					// before assigning it.
+					// TODO: Support all kinds of TAGs for these allocated values.
+					let capt_typ = self.db.get_capture_ctype(self.db.get(declare.identity).typ);
+					inf_writeln!(into, "{indent}{}* {} = ps_gc_must_calloc(sizeof({}), PS_TAG_CLOSURE_NOGC);",
+						capt_typ,
+						self.db.get_cname(declare.identity),
+						capt_typ);
+
+					// The assignment code no longer has to declare..
+					is_declaration = false;
+				}
+				self.compile_assign(declare.identity, &declare.value, into, is_declaration);
 				None
 			},
 			Stmt::Expression(expression) => {
