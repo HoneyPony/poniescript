@@ -18,6 +18,8 @@ struct Codegen<'a> {
 
 	fun_init_buffer: String,
 
+	current_fun:  Option<FunId>,
+
 	db: &'a Db
 }
 
@@ -71,6 +73,12 @@ enum Val {
 		lit: &'static str
 	},
 	DirectVar {
+		name: &'static str
+	},
+	ClosureVarOwned {
+		name: &'static str
+	},
+	ClosureVarFromClosure {
 		name: &'static str
 	},
 	StringLit {
@@ -202,6 +210,9 @@ impl std::fmt::Display for Val {
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
 			Val::DirectVar { name } => write!(f, "{name}"),
 
+			Val::ClosureVarOwned { name } => write!(f, "({name}->val)"),
+			Val::ClosureVarFromClosure { name } => write!(f, "(closure->{name}->val)"),
+
 			// String literals are always stored in variables with a consistent naming scheme.
 			Val::StringLit { id } => write!(f, "ps_str_const{}", id.to_usize()),
 			Val::BoolLit { val } => match val {
@@ -275,6 +286,8 @@ impl<'a> Codegen<'a> {
 			indent_level: 0,
 
 			db,
+
+			current_fun: None,
 
 			fun_init_buffer: String::new(),
 		}
@@ -536,8 +549,18 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::Variable(variable) => {
-				Val::DirectVar { name: self.db.get_cname(variable.identity) }
-					.typed(self.db.get_var_type(variable.identity))
+				let in_closure = self.db.get(variable.identity).captured;
+				let owned = self.db.get(variable.identity).owning_fun == self.current_fun;
+
+				let name = &self.db.get_cname(variable.identity);
+
+				let val = match (in_closure, owned) {
+					(false, _) => Val::DirectVar { name },
+					(true, false) => Val::ClosureVarFromClosure { name },
+					(true, true) => Val::ClosureVarOwned { name }
+				};
+				
+				val.typed(self.db.get_var_type(variable.identity))
 			},
 			Expr::Assign(assign) => {
 				self.compile_assign(assign.identity, assign.value, into, false);
@@ -857,6 +880,8 @@ impl<'a> Codegen<'a> {
 
 		let enclosing_indent = self.indent_level;
 		self.indent_level = 1;
+		let enclosing_function = self.current_fun;
+		self.current_fun = Some(fun);
 		let indent = self.indent();
 
 		let mut own_buffer = String::new();
@@ -885,6 +910,7 @@ impl<'a> Codegen<'a> {
 		self.return_types.pop();
 
 		self.indent_level = enclosing_indent;
+		self.current_fun = enclosing_function;
 
 		// init() fun has no surrounding scope
 		if !is_init { inf_writeln!(own_buffer, "}}"); }

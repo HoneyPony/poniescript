@@ -401,12 +401,13 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: Token, typ: TypId) -> VarId {
+	pub fn new_var(&mut self, name: Token, typ: TypId, owning_fun: Option<FunId>) -> VarId {
 		let var = Var {
 			name,
 			typ,
 
 			captured: false,
+			owning_fun
 		};
 
 		return self.new_id(var);

@@ -37,6 +37,8 @@ pub struct Parser<'a, 'b> {
 	scope_name: String,
 	global_scope: Scope,
 
+	current_function: Option<FunId>,
+
 	pub had_error: bool,
 }
 
@@ -159,6 +161,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			},
 
 			had_error: false,
+
+			current_function: None,
 		};
 
 		Ok(parser)
@@ -699,7 +703,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		expected!(self, Tok::Semicolon, "';' after initializer expression")?;
 		
 		let name_str = name.lexeme;
-		let identity = self.db.new_var(name, typ);
+		let identity = self.db.new_var(name, typ, self.current_function);
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -793,7 +797,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name, typ);
+		let identity = self.db.new_var(name, typ, self.current_function);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		Ok(identity)
@@ -818,14 +822,27 @@ impl<'a, 'b> Parser<'a, 'b> {
 			}
 		}
 
+		let name_str = name.as_ref().map(|t| t.lexeme);
+
+		// TODO: Maybe make this also take a non-ref for speed?
+		let identity = self.db.new_id(Fun {
+			name,
+			parameters: Vec::new(),
+			return_type: self.db.types.void,
+			sig: self.db.sig_unassigned,
+
+			captured: false,
+		});
+		let enclosing_function = self.current_function;
+		self.current_function = Some(identity);
+
 		expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
 
 		self.push_scope();
 
-		let mut parameters = vec![];
-
 		while !self.at(Tok::RightParen) && !self.is_at_end() {
-			parameters.push(self.parameter()?);
+			let next_param = self.parameter()?;
+			self.db.get_mut(identity).parameters.push(next_param);
 
 			// NOTE: Right now, this means you can have a trailing comma
 			// in a parameter list. That might be fine though -- trailing commas
@@ -835,11 +852,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::RightParen, "')' after function parameter list")?;
 
-		let mut return_type = self.db.types.void;
-
 		if self.match_(Tok::LeftArrow)?.is_some() {
 			// Parse return type
-			return_type = self.typ()?;
+			self.db.get_mut(identity).return_type = self.typ()?;
 		}
 
 		// For now, the function body MUST be a block. But, we can change it
@@ -851,18 +866,6 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let value = self.block()?;
 
 		self.pop_scope();
-
-		let name_str = name.as_ref().map(|t| t.lexeme);
-
-		// TODO: Maybe make this also take a non-ref for speed?
-		let identity = self.db.new_id(Fun {
-			name,
-			parameters,
-			return_type,
-			sig: self.db.sig_unassigned,
-
-			captured: false,
-		});
 
 		// Put the identity in to the current scope. For lexical scoped function
 		// names, they can't be used until they're defined...
@@ -881,6 +884,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 				self.db.fun_init = Some(identity);
 			}
 		}
+
+		// TODO: Also do this when we leave early.
+		self.current_function = enclosing_function;
 
 		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned)
 	}

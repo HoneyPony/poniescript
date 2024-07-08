@@ -167,6 +167,7 @@ pub struct Var {
 	pub typ: TypId,
 
 	pub captured: bool,
+	pub owning_fun: Option<FunId>,
 }
 
 pub struct Fun {
