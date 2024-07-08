@@ -43,6 +43,34 @@ typedef struct ps_strbuf {
 	size_t length;
 } ps_strbuf;
 
+// Example closure:
+// typedef struct some_closure {
+// 	ps_object object;
+// 	fun_ptr ptr;
+// 	void *closure;
+// 	ps_intval *val;
+// }
+
+typedef struct ps_intval {
+	ps_object object;
+	ps_int val;
+} ps_intval;
+
+typedef struct ps_floatval {
+	ps_object object;
+	ps_float val;
+} ps_floatval;
+
+typedef struct ps_boolval {
+	ps_object object;
+	ps_bool val;
+} ps_boolval;
+
+typedef struct ps_refval {
+	ps_object object;
+	void *val;
+} ps_refval;
+
 #ifdef __TINYC__
 	#define PONI_NORETURN __attribute__((noreturn))
 #else
