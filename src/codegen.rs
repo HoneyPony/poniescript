@@ -500,6 +500,21 @@ impl<'a> Codegen<'a> {
 		own_val
 	}
 
+	fn variable_to_val(&mut self, identity: VarId) -> TypedVal {
+		let in_closure = self.db.get(identity).captured;
+		let owned = self.db.get(identity).owning_fun == self.current_fun;
+
+		let name = &self.db.get_cname(identity);
+
+		let val = match (in_closure, owned) {
+			(false, _) => Val::DirectVar { name },
+			(true, false) => Val::ClosureVarFromClosure { name },
+			(true, true) => Val::ClosureVarOwned { name }
+		};
+		
+		val.typed(self.db.get_var_type(identity))
+	}
+
 	fn expr(&mut self, expr: &Expr, into: &mut String) -> TypedVal {
 		let indent = self.indent();
 		match expr {
@@ -549,23 +564,10 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::Variable(variable) => {
-				let in_closure = self.db.get(variable.identity).captured;
-				let owned = self.db.get(variable.identity).owning_fun == self.current_fun;
-
-				let name = &self.db.get_cname(variable.identity);
-
-				let val = match (in_closure, owned) {
-					(false, _) => Val::DirectVar { name },
-					(true, false) => Val::ClosureVarFromClosure { name },
-					(true, true) => Val::ClosureVarOwned { name }
-				};
-				
-				val.typed(self.db.get_var_type(variable.identity))
+				self.variable_to_val(variable.identity)
 			},
 			Expr::Assign(assign) => {
-				self.compile_assign(assign.identity, assign.value, into, false);
-				Val::DirectVar { name: self.db.get_cname(assign.identity) }
-					.typed(self.db.get_var_type(assign.identity))
+				self.compile_assign(assign.identity, assign.value, into, false)
 			},
 			Expr::FunCall(call) => {
 				let ret_type = self.db.get_fun_ret_type(call.identity);
@@ -870,11 +872,11 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn compile_assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) {
+	fn compile_assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) -> TypedVal {
 		let needed_type = self.db.get_var_type(var);
 		let value = self.expr(expr, into);
 		if value.is_bottom() {
-			return;
+			return value;
 		}
 
 		let value = self.promote(value, needed_type);
@@ -884,7 +886,10 @@ impl<'a> Codegen<'a> {
 		} else { ("", "") };
 
 		let indent = self.indent();
-		inf_writeln!(into, "{indent}{declaration}{space}{} = {value};", self.db.get_cname(var));
+		let var_val = self.variable_to_val(var);
+		inf_writeln!(into, "{indent}{declaration}{space}{} = {value};", var_val.val);
+
+		var_val
 	}
 
 	// Does not generate the code for a function declaration (e.g. assigning
