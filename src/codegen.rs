@@ -825,6 +825,12 @@ impl<'a> Codegen<'a> {
 					inf_writeln!(into, "{indent}{}->closure = {};",
 						self.db.get_fun_val_cname(fun),
 						self.db.get_fun_val_cname(fun));
+					
+					// We must set the fun value so that the closure can actually
+					// be called.
+					inf_writeln!(into, "{indent}{}->fun = &{};",
+						self.db.get_fun_val_cname(fun),
+						self.db.get_fun_cname(fun));
 				}
 				else {
 					inf_writeln!(into, "{indent}{} {} = ({}) {{ .fun = {}, .closure = NULL }};",
