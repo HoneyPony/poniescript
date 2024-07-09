@@ -95,6 +95,9 @@ pub fn generate(tests_file: &mut File) {
 		("closures/", "nested_param"),
 		("closures/", "nested_var"),
 		("closures/", "returns_closure"),
+		("closures/", "double_nested"),
+		("closures/", "double_nested_param"),
+		("closures/", "capture_strbuf"),
 	];
 
 	for (path, test) in tests {
