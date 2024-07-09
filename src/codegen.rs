@@ -970,6 +970,27 @@ impl<'a> Codegen<'a> {
 			inf_writeln!(own_buffer, "\tstruct c{} *closure = closure_ptr;", self.db.get_fun_cname(fun));
 		}
 
+		// Any parameters that are captured need to be allocated as regular
+		// captured variables.
+		for &param in &self.db.get(fun).parameters {
+			if self.db.is_var_owned_captured(param, self.current_fun) {
+				// If the variable is a captured variable, we have to allocate it
+				// before assigning it.
+				// TODO: Support all kinds of TAGs for these allocated values.
+				// TODO: Deduplicate this with Stmt::Declare.
+				let capt_typ = self.db.get_capture_ctype(self.db.get(param).typ);
+				inf_writeln!(own_buffer, "{indent}{}* {} = ps_gc_must_calloc(sizeof({}), PS_TAG_CLOSURE_NOGC);",
+					capt_typ,
+					self.db.get_cname(param),
+					capt_typ);
+
+				// Initialize the newly allocated value using the parameter.
+				inf_writeln!(own_buffer, "{indent}{}->val = p{};",
+					self.db.get_cname(param),
+					self.db.get_cname(param));
+			}
+		}
+
 		// Same idea as in codegen()
 		let own_return_type = self.db.get_fun_return_typid(fun);
 		self.return_types.push(own_return_type);

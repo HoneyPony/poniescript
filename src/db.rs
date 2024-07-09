@@ -645,6 +645,11 @@ impl Db {
 
 				buffer.push_str(self.get_var_ctype(*param));
 				buffer.push(' ');
+				if self.get(*param).captured {
+					buffer.push('p'); // FOR NOW:
+					// variable names: v_whatever
+					// captured parameter: pv_whatever (turned into v_whatever in fun)
+				}
 				buffer.push_str(self.get_cname(*param));
 			}
 
