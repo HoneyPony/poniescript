@@ -418,7 +418,7 @@ impl Db {
 	}
 
 	pub fn is_var_owned_captured(&self, var: VarId, fun: Option<FunId>) -> bool {
-		self.get(var).owning_fun == fun
+		self.get(var).captured && (self.get(var).owning_fun == fun)
 	}
 
 	pub fn get_cname(&self, var: VarId) -> &'static str {

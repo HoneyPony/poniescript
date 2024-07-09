@@ -238,18 +238,23 @@ impl<'a, 'b> Parser<'a, 'b> {
 	// TODO: We will also have to add_full_name for functions,
 	// fields, etc... not sure where though yet.
 
-	fn maybe_capture(&mut self, entry: ScopeEntry, captured: bool) -> ScopeEntry {
-		if !captured { return entry; }
-
+	fn maybe_capture(&mut self, entry: ScopeEntry) -> ScopeEntry {
 		match entry {
 			ScopeEntry::Var(var) => {
-				self.db.get_mut(var).captured = true;
-				if let Some(cur) = self.current_function {
-					self.db.get_mut(cur).closure_vars.insert(var);
+				// Capture variables when their owning function is not the current
+				// function.
+				if self.db.get(var).owning_fun != self.current_function {
+					self.db.get_mut(var).captured = true;
+					if let Some(cur) = self.current_function {
+						self.db.get_mut(cur).closure_vars.insert(var);
+					}
 				}
 			},
 			ScopeEntry::Fun(fun) => {
-				self.db.get_mut(fun).captured = true;
+				// It's not quite clear what it means to capture a function...
+				// I guess capture the local referring to it? But we could
+				// just make the value pointing to that function a global...
+				// TODO
 			},
 			ScopeEntry::None => {
 				// I believe this shouldn't happen, but we should at least see.
@@ -270,15 +275,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// by a class/node field). Instead, only resolve local variables right
 		// now.
 
-		let mut is_captured = false;
 		for scope in self.scopes.iter().rev() {
 			match scope.map.get(&name) {
 				Some(entry) => {
-					return self.maybe_capture(*entry, is_captured)
+					return self.maybe_capture(*entry)
 				}
 				_ => { }
 			}
-			is_captured = true;
 		}
 
 		// Default to no value if we can't find one.
