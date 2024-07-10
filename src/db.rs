@@ -447,6 +447,23 @@ impl Db {
 		self.get(var).typ
 	}
 
+	pub fn get_ref_cast(&self, typ: TypId) -> Option<&'static str> {
+		match self.get(typ) {
+			Type::Int => None,
+			Type::Float => None,
+			Type::Void => None,
+			Type::Bool => None,
+
+			Type::Bottom => None,
+			Type::Unassigned => None,
+			Type::AssumeInt => None,
+			Type::AssumeFloat => None,
+			Type::UnboundIdent(_) => None,
+
+			_ => Some(self.get_ctype(typ))
+		}
+	}
+
 	pub fn get_fun_ret_ctype(&self, fun: FunId) -> &'static str {
 		self.get_ctype(self.get(fun).return_type)
 	}

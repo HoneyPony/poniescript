@@ -76,10 +76,12 @@ enum Val {
 		name: &'static str
 	},
 	ClosureVarOwned {
-		name: &'static str
+		name: &'static str,
+		cast: Option<&'static str>,
 	},
 	ClosureVarFromClosure {
-		name: &'static str
+		name: &'static str,
+		cast: Option<&'static str>,
 	},
 	StringLit {
 		id: StrConstId,
@@ -210,8 +212,22 @@ impl std::fmt::Display for Val {
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
 			Val::DirectVar { name } => write!(f, "{name}"),
 
-			Val::ClosureVarOwned { name } => write!(f, "({name}->val)"),
-			Val::ClosureVarFromClosure { name } => write!(f, "(closure->{name}->val)"),
+			Val::ClosureVarOwned { name, cast } => {
+				if let Some(cast) = cast {
+					write!(f, "(({cast}){name}->val)")
+				}
+				else {
+					write!(f, "({name}->val)")
+				}
+			},
+			Val::ClosureVarFromClosure { name, cast } => {
+				if let Some(cast) = cast {
+					write!(f, "(({cast})closure->{name}->val)")
+				}
+				else {
+					write!(f, "(closure->{name}->val)")
+				}
+			},
 
 			// String literals are always stored in variables with a consistent naming scheme.
 			Val::StringLit { id } => write!(f, "ps_str_const{}", id.to_usize()),
@@ -505,14 +521,28 @@ impl<'a> Codegen<'a> {
 		let owned = self.db.get(identity).owning_fun == self.current_fun;
 
 		let name = &self.db.get_cname(identity);
+		let cast = self.db.get_ref_cast(self.db.get_var_type(identity));
 
 		let val = match (in_closure, owned) {
 			(false, _) => Val::DirectVar { name },
-			(true, false) => Val::ClosureVarFromClosure { name },
-			(true, true) => Val::ClosureVarOwned { name }
+			(true, false) => Val::ClosureVarFromClosure { name, cast },
+			(true, true) => Val::ClosureVarOwned { name, cast }
 		};
 		
 		val.typed(self.db.get_var_type(identity))
+	}
+
+	fn val_to_assignable(&self, val: TypedVal) -> TypedVal {
+		let typ = val.typ;
+		let val = match val.val {
+			// For closure vars, we can't include the cast when assigning.
+			Val::ClosureVarOwned { name, cast } => Val::ClosureVarOwned { name, cast: None },
+			Val::ClosureVarFromClosure { name, cast } => Val::ClosureVarFromClosure { name, cast: None },
+
+			_ => val.val
+		};
+
+		val.typed(typ)
 	}
 
 	fn expr(&mut self, expr: &Expr, into: &mut String) -> TypedVal {
@@ -929,6 +959,9 @@ impl<'a> Codegen<'a> {
 
 		let indent = self.indent();
 		let var_val = self.variable_to_val(var);
+
+		// When assigning, we need to make sure we have an LValue
+		let var_val = self.val_to_assignable(var_val);
 		inf_writeln!(into, "{indent}{declaration}{space}{} = {value};", var_val.val);
 
 		var_val

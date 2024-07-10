@@ -15,5 +15,5 @@ fun init() {
 	glob("hello");    //! hello
 	glob(" my");      //! hello my
 	glob(" little");  //! hello my little
-	glob(" ponies;"); //! hello my little ponies
+	glob(" ponies");  //! hello my little ponies
 }
