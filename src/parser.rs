@@ -35,6 +35,7 @@ pub struct Parser<'a, 'b> {
 	last_location: SourceLocation,
 
 	scopes: Vec<Scope>,
+	fun_scopes: Vec<FunId>,
 	scope_name: String,
 	global_scope: Scope,
 
@@ -150,6 +151,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			db,
 
 			scopes: Vec::new(),
+			fun_scopes: Vec::new(),
 			// TODO: Push and pop things from this name
 			scope_name: String::new(),
 			global_scope: Scope::new(),
@@ -245,8 +247,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 				// function.
 				if self.db.get(var).owning_fun != self.current_function {
 					self.db.get_mut(var).captured = true;
-					if let Some(cur) = self.current_function {
-						self.db.get_mut(cur).closure_vars.insert(var);
+
+					for &scope in self.fun_scopes.iter().rev() {
+						if Some(scope) == self.db.get(var).owning_fun { break; }
+						self.db.get_mut(scope).closure_vars.insert(var);
 					}
 				}
 			},
@@ -843,6 +847,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		});
 		let enclosing_function = self.current_function;
 		self.current_function = Some(identity);
+		self.fun_scopes.push(identity);
 
 		expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
 
@@ -895,6 +900,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		// TODO: Also do this when we leave early.
 		self.current_function = enclosing_function;
+		self.fun_scopes.pop();
 
 		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned)
 	}
