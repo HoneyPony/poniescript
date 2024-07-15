@@ -99,6 +99,7 @@ pub fn generate(tests_file: &mut File) {
 		("closures/", "double_nested_param"),
 		("closures/", "capture_strbuf"),
 		("closures/", "capture_fun"),
+		("closures/", "capture_fun_with_closure"),
 	];
 
 	for (path, test) in tests {
