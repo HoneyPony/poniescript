@@ -1,17 +1,17 @@
 fun test() -> fun() {
 	var a = 10;
 
-	fun helper(b: int) {
+	var helper = fun(b: int) {
 		print(a + b);
-	}
+	};
 
-	fun uses_helper() {
+	var uses_helper = fun() {
 		helper(2);
 		helper(4);
 
 		a = 15;
 		helper(6);
-	}
+	};
 
 	return uses_helper;
 }

@@ -100,6 +100,8 @@ pub fn generate(tests_file: &mut File) {
 		("closures/", "capture_strbuf"),
 		("closures/", "capture_fun"),
 		("closures/", "capture_fun_with_closure"),
+		("closures/", "capture_fun_lambda"),
+		("closures/", "capture_fun_with_closure_lambda"),
 	];
 
 	for (path, test) in tests {
