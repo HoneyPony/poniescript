@@ -1,0 +1,7 @@
+fun my_fun() {
+    print("hello!");
+}
+
+fun other() {
+    my_fun = 20;
+}
