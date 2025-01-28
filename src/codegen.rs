@@ -798,26 +798,32 @@ impl<'a> Codegen<'a> {
 
 		// Write the struct definition.
 		let mut struc = String::new();
-
 		inf_writeln!(struc, "struct {} {{", self.db.get_class_cname(class_declare.identity));
+
+		// Simultaneously write the variable generator. 
+		let enclosing_indent = self.indent_level;
+		self.indent_level = 1;
+		let mut preparer = String::new();
+
+		inf_writeln!(preparer, "void {}(struct {} *this) {{",
+				self.db.get_class_preparer_cname(class_declare.identity),
+				self.db.get_class_cname(class_declare.identity));
+		
 		for var in &class_declare.vars {
-			//let needed_type = self.db.get_var_type(var.identity);
-			//let value = self.expr(var.e, into);
-			//if value.is_bottom() {
-			//	panic!("shouldn't let Bottom values into class vars.");
-			//}
-
-			//let value = self.promote(value, needed_type);
-
-			//let (declaration, space) = if is_declaration {
-			//	(self.db.get_var_ctype(var), " ")
-			//} else { ("", "") };
-
+			// Compile the assignment into the 'preparer' function. This is where
+			// the variable value will be initialized.
+			self.compile_assign(var.identity, &var.value, &mut preparer, false);
+			// Compile the variable declaration into the struct.
 			inf_writeln!(struc, "\t{} {};", self.db.get_var_ctype(var.identity), self.db.get_cname(var.identity));
 		}
-		inf_writeln!(struc, "}};");
 
+		inf_writeln!(struc, "}};");
 		self.structs.push(struc);
+
+		inf_writeln!(preparer, "}}");
+		self.functions.push(preparer);
+
+		self.indent_level = enclosing_indent;
 	}
 
 	fn compile_stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<TypedVal> {

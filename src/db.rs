@@ -68,6 +68,7 @@ pub struct Db {
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
 	class_cname_cache: Vec<&'static str>,
+	class_preparer_cache: Vec<&'static str>,
 
 	/// Keep a cache of generated type reprs also for re-using them.
 	type_repr_cache: RefCell<FxHashMap<TypId, &'static str>>,
@@ -125,6 +126,7 @@ impl Db {
 			var_cname_cache: Vec::new(),
 			fun_cname_cache: Vec::new(),
 			class_cname_cache: Vec::new(),
+			class_preparer_cache: Vec::new(),
 
 			errors: Vec::new(),
 
@@ -477,6 +479,10 @@ impl Db {
 		unsafe { self.class_cname_cache.get_unchecked(class.to_usize()) }
 	}
 
+	pub fn get_class_preparer_cname(&self, class: ClassId) -> &'static str {
+		unsafe { self.class_preparer_cache.get_unchecked(class.to_usize()) }
+	}
+
 	pub fn repr_var(&self, var: VarId) -> &str {
 		self.get(self.get(var).name.lexeme)
 	}
@@ -583,8 +589,10 @@ impl Db {
 				},
 			};
 			let cname = cname.leak();
+			let preparer = format!("i{}", cname).leak();
 
 			self.class_cname_cache.push(cname);
+			self.class_preparer_cache.push(preparer);
 		}
 	}
 
