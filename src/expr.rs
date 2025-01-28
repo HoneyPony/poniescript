@@ -157,6 +157,7 @@ impl Stmt {
 			// The value of a Return is always Bottom, and so it cannot be
 			// affected by promote().
 			Stmt::Return(_) => return false,
+			Stmt::ClassDeclare(_) => return false,
 		}
 	}
 }
@@ -183,6 +184,12 @@ pub struct Fun {
 pub struct Sig {
 	pub parameters: Vec<TypId>,
 	pub return_type: TypId,
+}
+
+pub struct Class {
+	pub name: Token,
+	pub vars: Vec<VarId>,
+	pub funs: Vec<FunId>,
 }
 
 struct BoxAlloc {

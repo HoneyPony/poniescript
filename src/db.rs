@@ -8,6 +8,7 @@ use crate::error::Error;
 use crate::expr::Var;
 use crate::expr::Fun;
 use crate::expr::Sig;
+use crate::expr::Class;
 use crate::typ::Type;
 use crate::source::{Source};
 
@@ -66,6 +67,7 @@ pub struct Db {
 
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
+	class_cname_cache: Vec<&'static str>,
 
 	/// Keep a cache of generated type reprs also for re-using them.
 	type_repr_cache: RefCell<FxHashMap<TypId, &'static str>>,
@@ -122,6 +124,7 @@ impl Db {
 
 			var_cname_cache: Vec::new(),
 			fun_cname_cache: Vec::new(),
+			class_cname_cache: Vec::new(),
 
 			errors: Vec::new(),
 
@@ -469,6 +472,10 @@ impl Db {
 		// called until after type-checking.
 		unsafe { self.fun_cparams_cache.get_unchecked(fun.to_usize()) }
 	}
+	
+	pub fn get_class_cname(&self, class: ClassId) -> &'static str {
+		unsafe { self.class_cname_cache.get_unchecked(class.to_usize()) }
+	}
 
 	pub fn repr_var(&self, var: VarId) -> &str {
 		self.get(self.get(var).name.lexeme)
@@ -526,6 +533,7 @@ impl Db {
 		self.generate_var_cnames_cache();
 		self.generate_fun_cnames_cache();
 		self.generate_fun_cparams_cache();
+		self.generate_class_cnames_cache();
 	}
 
 	fn generate_var_cnames_cache(&mut self) {
@@ -546,6 +554,32 @@ impl Db {
 				std::collections::hash_map::Entry::Vacant(val) => {
 					val.insert(0);
 					format!("v_{}", self.get(str_id))
+				},
+			};
+			let cname = cname.leak();
+
+			self.var_cname_cache.push(cname);
+		}
+	}
+
+	fn generate_class_cnames_cache(&mut self) {
+		let range = self.arenas.arena_class.len() as IdType;
+
+		let mut used_set = FxHashMap::<StrId, u64>::default();
+
+		for id in 0..range {
+			let class = ClassId(id);
+
+			let str_id = self.get(class).name.lexeme;
+			let cname = match used_set.entry(str_id) {
+				std::collections::hash_map::Entry::Occupied(mut val) => {
+					let result = *val.get();
+					*val.get_mut() += 1;
+					format!("cl_{}{}", self.get(str_id), result)
+				},
+				std::collections::hash_map::Entry::Vacant(val) => {
+					val.insert(0);
+					format!("cl_{}", self.get(str_id))
 				},
 			};
 			let cname = cname.leak();

@@ -9,6 +9,7 @@ use std::fmt::Write as _;
 
 struct Codegen<'a> {
 	functions: Vec<String>,
+	structs: Vec<String>,
 
 	return_types: Vec<TypId>,
 
@@ -34,6 +35,10 @@ struct CodegenOutputs {
 	string_const_define: String,
 	string_const_init: String,
 
+	/// Declares structs used for classes, etc.
+	struct_declare: String,
+	struct_define: String,
+
 	fun_declare: String,
 }
 
@@ -47,6 +52,9 @@ impl CodegenOutputs {
 			string_const_init: String::new(),
 
 			fun_declare: String::new(),
+
+			struct_declare: String::new(),
+			struct_define: String::new(),
 		}
 	}
 }
@@ -267,6 +275,7 @@ impl<'a> Codegen<'a> {
 	fn new(db: &'a Db) -> Self {
 		return Codegen {
 			functions: Vec::new(),
+			structs: Vec::new(),
 
 			return_types: Vec::new(),
 
@@ -785,6 +794,40 @@ impl<'a> Codegen<'a> {
 				self.compile_assign(declare.identity, &declare.value, into, true);
 				None
 			},
+			Stmt::ClassDeclare(class_declare) => {
+				// For the class, it does not generate any direct code.
+				// But, we do have to generate a struct for the class,
+				// as well as each of its function definitions.
+
+				for fun in &class_declare.funs {
+					self.compile_function(fun.identity, &fun.value);
+				}
+
+				// Write the struct definition.
+				let mut struc = String::new();
+
+				inf_writeln!(struc, "struct {} {{", self.db.get_class_cname(class_declare.identity));
+				for var in &class_declare.vars {
+					//let needed_type = self.db.get_var_type(var.identity);
+					//let value = self.expr(var.e, into);
+					//if value.is_bottom() {
+					//	panic!("shouldn't let Bottom values into class vars.");
+					//}
+
+					//let value = self.promote(value, needed_type);
+
+					//let (declaration, space) = if is_declaration {
+					//	(self.db.get_var_ctype(var), " ")
+					//} else { ("", "") };
+
+					inf_writeln!(into, "\t{} {};", self.db.get_var_ctype(var.identity), self.db.get_cname(var.identity));
+				}
+				inf_writeln!(struc, "}}");
+
+				self.structs.push(struc);
+
+				None
+			}
 			Stmt::Expression(expression) => {
 				// The value of the expression is unused inside a statement.
 				// Note that this automatically results in some kinds of
@@ -937,7 +980,12 @@ impl<'a> Codegen<'a> {
 		writeln!(output, "#include \"poni/poni_standalone.h\"")?;
 
 		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
+		writeln!(output, "// --- struct declarations ---\n{}", outputs.struct_declare)?;
 		writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
+		writeln!(output, "// --- struct definitions ---")?;
+		for struc in &self.structs {
+			writeln!(output, "{}", struc)?;
+		}
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
 		writeln!(output, "// --- function definitions ---")?;

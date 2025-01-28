@@ -80,6 +80,7 @@ pub fn generate(db_file: &mut File) {
 		("FunId", "Fun"),
 		("TypId", "Type"),
 		("SigId", "Sig"),
+		("ClassId", "Class"),
 		("SourceId", "Source"),
 	];
 

@@ -210,6 +210,22 @@ impl<'db> Binder<'db> {
 					self.visit_expr(expr);
 				}
 			},
+			Stmt::ClassDeclare(declare) => {
+				let class = self.db.get(declare.identity);
+				let name = self.db.get(class.name.lexeme);
+				let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name);
+				self.checkers.push(new_scope);
+
+				for fun in &mut declare.funs {
+					self.visit_function(fun);
+				}
+
+				for var in &mut declare.vars {
+					self.visit_expr(&mut var.value);
+				}
+
+				self.checkers.pop();
+			}
 		}
 	}
 

@@ -213,9 +213,10 @@ pub fn generate(file: &mut File) {
 	// 	FunDeclare : FunId identity, Vec<VarId> args, 
 	let stmt_spec = r#"
 	
-	Declare    : VarId identity, Expr value
-	Expression : Expr expression
-	Return     : Option<Expr> expression
+	Declare      : VarId identity, Expr value
+	Expression   : Expr expression
+	Return       : Option<Expr> expression
+	ClassDeclare : ClassId identity, Vec<FunDeclare> funs, Vec<Declare> vars
 
 	"#;
 
