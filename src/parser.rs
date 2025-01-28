@@ -860,6 +860,55 @@ impl<'a, 'b> Parser<'a, 'b> {
 		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned)
 	}
 
+	fn class_declaration(&mut self) -> Result<ClassDeclare> {
+		let location = self.start();
+		let key_class = expected!(self, Tok::Class, "'class'")?;
+
+		let name = expected_after!(self, Tok::Identifier, key_class,
+			"class name")?;
+
+		expected!(self, Tok::LeftBrace, "'{{' at beginning of class")?;
+
+		let mut declare_funs = Vec::<FunDeclare>::new();
+		let mut declare_vars = Vec::<Declare>::new();
+
+		let mut funs = Vec::<FunId>::new();
+		let mut vars = Vec::<VarId>::new();
+
+		loop {
+			match self.peek_typ() {
+				Tok::Var => {
+					let declare = self.var_declaration()?;
+					vars.push(declare.identity);
+					declare_vars.push(declare);
+				},
+				Tok::Fun => {
+					todo!("functions in classes")
+				},
+				Tok::Class => {
+					todo!("nested classes")
+				}
+				Tok::RightBrace => {
+					break;
+				},
+				_ => {
+					// Error in class.
+					got!(self, "Expected 'var', 'const', 'class', or 'fun'");
+				}
+			}
+		}
+
+		expected!(self, Tok::RightBrace, "'}}' at end of class")?;
+
+		let identity = self.db.new_id(Class {
+			name,
+			vars,
+			funs
+		});
+
+		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars)
+	}
+
 	fn parse_top_level(&mut self) -> Result<()> {
 		match self.peek_typ() {
 			Tok::Eof => { },
@@ -874,6 +923,11 @@ impl<'a, 'b> Parser<'a, 'b> {
 				// must have a name.
 				let fun = self.fun_declaration(true)?;
 				self.module.functions.push(fun);
+			}
+
+			Tok::Class => {
+				let class = self.class_declaration()?;
+				self.module.classes.push(class);
 			}
 
 			_ => {

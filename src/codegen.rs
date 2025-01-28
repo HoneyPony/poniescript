@@ -787,6 +787,39 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
+	fn compile_class(&mut self, class_declare: &ClassDeclare) {
+		// For the class, it does not generate any direct code.
+		// But, we do have to generate a struct for the class,
+		// as well as each of its function definitions.
+
+		for fun in &class_declare.funs {
+			self.compile_function(fun.identity, &fun.value);
+		}
+
+		// Write the struct definition.
+		let mut struc = String::new();
+
+		inf_writeln!(struc, "struct {} {{", self.db.get_class_cname(class_declare.identity));
+		for var in &class_declare.vars {
+			//let needed_type = self.db.get_var_type(var.identity);
+			//let value = self.expr(var.e, into);
+			//if value.is_bottom() {
+			//	panic!("shouldn't let Bottom values into class vars.");
+			//}
+
+			//let value = self.promote(value, needed_type);
+
+			//let (declaration, space) = if is_declaration {
+			//	(self.db.get_var_ctype(var), " ")
+			//} else { ("", "") };
+
+			inf_writeln!(struc, "\t{} {};", self.db.get_var_ctype(var.identity), self.db.get_cname(var.identity));
+		}
+		inf_writeln!(struc, "}};");
+
+		self.structs.push(struc);
+	}
+
 	fn compile_stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<TypedVal> {
 		let indent = self.indent();
 		match stmt {
@@ -795,37 +828,7 @@ impl<'a> Codegen<'a> {
 				None
 			},
 			Stmt::ClassDeclare(class_declare) => {
-				// For the class, it does not generate any direct code.
-				// But, we do have to generate a struct for the class,
-				// as well as each of its function definitions.
-
-				for fun in &class_declare.funs {
-					self.compile_function(fun.identity, &fun.value);
-				}
-
-				// Write the struct definition.
-				let mut struc = String::new();
-
-				inf_writeln!(struc, "struct {} {{", self.db.get_class_cname(class_declare.identity));
-				for var in &class_declare.vars {
-					//let needed_type = self.db.get_var_type(var.identity);
-					//let value = self.expr(var.e, into);
-					//if value.is_bottom() {
-					//	panic!("shouldn't let Bottom values into class vars.");
-					//}
-
-					//let value = self.promote(value, needed_type);
-
-					//let (declaration, space) = if is_declaration {
-					//	(self.db.get_var_ctype(var), " ")
-					//} else { ("", "") };
-
-					inf_writeln!(into, "\t{} {};", self.db.get_var_ctype(var.identity), self.db.get_cname(var.identity));
-				}
-				inf_writeln!(struc, "}}");
-
-				self.structs.push(struc);
-
+				self.compile_class(class_declare);
 				None
 			}
 			Stmt::Expression(expression) => {
@@ -964,6 +967,10 @@ impl<'a> Codegen<'a> {
 			}
 			
 			self.compile_function(fun.identity, &fun.value);
+		}
+
+		for class in &module.classes {
+			self.compile_class(class);
 		}
 
 		self.compile_string_constant_init(&mut out.string_const_define, &mut out.string_const_init);

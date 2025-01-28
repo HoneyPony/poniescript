@@ -584,7 +584,7 @@ impl Db {
 			};
 			let cname = cname.leak();
 
-			self.var_cname_cache.push(cname);
+			self.class_cname_cache.push(cname);
 		}
 	}
 
