@@ -368,7 +368,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 					// semantic error, but the parse tree is still basically fine.
 					return Ok(expr);
 				}
-				Expr::Unbound(_) => todo!(),
+				Expr::Unbound(unbound) => {
+					return Expr::mk_unboundassign_ok(self.end(location), unbound.identifier, rhs)
+				}
 				_ => unreachable!()
 			}
 		}

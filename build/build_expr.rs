@@ -189,24 +189,26 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 pub fn generate(file: &mut File) {
 	let expr_spec = r#"
 
-	Binary      : Tok op, Expr left, Expr right, TypId typ
-	Comparison  : Tok op, Expr left, Expr right, TypId compare_as
-	Variable    : VarId identity
-	Logical     : Tok op, Expr left, Expr right
-	FunCall     : FunId identity, Vec<Expr> args
-	FunDeclare  : FunId identity, Expr value, TypId typ
-	ValCall     : Expr value, Vec<Expr> args, SigId sig
-	FunCapture  : FunId identity, TypId typ
-	Assign      : VarId identity, Expr value
-	NumLiteral  : Token contents, TypId typ
-	StrLiteral  : StrConstId id
-	BoolLiteral : bool value
-	Block       : Vec<Stmt> stmts, TypId typ
-	If          : Expr condition, Expr then_branch, Option<Expr> else_branch, TypId typ
-	Unbound     : Token identifier
-	UnboundCall : Token identifier, Vec<Expr> args
-	Print       : Vec<Expr> exprs, TypId typ
-	Str         : Vec<Expr> exprs
+	Binary        : Tok op, Expr left, Expr right, TypId typ
+	Comparison    : Tok op, Expr left, Expr right, TypId compare_as
+	Variable      : VarId identity
+	Logical       : Tok op, Expr left, Expr right
+	FunCall       : FunId identity, Vec<Expr> args
+	FunDeclare    : FunId identity, Expr value, TypId typ
+	ValCall       : Expr value, Vec<Expr> args, SigId sig
+	FunCapture    : FunId identity, TypId typ
+	Assign        : VarId identity, Expr value
+	UnboundAssign : Token identifier, Expr value
+	NumLiteral    : Token contents, TypId typ
+	StrLiteral    : StrConstId id
+	BoolLiteral   : bool value
+	Block         : Vec<Stmt> stmts, TypId typ
+	If            : Expr condition, Expr then_branch, Option<Expr> else_branch, TypId typ
+	Unbound       : Token identifier
+	UnboundCall   : Token identifier, Vec<Expr> args
+	Print         : Vec<Expr> exprs, TypId typ
+	Str           : Vec<Expr> exprs
+	Undefined     : 
 
 	"#;
 

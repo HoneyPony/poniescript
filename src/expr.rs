@@ -12,6 +12,22 @@ impl Stmt {
 	}
 }
 
+/// Necessary in order to use std::mem::take on Expr's for some parts of the
+/// compiler.
+impl std::default::Default for Expr {
+	fn default() -> Self {
+		return Expr::mk_undefined(SourceLocation {
+			// SAFETY: We only use this in order to std::mem::take something
+			// that will no longer be accessed.
+			// 
+			// (this is sketch... maybe we can come up with something better?)
+			source: unsafe { SourceId::from_u32(0) },
+			offset: 0,
+			length: 0
+		})
+	}
+}
+
 impl Expr {
 	pub fn val_location(&self) -> &SourceLocation {
 		match self {
@@ -79,10 +95,12 @@ impl Expr {
 			},
 			Expr::Unbound(_) => panic!("calling Expr::typ() on Unbound"),
 			Expr::UnboundCall(_) => panic!("calling Expr::typ() on UnboundCall"),
+			Expr::UnboundAssign(_) => panic!("calling Expr::typ() on UnboundAssign"),
 			Expr::Print(print) => {
 				print.exprs[0].typ(db)
 			},
 			Expr::Str(_) => db.types.str_buf,
+			Expr::Undefined(_) => panic!("calling Expr::typ() on Undefined"),
 		}
 	}
 
@@ -140,10 +158,12 @@ impl Expr {
 			},
 			Expr::Unbound(_) => false,
 			Expr::UnboundCall(_) => false,
+			Expr::UnboundAssign(_) => false,
 			Expr::Print(print) => {
 				print.exprs[0].promote(typ, db)
 			},
 			Expr::Str(_) => false,
+			Expr::Undefined(_) => panic!("calling Expr::promote() on Undefined")
 		}
 	}
 }

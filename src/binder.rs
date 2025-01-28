@@ -73,6 +73,27 @@ impl<'db> Binder<'db> {
 		None
 	}
 
+	fn resolve_unbound_assign(&mut self, ident: StrId, location: SourceLocation, expr: Expr) -> Option<Expr> {
+		for checker in self.checkers.iter_mut().rev() {
+			match checker.check(self.db, ident) {
+				ScopeEntry::Var(var) => return Some(Expr::mk_assign(location, var, expr)),
+				ScopeEntry::Fun(fun) => {
+					self.db.report_error(Error::simple(
+						format!("Cannot assign to a function."),
+						&location
+					));
+
+					self.had_error = true;
+					return None;
+				}
+				ScopeEntry::None => continue,
+			}
+		}
+
+		self.had_error = true;
+		None
+	}
+
 	fn resolve_unbound_call(&mut self, unbound: &mut UnboundCall) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, unbound.identifier.lexeme) {
@@ -155,6 +176,11 @@ impl<'db> Binder<'db> {
 				self.resolve_unbound(ident.identifier.lexeme, ident.location.clone())
 			},
 
+			Expr::UnboundAssign(assign) => {
+				// TODO: Do we want to avoid the clone here?
+				self.resolve_unbound_assign(assign.identifier.lexeme, assign.location.clone(), std::mem::take(assign.value))
+			},
+
 			Expr::FunCall(call) => {
 				// Must visit all the arguments of the call
 				for arg in &mut call.args {
@@ -187,6 +213,10 @@ impl<'db> Binder<'db> {
 				self.visit_function(fun_declare);
 				return None;
 			},
+			
+			Expr::Undefined(_) => {
+				return None;
+			}
 		}
 	}
 

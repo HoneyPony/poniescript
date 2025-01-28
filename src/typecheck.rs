@@ -623,6 +623,8 @@ impl<'db> TypeChecker<'db> {
 			Expr::UnboundCall(_) => {
 				panic!("compiler-err:tried-to-typecheck-an-unbound-call-expression");
 			}
+			Expr::UnboundAssign(_) => panic!("Internal compiler error: Tried to typecheck an UnboundAssign"),
+			Expr::Undefined(_) => panic!("Internal compiler error: Tried to typecheck an Undefined"),
 		})
 	}
 

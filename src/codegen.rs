@@ -599,9 +599,7 @@ impl<'a> Codegen<'a> {
 					.typed(self.db.get_var_type(variable.identity))
 			},
 			Expr::Assign(assign) => {
-				self.compile_assign(assign.identity, assign.value, into, false);
-				Val::DirectVar { name: self.db.get_cname(assign.identity), depth: 0 } // TODO: Class assignments.
-					.typed(self.db.get_var_type(assign.identity))
+				self.compile_assign(assign.identity, assign.value, into, false)
 			},
 			Expr::FunCall(call) => {
 				let ret_type = self.db.get_fun_ret_type(call.identity);
@@ -758,9 +756,15 @@ impl<'a> Codegen<'a> {
 			Expr::Unbound(_) => {
 				panic!("compiler-err:tried-to-codegen-an-unbound-identifier-expression");
 			},
+			Expr::UnboundAssign(_) => {
+				panic!("compiler-err:tried-to-codegen-an-unbound-assign-expression");
+			},
 			Expr::UnboundCall(_) => {
 				panic!("compiler-err:tried-to-codegen-an-unbound-call");
 			},
+			Expr::Undefined(_) => {
+				panic!("Internal compiler error: Tried to codegen an 'Undefined' node");
+			}
 
 			Expr::FunCapture(capt) => {
 				let val = self.new_val_typed(capt.typ);
@@ -864,10 +868,6 @@ impl<'a> Codegen<'a> {
 		for var in &class_declare.vars {
 			// Compile the assignment into the 'preparer' function. This is where
 			// the variable value will be initialized.
-			// EXTREME HORRIBLE HACK: Until we have proper variable binding, etc,
-			// in place, just write "this->" in front of each compiled variable.
-			// This should work (?) but it's not a good idea.
-			inf_write!(preparer, "this->");
 			self.compile_assign(var.identity, &var.value, &mut preparer, false);
 			// Compile the variable declaration into the struct.
 			inf_writeln!(struc, "\t{} {};", self.db.get_var_ctype(var.identity), self.db.get_cname(var.identity));
@@ -928,11 +928,32 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn compile_assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) {
+	fn get_direct_var(&mut self, var: VarId) -> TypedVal {
+		let mut depth = 0;
+
+		if let Some(class) = self.db.get(var).class {
+			for inside in self.inside_class.iter().rev() {
+				// Depth is at least one, because we're in a class, so
+				// increment before checking.
+				depth += 1;
+				if *inside == class {
+					break;
+				}
+			}
+
+			// TODO: Panic if we run out of classes before finding the
+			// right one.
+		}
+
+		Val::DirectVar { name: self.db.get_cname(var), depth }
+			.typed(self.db.get_var_type(var))
+	}
+
+	fn compile_assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) -> TypedVal {
 		let needed_type = self.db.get_var_type(var);
 		let value = self.expr(expr, into);
 		if value.is_bottom() {
-			return;
+			return value;
 		}
 
 		let value = self.promote(value, needed_type);
@@ -941,8 +962,13 @@ impl<'a> Codegen<'a> {
 			(self.db.get_var_ctype(var), " ")
 		} else { ("", "") };
 
+		let var_lvalue = self.get_direct_var(var);
+
 		let indent = self.indent();
-		inf_writeln!(into, "{indent}{declaration}{space}{} = {value};", self.db.get_cname(var));
+		// Discard type as we can't meaningfully promote it.
+		inf_writeln!(into, "{indent}{declaration}{space}{} = {value};", var_lvalue.val);
+
+		var_lvalue
 	}
 
 	// Does not generate the code for a function declaration (e.g. assigning
