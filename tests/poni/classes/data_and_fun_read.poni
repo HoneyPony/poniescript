@@ -1,0 +1,13 @@
+// This test tests VERY BASIC reading from class variables, not assigning to them.
+
+class Test {
+    var data : int = 10;
+
+    fun no_params() {
+        print(data);
+    }
+
+    fun with_param(x: int) {
+        print(data + x);
+    }
+}

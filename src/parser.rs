@@ -883,7 +883,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 					declare_vars.push(declare);
 				},
 				Tok::Fun => {
-					todo!("functions in classes")
+					let fun = self.fun_declaration(true)?;
+					funs.push(fun.identity);
+					declare_funs.push(fun);
 				},
 				Tok::Class => {
 					todo!("nested classes")
