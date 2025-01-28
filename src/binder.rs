@@ -197,6 +197,23 @@ impl<'db> Binder<'db> {
 		}
 	}
 
+	fn visit_class(&mut self, class_declare: &mut ClassDeclare) {
+		let class = self.db.get(class_declare.identity);
+		let name = self.db.get(class.name.lexeme);
+		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name);
+		self.checkers.push(new_scope);
+
+		for fun in &mut class_declare.funs {
+			self.visit_function(fun);
+		}
+
+		for var in &mut class_declare.vars {
+			self.visit_expr(&mut var.value);
+		}
+
+		self.checkers.pop();
+	}
+
 	fn visit_stmt(&mut self, stmt: &mut Stmt) {
 		match stmt {
 			Stmt::Declare(declare) => {
@@ -210,21 +227,8 @@ impl<'db> Binder<'db> {
 					self.visit_expr(expr);
 				}
 			},
-			Stmt::ClassDeclare(declare) => {
-				let class = self.db.get(declare.identity);
-				let name = self.db.get(class.name.lexeme);
-				let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name);
-				self.checkers.push(new_scope);
-
-				for fun in &mut declare.funs {
-					self.visit_function(fun);
-				}
-
-				for var in &mut declare.vars {
-					self.visit_expr(&mut var.value);
-				}
-
-				self.checkers.pop();
+			Stmt::ClassDeclare(class_declare) => {
+				self.visit_class(class_declare);
 			}
 		}
 	}
@@ -245,6 +249,10 @@ impl<'db> Binder<'db> {
 
 		for fun in &mut module.functions {
 			self.visit_function(fun);
+		}
+
+		for class in &mut module.classes {
+			self.visit_class(class);
 		}
 	}
 }
