@@ -179,6 +179,8 @@ pub struct Fun {
 	/// are the values passed by the caller.
 	pub parameters: Vec<VarId>,
 	pub return_type: TypId,
+
+	pub class: Option<ClassId>,
 }
 
 /// Represents a function signature. Includes the types of all parameters

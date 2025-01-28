@@ -840,7 +840,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			name,
 			parameters,
 			return_type,
-			sig: self.db.sig_unassigned
+			sig: self.db.sig_unassigned,
+			class: None, // Class is not assigned for now, the class parser will assign it later.
 		});
 
 		// Put the identity in to the current scope. For lexical scoped function
@@ -914,6 +915,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		for var in &declare_vars {
 			self.db.get_mut(var.identity).class = Some(identity);
+		}
+
+		for fun in &declare_funs {
+			self.db.get_mut(fun.identity).class = Some(identity);
 		}
 
 		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars)

@@ -964,6 +964,10 @@ impl<'a> Codegen<'a> {
 				self.db.get_fun_cparams(fun));
 		}
 
+		if let Some(class) = self.db.get(fun).class {
+			inf_writeln!(own_buffer, "{indent}struct {} *const this = closure;", self.db.get_class_cname(class));
+		}
+
 		// Same idea as in codegen()
 		let own_return_type = self.db.get_fun_return_typid(fun);
 		self.return_types.push(own_return_type);
