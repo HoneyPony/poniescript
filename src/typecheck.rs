@@ -626,6 +626,18 @@ impl<'db> TypeChecker<'db> {
 		})
 	}
 
+	fn check_class(&mut self, class_declare: &mut ClassDeclare) -> Result<()> {
+		for declare in &mut class_declare.vars {
+			self.check_declare(declare)?;
+		}
+
+		for fun in &mut class_declare.funs {
+			self.check_fun_declare(fun)?;
+		}
+
+		Ok(())
+	}
+
 	fn check_stmt(&mut self, stmt: &mut Stmt, value_used: bool) -> Result<Option<TypId>> {
 		match stmt {
 			Stmt::Declare(declare) => {
@@ -638,14 +650,7 @@ impl<'db> TypeChecker<'db> {
 				Ok(None)
 			},
 			Stmt::ClassDeclare(class_declare) => {
-				for declare in &mut class_declare.vars {
-					self.check_declare(declare)?;
-				}
-
-				for fun in &mut class_declare.funs {
-					self.check_fun_declare(fun)?;
-				}
-
+				self.check_class(class_declare)?;
 				Ok(None)
 			},
 			Stmt::Expression(expr) => {
@@ -791,6 +796,10 @@ impl<'db> TypeChecker<'db> {
 
 		for global in &mut module.globals {
 			self.check_declare(global);
+		}
+
+		for class in &mut module.classes {
+			self.check_class(class);
 		}
 	}
 
