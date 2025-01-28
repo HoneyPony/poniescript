@@ -1,0 +1,8 @@
+fun test(val: bool) -> int {
+	if(val) { 3 } else { 10 }
+}
+
+fun init() {
+	print(test(false)); //! 10
+	print(test(true));  //! 3
+}
