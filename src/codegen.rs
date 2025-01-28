@@ -13,6 +13,11 @@ struct Codegen<'a> {
 
 	return_types: Vec<TypId>,
 
+	/// Helps us resolve variables to the correct thing.
+	/// TODO: Do we want to instead synthesize AST nodes for variables that
+	/// are inside classes..?
+	inside_class: Vec<ClassId>,
+
 	val_idx: usize,
 
 	indent_level: usize,
@@ -79,7 +84,13 @@ enum Val {
 		lit: &'static str
 	},
 	DirectVar {
-		name: &'static str
+		name: &'static str,
+		// The number of class accesses we have to walk to get to the variable.
+		//
+		// Assumption: Each function has a local variable "this" which lets
+		// us get to the current class members. Then, "this" also lets us
+		// get to the superclass.
+		depth: usize,
 	},
 	StringLit {
 		id: StrConstId,
@@ -208,7 +219,21 @@ impl std::fmt::Display for Val {
 		match self {
 			Val::Tmp(idx) => write!(f, "tmp{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
-			Val::DirectVar { name } => write!(f, "{name}"),
+			Val::DirectVar { name, depth } => {
+				if *depth > 0 {
+					// TODO: The problem with this system is it doesn't seem
+					// like it can meaningfully support static variables in a
+					// clean way. We probably do want to change into synthesizing
+					// AST nodes of some sort.
+					write!(f, "this->")?;
+					let mut depth_loop = depth - 1;
+					while depth_loop > 0 {
+						panic!("todo: add nested class support, etc");
+						depth_loop -= 1;
+					}
+				}
+				write!(f, "{name}")
+			}
 
 			// String literals are always stored in variables with a consistent naming scheme.
 			Val::StringLit { id } => write!(f, "ps_str_const{}", id.to_usize()),
@@ -286,6 +311,8 @@ impl<'a> Codegen<'a> {
 			db,
 
 			fun_init_buffer: String::new(),
+
+			inside_class: Vec::new(),
 		}
 	}
 
@@ -545,12 +572,35 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::Variable(variable) => {
-				Val::DirectVar { name: self.db.get_cname(variable.identity) }
+				// If the variable is inside a class, we need to walk the chain
+				// of classes to synthesize the correct accessor.
+				//
+				// Note that, if the type checking and binding stages are correct,
+				// this code should be fine, as the varaible should be bound to
+				// a variable inside a class that we are also inside now.
+
+				let mut depth = 0;
+
+				if let Some(class) = self.db.get(variable.identity).class {
+					for inside in self.inside_class.iter().rev() {
+						// Depth is at least one, because we're in a class, so
+						// increment before checking.
+						depth += 1;
+						if *inside == class {
+							break;
+						}
+					}
+
+					// TODO: Panic if we run out of classes before finding the
+					// right one.
+				}
+
+				Val::DirectVar { name: self.db.get_cname(variable.identity), depth }
 					.typed(self.db.get_var_type(variable.identity))
 			},
 			Expr::Assign(assign) => {
 				self.compile_assign(assign.identity, assign.value, into, false);
-				Val::DirectVar { name: self.db.get_cname(assign.identity) }
+				Val::DirectVar { name: self.db.get_cname(assign.identity), depth: 0 } // TODO: Class assignments.
 					.typed(self.db.get_var_type(assign.identity))
 			},
 			Expr::FunCall(call) => {
@@ -792,6 +842,8 @@ impl<'a> Codegen<'a> {
 		// But, we do have to generate a struct for the class,
 		// as well as each of its function definitions.
 
+		self.inside_class.push(class_declare.identity);
+
 		for fun in &class_declare.funs {
 			self.compile_function(fun.identity, &fun.value);
 		}
@@ -828,6 +880,8 @@ impl<'a> Codegen<'a> {
 		self.functions.push(preparer);
 
 		self.indent_level = enclosing_indent;
+
+		self.inside_class.pop();
 	}
 
 	fn compile_stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<TypedVal> {

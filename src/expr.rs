@@ -166,6 +166,9 @@ impl Stmt {
 pub struct Var {
 	pub name: Token,
 	pub typ: TypId,
+
+	/// If this variable is a member of a class, this stores the class id.
+	pub class: Option<ClassId>,
 }
 
 pub struct Fun {

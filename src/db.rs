@@ -394,10 +394,11 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: Token, typ: TypId) -> VarId {
+	pub fn new_var(&mut self, name: Token, typ: TypId, class: Option<ClassId>) -> VarId {
 		let var = Var {
 			name,
 			typ,
+			class,
 		};
 
 		return self.new_id(var);

@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io;
+use std::process::id;
 
 use rustc_hash::FxHashMap;
 
@@ -676,7 +677,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 		expected!(self, Tok::Semicolon, "';' after initializer expression")?;
 		
 		let name_str = name.lexeme;
-		let identity = self.db.new_var(name, typ);
+		// When we create variables, don't set the class yet, as we don't
+		// know what it is -- we wire it back in once we're done parsing a 
+		// class.
+		let identity = self.db.new_var(name, typ, None);
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -770,7 +774,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name, typ);
+		let identity = self.db.new_var(name, typ, None);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		Ok(identity)
@@ -907,6 +911,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 			vars,
 			funs
 		});
+
+		for var in &declare_vars {
+			self.db.get_mut(var.identity).class = Some(identity);
+		}
 
 		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars)
 	}
