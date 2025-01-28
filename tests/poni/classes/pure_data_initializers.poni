@@ -1,0 +1,29 @@
+// This file shows some complex initializers, but NOTE:
+// It does NOT yet include initializers where some variables depend on other
+// variables. That will require some topological sorting, etc, in the compiler,
+// to ensure there are no cycles and that things happen in a reasonable order.
+
+class BigData {
+    var name = {
+        var attribute = "little";
+        var noun = "pony";
+
+        str("my ", attribute, " ", noun)
+    };
+    var gender = {
+        fun helper(param: int) {
+            param + 5
+        }
+
+        str("the ", helper(3), "th")
+    };
+    var teeth: int = fun() -> int {
+        if true {
+            return 5;
+        }
+        11;
+    }();
+    var time_of_day = {
+        0.5 + 0.5 + 0.5 * 5
+    };
+}

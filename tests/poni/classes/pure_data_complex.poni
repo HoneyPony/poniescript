@@ -1,0 +1,6 @@
+class BigData {
+    var name: StrBuf = "my name";
+    var gender: StrBuf = "horse";
+    var teeth = 13;
+    var time_of_day = 3.5;
+}

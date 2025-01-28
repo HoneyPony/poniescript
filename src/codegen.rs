@@ -812,6 +812,10 @@ impl<'a> Codegen<'a> {
 		for var in &class_declare.vars {
 			// Compile the assignment into the 'preparer' function. This is where
 			// the variable value will be initialized.
+			// EXTREME HORRIBLE HACK: Until we have proper variable binding, etc,
+			// in place, just write "this->" in front of each compiled variable.
+			// This should work (?) but it's not a good idea.
+			inf_write!(preparer, "this->");
 			self.compile_assign(var.identity, &var.value, &mut preparer, false);
 			// Compile the variable declaration into the struct.
 			inf_writeln!(struc, "\t{} {};", self.db.get_var_ctype(var.identity), self.db.get_cname(var.identity));
