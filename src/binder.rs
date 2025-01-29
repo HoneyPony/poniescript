@@ -295,6 +295,9 @@ impl<'db> Binder<'db> {
 
 		for var in &mut class_declare.vars {
 			self.visit_expr(&mut var.value);
+
+			// Bind variable types
+			self.visit_var_type(var.identity);
 		}
 
 		self.checkers.pop();
