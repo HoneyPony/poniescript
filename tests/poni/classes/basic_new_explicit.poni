@@ -4,4 +4,5 @@ class Example {
 
 fun init() {
     var y : Example = new Example {};
+    print(y);
 }
