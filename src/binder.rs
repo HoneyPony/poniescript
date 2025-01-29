@@ -339,6 +339,15 @@ impl<'db> Binder<'db> {
 			_ => { return typ; }
 		}
 	}
+	
+	/// Performs the visit_type logic on a particular VarId using that var's
+	/// source location information. Performs logic common to Stmt::Declare and
+	/// FunDeclare.
+	fn visit_var_type(&mut self, var: VarId) {
+		// TODO: Avoid this clone.
+		let var_type = self.visit_type(self.db.get_var_type(var), &self.db.get(var).name.location.clone());
+		self.db.get_mut(var).typ = var_type;
+	}
 
 	fn visit_stmt(&mut self, stmt: &mut Stmt) {
 		match stmt {
@@ -347,8 +356,7 @@ impl<'db> Binder<'db> {
 
 				// Anywhere where the parser might generate a Type::UnboundIdent,
 				// we need to try resolving that identifier.
-				let var_type = self.visit_type(self.db.get_var_type(declare.identity), &declare.location);
-				self.db.get_mut(declare.identity).typ = var_type;
+				self.visit_var_type(declare.identity);
 			},
 			Stmt::Expression(expr) => {
 				self.visit_expr(&mut expr.expression);
@@ -367,6 +375,12 @@ impl<'db> Binder<'db> {
 	fn visit_function(&mut self, function: &mut FunDeclare) {
 		// TODO: Push my name.
 		self.visit_expr(&mut function.value);
+
+		let param_count = self.db.get(function.identity).parameters.len();
+		for param in 0..param_count {
+			let var = self.db.get(function.identity).parameters[param];
+			self.visit_var_type(var);
+		}
 	}
 
 	pub fn visit_module(&mut self, module: &mut Module) {
