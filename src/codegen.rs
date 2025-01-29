@@ -852,7 +852,10 @@ impl<'a> Codegen<'a> {
 					self.db.get_class_cname(new.class));
 				// Initialize the value.
 				if val.needs_storage() {
-					inf_writeln!(into, "{}(&{});",
+					// Note: The value is a pointer-to-struct cl_Thing, so
+					// we want to pass the direct value to the preparer.
+					// e.g. struct cl_Thing *thing = malloc(); icl_Thing(thing);
+					inf_writeln!(into, "{}({});",
 						self.db.get_class_preparer_cname(new.class),
 						val.val);
 				}
