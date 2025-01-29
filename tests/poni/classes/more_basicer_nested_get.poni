@@ -22,7 +22,7 @@ fun init() {
     var the_c = the_b.the_c;
     var the_d = the_c.the_d;
 
-    print(the_d.val1);
-    print(the_d.val2);
-    print(the_d.val3);
+    print(the_d.val1); //! 10
+    print(the_d.val2); //! 20
+    print(the_d.val3); //! meow
 }
