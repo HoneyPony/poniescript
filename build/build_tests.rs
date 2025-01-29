@@ -109,6 +109,7 @@ pub fn generate(tests_file: &mut File) {
 
 		("set/", "basic_set"),
 		("set/", "set_bottom"),
+		("set/", "set_bottom_etc"),
 		("set/", "set_chain"),
 	
 		("variable/", "assign_numbers"),

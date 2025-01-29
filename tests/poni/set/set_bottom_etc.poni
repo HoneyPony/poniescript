@@ -1,0 +1,29 @@
+class Horse {
+    var hooves : int = 4;
+}
+
+fun broken_mutagen(horse: Horse) {
+    horse.hooves = horse.hooves * { return; };
+}
+
+fun broken_mutagen_2(horse: Horse) {
+    var h = horse.hooves;
+    horse.hooves = h * { return; };
+}
+
+fun working_mutagen(horse: Horse) {
+    horse.hooves = horse.hooves * 2;
+}
+
+fun init() {
+    var horse = new Horse{};
+    print(horse.hooves); //! 4
+    broken_mutagen(horse);
+    print(horse.hooves); //! 4
+    working_mutagen(horse);
+    print(horse.hooves); //! 8
+    broken_mutagen_2(horse);
+    print(horse.hooves); //! 8
+    working_mutagen(horse);
+    print(horse.hooves); //! 16
+}
