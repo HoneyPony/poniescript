@@ -300,10 +300,55 @@ impl<'db> Binder<'db> {
 		self.checkers.pop();
 	}
 
+	fn resolve_type(&mut self, name: StrId, location: &SourceLocation) -> Option<Type> {
+		for checker in self.checkers.iter_mut().rev() {
+			match checker.check(self.db, name) {
+				ScopeEntry::Var(var) => break, // TODO: Figure out an ergonomic way to do this.
+				ScopeEntry::Fun(fun) => break,
+				ScopeEntry::Class(class) => {
+					return Some(Type::Class(class))
+				}
+				ScopeEntry::None => continue,
+			}
+		}
+
+		self.db.report_error(Error::simple(
+			format!("Unknown named type '{}'", self.db.get(name)),
+			location
+		));
+		
+		self.had_error = true;
+		None
+	}
+
+	fn visit_type(&mut self, typ: TypId, location: &SourceLocation) -> TypId {
+		let ty = self.db.get(typ);
+
+		match ty {
+			Type::UnboundIdent(str_id) => {
+				let ty = self.resolve_type(*str_id, location);
+
+				// If we successfully resolved the type, return that; otherwise,
+				// we already reported the error, so just hang on to the unknown
+				// type.
+				if let Some(ty) = ty {
+					return self.db.put_type(ty);
+				}
+				return typ;
+			},
+			_ => { return typ; }
+		}
+	}
+
 	fn visit_stmt(&mut self, stmt: &mut Stmt) {
 		match stmt {
 			Stmt::Declare(declare) => {
 				self.visit_expr(&mut declare.value);
+
+				// Anywhere where the parser might generate a Type::UnboundIdent,
+				// we need to try resolving that identifier.
+				let var_type = self.visit_type(self.db.get_var_type(declare.identity), &declare.location);
+				self.db.get_mut(declare.identity).typ = var_type;
 			},
 			Stmt::Expression(expr) => {
 				self.visit_expr(&mut expr.expression);

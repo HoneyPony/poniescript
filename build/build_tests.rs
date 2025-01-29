@@ -94,6 +94,8 @@ pub fn generate(tests_file: &mut File) {
 
 		("classes/", "basic_new_inferred_get"),
 		("classes/", "basic_new_inferred_get_promote"),
+		("classes/", "basic_new_explicit_get"),
+		("classes/", "basic_new_explicit_get_promote"),
 
 		("get/", "get_string_length"),
 	];
