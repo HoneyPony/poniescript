@@ -811,6 +811,14 @@ impl<'db> TypeChecker<'db> {
 	}
 
 	fn check_module(&mut self, module: &mut Module) {
+		// HACK: Visit classes first so that type inference for properites works.
+		// We really should get this working so that type inferences can directly
+		// drive class type inference (i.e. type inference for the class members)
+		// when needed.
+		for class in &mut module.classes {
+			self.check_class(class);
+		}
+
 		// For now, in order to get FunCaptures working correctly, we make a first
 		// pass which "fix"es functions, which must be done for all functions
 		// (e.g. call_captured_rev.poni). We might come up with a more sophisticated
@@ -828,9 +836,7 @@ impl<'db> TypeChecker<'db> {
 			self.check_declare(global);
 		}
 
-		for class in &mut module.classes {
-			self.check_class(class);
-		}
+		
 	}
 
 	fn check_modules(&mut self, modules: &mut Vec<Module>) {
