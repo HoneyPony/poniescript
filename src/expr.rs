@@ -110,6 +110,7 @@ impl Expr {
 			Expr::Str(_) => db.types.str_buf,
 			Expr::New(new) => new.typ,
 			Expr::Get(get) => db.get_var_type(get.var),
+			Expr::Set(set) => db.get_var_type(set.var),
 			Expr::Undefined(_) => panic!("calling Expr::typ() on Undefined"),
 		}
 	}
@@ -180,7 +181,8 @@ impl Expr {
 			Expr::Get(_) => {
 				// TODO: Promote to superclasses..?
 				false
-			}
+			},
+			Expr::Set(_) => { false }
 			Expr::Undefined(_) => panic!("calling Expr::promote() on Undefined")
 		}
 	}

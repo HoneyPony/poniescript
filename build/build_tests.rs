@@ -105,6 +105,10 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "more_basicer_nested_get"),
 
 		("get/", "get_string_length"),
+
+		("set/", "basic_set"),
+		("set/", "set_bottom"),
+		("set/", "set_chain"),
 	];
 
 	for (path, test) in tests {

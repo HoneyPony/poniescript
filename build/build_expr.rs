@@ -210,6 +210,7 @@ pub fn generate(file: &mut File) {
 	Str           : Vec<Expr> exprs
 	New           : Token identifier, ClassId class, TypId typ
 	Get           : Token identifier, Expr lhs, VarId var
+	Set           : Token identifier, Expr lhs, VarId var, Expr rhs
 	Undefined     : 
 
 	"#;

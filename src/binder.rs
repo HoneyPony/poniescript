@@ -270,6 +270,12 @@ impl<'db> Binder<'db> {
 				return None;
 			}
 			
+			Expr::Set(set) => {
+				self.visit_expr(&mut set.rhs);
+				self.visit_expr(&mut set.lhs);
+				return None;
+			}
+			
 			Expr::Undefined(_) => {
 				return None;
 			}

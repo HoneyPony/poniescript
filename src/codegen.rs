@@ -876,6 +876,27 @@ impl<'a> Codegen<'a> {
 
 				val
 			}
+
+			Expr::Set(set) => {
+				let typ = self.db.get_var_type(set.var);
+				let val = self.new_val_typed(typ);
+			
+				let rhs = self.expr(set.rhs, into);
+				if rhs.is_bottom() {
+					return rhs;
+				}
+				let lhs = self.expr(set.lhs, into);
+				// TODO: What happens if lhs is Bottom?
+				let rhs = self.promote(rhs, typ);
+				
+				let varname = self.db.get_cname(set.var);
+
+				// TODO: Should lhs be promoted...??
+				// This is a bit hacky (the double assign), but I think it is overall fine.
+				define_val!(self, into, val, " = {}->{} = {};\n", lhs.val, varname, rhs);
+
+				val
+			}
 		}
 	}
 

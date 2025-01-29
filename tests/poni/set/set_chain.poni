@@ -1,0 +1,15 @@
+class Example {
+    var value : int = 10;
+}
+
+fun init() {
+    var a = new Example {};
+    var b = new Example {};
+    var c = new Example {};
+
+    var d = a.value = b.value = c.value = 30;
+    print(a.value); //! 30
+    print(b.value); //! 30
+    print(c.value); //! 30
+    print(d); //! 30
+}

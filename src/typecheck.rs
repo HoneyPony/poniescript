@@ -641,6 +641,29 @@ impl<'db> TypeChecker<'db> {
 				self.db.get_var_type(property)
 			}
 
+			Expr::Set(set) => {
+				// Get the type of the dotted expression. This lets us look up
+				// the property on that type.
+				let lhs = self.check_expr(&mut set.lhs, true)?;
+				let property = self.db.lookup_property(lhs, set.identifier.lexeme);
+
+				let Some(property) = property else {
+					type_error!(self,
+						&set.location,
+						"Object of type '{}' has no such property '{}'",
+						self.db.repr_type(lhs),
+						self.db.get(set.identifier.lexeme));
+				};
+
+				// We must actually store the looked-up property.
+				set.var = property;
+
+				// Check the variable assignment just like an Assign.
+				self.check_assign(&set.location, property, &mut set.rhs)?;
+
+				self.db.get_var_type(property)
+			}
+
 			Expr::Unbound(unbound) => {
 				// In theory we will resolve all idents beforehand? But this might
 				// be different if we have function overloading.

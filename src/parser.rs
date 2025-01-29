@@ -384,6 +384,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 				Expr::Unbound(unbound) => {
 					return Expr::mk_unboundassign_ok(self.end(location), unbound.identifier, rhs)
 				}
+				Expr::Get(_) => {
+					panic!("omg!");
+				}
 				_ => unreachable!()
 			}
 		}
@@ -599,6 +602,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::Dot => {
 				let op = self.advance()?;
 				let identifier = expected_after!(self, Tok::Identifier, op, "property name")?;
+
+				// TODO: Do we want to move this logic into expr_ident to go
+				// with the other ones?
+				if self.match_(Tok::Equal)?.is_some() {
+					let value = self.expression()?;
+					return Expr::mk_set_ok(self.end(location), identifier, lhs, self.db.var_unassigned, value);
+				}
 				return Expr::mk_get_ok(self.end(location), identifier, lhs, self.db.var_unassigned);
 			}
 
