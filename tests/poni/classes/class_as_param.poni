@@ -1,0 +1,12 @@
+class Example {
+    var y : int = 5;
+}
+
+fun print_y(e: Example) {
+    print(e.y);
+}
+
+fun init() {
+    var e = new Example{};
+    print_y(e);
+}
