@@ -560,6 +560,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::Plus | Tok::Minus => (7, 8),
 			Tok::Star | Tok::Slash => (9, 10),
 
+			Tok::Dot => (11, 12),
+
 			// Any other tokens should not be parsed as infix.
 			_ => (0, 0)
 		}
@@ -592,6 +594,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::mk_logical_ok(self.end(location), op.typ, lhs, rhs);
+			}
+
+			Tok::Dot => {
+				let op = self.advance()?;
+				let identifier = expected_after!(self, Tok::Identifier, op, "property name")?;
+				return Expr::mk_get_ok(self.end(location), identifier, lhs, self.db.var_unassigned);
 			}
 
 			// We should never call expr_infix() with an invalid operator,
@@ -913,11 +921,14 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let mut funs = Vec::<FunId>::new();
 		let mut vars = Vec::<VarId>::new();
 
+		let mut var_map = FxHashMap::default();
+
 		loop {
 			match self.peek_typ() {
 				Tok::Var => {
 					let declare = self.var_declaration()?;
 					vars.push(declare.identity);
+					var_map.insert(self.db.get(declare.identity).name.lexeme, declare.identity);
 					declare_vars.push(declare);
 				},
 				Tok::Fun => {
@@ -945,7 +956,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let identity = self.db.new_id(Class {
 			name,
 			vars,
-			funs
+			funs,
+			var_map
 		});
 
 		for var in &declare_vars {

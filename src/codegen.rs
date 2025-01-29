@@ -861,6 +861,20 @@ impl<'a> Codegen<'a> {
 				}
 
 				val
+			},
+
+			Expr::Get(get) => {
+				let typ = self.db.get_var_type(get.var);
+				let val = self.new_val_typed(typ);
+			
+				let lhs = self.expr(get.lhs, into);
+				
+				let varname = self.db.get_cname(get.var);
+
+				// TODO: Should lhs be promoted...??
+				define_val!(self, into, val, " = {}->{};\n", lhs.val, varname);
+
+				val
 			}
 		}
 	}

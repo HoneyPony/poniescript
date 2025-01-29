@@ -264,6 +264,12 @@ impl<'db> Binder<'db> {
 				return None;
 			}
 			
+			Expr::Get(get) => {
+				self.visit_expr(&mut get.lhs);
+				
+				return None;
+			}
+			
 			Expr::Undefined(_) => {
 				return None;
 			}

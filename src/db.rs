@@ -82,6 +82,7 @@ pub struct Db {
 	pub synthetic: SourceId,
 	pub sig_unassigned: SigId,
 	pub class_unassigned: ClassId,
+	pub var_unassigned: VarId,
 
 	pub errors: Vec<Error>,
 
@@ -153,6 +154,7 @@ impl Db {
 			synthetic: SourceId(0),
 			sig_unassigned: SigId(0),
 			class_unassigned: ClassId(0),
+			var_unassigned: VarId(0),
 
 			name_map: FxHashMap::default(),
 
@@ -548,6 +550,21 @@ impl Db {
 		return StrConstIter {
 			len: self.arenas.arena_strconst.len() as IdType,
 			current: 0
+		}
+	}
+	
+	pub fn lookup_property(&self, typ: TypId, propname: StrId) -> Option<VarId> {
+		let ty = self.get(typ);
+		match ty {
+			Type::StrConst => todo!("properties of strings"),
+			Type::Str => todo!("properties of strings"),
+			Type::StrBuf => todo!("properties of strings"),
+			Type::Class(class_id) => {
+				let class = self.get(*class_id);
+				class.var_map.get(&propname).copied()
+			},
+
+			_ => None
 		}
 	}
 	

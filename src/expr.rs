@@ -2,6 +2,8 @@ include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 
 use std::mem::MaybeUninit;
 
+use rustc_hash::FxHashMap;
+
 use crate::typ::Type;
 use crate::{db::*, lexer::Token};
 use crate::source::SourceLocation;
@@ -107,6 +109,7 @@ impl Expr {
 			},
 			Expr::Str(_) => db.types.str_buf,
 			Expr::New(new) => new.typ,
+			Expr::Get(get) => db.get_var_type(get.var),
 			Expr::Undefined(_) => panic!("calling Expr::typ() on Undefined"),
 		}
 	}
@@ -174,6 +177,10 @@ impl Expr {
 				// TODO: Promote to superclasses of this class.
 				false
 			}
+			Expr::Get(_) => {
+				// TODO: Promote to superclasses..?
+				false
+			}
 			Expr::Undefined(_) => panic!("calling Expr::promote() on Undefined")
 		}
 	}
@@ -226,6 +233,8 @@ pub struct Class {
 	pub name: Token,
 	pub vars: Vec<VarId>,
 	pub funs: Vec<FunId>,
+
+	pub var_map: FxHashMap<StrId, VarId>,
 }
 
 struct BoxAlloc {

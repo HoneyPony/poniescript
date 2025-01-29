@@ -91,6 +91,8 @@ pub fn generate(tests_file: &mut File) {
 		("call/", "local_fun"),
 		("call/", "local_fun_lambda"),
 		("call/", "if_simple_lambda"),
+
+		("classes/", "basic_new_inferred_get"),
 	];
 
 	for (path, test) in tests {
