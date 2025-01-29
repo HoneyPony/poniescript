@@ -635,6 +635,9 @@ impl<'db> TypeChecker<'db> {
 						self.db.get(get.identifier.lexeme));
 				};
 
+				// We must actually store the looked-up property.
+				get.var = property;
+
 				self.db.get_var_type(property)
 			}
 

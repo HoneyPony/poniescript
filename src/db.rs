@@ -10,10 +10,11 @@ use crate::expr::Fun;
 use crate::expr::Sig;
 use crate::expr::Class;
 use crate::typ::Type;
-use crate::source::{Source};
+use crate::source::{Source, SourceLocation};
 
 use crate::lexer::{Tok, Token};
 
+use clap::builder::Str;
 use rustc_hash::{FxHashMap};
 
 // Include arenas
@@ -28,6 +29,10 @@ pub enum ScopeEntry {
 	None
 }
 
+pub struct StrProperties {
+	length: VarId,
+	length_key: StrId,
+}
 
 pub struct DbTypes {
 	pub str_const: TypId,
@@ -67,6 +72,8 @@ pub struct Db {
 	/// Keep a cache of all generated ctypes so that we can quickly re-use them.
 	ctype_cache: Vec<&'static str>,
 
+	known_var_cnames: FxHashMap<VarId, &'static str>,
+
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
 	class_cname_cache: Vec<&'static str>,
@@ -104,6 +111,8 @@ pub struct Db {
 
 	pub str_anonymous: StrId,
 	pub str_lambda: StrId,
+
+	prop_str: StrProperties,
 }
 
 impl Db {
@@ -125,6 +134,9 @@ impl Db {
 			key_lookup_map: FxHashMap::default(),
 
 			ctype_cache: Vec::new(),
+
+			known_var_cnames: FxHashMap::default(),
+
 			type_repr_cache: RefCell::new(FxHashMap::default()),
 			fun_cparams_cache: Vec::new(),
 
@@ -167,6 +179,11 @@ impl Db {
 
 			str_anonymous: StrId(0),
 			str_lambda: StrId(0),
+
+			prop_str: StrProperties {
+				length: VarId(0),
+				length_key: StrId(0)
+			}
 		};
 
 		db.types.str_const  = db.put_type(Type::StrConst);
@@ -202,7 +219,39 @@ impl Db {
 		// so it's not a huge inefficiency.
 		db.key_lookup_map = crate::lexer::build_key_lookup_map(&mut db);
 
+		(db.prop_str.length_key, db.prop_str.length) = db.synthesize_property("length", "length", db.types.int);
+
 		return db;
+	}
+
+	pub fn synthetic(&self) -> SourceLocation {
+		SourceLocation {
+			source: self.synthetic,
+			offset: 0,
+			length: 0,
+		}
+	}
+
+	pub fn synthetic_id(&self, name: StrId) -> Token {
+		Token {
+			typ: Tok::Identifier,
+			lexeme: name,
+			location: self.synthetic(),
+		}
+	}
+
+	pub fn synthesize_property(&mut self, str: &'static str, cname: &'static str, typ: TypId) -> (StrId, VarId) {
+		let key = self.put_str(str);
+		let var = Var {
+			name: self.synthetic_id(key),
+			typ,
+			class: None,
+		};
+		let var = self.new_id(var);
+
+		self.known_var_cnames.insert(var, cname);
+
+		(key, var)
 	}
 
 	pub fn put_sig(&mut self, sig: &Sig) -> SigId {
@@ -571,12 +620,18 @@ impl Db {
 	pub fn lookup_property(&self, typ: TypId, propname: StrId) -> Option<VarId> {
 		let ty = self.get(typ);
 		match ty {
-			Type::StrConst => todo!("properties of strings"),
-			Type::Str => todo!("properties of strings"),
-			Type::StrBuf => todo!("properties of strings"),
+			// HACK: Right now these all do the same thing.
+			Type::Str | Type::StrConst | Type::StrBuf => {
+				if propname == self.prop_str.length_key {
+					return Some(self.prop_str.length);
+				}
+
+				None
+			},
 			Type::Class(class_id) => {
 				let class = self.get(*class_id);
-				class.var_map.get(&propname).copied()
+				let result = class.var_map.get(&propname).copied();
+				result
 			},
 
 			_ => None
@@ -613,6 +668,11 @@ impl Db {
 
 		for id in 0..range {
 			let var = VarId(id);
+
+			if let Some(desired) = self.known_var_cnames.get(&var) {
+				self.var_cname_cache.push(desired);
+				continue;
+			}
 
 			let str_id = self.get(var).name.lexeme;
 			let cname = match used_set.entry(str_id) {
