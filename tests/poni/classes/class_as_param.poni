@@ -8,5 +8,5 @@ fun print_y(e: Example) {
 
 fun init() {
     var e = new Example{};
-    print_y(e);
+    print_y(e); //! 5
 }

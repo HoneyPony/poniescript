@@ -381,6 +381,10 @@ impl<'db> Binder<'db> {
 			let var = self.db.get(function.identity).parameters[param];
 			self.visit_var_type(var);
 		}
+
+		// Visit the function return value type in case it is UnboundIdent.
+		let ret_type = self.visit_type(self.db.get(function.identity).return_type, &function.location);
+		self.db.get_mut(function.identity).return_type = ret_type;
 	}
 
 	pub fn visit_module(&mut self, module: &mut Module) {
