@@ -58,6 +58,7 @@ pub struct Db {
 
 	sig_cname_cache: FxHashMap<SigId, (&'static str, &'static str)>,
 	sig_cdeclared: FxHashMap<SigId, bool>,
+	sig_cgenerated: FxHashMap<SigId, bool>,
 
 	str_simple_const_map: FxHashMap<String, StrConstId>,
 
@@ -117,6 +118,7 @@ impl Db {
 
 			sig_cname_cache: FxHashMap::default(),
 			sig_cdeclared: FxHashMap::default(),
+			sig_cgenerated: FxHashMap::default(),
 
 			str_simple_const_map: FxHashMap::default(),
 
@@ -293,18 +295,18 @@ impl Db {
 	fn gen_type_dependencies(&mut self, typ: TypId) {
 		match self.get(typ) {
 			Type::FunRaw(sig) | Type::Fun(sig) => {
-				self.use_sig(*sig)
+				self.gen_sig(*sig)
 			},
 
 			_ => { }
 		}
 	}
-
-	pub fn use_sig(&mut self, sig_id: SigId) {
+	
+	fn gen_sig(&mut self, sig_id: SigId) {
 		use crate::inf_write;
 		use crate::inf_writeln;
 
-		if *self.sig_cdeclared.get(&sig_id).unwrap_or(&false) {
+		if *self.sig_cgenerated.get(&sig_id).unwrap_or(&false) {
 			// Return if we've already done it.
 			// TODO: This could just be an FxHashSet...
 			// Other TODO: Figure out cyclic references (e.g. throw an error
@@ -312,8 +314,8 @@ impl Db {
 			return;
 		}
 
-		// Now the sig has been used
-		self.sig_cdeclared.insert(sig_id, true);
+		// Now the sig has been generated
+		self.sig_cgenerated.insert(sig_id, true);
 
 		let (fnptr_name, struct_name) = self.gen_sig_ctype_impl(sig_id);
 
@@ -349,6 +351,19 @@ impl Db {
 
 		inf_writeln!(self.sig_declare_code, "typedef struct {} {{ {} fun; void* closure; }} {};",
 			struct_name, fnptr_name, struct_name);
+	}
+
+	pub fn use_sig(&mut self, sig_id: SigId) {
+		if *self.sig_cdeclared.get(&sig_id).unwrap_or(&false) {
+			// Return if we've already done it.
+			// TODO: This could just be an FxHashSet...
+			// Other TODO: Figure out cyclic references (e.g. throw an error
+			// if gen_type_dependcies calls use_sig on the same value again)
+			return;
+		}
+
+		// Now the sig has been used
+		self.sig_cdeclared.insert(sig_id, true);
 	}
 
 	/// Generates the ctype for a Sig. Note that this ctype might be nonsense,
@@ -575,6 +590,7 @@ impl Db {
 		self.generate_var_cnames_cache();
 		self.generate_fun_cnames_cache();
 		self.generate_fun_cparams_cache();
+		self.generate_sigs_cache();
 	}
 
 	fn generate_ctypes_cache(&mut self) {
@@ -696,6 +712,14 @@ impl Db {
 			buffer.push_str("void* closure");
 
 			self.fun_cparams_cache.push(buffer.leak());
+		}
+	}
+	
+	fn generate_sigs_cache(&mut self) {
+		let sigs = std::mem::take(&mut self.sig_cdeclared);
+
+		for sig in sigs {
+			self.gen_sig(sig.0);
 		}
 	}
 }
