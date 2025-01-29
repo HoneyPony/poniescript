@@ -14,6 +14,6 @@ fun test2() -> float {
 }
 
 fun init() {
-	print(test());
-	print(test2());
+	print(test());  //! 7
+	print(test2()); //! 80.000000
 }

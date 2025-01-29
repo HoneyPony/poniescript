@@ -1,0 +1,9 @@
+fun example() {
+    var x : int = 1 + { return; };
+    print(x);
+}
+
+fun init() {
+    example();
+    print(5); //! 5
+}

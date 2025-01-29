@@ -644,7 +644,7 @@ impl<'db> TypeChecker<'db> {
 			Expr::Set(set) => {
 				// Get the type of the dotted expression. This lets us look up
 				// the property on that type.
-				let lhs = self.check_expr(&mut set.lhs, true)?;
+				let lhs = self.check_expr(&mut set.lhs, value_used)?;
 				let property = self.db.lookup_property(lhs, set.identifier.lexeme);
 
 				let Some(property) = property else {
@@ -658,8 +658,34 @@ impl<'db> TypeChecker<'db> {
 				// We must actually store the looked-up property.
 				set.var = property;
 
-				// Check the variable assignment just like an Assign.
-				self.check_assign(&set.location, property, &mut set.rhs)?;
+				// We can't check the variable just like an Assign, as that
+				// will overwrite the type (the type is given ONLY by the class
+				// definition itself). But, we do need to check that the RHS
+				// is assignable to this variable.
+
+				let rhs = self.check_expr(&mut set.rhs, true)?;
+
+				let computed =
+					self.compute_assignable(self.db.get_var_type(property), rhs);
+
+				
+				println!("set expr: property = {}, property type = {}, rhs type = {}",
+					self.db.repr_var(property),
+					self.db.repr_var_type(property),
+					self.db.repr_type(rhs));
+
+				// TODO: Should we actually use the "computed" value here for
+				// anything?
+				let _ = maybe_type_error!(
+					self,
+					computed,
+
+					&set.location,
+					"Invalid assignment to property '{}': need {}, but value is {}",
+					self.db.repr_var(property),
+					self.db.repr_var_type(property),
+					self.db.repr_type(rhs)
+				);
 
 				self.db.get_var_type(property)
 			}

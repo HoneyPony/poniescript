@@ -1015,6 +1015,10 @@ impl<'a> Codegen<'a> {
 			return value;
 		}
 
+		println!("compile assign: var = {}, var type = {}, rhs type = {}",
+					self.db.repr_var(var),
+					self.db.repr_var_type(var),
+					self.db.repr_type(value.typ));
 		let value = self.promote(value, needed_type);
 
 		let (declaration, space) = if is_declaration {

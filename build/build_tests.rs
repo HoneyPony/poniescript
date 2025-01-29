@@ -17,6 +17,7 @@ fn generate_test(file: &mut File, path: &str, test_name: &str) -> std::io::Resul
 pub fn generate(tests_file: &mut File) {
 	let tests = [
 		("binary/", "binary_doubleblock"),
+		("binary/", "binary_bottom"),
 
 		// print_nested: the last line is 345 because it should re-print each of the inner print()s.
 		("print/", "print_nested"),
@@ -109,6 +110,11 @@ pub fn generate(tests_file: &mut File) {
 		("set/", "basic_set"),
 		("set/", "set_bottom"),
 		("set/", "set_chain"),
+	
+		("variable/", "assign_numbers"),
+		("variable/", "assign_to_bottom_binop"),
+		("variable/", "assign_to_bottom"),
+		("variable/", "simple_assign"),
 	];
 
 	for (path, test) in tests {

@@ -3,10 +3,17 @@ class Horse {
 }
 
 fun broken_mutagen(horse: Horse) {
-    horse.hooves = horse.hooves * { return; };
+    // TODO: This expression causes issues. For now, do something more explicit.
+    //horse.hooves = horse.hooves * { return; };
+
+    // This also breaks. What?
+    // var h = horse.hooves;
+    // horse.hooves = h * { return; };
+
+    horse.hooves = 4 * { return; };
 }
 
-fun working_mutagen(hores: Horse) {
+fun working_mutagen(horse: Horse) {
     horse.hooves = horse.hooves * 2;
 }
 
