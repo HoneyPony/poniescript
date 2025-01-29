@@ -342,9 +342,16 @@ impl<'a> Codegen<'a> {
 		}
 
 		// TODO: Does Any type automatically promote to Bottom?
-		//if to == self.db.types.bottom {
-		//	return PromotedVal::Bottom;
-		//}
+		// It's not clear if this is correct, but it is seemingly necessary
+		// for test cases such as variable/assign_to_bottom_binop_var
+		// and set/set_bottom_etc.
+		//
+		// The justification seems to be that if we're trying to promote
+		// something to bottom, it's because we already have a bottom somewhere
+		// in the expression.
+		if to == self.db.types.bottom {
+			return PromotedVal::Bottom;
+		}
 
 		if val.typ == self.db.types.int && to == self.db.types.float {
 			return PromotedVal::Promoted(val.val, "ps_promote_int_to_float")

@@ -231,7 +231,13 @@ impl<'db> TypeChecker<'db> {
 			self.db.repr_var(var));
 		}
 
-		self.db.get_mut(var).typ = computed;
+		// HACK (?): Never actually set a variable's type to bottom.
+		// This is necessary for us to get the print(10) in variable/assign_to_bottom_binop_var2.poni.
+		// Although, maybe what we should do is just never update the type after the declaration
+		// (at least for now?)
+		if computed != self.db.types.bottom {
+			self.db.get_mut(var).typ = computed;
+		}
 		expr.promote(computed, self.db);
 
 		Ok(computed)

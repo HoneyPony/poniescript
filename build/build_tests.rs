@@ -115,6 +115,7 @@ pub fn generate(tests_file: &mut File) {
 		("variable/", "assign_numbers"),
 		("variable/", "assign_to_bottom_binop"),
 		("variable/", "assign_to_bottom_binop_var"),
+		("variable/", "assign_to_bottom_binop_var2"),
 		("variable/", "assign_to_bottom"),
 		("variable/", "simple_assign"),
 	];

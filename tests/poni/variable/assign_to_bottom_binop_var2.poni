@@ -1,0 +1,10 @@
+fun test() -> int {
+	var x = 10;
+	print(x);
+	x = 5 + { return 5; };
+}
+
+fun init() {
+	//! 10
+	print(test()); //! 5
+}
