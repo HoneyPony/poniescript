@@ -124,7 +124,7 @@ impl Type {
 			Type::Fun(sig) => String::from(db.gen_sig_ctype(*sig)),
 
 			// IMPORTANT: We must generate class_cnames before ctypes
-			Type::Class(class_id) => format!("struct {}", db.get_class_cname(*class_id)),
+			Type::Class(class_id) => format!("struct {}*", db.get_class_cname(*class_id)),
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 

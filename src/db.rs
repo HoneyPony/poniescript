@@ -561,7 +561,7 @@ impl Db {
 	}
 
 	fn generate_ctypes_cache(&mut self) {
-		let range = self.arenas.arena_fun.len() as IdType;
+		let range = self.arenas.arena_typ.len() as IdType;
 
 		for id in 0..range {
 			let id = TypId(id);
