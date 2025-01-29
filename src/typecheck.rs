@@ -676,7 +676,7 @@ impl<'db> TypeChecker<'db> {
 
 				// TODO: Should we actually use the "computed" value here for
 				// anything?
-				let _ = maybe_type_error!(
+				let computed = maybe_type_error!(
 					self,
 					computed,
 
@@ -686,6 +686,9 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_var_type(property),
 					self.db.repr_type(rhs)
 				);
+
+				// Promote the RHS based on the computed type.
+				set.rhs.promote(computed, self.db);
 
 				self.db.get_var_type(property)
 			}
