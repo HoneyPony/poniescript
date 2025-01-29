@@ -80,6 +80,7 @@ pub struct Db {
 
 	pub synthetic: SourceId,
 	pub sig_unassigned: SigId,
+	pub class_unassigned: ClassId,
 
 	pub errors: Vec<Error>,
 
@@ -150,6 +151,7 @@ impl Db {
 
 			synthetic: SourceId(0),
 			sig_unassigned: SigId(0),
+			class_unassigned: ClassId(0),
 
 			name_map: FxHashMap::default(),
 
@@ -181,6 +183,9 @@ impl Db {
 			parameters: vec![],
 			return_type: db.types.unassigned
 		});
+
+		// TODO: Maybe make class_unassigned a special value...?
+		// For now it's going to cause some unsafety..
 
 		db.types.fun_sig_unassigned = db.put_type(Type::Fun(db.sig_unassigned));
 
@@ -537,10 +542,10 @@ impl Db {
 	
 	pub fn generate_codegen_caches(&mut self) {
 		// The order matters, as e.g. var cnames are used for fun cparams.
+		self.generate_class_cnames_cache();
 		self.generate_var_cnames_cache();
 		self.generate_fun_cnames_cache();
 		self.generate_fun_cparams_cache();
-		self.generate_class_cnames_cache();
 	}
 
 	fn generate_var_cnames_cache(&mut self) {

@@ -1,0 +1,7 @@
+class Example {
+    var x : int = 5;
+}
+
+fun init() {
+    var y = new Example {};
+}

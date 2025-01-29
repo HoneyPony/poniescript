@@ -213,6 +213,11 @@ impl<'db> Binder<'db> {
 				self.visit_function(fun_declare);
 				return None;
 			},
+
+			Expr::New(new) => {
+				// Nothing to do (yet).
+				return None;
+			}
 			
 			Expr::Undefined(_) => {
 				return None;

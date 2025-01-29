@@ -452,6 +452,7 @@ impl<'a> Codegen<'a> {
 
 			Type::Fun(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun\", (uintptr_t){val}.fun);"),
 			Type::FunRaw(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun*\", (uintptr_t){val});"),
+			Type::Class(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"object\", (uintptr_t){val});"),
 
 			// TODO: Consider simply making 10.0 a float and 10 an int..?
 			// at least, unless assigned differently..?
@@ -482,6 +483,7 @@ impl<'a> Codegen<'a> {
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unassigned>"),
 			Type::Fun(_) => todo!("str() for functions"),
 			Type::FunRaw(_) => todo!("str() for function pointers"),
+			Type::Class(_) => todo!("str() for classes"),
 			Type::AssumeFloat => todo!(),
 			Type::AssumeInt => todo!(),
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unbound-ident>"),
@@ -838,6 +840,25 @@ impl<'a> Codegen<'a> {
 
 				val
 			},
+
+			Expr::New(new) => {
+				let val = self.new_val_typed(new.typ);
+
+				// TODO: We need the C size (or at least the type name) of
+				// each class, so we can do e.g. sizeof(struct cl_Class) or
+				// just directly generate 16 or whatever. For now, use 32 bytes,
+				// which is terrible, but it's a start.
+				define_val!(self, into, val, " = ps_gc_must_calloc(sizeof(struct {}), 0);\n",
+					self.db.get_class_cname(new.class));
+				// Initialize the value.
+				if val.needs_storage() {
+					inf_writeln!(into, "{}(&{});",
+						self.db.get_class_preparer_cname(new.class),
+						val.val);
+				}
+
+				val
+			}
 		}
 	}
 

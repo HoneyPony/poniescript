@@ -208,6 +208,7 @@ pub fn generate(file: &mut File) {
 	UnboundCall   : Token identifier, Vec<Expr> args
 	Print         : Vec<Expr> exprs, TypId typ
 	Str           : Vec<Expr> exprs
+	New           : Token identifier, ClassId class, TypId typ
 	Undefined     : 
 
 	"#;

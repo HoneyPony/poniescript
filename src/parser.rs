@@ -469,6 +469,20 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 	}
 
+	/// Parses a 'new' expression, e.g. new Example {}
+	fn new_(&mut self) -> Result<Expr> {
+		let location = self.start();
+
+		let key_new = expected!(self, Tok::New, "'new'")?;
+		let name = expected_after!(self, Tok::Identifier, key_new, "class name after 'new'")?;
+
+		expected!(self, Tok::LeftBrace, "'{{' in 'new' expression");
+		// TODO: Parse inner arguments, etc.
+		expected!(self, Tok::RightBrace, "'}}' in 'new' expression");
+
+		Expr::mk_new_ok(self.end(location), name, self.db.class_unassigned, self.db.types.unassigned)
+	}
+
 	fn expr_prefix(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
 			Tok::LeftBrace | Tok::Identifier | Tok::If | Tok::Fun => {
@@ -509,6 +523,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 				// TODO: Make sure the contents of the string literal are
 				// what we expect...
 				Expr::mk_strliteral_ok(lit.location, id)
+			}
+
+			Tok::New => {
+				self.new_()
 			}
 
 			_ => {

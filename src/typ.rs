@@ -36,7 +36,7 @@ pub enum Type {
 
 	Bottom,
 
-	//Class(ClassId),
+	Class(ClassId),
 	//Function(SignatureId),
 	//ListOf(TypId),
 	
@@ -97,6 +97,10 @@ impl Type {
 				result
 			},
 
+			Type::Class(class) => {
+				db.get(db.get(*class).name.lexeme).to_string()
+			}
+
 			Type::AssumeInt => "a number".to_string(),
 			Type::AssumeFloat => "a decimal number".to_string(),
 
@@ -118,6 +122,9 @@ impl Type {
 			// TODO: MAybe take &mut db, and then we can use format! and such
 			Type::FunRaw(sig) => String::from(db.gen_sig_raw_ctype(*sig)),
 			Type::Fun(sig) => String::from(db.gen_sig_ctype(*sig)),
+
+			// IMPORTANT: We must generate class_cnames before ctypes
+			Type::Class(class_id) => format!("struct {}", db.get_class_cname(*class_id)),
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 

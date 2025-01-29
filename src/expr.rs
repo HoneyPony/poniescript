@@ -2,6 +2,7 @@ include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 
 use std::mem::MaybeUninit;
 
+use crate::typ::Type;
 use crate::{db::*, lexer::Token};
 use crate::source::SourceLocation;
 use crate::lexer::Tok;
@@ -47,6 +48,11 @@ impl Expr {
 		}
 	}
 
+	// TODO:
+	// Right now the only reason this takes &mut Db rather than &Db is so that
+	// we can use put_type for Expr::New.
+	// We could change this by either storing a general TypId in Expr::New
+	// (either alongside the class or instead of), but should we...?
 	pub fn typ(&self, db: &Db) -> TypId {
 		match self {
 			Expr::Binary(binary) => {
@@ -100,6 +106,7 @@ impl Expr {
 				print.exprs[0].typ(db)
 			},
 			Expr::Str(_) => db.types.str_buf,
+			Expr::New(new) => new.typ,
 			Expr::Undefined(_) => panic!("calling Expr::typ() on Undefined"),
 		}
 	}
@@ -163,6 +170,10 @@ impl Expr {
 				print.exprs[0].promote(typ, db)
 			},
 			Expr::Str(_) => false,
+			Expr::New(_) => {
+				// TODO: Promote to superclasses of this class.
+				false
+			}
 			Expr::Undefined(_) => panic!("calling Expr::promote() on Undefined")
 		}
 	}

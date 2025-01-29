@@ -613,6 +613,14 @@ impl<'db> TypeChecker<'db> {
 				declare.typ
 			},
 
+			Expr::New(new) => {
+				if new.typ == self.db.types.unassigned {
+					panic!("New expression has unassigned type from Binder");
+				}
+
+				new.typ
+			}
+
 			Expr::Unbound(unbound) => {
 				// In theory we will resolve all idents beforehand? But this might
 				// be different if we have function overloading.
