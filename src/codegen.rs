@@ -1103,6 +1103,12 @@ impl<'a> Codegen<'a> {
 
 		for class in &module.classes {
 			self.compile_class(class);
+
+			// For now: Write the forward declarations for these icl's here.
+			// We might need to change how this works when we have nested classes.
+			inf_writeln!(out.fun_declare, "void {}(struct {} *this);",
+				self.db.get_class_preparer_cname(class.identity),
+				self.db.get_class_cname(class.identity));
 		}
 
 		self.compile_string_constant_init(&mut out.string_const_define, &mut out.string_const_init);
