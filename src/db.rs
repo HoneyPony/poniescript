@@ -23,6 +23,7 @@ include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 pub enum ScopeEntry {
 	Var(VarId),
 	Fun(FunId),
+	Class(ClassId),
 
 	None
 }
@@ -257,10 +258,10 @@ impl Db {
 			return *existing;
 		}
 
-		let ctype = typ.gen_ctype(self);
+		//let ctype = typ.gen_ctype(self);
 
 		// IMPORTANT: The pushes() here must line up with new_id() -> TypId
-		self.ctype_cache.push(ctype.leak());
+		//self.ctype_cache.push(ctype.leak());
 
 		let id = self.new_id(typ.clone());
 		self.type_side_map.insert(typ, id);
@@ -418,9 +419,19 @@ impl Db {
 	//
 	// TODO: Consider generating the ctypes as soon as we generate a new type
 	pub fn get_ctype(&self, typ: TypId) -> &'static str {
+
+		if let Some(existing) = self.ctype_cache.get(typ.to_usize()) {
+			return *existing;
+		}
+
+		// Didn't get the type -- give a helpful panic message.
+		let ty_name = self.get(typ).to_string(self);
+		panic!("Tried to get invalid type in get_ctype: {} (TypId {})", ty_name, typ.to_usize());
+
 		// Safety: AS LONG AS we don't call new_id outside of put_type,
 		// the index must be valid.
-		unsafe { self.ctype_cache.get_unchecked(typ.to_usize()) }
+		// TODO: Make this code exist in like a "#[cfg(release)] or whatever."
+		// unsafe { self.ctype_cache.get_unchecked(typ.to_usize()) }
 	}
 
 	pub fn get_var_ctype(&self, var: VarId) -> &'static str {
@@ -543,9 +554,23 @@ impl Db {
 	pub fn generate_codegen_caches(&mut self) {
 		// The order matters, as e.g. var cnames are used for fun cparams.
 		self.generate_class_cnames_cache();
+		self.generate_ctypes_cache();
 		self.generate_var_cnames_cache();
 		self.generate_fun_cnames_cache();
 		self.generate_fun_cparams_cache();
+	}
+
+	fn generate_ctypes_cache(&mut self) {
+		let range = self.arenas.arena_fun.len() as IdType;
+
+		for id in 0..range {
+			let id = TypId(id);
+			// It's OK to clone here because types are lightweight
+			// (specifically because we're doing all this TypId stuff).
+			let ty = self.get(id).clone();
+			let ctype = ty.gen_ctype(self);
+			self.ctype_cache.push(ctype.leak());
+		}
 	}
 
 	fn generate_var_cnames_cache(&mut self) {

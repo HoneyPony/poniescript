@@ -3,6 +3,7 @@ use crate::error::Error;
 use crate::expr::*;
 use crate::module::Module;
 use crate::source::SourceLocation;
+use crate::typ::Type;
 
 struct NameChecker {
 	buffer: String,
@@ -55,11 +56,35 @@ impl<'db> Binder<'db> {
 		}
 	}
 
+	fn resolve_class_name(&mut self, ident: StrId, location: &SourceLocation) -> Option<ClassId> {
+		for checker in self.checkers.iter_mut().rev() {
+			match checker.check(self.db, ident) {
+				ScopeEntry::Var(var) => break, // TODO: Figure out an ergonomic way to do this.
+				ScopeEntry::Fun(fun) => break,
+				ScopeEntry::Class(class) => {
+					return Some(class)
+				}
+				ScopeEntry::None => continue,
+			}
+		}
+
+		self.db.report_error(Error::simple(
+			format!("Unknown class name '{}'", self.db.get(ident)),
+			location
+		));
+		
+		self.had_error = true;
+		None
+	}
+
 	fn resolve_unbound(&mut self, ident: StrId, location: SourceLocation) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
 				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location, fun, self.db.types.fun_sig_unassigned)),
+				ScopeEntry::Class(_) => {
+					todo!("What to do when we resolve an Unbound into a Class");
+				}
 				ScopeEntry::None => continue,
 			}
 		}
@@ -80,6 +105,15 @@ impl<'db> Binder<'db> {
 				ScopeEntry::Fun(fun) => {
 					self.db.report_error(Error::simple(
 						format!("Cannot assign to a function."),
+						&location
+					));
+
+					self.had_error = true;
+					return None;
+				},
+				ScopeEntry::Class(_) => {
+					self.db.report_error(Error::simple(
+						format!("Cannot assign to a class."),
 						&location
 					));
 
@@ -107,6 +141,15 @@ impl<'db> Binder<'db> {
 					// TODO: Figure out a better way to get the args out of the UnboundCall
 					// then this, as it likely leads to an additional allocation..?
 						std::mem::take(&mut unbound.args))),
+				ScopeEntry::Class(_) => {
+					self.db.report_error(Error::simple(
+						format!("Cannot call a class."),
+						&unbound.location
+					));
+
+					self.had_error = true;
+					return None;
+				}
 				ScopeEntry::None => continue,
 			}
 		}
@@ -215,7 +258,9 @@ impl<'db> Binder<'db> {
 			},
 
 			Expr::New(new) => {
-				// Nothing to do (yet).
+				new.class = self.resolve_class_name(new.identifier.lexeme, &new.location)?;
+				// Set the type here, so we don't have to mess with it again.
+				new.typ = self.db.put_type(Type::Class(new.class));
 				return None;
 			}
 			

@@ -200,6 +200,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 					todo!("how do we location_of() for functions without names..?")
 				}
 			}
+			ScopeEntry::Class(class) => {
+				&self.db.get(*class).name.location
+			}
 			ScopeEntry::None => todo!(),
 		}
 	}
@@ -333,6 +336,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 			// makes it easier to generate reasonable code in the common cases.
 			ScopeEntry::Fun(fun) => Expr::mk_funcall_ok(location, fun, args),
 
+			ScopeEntry::Class(class) => {
+				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), &self.current.location));
+
+				// Just return an UnboundCall, as we have a semantic error rather than parse error.
+				Expr::mk_unboundcall_ok(location, ident, args)
+			}
+
 			ScopeEntry::None => Expr::mk_unboundcall_ok(location, ident, args),
 		}
 	}
@@ -351,6 +361,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 			ScopeEntry::Var(identity) => Expr::mk_variable(ident.location.clone(), identity),
 			ScopeEntry::Fun(identity) =>
 				Expr::mk_funcapture(ident.location.clone(), identity, self.db.types.unassigned),
+			ScopeEntry::Class(_) => {
+				todo!("What should happen when you reference a class without anything else? I guess a ClassCapture?");
+			}
 			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
 		};
 
@@ -927,6 +940,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::RightBrace, "'}}' at end of class")?;
 
+		let name_str = name.lexeme;
+
 		let identity = self.db.new_id(Class {
 			name,
 			vars,
@@ -940,6 +955,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 		for fun in &declare_funs {
 			self.db.get_mut(fun.identity).class = Some(identity);
 		}
+
+		self.scope_put_entry(name_str, ScopeEntry::Class(identity));
 
 		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars)
 	}
