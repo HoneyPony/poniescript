@@ -122,6 +122,7 @@ pub fn generate(tests_file: &mut File) {
 		("dead_code/", "dead_block"),
 		("dead_code/", "dead_binary1"),
 		("dead_code/", "dead_ops"),
+		("dead_code/", "dead_args"),
 	];
 
 	for (path, test) in tests {

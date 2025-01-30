@@ -1,0 +1,12 @@
+fun example(a: int, b: int, c: int, d: int) -> int {
+    return a + b + c + d;
+}
+
+fun init() {
+    print(example(1, 2, 3, 4)); //! 10
+    //! 1
+    //! 4
+    example(print(1), 2, 3, print(4)); 
+    //! 1
+    example(print(1), 2, { return; }, print(4));
+}
