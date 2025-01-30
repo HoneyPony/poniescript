@@ -104,6 +104,7 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "class_as_returnval"),
 		("classes/", "basic_nested_get"),
 		("classes/", "basic_nested_get_ooo"),
+		("classes/", "basic_nested_set_ooo"),
 		("classes/", "basic_nested_get_explicit"),
 		("classes/", "basicer_nested_get"),
 		("classes/", "more_basicer_nested_get"),

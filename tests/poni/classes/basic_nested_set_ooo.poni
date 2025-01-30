@@ -26,7 +26,7 @@ class C {
 class D {
     var val1: int = 10;
     var val2: int = 20;
-    var val3: StrConst = "meow";
+    var val3: StrBuf = "meow";
 }
 
 var increment: int = 0;
@@ -95,10 +95,4 @@ fun init() {
     //
     // That could also impede our optimization like buf = str(), reusing the buf,
     // because this is a re-assignment rather than a mutation.
-
-
-    // For now (and probably forever): StrConst should not be mutated when we
-    // reassign it like this.
-    print(the_d.val3); //! 12
-    print(the_d.val3.length); //! 2
 }
