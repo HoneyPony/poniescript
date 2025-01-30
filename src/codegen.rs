@@ -126,6 +126,9 @@ struct TypedVal {
 
 impl TypedVal {
 	pub fn is_bottom(&self) -> bool {
+		// NOTE:
+		// Apparently we are able to form TypedVal that have a typ of Bottom
+		// that do not have a Val of Bottom. Spooky...
 		self.val.is_bottom()
 	}
 
@@ -393,6 +396,14 @@ impl<'a> Codegen<'a> {
 		if right.is_bottom() { return right; /* Val::Bottom */ }
 		let right = self.promote(right, binary.typ);
 
+		// WEIRD:
+		// For some reason, for e.g. variable/assign_to_bottom_binop, the LHS
+		// seems to not be typed as bottom but the binary itself is...?
+		// TODO: Maybe fix that in the typecheck stage..?
+		if binary.typ == self.db.types.bottom {
+			return Val::Bottom.typed(binary.typ);
+		}
+
 		let op = match binary.op {
 			Tok::Star => '*',
 			Tok::Plus => '+',
@@ -568,6 +579,7 @@ impl<'a> Codegen<'a> {
 
 				// Only store the value if not Bottom.
 				if !right.is_bottom() {
+					println!("right.is_bottom(): {}, right.typ: {}", right.is_bottom(), self.db.repr_type(right.typ));
 					let right = self.promote(right, self.db.types.bool);
 
 					// Our value now evalutes to this other one.
@@ -666,7 +678,7 @@ impl<'a> Codegen<'a> {
 						val);
 
 					val
-				} else { Val::Bottom };
+				} else { Val::Void };
 
 				let all_but_last = match block.stmts.len() {
 					0 => 0,
@@ -675,15 +687,27 @@ impl<'a> Codegen<'a> {
 				inf_writeln!(into, "{indent}{{");
 				self.indent_level += 1;
 				for stmt in &block.stmts[0..all_but_last] {
-					self.compile_stmt(stmt, into);
+					let val = self.compile_stmt(stmt, into);
+					if let Some(val) = val {
+						if val.is_bottom() {
+							// If we see a Bottom val inside a block, we have
+							// found an unconditional return. So, we can
+							// immediately stop processing further code (which
+							// will be relevant to avoid e.g. generating accesses
+							// to nonexistent variables).
+							self.indent_level -= 1;
+							inf_writeln!(into, "{indent}}}");
+							return val;
+						}
+					}
 				}
 
 				let val = match (block.stmts.last(), val) {
 					// If the block has no val, then generate a statement
-					// and return Val::None.
-					(last, Val::Bottom) => {
+					// and return Val::Void.
+					(last, Val::Void) => {
 						last.map(|last| self.compile_stmt(last, into));
-						Val::Bottom
+						Val::Void
 					},
 
 					// If the block has a val, then last MUST exist
@@ -1018,7 +1042,9 @@ impl<'a> Codegen<'a> {
 	fn compile_assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) -> TypedVal {
 		let needed_type = self.db.get_var_type(var);
 		let value = self.expr(expr, into);
-		if value.is_bottom() {
+
+		// Don't compile anything at all for variables that are bottom.
+		if value.is_bottom() || needed_type == self.db.types.bottom {
 			return value;
 		}
 

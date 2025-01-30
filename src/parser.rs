@@ -767,7 +767,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// last statement is return; because bottom can be assigned to void.
 		//
 		// We may want to consider simply deleting the Void type.
-		Expr::mk_block_ok(self.end(location), stmts, self.db.types.bottom)
+		Expr::mk_block_ok(self.end(location), stmts, self.db.types.unassigned)
 	}
 
 	fn stmt(&mut self) -> Result<Stmt> {

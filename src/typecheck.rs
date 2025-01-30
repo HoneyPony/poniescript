@@ -209,7 +209,7 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
-	fn check_assign(&mut self, at: &SourceLocation, var: VarId, expr: &mut Expr) -> Result<TypId> {
+	fn check_assign(&mut self, at: &SourceLocation, var: VarId, expr: &mut Expr, assign_ty: bool) -> Result<TypId> {
 		let value = self.check_expr(expr, true)?;
 		let computed =
 			self.compute_assignable(self.db.get_var_type(var), value);
@@ -231,11 +231,8 @@ impl<'db> TypeChecker<'db> {
 			self.db.repr_var(var));
 		}
 
-		// HACK (?): Never actually set a variable's type to bottom.
-		// This is necessary for us to get the print(10) in variable/assign_to_bottom_binop_var2.poni.
-		// Although, maybe what we should do is just never update the type after the declaration
-		// (at least for now?)
-		if computed != self.db.types.bottom {
+		// Only assign the type if we're in a declaration.
+		if assign_ty {
 			self.db.get_mut(var).typ = computed;
 		}
 		expr.promote(computed, self.db);
@@ -391,7 +388,7 @@ impl<'db> TypeChecker<'db> {
 			},
 			Expr::Variable(var) => self.db.get(var.identity).typ,
 			Expr::Assign(assign) => {
-				self.check_assign(&assign.location, assign.identity, &mut assign.value)?
+				self.check_assign(&assign.location, assign.identity, &mut assign.value, false)?
 			},
 			Expr::NumLiteral(lit) => {
 				lit.typ
@@ -416,7 +413,11 @@ impl<'db> TypeChecker<'db> {
 				// If the value isn't used, we can simply type-check the
 				// last statement then bail with Void.
 				if !value_used {
+					println!("block value not used @ {}", block.location.offset);
 					block.stmts.last_mut().map(|stmt| self.check_stmt(stmt, false));
+					// We also need to assign our own type to void in this case
+					// -- our type is not yet assigned.
+					block.typ = self.db.types.void;
 					return Ok(self.db.types.void);
 				}
 
@@ -435,6 +436,7 @@ impl<'db> TypeChecker<'db> {
 				};
 
 				// Return the computed TypId.
+				println!("block type = {}", self.db.repr_type(val));
 				block.typ = val;
 
 				stmt.promote(val, self.db);
@@ -800,7 +802,7 @@ impl<'db> TypeChecker<'db> {
 	}
 
 	fn check_declare(&mut self, declare: &mut Declare) -> Result<TypId> {
-		self.check_assign(&declare.location, declare.identity, &mut declare.value)
+		self.check_assign(&declare.location, declare.identity, &mut declare.value, true)
 	}
 
 	fn check_fun_declare(&mut self, fun: &mut FunDeclare) -> Result<()> {
