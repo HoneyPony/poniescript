@@ -11,7 +11,7 @@ impl<'db> DeadCodeElim<'db> {
 		}
 	}
 
-    fn elim_expr(&mut self, expr: &mut Expr) {
+    fn elim_expr(&mut self, expr: &mut Expr) -> bool {
         // Counterintuitive but true:
         // For any binary expression, such as a + b, if the LHS is Bottom, 
         // we can replace the whole expression with the LHS (because the RHS
@@ -29,42 +29,56 @@ impl<'db> DeadCodeElim<'db> {
         // something, or by making the codegen stage understand how to do that.
         match expr {
             Expr::Binary(binary) => {
-                self.elim_expr(&mut binary.left);
-                self.elim_expr(&mut binary.right);
-
-                if binary.left.typ(self.db) == self.db.types.bottom {
+                if self.elim_expr(&mut binary.left) {
                     let left = std::mem::take(binary.left);
                     *expr = left;
+                    return true;
                 }
+
+                if self.elim_expr(&mut binary.right) {
+                    return true;
+                }
+
+                false
                 // else if binary.right.typ(self.db) == self.db.types.bottom {
                 //     let left = std::mem::take(binary.left);
                 //     *expr = left;
                 // }
             },
             Expr::Comparison(comparison) => {
-                self.elim_expr(&mut comparison.left);
-                self.elim_expr(&mut comparison.right);
+                
 
-                if comparison.left.typ(self.db) == self.db.types.bottom {
+                if self.elim_expr(&mut comparison.left) {
                     let left = std::mem::take(comparison.left);
                     *expr = left;
+                    return true;
                 }
+
+                if self.elim_expr(&mut comparison.right) {
+                    return true;
+                }
+
+                false
                 // else if comparison.right.typ(self.db) == self.db.types.bottom {
                 //     let left = std::mem::take(comparison.left);
                 //     *expr = left;
                 // }
             },
             Expr::Variable(variable) => {
-                
+                false
             },
             Expr::Logical(logical) => {
-                self.elim_expr(&mut logical.left);
-                self.elim_expr(&mut logical.right);
-
-                if logical.left.typ(self.db) == self.db.types.bottom {
+                if self.elim_expr(&mut logical.left) {
                     let left = std::mem::take(logical.left);
                     *expr = left;
+                    return true;
                 }
+
+                // Don't return true if logical.right is a Bottom, because it
+                // might not always be evaluated.
+                self.elim_expr(&mut logical.right);
+
+                false
                 // else if logical.right.typ(self.db) == self.db.types.bottom {
                 //     let left = std::mem::take(logical.left);
                 //     *expr = left;
@@ -74,8 +88,7 @@ impl<'db> DeadCodeElim<'db> {
                 let mut last_needed_idx = None;
 
                 for idx in 0..fun_call.args.len() {
-                    self.elim_expr(&mut fun_call.args[idx]);
-                    if fun_call.args[idx].typ(self.db) == self.db.types.bottom {
+                    if self.elim_expr(&mut fun_call.args[idx]) {
                         last_needed_idx = Some(idx);
                         break;
                     }
@@ -94,17 +107,20 @@ impl<'db> DeadCodeElim<'db> {
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
                     *expr = new_block;
+
+                    return true;
                 }
+
+                false
             },
             Expr::FunDeclare(fun_declare) => {
-                self.elim_expr(&mut fun_declare.value);
+                self.elim_expr(&mut fun_declare.value)
             },
             Expr::ValCall(val_call) => {
                 let mut last_needed_idx = None;
 
                 for idx in 0..val_call.args.len() {
-                    self.elim_expr(&mut val_call.args[idx]);
-                    if val_call.args[idx].typ(self.db) == self.db.types.bottom {
+                    if self.elim_expr(&mut val_call.args[idx]) {
                         last_needed_idx = Some(idx);
                         break;
                     }
@@ -112,7 +128,7 @@ impl<'db> DeadCodeElim<'db> {
 
                 if let Some(last) = last_needed_idx {
                     let old = std::mem::take(expr);
-                    let Expr::FunCall(old) = old else { unreachable!() };
+                    let Expr::ValCall(old) = old else { unreachable!() };
 
                     let (mut args, location) = (old.args, old.location);
                     
@@ -123,20 +139,25 @@ impl<'db> DeadCodeElim<'db> {
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
                     *expr = new_block;
+
+                    return true;
                 }
+
+                false
             },
-            Expr::FunCapture(fun_capture) => {},
+            Expr::FunCapture(fun_capture) => { false },
             Expr::Assign(assign) => {
-                self.elim_expr(&mut assign.value);
-                if assign.value.typ(self.db) == self.db.types.bottom {
+                if self.elim_expr(&mut assign.value) {
                     let value = std::mem::take(assign.value);
                     *expr = value;
+                    return true;
                 }
+                false
             },
             Expr::UnboundAssign(unbound_assign) => unreachable!("dead code UnboundAssign"),
-            Expr::NumLiteral(num_literal) => {},
-            Expr::StrLiteral(str_literal) => {},
-            Expr::BoolLiteral(bool_literal) => {},
+            Expr::NumLiteral(num_literal) => false,
+            Expr::StrLiteral(str_literal) => false,
+            Expr::BoolLiteral(bool_literal) => false,
             Expr::Block(block) => {
                 let mut last_needed_idx = None;
 
@@ -149,7 +170,10 @@ impl<'db> DeadCodeElim<'db> {
 
                 if let Some(last) = last_needed_idx {
                     block.stmts.truncate(last + 1);
+                    return true;
                 }
+
+                false
             },
             Expr::If(if_) => {
                 // The if unconditionally evaluates its conditional, so if
@@ -165,6 +189,7 @@ impl<'db> DeadCodeElim<'db> {
                 if if_.condition.typ(&self.db) == self.db.types.bottom {
                     let replace = std::mem::take(if_.condition);
                     *expr = replace;
+                    return true;
                 }
                 else {
                     // Note: We can only do this if the conditional didn't
@@ -172,21 +197,21 @@ impl<'db> DeadCodeElim<'db> {
                     // been deleted at this point!)
                     //
                     // Although in this case Rust will yell at us if we try.
-                    self.elim_expr(&mut if_.then_branch);
+                    let mut is_bottom = self.elim_expr(&mut if_.then_branch);
                     if let Some(else_) = &mut if_.else_branch {
-                        self.elim_expr(else_);
+                        is_bottom = is_bottom && self.elim_expr(else_);
                     }
+
+                    return is_bottom
                 }
             },
             Expr::Unbound(unbound) => unreachable!("dead code Unbound"),
             Expr::UnboundCall(unbound_call) => unreachable!("dead code UnboundCall"),
             Expr::Print(print) => {
-                // TODO: Come up with a way to stop copy-pasting this code.
                 let mut last_needed_idx = None;
 
                 for idx in 0..print.exprs.len() {
-                    self.elim_expr(&mut print.exprs[idx]);
-                    if print.exprs[idx].typ(self.db) == self.db.types.bottom {
+                    if self.elim_expr(&mut print.exprs[idx]) {
                         last_needed_idx = Some(idx);
                         break;
                     }
@@ -194,9 +219,9 @@ impl<'db> DeadCodeElim<'db> {
 
                 if let Some(last) = last_needed_idx {
                     let old = std::mem::take(expr);
-                    let Expr::FunCall(old) = old else { unreachable!() };
+                    let Expr::Print(old) = old else { unreachable!() };
 
-                    let (mut args, location) = (old.args, old.location);
+                    let (mut args, location) = (old.exprs, old.location);
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
@@ -205,14 +230,17 @@ impl<'db> DeadCodeElim<'db> {
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
                     *expr = new_block;
+
+                    return true;
                 }
+
+                false
             },
             Expr::Str(str) => {
                 let mut last_needed_idx = None;
 
                 for idx in 0..str.exprs.len() {
-                    self.elim_expr(&mut str.exprs[idx]);
-                    if str.exprs[idx].typ(self.db) == self.db.types.bottom {
+                    if self.elim_expr(&mut str.exprs[idx]) {
                         last_needed_idx = Some(idx);
                         break;
                     }
@@ -220,9 +248,9 @@ impl<'db> DeadCodeElim<'db> {
 
                 if let Some(last) = last_needed_idx {
                     let old = std::mem::take(expr);
-                    let Expr::FunCall(old) = old else { unreachable!() };
+                    let Expr::Str(old) = old else { unreachable!() };
 
-                    let (mut args, location) = (old.args, old.location);
+                    let (mut args, location) = (old.exprs, old.location);
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
@@ -231,27 +259,35 @@ impl<'db> DeadCodeElim<'db> {
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
                     *expr = new_block;
-                }
-            },
-            Expr::New(new) => {
-                
-            },
-            Expr::Get(get) => {
-                self.elim_expr(get.lhs);
-                if get.lhs.typ(&self.db) == self.db.types.bottom {
-                    let replace = std::mem::take(get.lhs);
-                    *expr = replace;
-                }
-            },
-            Expr::Set(set) => {
-                self.elim_expr(set.lhs);
-                if set.lhs.typ(&self.db) == self.db.types.bottom {
-                    let replace = std::mem::take(set.lhs);
-                    *expr = replace;
-                    return;
+
+                    return true;
                 }
 
-                self.elim_expr(set.rhs);
+                false
+            },
+            Expr::New(new) => {
+                false // TODO
+            },
+            Expr::Get(get) => {
+                if self.elim_expr(get.lhs) {
+                    let replace = std::mem::take(get.lhs);
+                    *expr = replace;
+                    return true;
+                }
+                false
+            },
+            Expr::Set(set) => {
+                if self.elim_expr(set.lhs) {
+                    let replace = std::mem::take(set.lhs);
+                    *expr = replace;
+                    return true;
+                }
+
+                if self.elim_expr(set.rhs) {
+                    return true;
+                }
+
+                return false;
                 // if set.rhs.typ(&self.db) == self.db.types.bottom {
                 //     // important: lhs
                 //     let replace = std::mem::take(set.lhs);

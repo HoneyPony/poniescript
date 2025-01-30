@@ -387,22 +387,14 @@ impl<'a> Codegen<'a> {
 
 	fn compile_binary(&mut self, binary: &Binary, into: &mut String) -> TypedVal {
 		let left = self.expr(&binary.left, into);
-		if left.is_bottom() { return left; /* Val::Bottom */ }
+		if left.is_bottom() { println!("binary: left is bottom"); return left; /* Val::Bottom */ }
 		// TODO: Maybe we should have each function return a (Val, TypId) tuple,
 		// so that we can save time here..?
 		let left = self.promote(left, binary.typ);
 
 		let right = self.expr(&binary.right, into);
-		if right.is_bottom() { return right; /* Val::Bottom */ }
+		if right.is_bottom() { println!("binary: right is bottom"); return right; /* Val::Bottom */ }
 		let right = self.promote(right, binary.typ);
-
-		// WEIRD:
-		// For some reason, for e.g. variable/assign_to_bottom_binop, the LHS
-		// seems to not be typed as bottom but the binary itself is...?
-		// TODO: Maybe fix that in the typecheck stage..?
-		if binary.typ == self.db.types.bottom {
-			return Val::Bottom.typed(binary.typ);
-		}
 
 		let op = match binary.op {
 			Tok::Star => '*',
