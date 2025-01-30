@@ -1,0 +1,22 @@
+class Thing {
+    var x: int = 20;
+    var y: int = 30;
+}
+
+// This test was written when we didn't have any real new {} syntax (i.e. we
+// couldn't specify values), so it just sets them manually.
+fun new_thing(x: int, y: int) -> Thing {
+    var result = new Thing {};
+    result.x = x;
+    result.y = y;
+    result
+}
+
+fun init() {
+    var a = new_thing(1, 2);
+    var b = new_thing(3, 4);
+    print(a.x); //! 1
+    print(a.y); //! 2
+    print(b.x); //! 3
+    print(b.y); //! 4
+}
