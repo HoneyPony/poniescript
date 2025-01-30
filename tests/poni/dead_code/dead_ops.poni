@@ -1,0 +1,60 @@
+fun plus_left()  { { print(1); return; } + { print(2); } } //! 1
+fun plus_right() { { print(1) } + { print(2); return; } } //! 1
+//! 2
+
+fun minus_left()  { { print(1); return; } - { print(2); } } //! 1
+fun minus_right() { { print(1) } - { print(2); return; } } //! 1
+//! 2
+
+fun times_left()  { { print(1); return; } * { print(2); } } //! 1
+fun times_right() { { print(1) } * { print(2); return; } } //! 1
+//! 2
+
+fun divide_left()  { { print(1); return; } / { print(2); } } //! 1
+fun divide_right() { { print(1) } / { print(2); return; } } //! 1
+//! 2
+
+fun gt_left()  { { print(1); return; } > { print(2); } } //! 1
+fun gt_right() { { print(1) } > { print(2); return; } } //! 1
+//! 2
+
+fun lt_left()  { { print(1); return; } < { print(2); } } //! 1
+fun lt_right() { { print(1) } < { print(2); return; } } //! 1
+//! 2
+
+fun gte_left()  { { print(1); return; } >= { print(2); } } //! 1
+fun gte_right() { { print(1) } >= { print(2); return; } } //! 1
+//! 2
+
+fun lte_left()  { { print(1); return; } <= { print(2); } } //! 1
+fun lte_right() { { print(1) } <= { print(2); return; } } //! 1
+//! 2
+
+// TODO: Equality
+//fun eq_left()  { { print(1); return; } == { print(2); } } 
+//fun eq_right() { { print(1) } == { print(2); return; } } 
+
+fun init() {
+    plus_left();
+    plus_right();
+    minus_left();
+    minus_right();
+    times_left();
+    times_right();
+    divide_left();
+    divide_right();
+    plus_left();
+    plus_right();
+    minus_left();
+    minus_right();
+    gt_left();
+    gt_right();
+    lt_left();
+    lt_right();
+    gte_left();
+    gte_right();
+    lte_left();
+    lte_right();
+    //eq_left();
+    //eq_right();
+}
