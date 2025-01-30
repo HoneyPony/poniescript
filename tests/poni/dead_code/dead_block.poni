@@ -1,0 +1,8 @@
+fun init() {
+    var x : int = 20;
+    print(x); //! 20
+    return;
+    print(x + 5);
+    x = x * 5;
+    print(x);
+}

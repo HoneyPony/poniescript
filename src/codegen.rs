@@ -678,7 +678,7 @@ impl<'a> Codegen<'a> {
 						val);
 
 					val
-				} else { Val::Void };
+				} else { if block.typ == self.db.types.void { Val::Void } else { Val::Bottom } };
 
 				let all_but_last = match block.stmts.len() {
 					0 => 0,

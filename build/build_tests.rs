@@ -118,6 +118,8 @@ pub fn generate(tests_file: &mut File) {
 		("variable/", "assign_to_bottom_binop_var2"),
 		("variable/", "assign_to_bottom"),
 		("variable/", "simple_assign"),
+
+		("dead_code/", "dead_block"),
 	];
 
 	for (path, test) in tests {
