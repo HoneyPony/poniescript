@@ -340,7 +340,7 @@ impl<'a> Codegen<'a> {
 			return PromotedVal::Simple(val.val);
 		}
 
-		if val.is_bottom() {
+		if val.is_bottom() || val.typ == self.db.types.bottom {
 			return PromotedVal::Bottom;
 		}
 
