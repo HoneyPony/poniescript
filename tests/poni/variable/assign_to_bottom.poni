@@ -1,5 +1,5 @@
 fun test() -> int {
-	var x = { return 5; };
+	var x : int = { return 5; };
 }
 
 fun init() {

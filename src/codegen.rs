@@ -710,6 +710,12 @@ impl<'a> Codegen<'a> {
 						Val::Void
 					},
 
+					// Simmilar case for Val::Bottom
+					(last, Val::Bottom) => {
+						last.map(|last| self.compile_stmt(last, into));
+						Val::Bottom
+					},
+
 					// If the block has a val, then last MUST exist
 					// (otherwise the type checker is broken)
 					// so return its value.
