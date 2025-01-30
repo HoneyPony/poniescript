@@ -1,5 +1,5 @@
 fun example() {
-    var x : int = 1 + { return; };
+    var x : int = 1 + { print(3); return; }; //! 3
     print(x);
 }
 

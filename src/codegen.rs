@@ -1050,7 +1050,7 @@ impl<'a> Codegen<'a> {
 		let value = self.expr(expr, into);
 
 		// Don't compile anything at all for variables that are bottom.
-		if value.is_bottom() || needed_type == self.db.types.bottom {
+		if value.is_bottom() || value.typ == self.db.types.bottom { // TODO: Fix the value thingyingy
 			return value;
 		}
 
@@ -1058,7 +1058,7 @@ impl<'a> Codegen<'a> {
 					self.db.repr_var(var),
 					self.db.repr_var_type(var),
 					self.db.repr_type(value.typ));
-		let value = self.promote(value, needed_type);
+		let value: PromotedVal = self.promote(value, needed_type);
 
 		let (declaration, space) = if is_declaration {
 			(self.db.get_var_ctype(var), " ")

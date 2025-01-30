@@ -31,6 +31,13 @@ impl std::default::Default for Expr {
 	}
 }
 
+impl std::default::Default for Stmt {
+	fn default() -> Self {
+		let expr = Expr::default();
+		return Stmt::mk_expression(expr.location().clone(), expr);
+	}
+}
+
 impl Expr {
 	pub fn val_location(&self) -> &SourceLocation {
 		match self {

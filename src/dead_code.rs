@@ -267,7 +267,22 @@ impl<'db> DeadCodeElim<'db> {
     fn elim_stmt(&mut self, stmt: &mut Stmt) -> bool {
         match stmt {
             Stmt::Declare(declare) => {
-                // TODO: Prevent declaring variables as Bottom
+                // So even though we can't declare variables as Bottom, we
+                // can still do something like:
+                // var x : int = { return; }
+                // Which is valid.
+                // In these cases, we do have to propogate whatever value
+                // we found inside the assignment upwards.
+                self.elim_expr(&mut declare.value);
+
+                // If the eliminated expression is a Bottom, then we can replace
+                // ourselves with it.
+                if declare.value.typ(self.db) == self.db.types.bottom {
+                    let value = std::mem::take(&mut declare.value);
+                    *stmt = Stmt::mk_expression(declare.location.clone(), value);
+                    return true
+                }
+
                 false
             },
             Stmt::Expression(expression) => {

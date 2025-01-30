@@ -120,6 +120,7 @@ pub fn generate(tests_file: &mut File) {
 		("variable/", "simple_assign"),
 
 		("dead_code/", "dead_block"),
+		("dead_code/", "dead_binary1"),
 	];
 
 	for (path, test) in tests {
