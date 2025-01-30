@@ -1,0 +1,104 @@
+// Same as nested_get, except this should fail until we properly get type
+// inference working as a sort of graph traversal rather than as the dumber thing
+// it is right now.
+//
+// Um, but for some reason, this is working correctly. What?
+//
+// Oh right, because the classes are all visited and the order doesn't actually
+// matter.
+//
+// I guuuuuuuueeeeessss we don't need full graph traversal, just to visit ALL
+// class nodes before doing anything else...? (e.g. including nested classes
+// and all private-to-funs classes)
+
+class A {
+    var the_b = new B {};
+}
+
+class B {
+    var the_c = new C {};
+}
+
+class C {
+    var the_d = new D {};
+}
+
+class D {
+    var val1: int = 10;
+    var val2: int = 20;
+    var val3: StrConst = "meow";
+}
+
+var increment: int = 0;
+
+fun val() -> int {
+    increment = increment + 1;
+    return increment;
+}
+
+fun init() {
+    var the_a = new A {};
+
+    the_a.the_b.the_c.the_d.val1 = val();
+    the_a.the_b.the_c.the_d.val2 = val();
+    the_a.the_b.the_c.the_d.val3 = str(val());
+
+    print(the_a.the_b.the_c.the_d.val1);   //! 1
+    print(the_a.the_b.the_c.the_d.val2);   //! 2
+    print(the_a.the_b.the_c.the_d.val3);   //! 3
+    print(the_a.the_b.the_c.the_d.val3.length); //! 1
+
+    var the_c = the_a.the_b.the_c;
+
+    the_c.the_d.val1 = val();
+    the_c.the_d.val2 = val();
+    the_c.the_d.val3 = str(val());
+
+    print(the_c.the_d.val1);   //! 4
+    print(the_c.the_d.val2);   //! 5
+    print(the_c.the_d.val3);   //! 6
+    print(the_c.the_d.val3.length); //! 1
+
+    var the_b = the_a.the_b;
+
+    the_b.the_c.the_d.val1 = val();
+    the_b.the_c.the_d.val2 = val();
+    the_b.the_c.the_d.val3 = str(val());
+
+    print(the_b.the_c.the_d.val1);   //! 7
+    print(the_b.the_c.the_d.val2);   //! 8
+    print(the_b.the_c.the_d.val3);   //! 9
+    print(the_b.the_c.the_d.val3.length); //! 1
+
+    var the_d = the_b.the_c.the_d;
+    the_d.val1 = val();
+    the_d.val2 = val();
+    the_d.val3 = str(val());
+
+    print(the_d.val1);   //! 10
+    print(the_d.val2);   //! 11
+    print(the_d.val3);   //! 12
+    print(the_d.val3.length); //! 2
+
+    var the_str = the_c.the_d.val3;
+
+    print(the_str);        //! 12
+    print(the_str.length); //! 2
+
+    the_str = "hello";
+
+    print(the_str); // hello
+    print(the_str.length); // 5
+    // TODO: Should changing the_str like this also change the string inside
+    // the_d? For StrConst the answer is 'obviously' no, but what about for
+    // StrBuf?
+    //
+    // That could also impede our optimization like buf = str(), reusing the buf,
+    // because this is a re-assignment rather than a mutation.
+
+
+    // For now (and probably forever): StrConst should not be mutated when we
+    // reassign it like this.
+    print(the_d.val3); //! 12
+    print(the_d.val3.length); //! 2
+}

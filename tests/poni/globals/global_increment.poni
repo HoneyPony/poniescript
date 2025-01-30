@@ -1,0 +1,7 @@
+var x : int = 5;
+
+fun init() {
+    print(x); //! 5
+    x = x + 1;
+    print(x); //! 6
+}
