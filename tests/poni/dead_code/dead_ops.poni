@@ -43,10 +43,6 @@ fun init() {
     times_right();
     divide_left();
     divide_right();
-    plus_left();
-    plus_right();
-    minus_left();
-    minus_right();
     gt_left();
     gt_right();
     lt_left();
