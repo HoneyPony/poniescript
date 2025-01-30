@@ -35,6 +35,7 @@ pub fn generate(tests_file: &mut File) {
 		("globals/", "globals_3"),
 		("globals/", "global_global"),
 		("globals/", "global_increment"),
+		("globals/", "global_increment_indirect"),
 		("globals/", "global_mutate"),
 
 		("typecheck/", "print_assume_int"),

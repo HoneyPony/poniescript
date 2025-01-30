@@ -220,6 +220,8 @@ impl<'db> Binder<'db> {
 			},
 
 			Expr::UnboundAssign(assign) => {
+				// Important: Must visit the value node too
+				self.visit_expr(&mut assign.value);
 				// TODO: Do we want to avoid the clone here?
 				self.resolve_unbound_assign(assign.identifier.lexeme, assign.location.clone(), std::mem::take(assign.value))
 			},
