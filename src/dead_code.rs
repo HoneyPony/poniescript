@@ -12,6 +12,21 @@ impl<'db> DeadCodeElim<'db> {
 	}
 
     fn elim_expr(&mut self, expr: &mut Expr) {
+        // Counterintuitive but true:
+        // For any binary expression, such as a + b, if the LHS is Bottom, 
+        // we can replace the whole expression with the LHS (because the RHS
+        // would never get to be evaluated anyway).
+        //
+        // If the RHS is Bottom, we cannot eliminate the LHS, as it must be
+        // evaluated before the RHS. But we also can't eliminate the RHS, 
+        // because it might have side-effects.
+        //
+        // So what we really have to do in the case that RHS is bottom is
+        // turn the expression into a sequence, e.g. evaluate LHS first then
+        // RHS but without any need to evaluate the higher level expression.
+        // 
+        // We can either implement this as a separate Expr::Sequence node or
+        // something, or by making the codegen stage understand how to do that.
         match expr {
             Expr::Binary(binary) => {
                 self.elim_expr(&mut binary.left);
@@ -21,10 +36,10 @@ impl<'db> DeadCodeElim<'db> {
                     let left = std::mem::take(binary.left);
                     *expr = left;
                 }
-                //else if binary.right.typ(self.db) == self.db.types.bottom {
-                //    let right = std::mem::take(binary.right);
-                //    *expr = right;
-                //}
+                // else if binary.right.typ(self.db) == self.db.types.bottom {
+                //     let left = std::mem::take(binary.left);
+                //     *expr = left;
+                // }
             },
             Expr::Comparison(comparison) => {
                 self.elim_expr(&mut comparison.left);
@@ -34,10 +49,10 @@ impl<'db> DeadCodeElim<'db> {
                     let left = std::mem::take(comparison.left);
                     *expr = left;
                 }
-                //else if comparison.right.typ(self.db) == self.db.types.bottom {
-                //    let right = std::mem::take(comparison.right);
-                //    *expr = right;
-                //}
+                // else if comparison.right.typ(self.db) == self.db.types.bottom {
+                //     let left = std::mem::take(comparison.left);
+                //     *expr = left;
+                // }
             },
             Expr::Variable(variable) => {
                 
@@ -50,10 +65,10 @@ impl<'db> DeadCodeElim<'db> {
                     let left = std::mem::take(logical.left);
                     *expr = left;
                 }
-                //else if logical.right.typ(self.db) == self.db.types.bottom {
-                //    let right = std::mem::take(logical.right);
-                //    *expr = right;
-                //}
+                // else if logical.right.typ(self.db) == self.db.types.bottom {
+                //     let left = std::mem::take(logical.left);
+                //     *expr = left;
+                // }
             },
             Expr::FunCall(fun_call) => {
                 let mut last_needed_idx = None;
@@ -237,11 +252,12 @@ impl<'db> DeadCodeElim<'db> {
                 }
 
                 self.elim_expr(set.rhs);
-                //if set.rhs.typ(&self.db) == self.db.types.bottom {
-                //    let replace = std::mem::take(set.rhs);
-                //    *expr = replace;
-                //    return;
-                //}
+                // if set.rhs.typ(&self.db) == self.db.types.bottom {
+                //     // important: lhs
+                //     let replace = std::mem::take(set.lhs);
+                //     *expr = replace;
+                //     return;
+                // }
             },
             Expr::Undefined(undefined) => unreachable!("dead code Undefined"),
         }
