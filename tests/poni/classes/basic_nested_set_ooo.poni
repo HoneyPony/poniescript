@@ -87,8 +87,8 @@ fun init() {
 
     the_str = "hello";
 
-    print(the_str); // hello
-    print(the_str.length); // 5
+    print(the_str); //! hello
+    print(the_str.length); //! 5
     // TODO: Should changing the_str like this also change the string inside
     // the_d? For StrConst the answer is 'obviously' no, but what about for
     // StrBuf?
