@@ -745,6 +745,7 @@ impl<'a> Codegen<'a> {
 				}
 
 				for val in &vals {
+					println!("found val in print -- typ = {}", self.db.repr_type(val.typ));
 					self.compile_partial_print(val, into);
 				}
 

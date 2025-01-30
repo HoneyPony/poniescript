@@ -123,6 +123,11 @@ impl Expr {
 	}
 
 	pub fn promote(&mut self, typ: TypId, db: &Db) -> bool {
+		// Cannot promote to Bottom.
+		if typ == db.types.bottom {
+			return false;
+		}
+
 		match self {
 			Expr::Binary(binary) => {
 				if db.is_not_concrete(binary.typ) && db.is_concrete(typ) {
