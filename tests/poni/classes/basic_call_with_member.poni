@@ -1,0 +1,16 @@
+class Test {
+    var horse = 40;
+
+    fun go() {
+        print("horse: ", horse);
+    }
+}
+
+fun init() {
+    var x = new Test{};
+    x.go(); //! horse: 40
+    x.horse = 50;
+    x.go(); //! horse: 50
+    x.horse = 60;
+    x.go(); //! horse: 60
+}

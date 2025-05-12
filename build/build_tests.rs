@@ -110,6 +110,8 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "basic_nested_get_explicit"),
 		("classes/", "basicer_nested_get"),
 		("classes/", "more_basicer_nested_get"),
+		("classes/", "basic_class_call"),
+		("classes/", "basic_call_with_member"),
 
 		("get/", "get_string_length"),
 
