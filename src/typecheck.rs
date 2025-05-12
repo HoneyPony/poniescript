@@ -422,7 +422,6 @@ impl<'db> TypeChecker<'db> {
 				// If the value isn't used, we can simply type-check the
 				// last statement then bail with Void.
 				if !value_used {
-					println!("block value not used @ {}", block.location.offset);
 					block.stmts.last_mut().map(|stmt| self.check_stmt(stmt, false));
 					// We also need to assign our own type to void in this case
 					// -- our type is not yet assigned.
@@ -445,7 +444,6 @@ impl<'db> TypeChecker<'db> {
 				};
 
 				// Return the computed TypId.
-				println!("block type = {}", self.db.repr_type(val));
 				block.typ = val;
 
 				stmt.promote(val, self.db);
@@ -684,12 +682,6 @@ impl<'db> TypeChecker<'db> {
 
 				let computed =
 					self.compute_assignable(self.db.get_var_type(property), rhs);
-
-				
-				println!("set expr: property = {}, property type = {}, rhs type = {}",
-					self.db.repr_var(property),
-					self.db.repr_var_type(property),
-					self.db.repr_type(rhs));
 
 				// TODO: Should we actually use the "computed" value here for
 				// anything?

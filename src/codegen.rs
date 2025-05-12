@@ -386,13 +386,13 @@ impl<'a> Codegen<'a> {
 
 	fn compile_binary(&mut self, binary: &Binary, into: &mut String) -> TypedVal {
 		let left = self.expr(&binary.left, into);
-		if left.is_bottom() { println!("binary: left is bottom"); return left; /* Val::Bottom */ }
+		if left.is_bottom() { return left; /* Val::Bottom */ }
 		// TODO: Maybe we should have each function return a (Val, TypId) tuple,
 		// so that we can save time here..?
 		let left = self.promote(left, binary.typ);
 
 		let right = self.expr(&binary.right, into);
-		if right.is_bottom() { println!("binary: right is bottom"); return right; /* Val::Bottom */ }
+		if right.is_bottom() { return right; /* Val::Bottom */ }
 		let right = self.promote(right, binary.typ);
 
 		let op = match binary.op {
@@ -570,7 +570,6 @@ impl<'a> Codegen<'a> {
 
 				// Only store the value if not Bottom.
 				if !right.is_bottom() {
-					println!("right.is_bottom(): {}, right.typ: {}", right.is_bottom(), self.db.repr_type(right.typ));
 					let right = self.promote(right, self.db.types.bool);
 
 					// Our value now evalutes to this other one.
@@ -744,7 +743,6 @@ impl<'a> Codegen<'a> {
 				}
 
 				for val in &vals {
-					println!("found val in print -- typ = {}", self.db.repr_type(val.typ));
 					self.compile_partial_print(val, into);
 				}
 
@@ -1076,10 +1074,6 @@ impl<'a> Codegen<'a> {
 			return value;
 		}
 
-		println!("compile assign: var = {}, var type = {}, rhs type = {}",
-					self.db.repr_var(var),
-					self.db.repr_var_type(var),
-					self.db.repr_type(value.typ));
 		let value: PromotedVal = self.promote(value, needed_type);
 
 		let (declaration, space) = if is_declaration {

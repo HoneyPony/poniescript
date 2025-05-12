@@ -143,15 +143,11 @@ impl<'db> Binder<'db> {
 
 	fn resolve_unbound_funcapture(&mut self, unbound: &mut UnboundFunCapture) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
-			eprintln!("checker: {}", checker.buffer);
-		}
-		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, unbound.identifier.lexeme) {
 				ScopeEntry::Var(v) => {
 					return Some(Expr::mk_variable(unbound.location.clone(), v));
 				}
 				ScopeEntry::Fun(fun) => {
-					eprintln!("resolve_unbound_funcapture: Resolved to a Fun in scope.");
 					return Some(Expr::mk_funcapture(unbound.location.clone(), fun, self.db.types.unassigned, 
 						self.get_selfval(unbound.location.clone())))
 				}
@@ -167,8 +163,6 @@ impl<'db> Binder<'db> {
 				ScopeEntry::None => continue,
 			}
 		}
-
-		eprintln!("resolve_unbound_funcapture: Could not resolve.");
 
 		None
 	}
