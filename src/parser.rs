@@ -979,6 +979,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let mut vars = Vec::<VarId>::new();
 
 		let mut var_map = FxHashMap::default();
+		let mut fun_map = FxHashMap::default();
 
 		loop {
 			match self.peek_typ() {
@@ -991,6 +992,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 				Tok::Fun => {
 					let fun = self.fun_declaration(true)?;
 					funs.push(fun.identity);
+					// We require name so this must have a name.
+					fun_map.insert(self.db.get(fun.identity).name.as_ref().unwrap().lexeme, fun.identity);
 					declare_funs.push(fun);
 				},
 				Tok::Class => {
@@ -1014,7 +1017,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			name,
 			vars,
 			funs,
-			var_map
+			var_map,
+			fun_map
 		});
 
 		for var in &declare_vars {

@@ -637,6 +637,18 @@ impl Db {
 			_ => None
 		}
 	}
+
+	pub fn lookup_member_fn(&self, typ: TypId, propname: StrId) -> Option<FunId> {
+		let ty = self.get(typ);
+		match ty {
+			Type::Class(class_id) => {
+				let class = self.get(*class_id);
+				class.fun_map.get(&propname).copied()
+			}
+
+			_ => None
+		}
+	}
 	
 	pub fn generate_codegen_caches(&mut self) {
 		// The order matters, as e.g. var cnames are used for fun cparams.

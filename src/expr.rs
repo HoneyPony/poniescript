@@ -252,6 +252,7 @@ pub struct Class {
 	pub funs: Vec<FunId>,
 
 	pub var_map: FxHashMap<StrId, VarId>,
+	pub fun_map: FxHashMap<StrId, FunId>,
 }
 
 struct BoxAlloc {

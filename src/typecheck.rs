@@ -730,8 +730,39 @@ impl<'db> TypeChecker<'db> {
 					self.db.get(unbound.identifier.lexeme),
 					unbound.location.offset);
 			},
-			Expr::UnboundFunCapture(_) => {
-				panic!("compiler-err:tried-to-typecheck-an-unbound-funcapture-expression");
+			Expr::UnboundFunCapture(capt) => {
+				// Here we will have to replace this UnboundFunCapture with
+				// a FunCapture, for the current state of the project.
+
+				let obj_ty = {
+					let Some(object) = &mut capt.object else {
+						type_error!(self, &capt.location, "Can't resolve function call on no object.");
+					};
+					self.check_expr(object, true)?
+				};
+
+				if let Some(fun) = self.db.lookup_member_fn(obj_ty, capt.identifier.lexeme) {
+					unsafe {
+						// Safety: We're immediately re-initializing this memory after
+						// taking from it.
+						let capt_obj = std::mem::replace(capt, std::mem::zeroed());
+						let as_funcapture = FunCapture {
+							location: capt_obj.location,
+							identity: fun,
+							typ: self.db.types.unassigned,
+							object: capt_obj.object
+						};
+						*expr = Expr::FunCapture(as_funcapture);
+					}
+					return self.check_expr(expr, value_used);
+				}
+
+
+				//let property = self.db.lookup_property(lhs, get.identifier.lexeme);
+
+				type_error!(self,
+					&capt.location,
+					"Could not find a matching function for object.")
 			}
 			Expr::UnboundAssign(_) => panic!("Internal compiler error: Tried to typecheck an UnboundAssign"),
 			Expr::Undefined(_) => panic!("Internal compiler error: Tried to typecheck an Undefined"),
@@ -741,6 +772,11 @@ impl<'db> TypeChecker<'db> {
 	fn check_class(&mut self, class_declare: &mut ClassDeclare) -> Result<()> {
 		let enclosing_class = self.current_class;
 		self.current_class = Some(self.db.put_type(Type::Class(class_declare.identity)));
+
+		// Must fix_fun_declare for class too in order to assign them a sig.
+		for fun in &mut class_declare.funs {
+			self.fix_fun_declare(fun);
+		}
 
 		for declare in &mut class_declare.vars {
 			self.check_declare(declare)?;
