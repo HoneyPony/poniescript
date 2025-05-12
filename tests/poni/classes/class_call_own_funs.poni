@@ -11,7 +11,7 @@ class Test {
     }
 
     fun fun3(x: int, y: int, z: int) {
-        fun2(x + y + z);
+        fun2(x + y, z);
     }
 }
 

@@ -461,6 +461,7 @@ impl Db {
 
 	// TODO: Return the old name for error reporting..?
 	pub fn add_full_name(&mut self, name: &str, entry: ScopeEntry) -> Option<ScopeEntry> {
+		eprintln!("add full name: {}", name);
 		let name = self.put_str(name);
 
 		self.name_map.insert(name, entry)

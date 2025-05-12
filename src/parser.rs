@@ -916,6 +916,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 			class: None, // Class is not assigned for now, the class parser will assign it later.
 		});
 
+		// We must pop our pushed_name before we put the function name in the scope.
+		self.pop_name(pushed_name);
+
 		// Put the identity in to the current scope. For lexical scoped function
 		// names, they can't be used until they're defined...
 		// TODO: Do we want to be able to have mutually recursive functions local
@@ -933,9 +936,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 				self.db.fun_init = Some(identity);
 			}
 		}
-
-		self.pop_name(pushed_name);
-
+		
 		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned, )
 	}
 
