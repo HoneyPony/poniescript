@@ -21,6 +21,9 @@ struct TypeChecker<'db> {
 	global_scope: bool,
 
 	return_types: Vec<TypId>,
+
+	/// Which class we're currently in. Used to give types to SelfVal.
+	current_class: Option<TypId>,
 }
 
 struct TypeCheckErr;
@@ -87,6 +90,8 @@ impl<'db> TypeChecker<'db> {
 			global_scope: false,
 
 			return_types: Vec::new(),
+
+			current_class: None
 		}
 	}
 
@@ -705,6 +710,19 @@ impl<'db> TypeChecker<'db> {
 				self.db.get_var_type(property)
 			}
 
+			Expr::SelfVal(selfval) => {
+				let Some(typ) = self.current_class else {
+					type_error!(
+						self,
+						&selfval.location,
+						"Trying to use 'self' outside of a class."
+					);
+				};
+
+				selfval.typ = typ;
+				typ
+			}
+
 			Expr::Unbound(unbound) => {
 				// In theory we will resolve all idents beforehand? But this might
 				// be different if we have function overloading.
@@ -712,8 +730,8 @@ impl<'db> TypeChecker<'db> {
 					self.db.get(unbound.identifier.lexeme),
 					unbound.location.offset);
 			},
-			Expr::UnboundCall(_) => {
-				panic!("compiler-err:tried-to-typecheck-an-unbound-call-expression");
+			Expr::UnboundFunCapture(_) => {
+				panic!("compiler-err:tried-to-typecheck-an-unbound-funcapture-expression");
 			}
 			Expr::UnboundAssign(_) => panic!("Internal compiler error: Tried to typecheck an UnboundAssign"),
 			Expr::Undefined(_) => panic!("Internal compiler error: Tried to typecheck an Undefined"),
@@ -721,6 +739,9 @@ impl<'db> TypeChecker<'db> {
 	}
 
 	fn check_class(&mut self, class_declare: &mut ClassDeclare) -> Result<()> {
+		let enclosing_class = self.current_class;
+		self.current_class = Some(self.db.put_type(Type::Class(class_declare.identity)));
+
 		for declare in &mut class_declare.vars {
 			self.check_declare(declare)?;
 		}
@@ -728,6 +749,8 @@ impl<'db> TypeChecker<'db> {
 		for fun in &mut class_declare.funs {
 			self.check_fun_declare(fun)?;
 		}
+
+		self.current_class = enclosing_class;
 
 		Ok(())
 	}

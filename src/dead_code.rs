@@ -206,7 +206,7 @@ impl<'db> DeadCodeElim<'db> {
                 }
             },
             Expr::Unbound(unbound) => unreachable!("dead code Unbound"),
-            Expr::UnboundCall(unbound_call) => unreachable!("dead code UnboundCall"),
+            Expr::UnboundFunCapture(unbound_call) => unreachable!("dead code UnboundFunCapture"),
             Expr::Print(print) => {
                 let mut last_needed_idx = None;
 
@@ -295,6 +295,9 @@ impl<'db> DeadCodeElim<'db> {
                 //     return;
                 // }
             },
+            Expr::SelfVal(_) => {
+                false
+            }
             Expr::Undefined(undefined) => unreachable!("dead code Undefined"),
         }
     }

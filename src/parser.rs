@@ -328,22 +328,26 @@ impl<'a, 'b> Parser<'a, 'b> {
 		match self.scope_lookup(ident.lexeme) {
 			ScopeEntry::Var(v) => {
 				let inner = Expr::mk_variable(location.clone(), v);
-				return Expr::mk_valcall_ok(self.end(location), inner, args, self.db.sig_unassigned, object)
+				return Expr::mk_valcall_ok(self.end(location), inner, args, self.db.sig_unassigned)
 			},
 
 			// It may seem in poor taste to have a specific Expr for function
 			// calls all throughout the syntax tree. But, the hope is that this
 			// makes it easier to generate reasonable code in the common cases.
-			ScopeEntry::Fun(fun) => Expr::mk_funcall_ok(location, fun, args, object),
+			ScopeEntry::Fun(fun) => Expr::mk_funcall_ok(location, fun, args),
 
 			ScopeEntry::Class(class) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), &self.current.location));
 
 				// Just return an UnboundCall, as we have a semantic error rather than parse error.
-				Expr::mk_unboundcall_ok(location, ident, args, object)
+				let call = Expr::mk_unboundfuncapture(self.end(location.clone()), ident, object);
+				Expr::mk_valcall_ok(self.end(location), call, args, self.db.sig_unassigned)
 			}
 
-			ScopeEntry::None => Expr::mk_unboundcall_ok(location, ident, args, object),
+			ScopeEntry::None => {
+				let call = Expr::mk_unboundfuncapture(self.end(location.clone()), ident, object);
+				Expr::mk_valcall_ok(location, call, args, self.db.sig_unassigned)
+			}
 		}
 	}
 
@@ -361,7 +365,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let expr = match self.scope_lookup(ident.lexeme) {
 			ScopeEntry::Var(identity) => Expr::mk_variable(ident.location.clone(), identity),
 			ScopeEntry::Fun(identity) =>
-				Expr::mk_funcapture(ident.location.clone(), identity, self.db.types.unassigned),
+				Expr::mk_funcapture(ident.location.clone(), identity, self.db.types.unassigned, None),
 			ScopeEntry::Class(_) => {
 				todo!("What should happen when you reference a class without anything else? I guess a ClassCapture?");
 			}
@@ -518,7 +522,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 					}
 
 					expected!(self, Tok::RightParen, "')' after argument list")?;
-					inner = Expr::mk_valcall(self.end(location.clone()), inner, args, self.db.sig_unassigned, None);
+					inner = Expr::mk_valcall(self.end(location.clone()), inner, args, self.db.sig_unassigned);
 				}
 
 				return Ok(inner);

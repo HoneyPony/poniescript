@@ -109,7 +109,7 @@ impl Expr {
 				block.typ
 			},
 			Expr::Unbound(_) => panic!("calling Expr::typ() on Unbound"),
-			Expr::UnboundCall(_) => panic!("calling Expr::typ() on UnboundCall"),
+			Expr::UnboundFunCapture(_) => panic!("calling Expr::typ() on UnboundFunCapture"),
 			Expr::UnboundAssign(_) => panic!("calling Expr::typ() on UnboundAssign"),
 			Expr::Print(print) => {
 				print.exprs[0].typ(db)
@@ -119,6 +119,7 @@ impl Expr {
 			Expr::Get(get) => db.get_var_type(get.var),
 			Expr::Set(set) => db.get_var_type(set.var),
 			Expr::Undefined(_) => panic!("calling Expr::typ() on Undefined"),
+			Expr::SelfVal(selfval) => selfval.typ
 		}
 	}
 
@@ -160,7 +161,9 @@ impl Expr {
 				if_.typ = typ;
 				true
 			}
+			// TODO: Subclasses...?
 			Expr::Variable(_) => false,
+			Expr::SelfVal(_) => false,
 			Expr::Assign(_) => false,
 			Expr::FunCall(_) => false,
 			Expr::ValCall(_) => false,
@@ -180,7 +183,7 @@ impl Expr {
 				true
 			},
 			Expr::Unbound(_) => false,
-			Expr::UnboundCall(_) => false,
+			Expr::UnboundFunCapture(_) => false,
 			Expr::UnboundAssign(_) => false,
 			Expr::Print(print) => {
 				print.exprs[0].promote(typ, db)

@@ -92,6 +92,7 @@ enum Val {
 		// get to the superclass.
 		depth: usize,
 	},
+	DirectSelf,
 	StringLit {
 		id: StrConstId,
 	},
@@ -236,6 +237,9 @@ impl std::fmt::Display for Val {
 					}
 				}
 				write!(f, "{name}")
+			}
+			Val::DirectSelf => {
+				write!(f, "this")
 			}
 
 			// String literals are always stored in variables with a consistent naming scheme.
@@ -791,8 +795,8 @@ impl<'a> Codegen<'a> {
 			Expr::UnboundAssign(_) => {
 				panic!("compiler-err:tried-to-codegen-an-unbound-assign-expression");
 			},
-			Expr::UnboundCall(_) => {
-				panic!("compiler-err:tried-to-codegen-an-unbound-call");
+			Expr::UnboundFunCapture(_) => {
+				panic!("compiler-err:tried-to-codegen-an-unbound-funcapture");
 			},
 			Expr::Undefined(_) => {
 				panic!("Internal compiler error: Tried to codegen an 'Undefined' node");
@@ -926,6 +930,10 @@ impl<'a> Codegen<'a> {
 				define_val!(self, into, val, " = {}->{} = {};\n", lhs.val, varname, rhs);
 
 				val
+			}
+
+			Expr::SelfVal(selfval) => {
+				Val::DirectSelf.typed(selfval.typ)
 			}
 		}
 	}

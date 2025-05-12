@@ -81,7 +81,8 @@ impl<'db> Binder<'db> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
-				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location, fun, self.db.types.fun_sig_unassigned)),
+				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location.clone(), fun, self.db.types.fun_sig_unassigned, 
+					Some(Expr::mk_selfval(location, self.db.types.unassigned)))),
 				ScopeEntry::Class(_) => {
 					todo!("What to do when we resolve an Unbound into a Class");
 				}
@@ -128,19 +129,20 @@ impl<'db> Binder<'db> {
 		None
 	}
 
-	fn resolve_unbound_call(&mut self, unbound: &mut UnboundCall) -> Option<Expr> {
+	fn resolve_unbound_funcapture(&mut self, unbound: &mut UnboundFunCapture) -> Option<Expr> {
+		for checker in self.checkers.iter_mut().rev() {
+			eprintln!("checker: {}", checker.buffer);
+		}
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, unbound.identifier.lexeme) {
 				ScopeEntry::Var(v) => {
-					let inner = Expr::mk_variable(unbound.location.clone(), v);
-					return Some(Expr::mk_valcall(unbound.location.clone(), inner,
-						std::mem::take(&mut unbound.args), self.db.sig_unassigned));
+					return Some(Expr::mk_variable(unbound.location.clone(), v));
 				}
-				ScopeEntry::Fun(fun) =>
-					return Some(Expr::mk_funcall(unbound.location.clone(), fun, 
-					// TODO: Figure out a better way to get the args out of the UnboundCall
-					// then this, as it likely leads to an additional allocation..?
-						std::mem::take(&mut unbound.args))),
+				ScopeEntry::Fun(fun) => {
+					eprintln!("resolve_unbound_funcapture: Resolved to a Fun in scope.");
+					return Some(Expr::mk_funcapture(unbound.location.clone(), fun, self.db.types.unassigned, 
+						Some(Expr::mk_selfval(unbound.location.clone(), self.db.types.unassigned))))
+				}
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
 						format!("Cannot call a class."),
@@ -153,6 +155,8 @@ impl<'db> Binder<'db> {
 				ScopeEntry::None => continue,
 			}
 		}
+
+		eprintln!("resolve_unbound_funcapture: Could not resolve.");
 
 		None
 	}
@@ -245,13 +249,8 @@ impl<'db> Binder<'db> {
 			// Nothing to visit.
 			Expr::FunCapture(capt) => None,
 
-			Expr::UnboundCall(unbound) => {
-				// Must visit all the arguments of the call, so that they can
-				// be bound.
-				for arg in &mut unbound.args {
-					self.visit_expr(arg);
-				}
-				self.resolve_unbound_call(unbound)
+			Expr::UnboundFunCapture(unbound) => {
+				self.resolve_unbound_funcapture(unbound)
 			},
 
 			Expr::FunDeclare(fun_declare) => {
@@ -275,6 +274,10 @@ impl<'db> Binder<'db> {
 			Expr::Set(set) => {
 				self.visit_expr(&mut set.rhs);
 				self.visit_expr(&mut set.lhs);
+				return None;
+			}
+
+			Expr::SelfVal(_) => {
 				return None;
 			}
 			

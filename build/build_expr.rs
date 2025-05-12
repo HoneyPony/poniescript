@@ -193,10 +193,10 @@ pub fn generate(file: &mut File) {
 	Comparison    : Tok op, Expr left, Expr right, TypId compare_as
 	Variable      : VarId identity
 	Logical       : Tok op, Expr left, Expr right
-	FunCall       : FunId identity, Vec<Expr> args, Option<Expr> object
+	FunCall       : FunId identity, Vec<Expr> args
 	FunDeclare    : FunId identity, Expr value, TypId typ
-	ValCall       : Expr value, Vec<Expr> args, SigId sig, Option<Expr> object
-	FunCapture    : FunId identity, TypId typ
+	ValCall       : Expr value, Vec<Expr> args, SigId sig
+	FunCapture    : FunId identity, TypId typ, Option<Expr> object
 	Assign        : VarId identity, Expr value
 	UnboundAssign : Token identifier, Expr value
 	NumLiteral    : Token contents, TypId typ
@@ -205,12 +205,13 @@ pub fn generate(file: &mut File) {
 	Block         : Vec<Stmt> stmts, TypId typ
 	If            : Expr condition, Expr then_branch, Option<Expr> else_branch, TypId typ
 	Unbound       : Token identifier
-	UnboundCall   : Token identifier, Vec<Expr> args, Option<Expr> object
+	UnboundFunCapture : Token identifier, Option<Expr> object
 	Print         : Vec<Expr> exprs, TypId typ
 	Str           : Vec<Expr> exprs
 	New           : Token identifier, ClassId class, TypId typ
 	Get           : Token identifier, Expr lhs, VarId var
 	Set           : Token identifier, Expr lhs, VarId var, Expr rhs
+	SelfVal       : TypId typ
 	Undefined     : 
 
 	"#;
