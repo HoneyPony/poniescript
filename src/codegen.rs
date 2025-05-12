@@ -807,10 +807,29 @@ impl<'a> Codegen<'a> {
 
 				// BIG TODO: Support closures. Not exactly clear how that will work.
 
+				let closure = match &capt.object {
+					Some(expr) => {
+						Some(self.expr(expr, into))
+					},
+					None => None
+				};
+
 				define_val!(self, into, val,
-					" = ({}) {{ .fun = {}, .closure = NULL }};\n",
+					" = ({}) {{ .fun = {}, ",
 					self.db.get_ctype(capt.typ), // TODO: Maybe use a sig-specific fucntion
 					self.db.get_fun_cname(capt.identity));
+
+				if val.needs_storage() {
+					// Second half of definition: closure
+					if let Some(closure) = closure {
+						// TODO: We need to promote Closure into essentially
+						// the class type for the function?
+						inf_writeln!(into, ".closure = {} }};", closure.val);
+					}
+					else {
+						inf_writeln!(into, ".closure = NULL }};");
+					}
+				}
 
 				val
 			},
