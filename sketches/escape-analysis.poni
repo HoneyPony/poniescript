@@ -1,0 +1,29 @@
+class Stuff {
+
+}
+
+fun fill_out(stuff: Stuff) -> void {
+
+}  
+
+fun my_fun() -> void {
+    // Should be stack allocated, because 
+    var stuff = new Stuff {};
+    fill_out(stuff);
+}
+
+fun hook(@noescape class1: Class1, @escapes_to(class1) class2: Class2) {
+    class1.thing = class2;
+}
+
+fun my_fun2() {
+    var a = new Class1 {};
+    var b = new Class2 {};
+
+    // Ideally both a and b are still stack allocated. 
+    hook(a, b);
+}
+
+fun superhook(class1: Class1, @escapes_to(class1.thing) class2: Class2) {
+    class1.thing.thing = class2;
+}
