@@ -113,6 +113,7 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "basic_class_call"),
 		("classes/", "basic_call_with_member"),
 		("classes/", "class_call_own_funs"),
+		("classes/", "class_member_ref"),
 
 		("get/", "get_string_length"),
 
