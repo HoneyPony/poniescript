@@ -853,8 +853,11 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let mut name = None;
 
+		let pushed_name =
 		if let Some(name_) = self.match_(Tok::Identifier)? {
+			let pushed_name = self.push_name(&name_);
 			name = Some(name_);
+			pushed_name
 		}
 		else {
 			if require_name {
@@ -864,7 +867,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 				);
 				semantic_error_with!(self, error);
 			}
-		}
+
+			self.push_name_anon()
+		};
 
 		expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
 
@@ -929,7 +934,31 @@ impl<'a, 'b> Parser<'a, 'b> {
 			}
 		}
 
+		self.pop_name(pushed_name);
+
 		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned, )
+	}
+
+	fn push_name(&mut self, name: &Token) -> usize {
+		self.scope_name.push_str(self.db.get(name.lexeme));
+		self.scope_name.push('.');
+		
+		self.db.get(name.lexeme).len() + 1
+	}
+
+	fn push_name_anon(&mut self) -> usize {
+		// TODO: Right now this won't work because it'll put all anonymous
+		// names in effectively the same scope. Instead, we need to figure
+		// out a way to essentially forbid anything from looking into an
+		// anonymous scope at all. (Although, I suppose this already
+		// works for that..?)
+		let str = format!("<anon>.");
+		self.scope_name.push_str(&str);
+		str.len()
+	}
+
+	fn pop_name(&mut self, size: usize) {
+		self.scope_name.truncate(self.scope_name.len() - size);
 	}
 
 	fn class_declaration(&mut self) -> Result<ClassDeclare> {
@@ -938,6 +967,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name = expected_after!(self, Tok::Identifier, key_class,
 			"class name")?;
+
+		let pushed_name = self.push_name(&name);
 
 		expected!(self, Tok::LeftBrace, "'{{' at beginning of class")?;
 
@@ -993,6 +1024,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 		for fun in &declare_funs {
 			self.db.get_mut(fun.identity).class = Some(identity);
 		}
+
+		self.pop_name(pushed_name);
 
 		self.scope_put_entry(name_str, ScopeEntry::Class(identity));
 
