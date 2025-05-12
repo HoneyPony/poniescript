@@ -307,7 +307,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 	}
 
 	// Expects to be at the first param, after the LeftParen.
-	fn expr_call_finish(&mut self, location: SourceLocation, ident: Token, object: Option<Expr>) -> Result<Expr> {
+	fn expr_call_finish(&mut self, location: SourceLocation, ident: Token) -> Result<Expr> {
 		let mut args = Vec::new();
 
 		while !self.at(Tok::RightParen) && !self.is_at_end() {
@@ -328,22 +328,22 @@ impl<'a, 'b> Parser<'a, 'b> {
 		match self.scope_lookup(ident.lexeme) {
 			ScopeEntry::Var(v) => {
 				let inner = Expr::mk_variable(location.clone(), v);
-				return Expr::mk_valcall_ok(self.end(location), inner, args, self.db.sig_unassigned, object)
+				return Expr::mk_valcall_ok(self.end(location), inner, args, self.db.sig_unassigned)
 			},
 
 			// It may seem in poor taste to have a specific Expr for function
 			// calls all throughout the syntax tree. But, the hope is that this
 			// makes it easier to generate reasonable code in the common cases.
-			ScopeEntry::Fun(fun) => Expr::mk_funcall_ok(location, fun, args, object),
+			ScopeEntry::Fun(fun) => Expr::mk_funcall_ok(location, fun, args),
 
 			ScopeEntry::Class(class) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), &self.current.location));
 
 				// Just return an UnboundCall, as we have a semantic error rather than parse error.
-				Expr::mk_unboundcall_ok(location, ident, args, object)
+				Expr::mk_unboundcall_ok(location, ident, args)
 			}
 
-			ScopeEntry::None => Expr::mk_unboundcall_ok(location, ident, args, object),
+			ScopeEntry::None => Expr::mk_unboundcall_ok(location, ident, args),
 		}
 	}
 
@@ -352,8 +352,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let ident = expected!(self, Tok::Identifier, "identifier")?;
 
 		if self.match_(Tok::LeftParen)?.is_some() {
-			// We're not dotted, so we have no object.
-			return self.expr_call_finish(location, ident, None);
+			return self.expr_call_finish(location, ident);
 		}
 
 		// In the future, if we see a dot or a (), we might generate a getter/setter/call.
@@ -518,7 +517,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 					}
 
 					expected!(self, Tok::RightParen, "')' after argument list")?;
-					inner = Expr::mk_valcall(self.end(location.clone()), inner, args, self.db.sig_unassigned, None);
+					inner = Expr::mk_valcall(self.end(location.clone()), inner, args, self.db.sig_unassigned);
 				}
 
 				return Ok(inner);
@@ -609,17 +608,6 @@ impl<'a, 'b> Parser<'a, 'b> {
 				if self.match_(Tok::Equal)?.is_some() {
 					let value = self.expression()?;
 					return Expr::mk_set_ok(self.end(location), identifier, lhs, self.db.var_unassigned, value);
-				}
-				// Function calls are mutually exclusive with assignment.
-				//
-				// An assignment would be like:
-				// object.thing() = 5;  or object.thing() = new Thing {};
-				// But this doesn't make sense, because in either case we're
-				// basically creating a new temporary that isn't really an lvalue.
-				//
-				// So function calls are distinct from assignments.
-				else if self.match_(Tok::LeftParen)?.is_some() {
-					return self.expr_call_finish(location, identifier, Some(lhs));
 				}
 				return Expr::mk_get_ok(self.end(location), identifier, lhs, self.db.var_unassigned);
 			}
@@ -925,7 +913,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			}
 		}
 
-		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned, )
+		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned)
 	}
 
 	fn class_declaration(&mut self) -> Result<ClassDeclare> {
