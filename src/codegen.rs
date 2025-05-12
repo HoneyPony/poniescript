@@ -10,6 +10,7 @@ use std::fmt::Write as _;
 struct Codegen<'a> {
 	functions: Vec<String>,
 	structs: Vec<String>,
+	struct_declares: Vec<String>,
 
 	return_types: Vec<TypId>,
 
@@ -40,10 +41,6 @@ struct CodegenOutputs {
 	string_const_define: String,
 	string_const_init: String,
 
-	/// Declares structs used for classes, etc.
-	struct_declare: String,
-	struct_define: String,
-
 	fun_declare: String,
 }
 
@@ -57,9 +54,6 @@ impl CodegenOutputs {
 			string_const_init: String::new(),
 
 			fun_declare: String::new(),
-
-			struct_declare: String::new(),
-			struct_define: String::new(),
 		}
 	}
 }
@@ -308,6 +302,7 @@ impl<'a> Codegen<'a> {
 		return Codegen {
 			functions: Vec::new(),
 			structs: Vec::new(),
+			struct_declares: Vec::new(),
 
 			return_types: Vec::new(),
 
@@ -972,6 +967,13 @@ impl<'a> Codegen<'a> {
 		let mut struc = String::new();
 		inf_writeln!(struc, "struct {} {{", self.db.get_class_cname(class_declare.identity));
 
+		// Write the struct declaration. These must come before signature declarations
+		// in case the signature needs to use the struct; The signature declarations
+		// must then come before structs in case the struct needs to use the signature.
+		let mut struc_declare = String::new();
+		inf_writeln!(struc_declare, "struct {};", self.db.get_class_cname(class_declare.identity));
+		self.struct_declares.push(struc_declare);
+
 		// Simultaneously write the variable generator. 
 		let enclosing_indent = self.indent_level;
 		self.indent_level = 1;
@@ -1209,7 +1211,10 @@ impl<'a> Codegen<'a> {
 		writeln!(output, "#include \"poni/poni_standalone.h\"")?;
 
 		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
-		writeln!(output, "// --- struct declarations ---\n{}", outputs.struct_declare)?;
+		writeln!(output, "// --- struct declarations ---\n")?;
+		for struc_declare in &self.struct_declares {
+			writeln!(output, "{}", struc_declare)?;
+		}
 		writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
 		writeln!(output, "// --- struct definitions ---")?;
 		for struc in &self.structs {
