@@ -2,7 +2,7 @@ use crate::db::*;
 use crate::error::Error;
 use crate::expr::*;
 use crate::module::Module;
-use crate::source::SourceLocation;
+use crate::source::{Source, SourceLocation};
 use crate::typ::Type;
 
 struct NameChecker {
@@ -41,6 +41,7 @@ struct Binder<'db> {
 	db: &'db mut Db,
 
 	had_error: bool,
+	in_class: bool,
 
 	checkers: Vec<NameChecker>,
 }
@@ -51,6 +52,7 @@ impl<'db> Binder<'db> {
 			db,
 
 			had_error: false,
+			in_class: false,
 
 			checkers: Vec::new(),
 		}
@@ -77,12 +79,22 @@ impl<'db> Binder<'db> {
 		None
 	}
 
+	/// If we're currently inside a class, gets a new SelfVal; otherwise, returns
+	/// None. Useful for resolving AST types that can optionally operate on an
+	/// object.
+	fn get_selfval(&mut self, location: SourceLocation) -> Option<Expr> {
+		if self.in_class {
+			Some(Expr::mk_selfval(location, self.db.types.unassigned))
+		}
+		else { None }
+	}
+
 	fn resolve_unbound(&mut self, ident: StrId, location: SourceLocation) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
 				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location.clone(), fun, self.db.types.fun_sig_unassigned, 
-					Some(Expr::mk_selfval(location, self.db.types.unassigned)))),
+					self.get_selfval(location))),
 				ScopeEntry::Class(_) => {
 					todo!("What to do when we resolve an Unbound into a Class");
 				}
@@ -141,7 +153,7 @@ impl<'db> Binder<'db> {
 				ScopeEntry::Fun(fun) => {
 					eprintln!("resolve_unbound_funcapture: Resolved to a Fun in scope.");
 					return Some(Expr::mk_funcapture(unbound.location.clone(), fun, self.db.types.unassigned, 
-						Some(Expr::mk_selfval(unbound.location.clone(), self.db.types.unassigned))))
+						self.get_selfval(unbound.location.clone())))
 				}
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
@@ -295,6 +307,9 @@ impl<'db> Binder<'db> {
 	}
 
 	fn visit_class(&mut self, class_declare: &mut ClassDeclare) {
+		let enclosing_in_class = self.in_class;
+		self.in_class = true;
+
 		let class = self.db.get(class_declare.identity);
 		let name = self.db.get(class.name.lexeme);
 		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name);
@@ -312,6 +327,7 @@ impl<'db> Binder<'db> {
 		}
 
 		self.checkers.pop();
+		self.in_class = enclosing_in_class;
 	}
 
 	fn resolve_type(&mut self, name: StrId, location: &SourceLocation) -> Option<Type> {
