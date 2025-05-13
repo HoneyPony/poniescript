@@ -1,0 +1,10 @@
+class Player =>
+
+fun ready() {
+
+}
+
+fun tick(dt: float) {
+
+}
+

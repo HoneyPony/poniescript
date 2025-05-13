@@ -1,0 +1,11 @@
+class Example {
+    var whatever: float {
+        set(x) {
+            whatever = x;
+        }
+
+        get() {
+            whatever
+        }
+    }
+}
