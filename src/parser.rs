@@ -490,6 +490,14 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 	}
 
+	fn eat_comma(&mut self, terminator: Tok) -> Result<()> {
+		if self.at(terminator) { return Ok(()); }
+		if self.is_at_end() { return Ok(()); }
+		if self.match_(Tok::Comma)?.is_some() { return Ok(()); }
+
+		got!(self, "','");
+	}
+
 	/// Parses a 'new' expression, e.g. new Example {}
 	fn new_(&mut self) -> Result<Expr> {
 		let location = self.start();
@@ -497,11 +505,27 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let key_new = expected!(self, Tok::New, "'new'")?;
 		let name = expected_after!(self, Tok::Identifier, key_new, "class name after 'new'")?;
 
+		let mut initializers = Vec::new();
+
 		expected!(self, Tok::LeftBrace, "'{{' in 'new' expression");
+
+		while !self.at(Tok::RightBrace) && !self.is_at_end() {
+			let location = self.start();
+			let ident = expected!(self, Tok::Identifier, "identifier inside 'new' block")?;
+			expected_after!(self, Tok::Colon, name, "':' after member name");
+
+			let value = self.expression()?;
+			initializers.push(NewInitElem { var: self.db.var_unassigned, ident, value, location: self.end(location) });
+
+			self.eat_comma(Tok::RightBrace)?;
+		}
 		// TODO: Parse inner arguments, etc.
 		expected!(self, Tok::RightBrace, "'}}' in 'new' expression");
 
-		Expr::mk_new_ok(self.end(location), name, self.db.class_unassigned, self.db.types.unassigned)
+		Expr::mk_new_ok(self.end(location), name, 
+			self.db.class_unassigned,
+			self.db.types.unassigned,
+			initializers)
 	}
 
 	fn expr_prefix(&mut self) -> Result<Expr> {
@@ -747,7 +771,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// When we create variables, don't set the class yet, as we don't
 		// know what it is -- we wire it back in once we're done parsing a 
 		// class.
-		let identity = self.db.new_var(name, typ, None);
+		//
+		// TODO: For classes, support variables that don't have an initializer?
+		let identity = self.db.new_var(name, typ, None, true);
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -841,7 +867,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name, typ, None);
+		let identity = self.db.new_var(name, typ, None, false);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		Ok(identity)
@@ -936,7 +962,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 				self.db.fun_init = Some(identity);
 			}
 		}
-		
+
 		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned, )
 	}
 

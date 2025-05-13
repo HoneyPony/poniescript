@@ -9,6 +9,13 @@ use crate::{db::*, lexer::Token};
 use crate::source::SourceLocation;
 use crate::lexer::Tok;
 
+pub struct NewInitElem {
+	pub var: VarId,
+	pub ident: Token,
+	pub value: Expr,
+	pub location: SourceLocation
+}
+
 impl Stmt {
 	pub fn val_location(&self) -> &SourceLocation {
 		self.location()
@@ -224,6 +231,9 @@ pub struct Var {
 
 	/// If this variable is a member of a class, this stores the class id.
 	pub class: Option<ClassId>,
+	/// For class members, stores whether this variable was initialized.
+	/// (TODO: Is there a way to not have this field on non-class variables?)
+	pub init: bool,
 }
 
 pub struct Fun {

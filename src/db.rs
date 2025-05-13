@@ -246,6 +246,7 @@ impl Db {
 			name: self.synthetic_id(key),
 			typ,
 			class: None,
+			init: false,
 		};
 		let var = self.new_id(var);
 
@@ -466,11 +467,12 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: Token, typ: TypId, class: Option<ClassId>) -> VarId {
+	pub fn new_var(&mut self, name: Token, typ: TypId, class: Option<ClassId>, init: bool) -> VarId {
 		let var = Var {
 			name,
 			typ,
 			class,
+			init
 		};
 
 		return self.new_id(var);
@@ -568,6 +570,10 @@ impl Db {
 
 	pub fn repr_var(&self, var: VarId) -> &str {
 		self.get(self.get(var).name.lexeme)
+	}
+
+	pub fn repr_class(&self, class: ClassId) -> &str {
+		self.get(self.get(class).name.lexeme)
 	}
 
 	pub fn repr_var_type(&self, var: VarId) -> &'static str {

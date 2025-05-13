@@ -901,9 +901,17 @@ impl<'a> Codegen<'a> {
 					// Note: The value is a pointer-to-struct cl_Thing, so
 					// we want to pass the direct value to the preparer.
 					// e.g. struct cl_Thing *thing = malloc(); icl_Thing(thing);
-					inf_writeln!(into, "{}({});",
+					inf_writeln!(into, "{indent}{}({});",
 						self.db.get_class_preparer_cname(new.class),
 						val.val);
+
+					for init in &new.initializers {
+						let rhs = self.expr(&init.value, into);
+						let rhs = self.promote(rhs, self.db.get_var_type(init.var));
+						let varname = self.db.get_cname(init.var);
+
+						inf_writeln!(into, "{indent}{}->{varname} = {rhs};", val.val);
+					}
 				}
 
 				val

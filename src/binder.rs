@@ -268,6 +268,22 @@ impl<'db> Binder<'db> {
 				new.class = self.resolve_class_name(new.identifier.lexeme, &new.location)?;
 				// Set the type here, so we don't have to mess with it again.
 				new.typ = self.db.put_type(Type::Class(new.class));
+
+				for init in &mut new.initializers {
+					if let Some(id) = self.db.lookup_property(new.typ, init.ident.lexeme) {
+						init.var = id;
+					} else {
+						self.db.report_error(Error::simple(
+							format!("Class '{}' has no such property '{}'",
+								self.db.repr_class(new.class),
+								self.db.get(init.ident.lexeme)),
+							&new.location
+						));
+						
+						self.had_error = true;
+					};
+				}
+
 				return None;
 			}
 			

@@ -266,7 +266,34 @@ impl<'db> DeadCodeElim<'db> {
                 false
             },
             Expr::New(new) => {
-                false // TODO
+                // TODO: Deduplicate all this code.
+                let mut last_needed_idx = None;
+
+                for idx in 0..new.initializers.len() {
+                    if self.elim_expr(&mut new.initializers[idx].value) {
+                        last_needed_idx = Some(idx);
+                        break;
+                    }
+                }
+
+                if let Some(last) = last_needed_idx {
+                    let old = std::mem::take(expr);
+                    let Expr::New(old) = old else { unreachable!() };
+
+                    let (mut args, location) = (old.initializers, old.location);
+                    
+                    let mut new_exprs = Vec::new();
+                    for arg in args.drain(0..=last) {
+                        new_exprs.push(Stmt::mk_expression(arg.location.clone(), arg.value));
+                    }
+
+                    let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
+                    *expr = new_block;
+
+                    return true;
+                }
+
+                false
             },
             Expr::Get(get) => {
                 if self.elim_expr(get.lhs) {

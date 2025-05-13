@@ -633,6 +633,10 @@ impl<'db> TypeChecker<'db> {
 					panic!("New expression has unassigned type from Binder");
 				}
 
+				for init in &mut new.initializers {
+					self.check_assign(&init.location, init.var, &mut init.value, false)?;
+				}
+
 				new.typ
 			}
 
