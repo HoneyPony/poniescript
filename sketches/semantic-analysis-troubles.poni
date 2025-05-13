@@ -1,0 +1,15 @@
+class A { }
+class B { }
+
+fun ident(x: int) -> int { return x; }
+fun ident(y: float) -> float { return y; }
+
+fun init() {
+    var arr = [5];
+    
+    // Overload of ident() depends on type of arr[]
+    var x = ident(arr[0]);
+
+    // Type deduction for arr[] depends on type of x
+    arr.push(ident(x));
+}
