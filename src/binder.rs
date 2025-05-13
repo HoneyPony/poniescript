@@ -277,9 +277,9 @@ impl<'db> Binder<'db> {
 					} else {
 						self.db.report_error(Error::simple(
 							format!("Class '{}' has no such property '{}'",
-								self.db.repr_class(new.class),
-								self.db.get(init.ident.lexeme)),
-							&new.location
+							self.db.repr_class(new.class),
+							self.db.get(init.ident.lexeme)),
+							&init.location
 						));
 						
 						self.had_error = true;
