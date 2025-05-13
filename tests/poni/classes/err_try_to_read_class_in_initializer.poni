@@ -1,0 +1,10 @@
+class Example {
+    var a = 5;
+    var b = 6;
+}
+
+fun init() {
+    var e = new Example {
+        a: e.b
+    };
+}

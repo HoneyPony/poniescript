@@ -270,6 +270,8 @@ impl<'db> Binder<'db> {
 				new.typ = self.db.put_type(Type::Class(new.class));
 
 				for init in &mut new.initializers {
+					self.visit_expr(&mut init.value);
+					
 					if let Some(id) = self.db.lookup_property(new.typ, init.ident.lexeme) {
 						init.var = id;
 					} else {
