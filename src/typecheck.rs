@@ -161,6 +161,11 @@ impl<'db> TypeChecker<'db> {
 				return Ok(self.db.put_type(Type::ArrayOf(elem_typ)))
 			}
 
+			(Type::ArrayOf(lhs), Type::ArrayOf(rhs)) => {
+				let elem_typ = self.compute_assignable(*lhs, *rhs)?;
+				return Ok(self.db.put_type(Type::ArrayOf(elem_typ)));
+			}
+
 			(Type::Fun(sig), Type::Fun(sig2)) => {
 				if *sig == self.db.sig_unassigned {
 					return Ok(from);
@@ -201,8 +206,8 @@ impl<'db> TypeChecker<'db> {
 	fn compute_intersect(&mut self, bottom_eats: bool, left: TypId, right: TypId) -> std::result::Result<TypId, TypeComputeErr> {
 		if left == right { return Ok(left); }
 
-		let ty_left = self.db.get(left);
-		let ty_right = self.db.get(right);
+		let ty_left = self.db.get(left).clone();
+		let ty_right = self.db.get(right).clone();
 
 		match (ty_left, ty_right) {
 			// For something like 5 + return; we do want the bottom to take over
@@ -222,6 +227,17 @@ impl<'db> TypeChecker<'db> {
 
 			(Type::AssumeFloat, Type::AssumeInt) => return Ok(left),
 			(Type::AssumeInt, Type::AssumeFloat) => return Ok(right),
+
+			(Type::ArrayOf(lhs), Type::ArrayOf(rhs)) => {
+				// For arrays, the intersection is the intersection of their inner
+				// types.
+				// Note that right now, because we always return left or right
+				// for the other cases for this function, we don't have to synthesize
+				// a new type here. If we ever change that, we will.
+				let inner = self.compute_intersect(bottom_eats, lhs, rhs)?;
+				if inner == lhs { return Ok(lhs); }
+				return Ok(rhs);
+			}
 
 			_ => return Err(TypeComputeErr)
 		}
