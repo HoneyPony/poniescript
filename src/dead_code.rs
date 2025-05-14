@@ -325,6 +325,10 @@ impl<'db> DeadCodeElim<'db> {
             Expr::SelfVal(_) => {
                 false
             }
+            Expr::ArrayLit(_) => {
+                // TODO: Eliminate sequence like all the other ones
+                false
+            }
             Expr::Undefined(undefined) => unreachable!("dead code Undefined"),
         }
     }

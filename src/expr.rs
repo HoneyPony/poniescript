@@ -71,6 +71,9 @@ impl Expr {
 	// (either alongside the class or instead of), but should we...?
 	pub fn typ(&self, db: &Db) -> TypId {
 		match self {
+			Expr::ArrayLit(lit) => {
+				lit.arr_typ
+			}
 			Expr::Binary(binary) => {
 				binary.typ
 			},
@@ -150,6 +153,29 @@ impl Expr {
 				binary.typ = typ;
 				true
 			},
+			Expr::ArrayLit(lit) => {
+				// Only promote if the incoming type is actually an Array of
+				// something.
+				let incoming_elem_typ = match db.get(typ) {
+					Type::ArrayOf(elem) => *elem,
+					_ => return false
+				};
+
+				if db.is_not_concrete(lit.elem_typ) && db.is_concrete(incoming_elem_typ) {
+					// Recursively promote to any concrete element type
+					//
+					// NOTE that this is still O(n) in the number of AST nodes,
+					// because once a type is promoted to concrete once, it cannot
+					// have to do it again.
+					for expr in &mut lit.values {
+						expr.promote(incoming_elem_typ, db);
+					}
+				}
+				// The array type is the direct incoming typ.
+				lit.arr_typ = typ;
+				lit.elem_typ = incoming_elem_typ;
+				true
+			}
 			Expr::Comparison(_) => {
 				// Types do not propagate down into the comparison. It will
 				// promote its own operands, though.

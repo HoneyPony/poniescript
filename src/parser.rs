@@ -528,6 +528,23 @@ impl<'a, 'b> Parser<'a, 'b> {
 			initializers)
 	}
 
+	fn array_literal(&mut self) -> Result<Expr> {
+		let location = self.start();
+		let lbracket = self.advance()?;
+
+		let mut values = Vec::new();
+		while !self.at(Tok::RightSquare) && !self.is_at_end() {
+			let value = self.expression()?;
+			values.push(value);
+
+			self.eat_comma(Tok::RightSquare)?;
+		}
+
+		expected!(self, Tok::RightSquare, "']' at end of array literal");
+
+		Expr::mk_arraylit_ok(self.end(location), values, self.db.types.unassigned, self.db.types.unassigned)
+	}
+
 	fn expr_prefix(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
 			Tok::LeftBrace | Tok::Identifier | Tok::If | Tok::Fun => {
@@ -572,6 +589,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			Tok::New => {
 				self.new_()
+			}
+
+			Tok::LeftSquare => {
+				self.array_literal()
 			}
 
 			_ => {

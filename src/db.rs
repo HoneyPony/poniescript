@@ -283,7 +283,9 @@ impl Db {
 	}
 
 	pub fn is_not_concrete(&self, id: TypId) -> bool {
-		return id == self.types.assume_float || id == self.types.assume_int;
+		// TODO: Is unassigned correct here?
+		// It seems necessary for empty array literals, but it's not clear.
+		return id == self.types.assume_float || id == self.types.assume_int || id == self.types.unassigned;
 	}
 
 	pub fn is_concrete(&self, id: TypId) -> bool {

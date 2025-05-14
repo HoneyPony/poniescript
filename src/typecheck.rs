@@ -170,9 +170,15 @@ impl<'db> TypeChecker<'db> {
 				return Err(TypeComputeErr);
 			}
 
+			// Both unassigned is an error.
+			(Type::Unassigned, Type::Unassigned) => return Err(TypeComputeErr),
+
 			// If the 'to' is unassigned, then anything is assignable to it.
 			(Type::Unassigned, _) => return Ok(from),
 
+			// Just the RHS unassigned is fine.
+			(_, Type::Unassigned) => return Ok(to),
+			
 			// Everything else is an error.
 			_ => return Err(TypeComputeErr)
 		}
@@ -275,6 +281,37 @@ impl<'db> TypeChecker<'db> {
 				
 				computed
 			},
+			Expr::ArrayLit(lit) => {
+				let mut final_ty: TypId = self.db.types.unassigned;
+
+				if let Some((first, rest)) = lit.values.split_first_mut() {
+					final_ty = self.check_expr(first, true)?;
+					for value in rest {
+						let value_ty = self.check_expr(value, true)?;
+						
+						final_ty = maybe_type_error!(
+							self,
+							self.compute_intersect(true, final_ty, value_ty),
+							
+							&lit.location,
+							"Invalid type of array elements: {} vs {}",
+							self.db.repr_type(final_ty),
+							self.db.repr_type(value_ty)
+						);
+					}
+				}
+
+				for value in &mut lit.values {
+					value.promote(final_ty, self.db);
+				}
+
+				lit.elem_typ = final_ty;
+				if lit.elem_typ != self.db.types.unassigned {
+					lit.arr_typ = self.db.put_type(Type::ArrayOf(lit.elem_typ));
+				}
+
+				lit.arr_typ
+			}
 			Expr::Comparison(compare) => {
 				let left = self.check_expr(&mut compare.left, true)?;
 				let right = self.check_expr(&mut compare.right, true)?;

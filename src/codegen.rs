@@ -954,6 +954,16 @@ impl<'a> Codegen<'a> {
 				val
 			}
 
+			Expr::ArrayLit(lit) => {
+				let val = self.new_val_typed(lit.arr_typ);
+
+				define_val!(self, into, val, " = ps_gc_must_calloc(sizeof(struct ps_array_header) + sizeof({}) * {}, PS_TAG_ARRAY);",
+					self.db.get_ctype(lit.elem_typ),
+					lit.values.len());
+
+				val
+			}
+
 			Expr::SelfVal(selfval) => {
 				Val::DirectSelf.typed(selfval.typ)
 			}

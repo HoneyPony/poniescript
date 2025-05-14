@@ -212,6 +212,7 @@ pub fn generate(file: &mut File) {
 	Get           : Token identifier, Expr lhs, VarId var
 	Set           : Token identifier, Expr lhs, VarId var, Expr rhs
 	SelfVal       : TypId typ
+	ArrayLit      : Vec<Expr> values, TypId elem_typ, TypId arr_typ
 	Undefined     : 
 
 	"#;

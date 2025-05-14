@@ -308,6 +308,13 @@ impl<'db> Binder<'db> {
 			Expr::Undefined(_) => {
 				return None;
 			}
+
+			Expr::ArrayLit(lit) => {
+				for val in &mut lit.values {
+					self.visit_expr(val);
+				}
+				return None;
+			}
 		}
 	}
 

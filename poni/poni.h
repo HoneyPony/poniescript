@@ -10,6 +10,7 @@
 #define PS_TAG_STRCONST 1
 #define PS_TAG_STR      2
 #define PS_TAG_STRBUF   3
+#define PS_TAG_ARRAY    4
 
 typedef float   ps_float;
 typedef int32_t ps_int;
