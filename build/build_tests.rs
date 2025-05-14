@@ -138,6 +138,11 @@ pub fn generate(tests_file: &mut File) {
 		("dead_code/", "dead_args_print"),
 		("dead_code/", "dead_args_str"),
 		("dead_code/", "dead_args_valcall"),
+
+		("array/", "array_nested_empty_lhs"),
+		("array/", "array_nested_empty_rhs"),
+		("array/", "array_nested_empty"),
+		("array/", "array_nested_infer"),
 	];
 
 	for (path, test) in tests {

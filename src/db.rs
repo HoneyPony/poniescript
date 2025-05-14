@@ -293,9 +293,18 @@ impl Db {
 	}
 
 	pub fn is_not_concrete(&self, id: TypId) -> bool {
-		// TODO: Is unassigned correct here?
-		// It seems necessary for empty array literals, but it's not clear.
-		return id == self.types.assume_float || id == self.types.assume_int || id == self.types.unassigned;
+		match self.get(id) {
+			Type::AssumeFloat => true,
+			Type::AssumeInt => true,
+
+			// TODO: Is unassigned correct here?
+			// It seems necessary for empty array literals, but it's not clear.
+			Type::Unassigned => true,
+
+			Type::ArrayOf(elem) => self.is_not_concrete(*elem),
+
+			_ => false
+		}
 	}
 
 	pub fn is_concrete(&self, id: TypId) -> bool {

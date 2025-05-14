@@ -1,3 +1,4 @@
 fun init() {
     var arr: Array[Array[int]] = [[], [], []];
+    print("success"); //! success
 }
