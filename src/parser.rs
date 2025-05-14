@@ -700,6 +700,16 @@ impl<'a, 'b> Parser<'a, 'b> {
 				if tok.lexeme == self.db.put_str("StrConst") {
 					return Ok(self.db.types.str_const)
 				}
+				
+				if tok.lexeme == self.db.put_str("Array") {
+					expected!(self, Tok::LeftSquare, "'[' after 'Array'")?;
+
+					let inner = self.typ()?;
+
+					expected!(self, Tok::RightSquare, "']' after inner type")?;
+
+					return Ok(self.db.put_type(Type::ArrayOf(inner)));
+				}
 
 				self.db.put_type(Type::UnboundIdent(tok.lexeme))
 			},

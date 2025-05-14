@@ -364,11 +364,11 @@ impl<'db> Binder<'db> {
 	}
 
 	fn visit_type(&mut self, typ: TypId, location: &SourceLocation) -> TypId {
-		let ty = self.db.get(typ);
+		let ty = self.db.get(typ).clone();
 
 		match ty {
 			Type::UnboundIdent(str_id) => {
-				let ty = self.resolve_type(*str_id, location);
+				let ty = self.resolve_type(str_id, location);
 
 				// If we successfully resolved the type, return that; otherwise,
 				// we already reported the error, so just hang on to the unknown
@@ -378,6 +378,13 @@ impl<'db> Binder<'db> {
 				}
 				return typ;
 			},
+			Type::ArrayOf(inner_typ) => {
+				let inner = self.visit_type(inner_typ, location);
+				if inner != inner_typ {
+					return self.db.put_type(Type::ArrayOf(inner));
+				}
+				return typ;
+			}
 			_ => { return typ; }
 		}
 	}
