@@ -40,6 +40,15 @@ typedef struct ps_strbuf {
 	size_t length;
 } ps_strbuf;
 
+struct ps_array_header {
+	/** Object header */
+	ps_object object;
+	/** Type of the array members */
+	uint64_t  type;
+	/** Length of the array */
+	ps_int    length;
+};
+
 #ifdef __TINYC__
 	#define PONI_NORETURN __attribute__((noreturn))
 #else

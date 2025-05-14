@@ -1,0 +1,5 @@
+fun init() {
+    var arr: Array[int] = [1, 2, 3];
+
+    print(arr[0]);
+}

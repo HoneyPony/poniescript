@@ -1,0 +1,19 @@
+// Array[ty] : Fixed-sized array of type
+// List[ty] : Mutable growing array-backed list
+// Slice[ty] : Slice that points into either an Array or a List
+
+// In C:
+// struct ps_arr_1;
+// struct ps_arr_2;
+
+// struct ps_arr_1 {
+//     struct ps_array_header header;
+//     uint64_t               contents[];
+// };
+
+// struct ps_arr_2 {
+//     struct ps_array_header header;
+//     struct cl_Horse *contents[];
+// };
+
+// Same for List, Slice, etc
