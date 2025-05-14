@@ -966,7 +966,7 @@ impl<'a> Codegen<'a> {
 					for value in &lit.values {
 						let nth = self.expr(value, into);
 						let nth = self.promote(nth, lit.elem_typ);
-						inf_writeln!(into, "{indent}{}->contents[{idx}] = {nth}", val.val);
+						inf_writeln!(into, "{indent}{}->contents[{idx}] = {nth};", val.val);
 
 						idx += 1;
 					}

@@ -154,6 +154,13 @@ impl<'db> TypeChecker<'db> {
 			(Type::Unassigned, Type::AssumeInt) => return Ok(self.db.types.int),
 			(Type::Unassigned, Type::AssumeFloat) => return Ok(self.db.types.float),
 
+			// Assigning an ArrayOf something to Unassigned also means that array
+			// gets to promote using the same rules recursively.
+			(Type::Unassigned, Type::ArrayOf(inner)) => {
+				let elem_typ = self.compute_assignable(to, *inner)?;
+				return Ok(self.db.put_type(Type::ArrayOf(elem_typ)))
+			}
+
 			(Type::Fun(sig), Type::Fun(sig2)) => {
 				if *sig == self.db.sig_unassigned {
 					return Ok(from);
