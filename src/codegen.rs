@@ -990,6 +990,7 @@ impl<'a> Codegen<'a> {
 				let idx_val = self.expr(&index.index, into);
 				let idx_val = self.promote(idx_val, self.db.types.int);
 
+				// TODO: Generate bounds checks
 				define_val!(self, into, val, " = {arr_val}->contents[{idx_val}];\n");
 
 				val
