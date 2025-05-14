@@ -961,6 +961,17 @@ impl<'a> Codegen<'a> {
 					self.db.get_ctype(lit.elem_typ),
 					lit.values.len());
 
+				if val.needs_storage() {
+					let mut idx = 0;
+					for value in &lit.values {
+						let nth = self.expr(value, into);
+						let nth = self.promote(nth, lit.elem_typ);
+						inf_writeln!(into, "{indent}{}->contents[{idx}] = {nth}", val.val);
+
+						idx += 1;
+					}
+				}
+
 				val
 			}
 
