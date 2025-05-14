@@ -222,6 +222,11 @@ impl<'db> TypeChecker<'db> {
 
 	fn check_assign(&mut self, at: &SourceLocation, var: VarId, expr: &mut Expr, assign_ty: bool) -> Result<TypId> {
 		let value = self.check_expr(expr, true)?;
+
+		if self.db.get_var_type(var) == self.db.types.unassigned && value == self.db.types.unassigned {
+			type_error!(self, at, "Invalid assignment: Type annotations needed.");
+		}
+
 		let computed =
 			self.compute_assignable(self.db.get_var_type(var), value);
 
