@@ -957,7 +957,7 @@ impl<'a> Codegen<'a> {
 			Expr::ArrayLit(lit) => {
 				let val = self.new_val_typed(lit.arr_typ);
 
-				define_val!(self, into, val, " = ps_gc_must_calloc(sizeof(struct ps_array_header) + sizeof({}) * {}, PS_TAG_ARRAY);",
+				define_val!(self, into, val, " = ps_gc_must_calloc(sizeof(struct ps_array_header) + sizeof({}) * {}, PS_TAG_ARRAY);\n",
 					self.db.get_ctype(lit.elem_typ),
 					lit.values.len());
 
@@ -1229,11 +1229,13 @@ impl<'a> Codegen<'a> {
 		for struc_declare in &self.struct_declares {
 			writeln!(output, "{}", struc_declare)?;
 		}
+		writeln!(output, "// --- struct declarations (ps_array) ---\n{}", self.db.arr_declare_code)?;
 		writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
 		writeln!(output, "// --- struct definitions ---")?;
 		for struc in &self.structs {
 			writeln!(output, "{}", struc)?;
 		}
+		writeln!(output, "// --- struct definitions (ps_array) ---\n{}", self.db.arr_define_code)?;
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
 		writeln!(output, "// --- function definitions ---")?;

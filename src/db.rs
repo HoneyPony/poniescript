@@ -66,6 +66,7 @@ pub struct Db {
 	sig_cgenerated: FxHashMap<SigId, bool>,
 
 	array_cname_cache: FxHashMap<TypId, &'static str>,
+	array_used: Vec<TypId>,
 	//array_cgenerated: FxHashMap<TypId, bool>,
 
 	str_simple_const_map: FxHashMap<String, StrConstId>,
@@ -112,6 +113,11 @@ pub struct Db {
 	/// Some C code to declare each Sig type.
 	pub sig_declare_code: String,
 
+	/// Declares each array struct type.
+	pub arr_declare_code: String,
+	/// Defines each array struct type.
+	pub arr_define_code: String,
+
 	/// Some C code to declare each Array type.
 	/// TODO: This doesn't quite work, we really need to do a topological
 	/// sort on this stuff.
@@ -138,6 +144,7 @@ impl Db {
 			sig_cgenerated: FxHashMap::default(),
 
 			array_cname_cache: FxHashMap::default(),
+			array_used: Vec::new(),
 
 			str_simple_const_map: FxHashMap::default(),
 
@@ -186,6 +193,9 @@ impl Db {
 			test_lines: Vec::new(),
 
 			sig_declare_code: String::new(),
+
+			arr_declare_code: String::new(),
+			arr_define_code: String::new(),
 
 			str_anonymous: StrId(0),
 			str_lambda: StrId(0),
@@ -329,6 +339,12 @@ impl Db {
 		// IMPORTANT: The pushes() here must line up with new_id() -> TypId
 		//self.ctype_cache.push(ctype.leak());
 
+		match typ {
+			// For array types, use any type we generate.
+			Type::ArrayOf(elem_ty) => self.use_array(elem_ty),
+			_ => { }
+		}
+
 		let id = self.new_id(typ.clone());
 		self.type_side_map.insert(typ, id);
 
@@ -428,6 +444,12 @@ impl Db {
 		self.sig_cdeclared.insert(sig_id, true);
 	}
 
+	pub fn use_array(&mut self, elem_ty: TypId) {
+		if self.is_concrete(elem_ty) {
+			self.array_used.push(elem_ty);
+		}
+	}
+
 	/// Generates the ctype for a Sig. Note that this ctype might be nonsense,
 	/// but that's OK.
 	pub fn gen_sig_ctype(&mut self, sig: SigId) -> &'static str {
@@ -445,7 +467,7 @@ impl Db {
 			return existing;
 		}
 
-		let name = format!("ps_arr_{}", inner_ty.0);
+		let name = format!("struct ps_arr_{}*", inner_ty.0);
 		let name = name.leak();
 		self.array_cname_cache.insert(inner_ty, name);
 
@@ -688,6 +710,7 @@ impl Db {
 		self.generate_fun_cnames_cache();
 		self.generate_fun_cparams_cache();
 		self.generate_sigs_cache();
+		self.generate_arrays_cache();
 	}
 
 	fn generate_ctypes_cache(&mut self) {
@@ -822,6 +845,26 @@ impl Db {
 
 		for sig in sigs {
 			self.gen_sig(sig.0);
+		}
+	}
+
+	fn gen_array(&mut self, elem_ty: TypId) {
+		use crate::inf_write;
+		use crate::inf_writeln;
+
+		inf_writeln!(self.arr_declare_code, "struct ps_arr_{};", elem_ty.0);
+
+		inf_writeln!(self.arr_define_code, "struct ps_arr_{} {{", elem_ty.0);
+		inf_writeln!(self.arr_define_code, "\tstruct ps_array_header header;");
+		inf_writeln!(self.arr_define_code, "\t{} contents[];", self.get_ctype(elem_ty));
+		inf_writeln!(self.arr_define_code, "}};");
+	}
+
+	fn generate_arrays_cache(&mut self) {
+		let arrays = std::mem::take(&mut self.array_used);
+
+		for elem_ty in arrays {
+			self.gen_array(elem_ty);
 		}
 	}
 }
