@@ -1,0 +1,20 @@
+class Horse {
+    var hooves = 4;
+}
+
+fun init() {
+    var stable = [
+        new Horse {},
+        new Horse {},
+        new Horse { hooves: 10 }
+    ];
+
+    print(stable[0].hooves); //! 4
+    print(stable[1].hooves); //! 4
+    print(stable[2].hooves); //! 10
+
+    stable[0].hooves = 16;
+    print(stable[0].hooves); //! 16
+    print(stable[1].hooves); //! 4
+    print(stable[2].hooves); //! 10
+}
