@@ -228,6 +228,11 @@ impl<'db> TypeChecker<'db> {
 			(Type::AssumeFloat, Type::AssumeInt) => return Ok(left),
 			(Type::AssumeInt, Type::AssumeFloat) => return Ok(right),
 
+			// TODO: Is this correct?
+			// It seems necessary for array_nested_empty_lhs, array_nested_empty_rhs
+			(Type::Unassigned, _) => return Ok(right),
+			(_, Type::Unassigned) => return Ok(left),
+
 			(Type::ArrayOf(lhs), Type::ArrayOf(rhs)) => {
 				// For arrays, the intersection is the intersection of their inner
 				// types.
