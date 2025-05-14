@@ -17,6 +17,7 @@ fn generate_test(file: &mut File, path: &str, test_name: &str) -> std::io::Resul
 pub fn generate(tests_file: &mut File) {
 	let tests = [
 		("binary/", "binary_doubleblock"),
+		("binary/", "binary_bottom"),
 
 		// print_nested: the last line is 345 because it should re-print each of the inner print()s.
 		("print/", "print_nested"),
@@ -33,6 +34,9 @@ pub fn generate(tests_file: &mut File) {
 		// TODO: Figure out precise float output format we want.
 		("globals/", "globals_3"),
 		("globals/", "global_global"),
+		("globals/", "global_increment"),
+		("globals/", "global_increment_indirect"),
+		("globals/", "global_mutate"),
 
 		("typecheck/", "print_assume_int"),
 		("typecheck/", "promote_assumes_inside_block"),
@@ -91,6 +95,49 @@ pub fn generate(tests_file: &mut File) {
 		("call/", "local_fun"),
 		("call/", "local_fun_lambda"),
 		("call/", "if_simple_lambda"),
+
+		("classes/", "basic_new_inferred_get"),
+		("classes/", "basic_new_inferred_get_promote"),
+		("classes/", "basic_new_explicit_get"),
+		("classes/", "basic_new_explicit_get_promote"),
+		("classes/", "class_as_param"),
+		("classes/", "class_as_returnval"),
+		("classes/", "class_as_returnval_params"),
+		("classes/", "class_ref_semantics"),
+		("classes/", "basic_nested_get"),
+		("classes/", "basic_nested_get_ooo"),
+		("classes/", "basic_nested_set_ooo"),
+		("classes/", "basic_nested_get_explicit"),
+		("classes/", "basicer_nested_get"),
+		("classes/", "more_basicer_nested_get"),
+		("classes/", "basic_class_call"),
+		("classes/", "basic_call_with_member"),
+		("classes/", "class_call_own_funs"),
+		("classes/", "class_member_ref"),
+		("classes/", "basic_new_list"),
+
+		("get/", "get_string_length"),
+
+		("set/", "basic_set"),
+		("set/", "set_bottom"),
+		("set/", "set_bottom_etc"),
+		("set/", "set_chain"),
+	
+		("variable/", "assign_numbers"),
+		("variable/", "assign_to_bottom_binop"),
+		("variable/", "assign_to_bottom_binop_var"),
+		("variable/", "assign_to_bottom_binop_var2"),
+		("variable/", "assign_to_bottom"),
+		("variable/", "simple_assign"),
+
+		("dead_code/", "dead_block"),
+		("dead_code/", "dead_binary1"),
+		("dead_code/", "dead_ops"),
+		("dead_code/", "dead_op_single"),
+		("dead_code/", "dead_args"),
+		("dead_code/", "dead_args_print"),
+		("dead_code/", "dead_args_str"),
+		("dead_code/", "dead_args_valcall"),
 	];
 
 	for (path, test) in tests {

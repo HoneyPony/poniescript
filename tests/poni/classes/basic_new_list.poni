@@ -1,0 +1,35 @@
+class Horse {
+    var hooves = 4;
+    var teeth = 5;
+
+    fun repr() {
+        print(hooves, " ", teeth);
+    }
+}
+
+fun init() {
+    var h1 = new Horse {};
+    h1.repr(); //! 4 5
+
+    var h2 = new Horse {
+        hooves: 3,
+        teeth: 16
+    };
+    h2.repr(); //! 3 16
+
+    var h3 = new Horse {
+        teeth: 7
+    };
+    h3.repr(); //! 4 7
+
+    var h4 = new Horse {
+        hooves: 42
+    };
+    h4.repr(); //! 42 5
+
+    var h5 = new Horse {
+        teeth: 83,
+        hooves: 14
+    };
+    h5.repr(); //! 14 83
+}

@@ -1,0 +1,28 @@
+class D {
+    var val1: int = 10;
+    var val2: int = 20;
+    var val3: StrConst = "meow";
+}
+
+class C {
+    var the_d : D = new D {};
+}
+
+class B {
+    var the_c : C = new C {};
+}
+
+class A {
+    var the_b : B = new B {};
+}
+
+fun init() {
+    var the_a = new A {};
+    var the_b = the_a.the_b;
+    var the_c = the_b.the_c;
+    var the_d = the_c.the_d;
+
+    print(the_d.val1); //! 10
+    print(the_d.val2); //! 20
+    print(the_d.val3); //! meow
+}

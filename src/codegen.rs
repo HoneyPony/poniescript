@@ -9,8 +9,15 @@ use std::fmt::Write as _;
 
 struct Codegen<'a> {
 	functions: Vec<String>,
+	structs: Vec<String>,
+	struct_declares: Vec<String>,
 
 	return_types: Vec<TypId>,
+
+	/// Helps us resolve variables to the correct thing.
+	/// TODO: Do we want to instead synthesize AST nodes for variables that
+	/// are inside classes..?
+	inside_class: Vec<ClassId>,
 
 	val_idx: usize,
 
@@ -71,8 +78,15 @@ enum Val {
 		lit: &'static str
 	},
 	DirectVar {
-		name: &'static str
+		name: &'static str,
+		// The number of class accesses we have to walk to get to the variable.
+		//
+		// Assumption: Each function has a local variable "this" which lets
+		// us get to the current class members. Then, "this" also lets us
+		// get to the superclass.
+		depth: usize,
 	},
+	DirectSelf,
 	StringLit {
 		id: StrConstId,
 	},
@@ -107,6 +121,9 @@ struct TypedVal {
 
 impl TypedVal {
 	pub fn is_bottom(&self) -> bool {
+		// NOTE:
+		// Apparently we are able to form TypedVal that have a typ of Bottom
+		// that do not have a Val of Bottom. Spooky...
 		self.val.is_bottom()
 	}
 
@@ -200,7 +217,24 @@ impl std::fmt::Display for Val {
 		match self {
 			Val::Tmp(idx) => write!(f, "tmp{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
-			Val::DirectVar { name } => write!(f, "{name}"),
+			Val::DirectVar { name, depth } => {
+				if *depth > 0 {
+					// TODO: The problem with this system is it doesn't seem
+					// like it can meaningfully support static variables in a
+					// clean way. We probably do want to change into synthesizing
+					// AST nodes of some sort.
+					write!(f, "this->")?;
+					let mut depth_loop = depth - 1;
+					while depth_loop > 0 {
+						panic!("todo: add nested class support, etc");
+						depth_loop -= 1;
+					}
+				}
+				write!(f, "{name}")
+			}
+			Val::DirectSelf => {
+				write!(f, "this")
+			}
 
 			// String literals are always stored in variables with a consistent naming scheme.
 			Val::StringLit { id } => write!(f, "ps_str_const{}", id.to_usize()),
@@ -267,6 +301,8 @@ impl<'a> Codegen<'a> {
 	fn new(db: &'a Db) -> Self {
 		return Codegen {
 			functions: Vec::new(),
+			structs: Vec::new(),
+			struct_declares: Vec::new(),
 
 			return_types: Vec::new(),
 
@@ -277,6 +313,8 @@ impl<'a> Codegen<'a> {
 			db,
 
 			fun_init_buffer: String::new(),
+
+			inside_class: Vec::new(),
 		}
 	}
 
@@ -301,14 +339,21 @@ impl<'a> Codegen<'a> {
 			return PromotedVal::Simple(val.val);
 		}
 
-		if val.is_bottom() {
+		if val.is_bottom() || val.typ == self.db.types.bottom {
 			return PromotedVal::Bottom;
 		}
 
 		// TODO: Does Any type automatically promote to Bottom?
-		//if to == self.db.types.bottom {
-		//	return PromotedVal::Bottom;
-		//}
+		// It's not clear if this is correct, but it is seemingly necessary
+		// for test cases such as variable/assign_to_bottom_binop_var
+		// and set/set_bottom_etc.
+		//
+		// The justification seems to be that if we're trying to promote
+		// something to bottom, it's because we already have a bottom somewhere
+		// in the expression.
+		if to == self.db.types.bottom {
+			return PromotedVal::Bottom;
+		}
 
 		if val.typ == self.db.types.int && to == self.db.types.float {
 			return PromotedVal::Promoted(val.val, "ps_promote_int_to_float")
@@ -416,6 +461,7 @@ impl<'a> Codegen<'a> {
 
 			Type::Fun(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun\", (uintptr_t){val}.fun);"),
 			Type::FunRaw(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun*\", (uintptr_t){val});"),
+			Type::Class(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"object\", (uintptr_t){val});"),
 
 			// TODO: Consider simply making 10.0 a float and 10 an int..?
 			// at least, unless assigned differently..?
@@ -446,6 +492,7 @@ impl<'a> Codegen<'a> {
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unassigned>"),
 			Type::Fun(_) => todo!("str() for functions"),
 			Type::FunRaw(_) => todo!("str() for function pointers"),
+			Type::Class(_) => todo!("str() for classes"),
 			Type::AssumeFloat => todo!(),
 			Type::AssumeInt => todo!(),
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unbound-ident>"),
@@ -536,13 +583,34 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::Variable(variable) => {
-				Val::DirectVar { name: self.db.get_cname(variable.identity) }
+				// If the variable is inside a class, we need to walk the chain
+				// of classes to synthesize the correct accessor.
+				//
+				// Note that, if the type checking and binding stages are correct,
+				// this code should be fine, as the varaible should be bound to
+				// a variable inside a class that we are also inside now.
+
+				let mut depth = 0;
+
+				if let Some(class) = self.db.get(variable.identity).class {
+					for inside in self.inside_class.iter().rev() {
+						// Depth is at least one, because we're in a class, so
+						// increment before checking.
+						depth += 1;
+						if *inside == class {
+							break;
+						}
+					}
+
+					// TODO: Panic if we run out of classes before finding the
+					// right one.
+				}
+
+				Val::DirectVar { name: self.db.get_cname(variable.identity), depth }
 					.typed(self.db.get_var_type(variable.identity))
 			},
 			Expr::Assign(assign) => {
-				self.compile_assign(assign.identity, assign.value, into, false);
-				Val::DirectVar { name: self.db.get_cname(assign.identity) }
-					.typed(self.db.get_var_type(assign.identity))
+				self.compile_assign(assign.identity, assign.value, into, false)
 			},
 			Expr::FunCall(call) => {
 				let ret_type = self.db.get_fun_ret_type(call.identity);
@@ -600,7 +668,7 @@ impl<'a> Codegen<'a> {
 						val);
 
 					val
-				} else { Val::Bottom };
+				} else { if block.typ == self.db.types.void { Val::Void } else { Val::Bottom } };
 
 				let all_but_last = match block.stmts.len() {
 					0 => 0,
@@ -609,12 +677,30 @@ impl<'a> Codegen<'a> {
 				inf_writeln!(into, "{indent}{{");
 				self.indent_level += 1;
 				for stmt in &block.stmts[0..all_but_last] {
-					self.compile_stmt(stmt, into);
+					let val = self.compile_stmt(stmt, into);
+					if let Some(val) = val {
+						if val.is_bottom() {
+							// If we see a Bottom val inside a block, we have
+							// found an unconditional return. So, we can
+							// immediately stop processing further code (which
+							// will be relevant to avoid e.g. generating accesses
+							// to nonexistent variables).
+							self.indent_level -= 1;
+							inf_writeln!(into, "{indent}}}");
+							return val;
+						}
+					}
 				}
 
 				let val = match (block.stmts.last(), val) {
 					// If the block has no val, then generate a statement
-					// and return Val::None.
+					// and return Val::Void.
+					(last, Val::Void) => {
+						last.map(|last| self.compile_stmt(last, into));
+						Val::Void
+					},
+
+					// Simmilar case for Val::Bottom
 					(last, Val::Bottom) => {
 						last.map(|last| self.compile_stmt(last, into));
 						Val::Bottom
@@ -699,19 +785,44 @@ impl<'a> Codegen<'a> {
 			Expr::Unbound(_) => {
 				panic!("compiler-err:tried-to-codegen-an-unbound-identifier-expression");
 			},
-			Expr::UnboundCall(_) => {
-				panic!("compiler-err:tried-to-codegen-an-unbound-call");
+			Expr::UnboundAssign(_) => {
+				panic!("compiler-err:tried-to-codegen-an-unbound-assign-expression");
 			},
+			Expr::UnboundFunCapture(_) => {
+				panic!("compiler-err:tried-to-codegen-an-unbound-funcapture");
+			},
+			Expr::Undefined(_) => {
+				panic!("Internal compiler error: Tried to codegen an 'Undefined' node");
+			}
 
 			Expr::FunCapture(capt) => {
 				let val = self.new_val_typed(capt.typ);
 
 				// BIG TODO: Support closures. Not exactly clear how that will work.
 
+				let closure = match &capt.object {
+					Some(expr) => {
+						Some(self.expr(expr, into))
+					},
+					None => None
+				};
+
 				define_val!(self, into, val,
-					" = ({}) {{ .fun = {}, .closure = NULL }};\n",
+					" = ({}) {{ .fun = {}, ",
 					self.db.get_ctype(capt.typ), // TODO: Maybe use a sig-specific fucntion
 					self.db.get_fun_cname(capt.identity));
+
+				if val.needs_storage() {
+					// Second half of definition: closure
+					if let Some(closure) = closure {
+						// TODO: We need to promote Closure into essentially
+						// the class type for the function?
+						inf_writeln!(into, ".closure = {} }};", closure.val);
+					}
+					else {
+						inf_writeln!(into, ".closure = NULL }};");
+					}
+				}
 
 				val
 			},
@@ -775,7 +886,126 @@ impl<'a> Codegen<'a> {
 
 				val
 			},
+
+			Expr::New(new) => {
+				let val = self.new_val_typed(new.typ);
+
+				// TODO: We need the C size (or at least the type name) of
+				// each class, so we can do e.g. sizeof(struct cl_Class) or
+				// just directly generate 16 or whatever. For now, use 32 bytes,
+				// which is terrible, but it's a start.
+				define_val!(self, into, val, " = ps_gc_must_calloc(sizeof(struct {}), 0);\n",
+					self.db.get_class_cname(new.class));
+				// Initialize the value.
+				if val.needs_storage() {
+					// Note: The value is a pointer-to-struct cl_Thing, so
+					// we want to pass the direct value to the preparer.
+					// e.g. struct cl_Thing *thing = malloc(); icl_Thing(thing);
+					inf_writeln!(into, "{indent}{}({});",
+						self.db.get_class_preparer_cname(new.class),
+						val.val);
+
+					for init in &new.initializers {
+						let rhs = self.expr(&init.value, into);
+						let rhs = self.promote(rhs, self.db.get_var_type(init.var));
+						let varname = self.db.get_cname(init.var);
+
+						inf_writeln!(into, "{indent}{}->{varname} = {rhs};", val.val);
+					}
+				}
+
+				val
+			},
+
+			Expr::Get(get) => {
+				let typ = self.db.get_var_type(get.var);
+				let val = self.new_val_typed(typ);
+			
+				let lhs = self.expr(get.lhs, into);
+				
+				let varname = self.db.get_cname(get.var);
+
+				// TODO: Should lhs be promoted...??
+				define_val!(self, into, val, " = {}->{};\n", lhs.val, varname);
+
+				val
+			}
+
+			Expr::Set(set) => {
+				let typ = self.db.get_var_type(set.var);
+				let val = self.new_val_typed(typ);
+			
+				let rhs = self.expr(set.rhs, into);
+				if rhs.is_bottom() {
+					return rhs;
+				}
+				let lhs = self.expr(set.lhs, into);
+				// TODO: What happens if lhs is Bottom?
+				let rhs = self.promote(rhs, typ);
+				
+				let varname = self.db.get_cname(set.var);
+
+				// TODO: Should lhs be promoted...??
+				// This is a bit hacky (the double assign), but I think it is overall fine.
+				define_val!(self, into, val, " = {}->{} = {};\n", lhs.val, varname, rhs);
+
+				val
+			}
+
+			Expr::SelfVal(selfval) => {
+				Val::DirectSelf.typed(selfval.typ)
+			}
 		}
+	}
+
+	fn compile_class(&mut self, class_declare: &ClassDeclare) {
+		// For the class, it does not generate any direct code.
+		// But, we do have to generate a struct for the class,
+		// as well as each of its function definitions.
+
+		self.inside_class.push(class_declare.identity);
+
+		for fun in &class_declare.funs {
+			self.compile_function(fun.identity, &fun.value);
+		}
+
+		// Write the struct definition.
+		let mut struc = String::new();
+		inf_writeln!(struc, "struct {} {{", self.db.get_class_cname(class_declare.identity));
+
+		// Write the struct declaration. These must come before signature declarations
+		// in case the signature needs to use the struct; The signature declarations
+		// must then come before structs in case the struct needs to use the signature.
+		let mut struc_declare = String::new();
+		inf_writeln!(struc_declare, "struct {};", self.db.get_class_cname(class_declare.identity));
+		self.struct_declares.push(struc_declare);
+
+		// Simultaneously write the variable generator. 
+		let enclosing_indent = self.indent_level;
+		self.indent_level = 1;
+		let mut preparer = String::new();
+
+		inf_writeln!(preparer, "void {}(struct {} *this) {{",
+				self.db.get_class_preparer_cname(class_declare.identity),
+				self.db.get_class_cname(class_declare.identity));
+		
+		for var in &class_declare.vars {
+			// Compile the assignment into the 'preparer' function. This is where
+			// the variable value will be initialized.
+			self.compile_assign(var.identity, &var.value, &mut preparer, false);
+			// Compile the variable declaration into the struct.
+			inf_writeln!(struc, "\t{} {};", self.db.get_var_ctype(var.identity), self.db.get_cname(var.identity));
+		}
+
+		inf_writeln!(struc, "}};");
+		self.structs.push(struc);
+
+		inf_writeln!(preparer, "}}");
+		self.functions.push(preparer);
+
+		self.indent_level = enclosing_indent;
+
+		self.inside_class.pop();
 	}
 
 	fn compile_stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<TypedVal> {
@@ -785,6 +1015,10 @@ impl<'a> Codegen<'a> {
 				self.compile_assign(declare.identity, &declare.value, into, true);
 				None
 			},
+			Stmt::ClassDeclare(class_declare) => {
+				self.compile_class(class_declare);
+				None
+			}
 			Stmt::Expression(expression) => {
 				// The value of the expression is unused inside a statement.
 				// Note that this automatically results in some kinds of
@@ -818,21 +1052,49 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn compile_assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) {
-		let needed_type = self.db.get_var_type(var);
-		let value = self.expr(expr, into);
-		if value.is_bottom() {
-			return;
+	fn get_direct_var(&mut self, var: VarId) -> TypedVal {
+		let mut depth = 0;
+
+		if let Some(class) = self.db.get(var).class {
+			for inside in self.inside_class.iter().rev() {
+				// Depth is at least one, because we're in a class, so
+				// increment before checking.
+				depth += 1;
+				if *inside == class {
+					break;
+				}
+			}
+
+			// TODO: Panic if we run out of classes before finding the
+			// right one.
 		}
 
-		let value = self.promote(value, needed_type);
+		Val::DirectVar { name: self.db.get_cname(var), depth }
+			.typed(self.db.get_var_type(var))
+	}
+
+	fn compile_assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) -> TypedVal {
+		let needed_type = self.db.get_var_type(var);
+		let value = self.expr(expr, into);
+
+		// Don't compile anything at all for variables that are bottom.
+		if value.is_bottom() || value.typ == self.db.types.bottom { // TODO: Fix the value thingyingy
+			return value;
+		}
+
+		let value: PromotedVal = self.promote(value, needed_type);
 
 		let (declaration, space) = if is_declaration {
 			(self.db.get_var_ctype(var), " ")
 		} else { ("", "") };
 
+		let var_lvalue = self.get_direct_var(var);
+
 		let indent = self.indent();
-		inf_writeln!(into, "{indent}{declaration}{space}{} = {value};", self.db.get_cname(var));
+		// Discard type as we can't meaningfully promote it.
+		inf_writeln!(into, "{indent}{declaration}{space}{} = {value};", var_lvalue.val);
+
+		var_lvalue
 	}
 
 	// Does not generate the code for a function declaration (e.g. assigning
@@ -852,6 +1114,10 @@ impl<'a> Codegen<'a> {
 				self.db.get_fun_ret_ctype(fun),
 				self.db.get_fun_cname(fun),
 				self.db.get_fun_cparams(fun));
+		}
+
+		if let Some(class) = self.db.get(fun).class {
+			inf_writeln!(own_buffer, "{indent}struct {} *const this = closure;", self.db.get_class_cname(class));
 		}
 
 		// Same idea as in codegen()
@@ -923,6 +1189,16 @@ impl<'a> Codegen<'a> {
 			self.compile_function(fun.identity, &fun.value);
 		}
 
+		for class in &module.classes {
+			self.compile_class(class);
+
+			// For now: Write the forward declarations for these icl's here.
+			// We might need to change how this works when we have nested classes.
+			inf_writeln!(out.fun_declare, "void {}(struct {} *this);",
+				self.db.get_class_preparer_cname(class.identity),
+				self.db.get_class_cname(class.identity));
+		}
+
 		self.compile_string_constant_init(&mut out.string_const_define, &mut out.string_const_init);
 	}
 
@@ -937,7 +1213,15 @@ impl<'a> Codegen<'a> {
 		writeln!(output, "#include \"poni/poni_standalone.h\"")?;
 
 		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
+		writeln!(output, "// --- struct declarations ---\n")?;
+		for struc_declare in &self.struct_declares {
+			writeln!(output, "{}", struc_declare)?;
+		}
 		writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
+		writeln!(output, "// --- struct definitions ---")?;
+		for struc in &self.structs {
+			writeln!(output, "{}", struc)?;
+		}
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
 		writeln!(output, "// --- function definitions ---")?;

@@ -1,0 +1,11 @@
+class Example {
+    var x : int = 5;
+}
+
+fun init() {
+    var y : Example = new Example {};
+    var z = y.x;
+    var a : float = y.x;
+    print(z); //! 5
+    print(a); //! 5.000000
+}

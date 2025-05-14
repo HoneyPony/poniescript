@@ -9,6 +9,7 @@ mod typecheck;
 mod codegen;
 mod error;
 mod binder;
+mod dead_code;
 
 use std::fs::File;
 use std::io::Read;
@@ -217,6 +218,10 @@ fn main() {
 	}
 
 	let timer = duration(timer, "type check", &mut duration_set);
+
+	dead_code::eliminate_dead_code(&mut db, &mut modules);
+
+	let timer = duration(timer, "dead code", &mut duration_set);
 
 	// Pass 4: Codegen
 	// Generate any caches that require type checking info.

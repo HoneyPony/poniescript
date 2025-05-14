@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io;
+use std::process::id;
 
 use rustc_hash::FxHashMap;
 
@@ -199,6 +200,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 					todo!("how do we location_of() for functions without names..?")
 				}
 			}
+			ScopeEntry::Class(class) => {
+				&self.db.get(*class).name.location
+			}
 			ScopeEntry::None => todo!(),
 		}
 	}
@@ -303,7 +307,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 	}
 
 	// Expects to be at the first param, after the LeftParen.
-	fn expr_call_finish(&mut self, location: SourceLocation, ident: Token) -> Result<Expr> {
+	fn expr_call_finish(&mut self, location: SourceLocation, ident: Token, object: Option<Expr>) -> Result<Expr> {
 		let mut args = Vec::new();
 
 		while !self.at(Tok::RightParen) && !self.is_at_end() {
@@ -332,7 +336,18 @@ impl<'a, 'b> Parser<'a, 'b> {
 			// makes it easier to generate reasonable code in the common cases.
 			ScopeEntry::Fun(fun) => Expr::mk_funcall_ok(location, fun, args),
 
-			ScopeEntry::None => Expr::mk_unboundcall_ok(location, ident, args),
+			ScopeEntry::Class(class) => {
+				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), &self.current.location));
+
+				// Just return an UnboundCall, as we have a semantic error rather than parse error.
+				let call = Expr::mk_unboundfuncapture(self.end(location.clone()), ident, object);
+				Expr::mk_valcall_ok(self.end(location), call, args, self.db.sig_unassigned)
+			}
+
+			ScopeEntry::None => {
+				let call = Expr::mk_unboundfuncapture(self.end(location.clone()), ident, object);
+				Expr::mk_valcall_ok(location, call, args, self.db.sig_unassigned)
+			}
 		}
 	}
 
@@ -341,7 +356,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let ident = expected!(self, Tok::Identifier, "identifier")?;
 
 		if self.match_(Tok::LeftParen)?.is_some() {
-			return self.expr_call_finish(location, ident);
+			// We're not dotted, so we have no object.
+			return self.expr_call_finish(location, ident, None);
 		}
 
 		// In the future, if we see a dot or a (), we might generate a getter/setter/call.
@@ -349,7 +365,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let expr = match self.scope_lookup(ident.lexeme) {
 			ScopeEntry::Var(identity) => Expr::mk_variable(ident.location.clone(), identity),
 			ScopeEntry::Fun(identity) =>
-				Expr::mk_funcapture(ident.location.clone(), identity, self.db.types.unassigned),
+				Expr::mk_funcapture(ident.location.clone(), identity, self.db.types.unassigned, None),
+			ScopeEntry::Class(_) => {
+				todo!("What should happen when you reference a class without anything else? I guess a ClassCapture?");
+			}
 			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
 		};
 
@@ -367,7 +386,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 					// semantic error, but the parse tree is still basically fine.
 					return Ok(expr);
 				}
-				Expr::Unbound(_) => todo!(),
+				Expr::Unbound(unbound) => {
+					return Expr::mk_unboundassign_ok(self.end(location), unbound.identifier, rhs)
+				}
+				Expr::Get(_) => {
+					panic!("omg!");
+				}
 				_ => unreachable!()
 			}
 		}
@@ -466,6 +490,44 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 	}
 
+	fn eat_comma(&mut self, terminator: Tok) -> Result<()> {
+		if self.at(terminator) { return Ok(()); }
+		if self.is_at_end() { return Ok(()); }
+		if self.match_(Tok::Comma)?.is_some() { return Ok(()); }
+
+		got!(self, "','");
+	}
+
+	/// Parses a 'new' expression, e.g. new Example {}
+	fn new_(&mut self) -> Result<Expr> {
+		let location = self.start();
+
+		let key_new = expected!(self, Tok::New, "'new'")?;
+		let name = expected_after!(self, Tok::Identifier, key_new, "class name after 'new'")?;
+
+		let mut initializers = Vec::new();
+
+		expected!(self, Tok::LeftBrace, "'{{' in 'new' expression");
+
+		while !self.at(Tok::RightBrace) && !self.is_at_end() {
+			let location = self.start();
+			let ident = expected!(self, Tok::Identifier, "identifier inside 'new' block")?;
+			expected_after!(self, Tok::Colon, name, "':' after member name");
+
+			let value = self.expression()?;
+			initializers.push(NewInitElem { var: self.db.var_unassigned, ident, value, location: self.end(location) });
+
+			self.eat_comma(Tok::RightBrace)?;
+		}
+		// TODO: Parse inner arguments, etc.
+		expected!(self, Tok::RightBrace, "'}}' in 'new' expression");
+
+		Expr::mk_new_ok(self.end(location), name, 
+			self.db.class_unassigned,
+			self.db.types.unassigned,
+			initializers)
+	}
+
 	fn expr_prefix(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
 			Tok::LeftBrace | Tok::Identifier | Tok::If | Tok::Fun => {
@@ -508,6 +570,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 				Expr::mk_strliteral_ok(lit.location, id)
 			}
 
+			Tok::New => {
+				self.new_()
+			}
+
 			_ => {
 				got!(self, "Expected expression")
 			}
@@ -525,6 +591,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			Tok::Plus | Tok::Minus => (7, 8),
 			Tok::Star | Tok::Slash => (9, 10),
+
+			Tok::Dot => (11, 12),
 
 			// Any other tokens should not be parsed as infix.
 			_ => (0, 0)
@@ -558,6 +626,30 @@ impl<'a, 'b> Parser<'a, 'b> {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::mk_logical_ok(self.end(location), op.typ, lhs, rhs);
+			}
+
+			Tok::Dot => {
+				let op = self.advance()?;
+				let identifier = expected_after!(self, Tok::Identifier, op, "property name")?;
+
+				// TODO: Do we want to move this logic into expr_ident to go
+				// with the other ones?
+				if self.match_(Tok::Equal)?.is_some() {
+					let value = self.expression()?;
+					return Expr::mk_set_ok(self.end(location), identifier, lhs, self.db.var_unassigned, value);
+				}
+				// Function calls are mutually exclusive with assignment.
+				//
+				// An assignment would be like:
+				// object.thing() = 5;  or object.thing() = new Thing {};
+				// But this doesn't make sense, because in either case we're
+				// basically creating a new temporary that isn't really an lvalue.
+				//
+				// So function calls are distinct from assignments.
+				else if self.match_(Tok::LeftParen)?.is_some() {
+					return self.expr_call_finish(location, identifier, Some(lhs));
+				}
+				return Expr::mk_get_ok(self.end(location), identifier, lhs, self.db.var_unassigned);
 			}
 
 			// We should never call expr_infix() with an invalid operator,
@@ -676,7 +768,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 		expected!(self, Tok::Semicolon, "';' after initializer expression")?;
 		
 		let name_str = name.lexeme;
-		let identity = self.db.new_var(name, typ);
+		// When we create variables, don't set the class yet, as we don't
+		// know what it is -- we wire it back in once we're done parsing a 
+		// class.
+		//
+		// TODO: For classes, support variables that don't have an initializer?
+		let identity = self.db.new_var(name, typ, None, true);
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -712,7 +809,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// last statement is return; because bottom can be assigned to void.
 		//
 		// We may want to consider simply deleting the Void type.
-		Expr::mk_block_ok(self.end(location), stmts, self.db.types.bottom)
+		Expr::mk_block_ok(self.end(location), stmts, self.db.types.unassigned)
 	}
 
 	fn stmt(&mut self) -> Result<Stmt> {
@@ -770,7 +867,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name, typ);
+		let identity = self.db.new_var(name, typ, None, false);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		Ok(identity)
@@ -782,8 +879,11 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let mut name = None;
 
+		let pushed_name =
 		if let Some(name_) = self.match_(Tok::Identifier)? {
+			let pushed_name = self.push_name(&name_);
 			name = Some(name_);
+			pushed_name
 		}
 		else {
 			if require_name {
@@ -793,7 +893,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 				);
 				semantic_error_with!(self, error);
 			}
-		}
+
+			self.push_name_anon()
+		};
 
 		expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
 
@@ -836,8 +938,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 			name,
 			parameters,
 			return_type,
-			sig: self.db.sig_unassigned
+			sig: self.db.sig_unassigned,
+			class: None, // Class is not assigned for now, the class parser will assign it later.
 		});
+
+		// We must pop our pushed_name before we put the function name in the scope.
+		self.pop_name(pushed_name);
 
 		// Put the identity in to the current scope. For lexical scoped function
 		// names, they can't be used until they're defined...
@@ -857,7 +963,104 @@ impl<'a, 'b> Parser<'a, 'b> {
 			}
 		}
 
-		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned)
+		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned, )
+	}
+
+	fn push_name(&mut self, name: &Token) -> usize {
+		self.scope_name.push_str(self.db.get(name.lexeme));
+		self.scope_name.push('.');
+		
+		self.db.get(name.lexeme).len() + 1
+	}
+
+	fn push_name_anon(&mut self) -> usize {
+		// TODO: Right now this won't work because it'll put all anonymous
+		// names in effectively the same scope. Instead, we need to figure
+		// out a way to essentially forbid anything from looking into an
+		// anonymous scope at all. (Although, I suppose this already
+		// works for that..?)
+		let str = format!("<anon>.");
+		self.scope_name.push_str(&str);
+		str.len()
+	}
+
+	fn pop_name(&mut self, size: usize) {
+		self.scope_name.truncate(self.scope_name.len() - size);
+	}
+
+	fn class_declaration(&mut self) -> Result<ClassDeclare> {
+		let location = self.start();
+		let key_class = expected!(self, Tok::Class, "'class'")?;
+
+		let name = expected_after!(self, Tok::Identifier, key_class,
+			"class name")?;
+
+		let pushed_name = self.push_name(&name);
+
+		expected!(self, Tok::LeftBrace, "'{{' at beginning of class")?;
+
+		let mut declare_funs = Vec::<FunDeclare>::new();
+		let mut declare_vars = Vec::<Declare>::new();
+
+		let mut funs = Vec::<FunId>::new();
+		let mut vars = Vec::<VarId>::new();
+
+		let mut var_map = FxHashMap::default();
+		let mut fun_map = FxHashMap::default();
+
+		loop {
+			match self.peek_typ() {
+				Tok::Var => {
+					let declare = self.var_declaration()?;
+					vars.push(declare.identity);
+					var_map.insert(self.db.get(declare.identity).name.lexeme, declare.identity);
+					declare_vars.push(declare);
+				},
+				Tok::Fun => {
+					let fun = self.fun_declaration(true)?;
+					funs.push(fun.identity);
+					// We require name so this must have a name.
+					fun_map.insert(self.db.get(fun.identity).name.as_ref().unwrap().lexeme, fun.identity);
+					declare_funs.push(fun);
+				},
+				Tok::Class => {
+					todo!("nested classes")
+				}
+				Tok::RightBrace => {
+					break;
+				},
+				_ => {
+					// Error in class.
+					got!(self, "Expected 'var', 'const', 'class', or 'fun'");
+				}
+			}
+		}
+
+		expected!(self, Tok::RightBrace, "'}}' at end of class")?;
+
+		let name_str = name.lexeme;
+
+		let identity = self.db.new_id(Class {
+			name,
+			vars,
+			funs,
+			var_map,
+			fun_map
+		});
+
+		for var in &declare_vars {
+			self.db.get_mut(var.identity).class = Some(identity);
+		}
+
+		for fun in &declare_funs {
+			self.db.get_mut(fun.identity).class = Some(identity);
+		}
+
+		self.pop_name(pushed_name);
+
+		self.scope_put_entry(name_str, ScopeEntry::Class(identity));
+
+		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars)
 	}
 
 	fn parse_top_level(&mut self) -> Result<()> {
@@ -874,6 +1077,11 @@ impl<'a, 'b> Parser<'a, 'b> {
 				// must have a name.
 				let fun = self.fun_declaration(true)?;
 				self.module.functions.push(fun);
+			}
+
+			Tok::Class => {
+				let class = self.class_declaration()?;
+				self.module.classes.push(class);
 			}
 
 			_ => {

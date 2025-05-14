@@ -1,0 +1,19 @@
+class Example {
+    var value: int = 20;
+}
+
+fun init() {
+    var e = new Example{};
+    print(e.value); //! 20
+
+    // Note to self:
+    // How do we want to support things like +=?
+    // It would be quite annoying to have a special node for every single one.
+    // 
+    // We could do something like have a notion of "lvalues" inside the compiler,
+    // where get expressions could generate a lvalue and other kinds of expressions
+    // could operate on lvalues.
+    e.value = 30;
+
+    print(e.value); //! 30
+}

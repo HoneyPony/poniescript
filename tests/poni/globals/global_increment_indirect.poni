@@ -1,0 +1,8 @@
+var x : int = 5;
+
+fun init() {
+    print(x); //! 5
+    var y = 3;
+    y = x + 1;
+    print(y); //! 6
+}

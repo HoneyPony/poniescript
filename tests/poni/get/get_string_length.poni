@@ -1,0 +1,4 @@
+fun init() {
+    var x : StrBuf = "hello world";
+    print(x.length); //! 11
+}

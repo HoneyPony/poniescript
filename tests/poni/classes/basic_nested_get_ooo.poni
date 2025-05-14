@@ -1,0 +1,65 @@
+// Same as nested_get, except this should fail until we properly get type
+// inference working as a sort of graph traversal rather than as the dumber thing
+// it is right now.
+//
+// Um, but for some reason, this is working correctly. What?
+//
+// Oh right, because the classes are all visited and the order doesn't actually
+// matter.
+//
+// I guuuuuuuueeeeessss we don't need full graph traversal, just to visit ALL
+// class nodes before doing anything else...? (e.g. including nested classes
+// and all private-to-funs classes)
+
+class A {
+    var the_b = new B {};
+}
+
+class B {
+    var the_c = new C {};
+}
+
+class C {
+    var the_d = new D {};
+}
+
+class D {
+    var val1: int = 10;
+    var val2: int = 20;
+    var val3: StrConst = "meow";
+}
+
+fun init() {
+    var the_a = new A {};
+
+    print(the_a.the_b.the_c.the_d.val1);   //! 10
+    print(the_a.the_b.the_c.the_d.val2);   //! 20
+    print(the_a.the_b.the_c.the_d.val3);   //! meow
+    print(the_a.the_b.the_c.the_d.val3.length); //! 4
+
+    var the_c = the_a.the_b.the_c;
+
+    print(the_c.the_d.val1);   //! 10
+    print(the_c.the_d.val2);   //! 20
+    print(the_c.the_d.val3);   //! meow
+    print(the_c.the_d.val3.length); //! 4
+
+    var the_b = the_a.the_b;
+
+    print(the_b.the_c.the_d.val1);   //! 10
+    print(the_b.the_c.the_d.val2);   //! 20
+    print(the_b.the_c.the_d.val3);   //! meow
+    print(the_b.the_c.the_d.val3.length); //! 4
+
+    var the_d = the_b.the_c.the_d;
+
+    print(the_d.val1);   //! 10
+    print(the_d.val2);   //! 20
+    print(the_d.val3);   //! meow
+    print(the_d.val3.length); //! 4
+
+    var the_str = the_c.the_d.val3;
+
+    print(the_str);        //! meow
+    print(the_str.length); //! 4
+}

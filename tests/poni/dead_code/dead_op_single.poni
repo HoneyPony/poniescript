@@ -1,0 +1,7 @@
+fun plus_right() { { print(1) } + { print(2); return; } }
+
+fun init() {
+    //! 1
+    //! 2
+    plus_right();
+}

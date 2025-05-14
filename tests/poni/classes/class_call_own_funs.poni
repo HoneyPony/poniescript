@@ -1,0 +1,33 @@
+class Test {
+    var extra1 = 0;
+    var extra2 = 0;
+
+    fun fun1(x: int) {
+        print(x + extra1 + extra2);
+    }
+
+    fun fun2(x: int, y: int) {
+        fun1(x + y);
+    }
+
+    fun fun3(x: int, y: int, z: int) {
+        fun2(x + y, z);
+    }
+}
+
+fun init() {
+    var t = new Test { };
+    
+    t.fun3(1, 2, 3); //! 6
+    t.fun3(4, 5, 6); //! 15
+
+    t.extra1 = 5;
+
+    t.fun3(1, 2, 3); //! 11
+    t.fun3(4, 5, 6); //! 20
+
+    t.extra2 = 7;
+
+    t.fun3(1, 2, 3); //! 18
+    t.fun3(4, 5, 6); //! 27
+}

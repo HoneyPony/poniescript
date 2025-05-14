@@ -1,0 +1,13 @@
+fun test1() -> int {
+    var x : int = 20;
+    x
+}
+
+fun test2() -> int {
+    var y : int = 30;
+    y
+}
+
+fun init() {
+    print(test1(), " ", test2()); //! 20 30
+}

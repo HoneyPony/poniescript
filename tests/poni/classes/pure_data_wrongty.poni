@@ -1,0 +1,3 @@
+class Data {
+    var x : int = "hello";
+}

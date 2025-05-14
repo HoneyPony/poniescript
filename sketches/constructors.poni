@@ -1,0 +1,13 @@
+class Data {
+    var x = 0;
+
+    // Maybe let 'new' be an identifier too..?
+    // But then ambiguity with Blah.new Child { }
+    static fun new(x: int) -> Data {
+        return new Data { x: x }; 
+    }
+
+    static fun mk(x: int) -> Data {
+        return new Data { x: x };
+    }
+}

@@ -1,0 +1,9 @@
+class Test {
+    var x = 10;
+}
+
+fun init() {
+    var y = new Test {
+        property: 20
+    };
+}

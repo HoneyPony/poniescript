@@ -1,0 +1,10 @@
+class Test {
+    fun minimal() {
+        print("hello, ponies!"); //! hello, ponies!
+    }
+}
+
+fun init() {
+    var x = new Test{};
+    x.minimal();
+}

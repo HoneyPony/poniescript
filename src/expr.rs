@@ -2,13 +2,46 @@ include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 
 use std::mem::MaybeUninit;
 
+use rustc_hash::FxHashMap;
+
+use crate::typ::Type;
 use crate::{db::*, lexer::Token};
 use crate::source::SourceLocation;
 use crate::lexer::Tok;
 
+pub struct NewInitElem {
+	pub var: VarId,
+	pub ident: Token,
+	pub value: Expr,
+	pub location: SourceLocation
+}
+
 impl Stmt {
 	pub fn val_location(&self) -> &SourceLocation {
 		self.location()
+	}
+}
+
+/// Necessary in order to use std::mem::take on Expr's for some parts of the
+/// compiler.
+impl std::default::Default for Expr {
+	fn default() -> Self {
+		return Expr::mk_undefined(SourceLocation {
+			// SAFETY: We only use this in order to std::mem::take something
+			// that will no longer be accessed.
+			// 
+			// (this is sketch... maybe we can come up with something better?)
+			source: unsafe { SourceId::from_u32(0) },
+			offset: 0,
+			length: 0
+		})
+	}
+}
+
+impl std::default::Default for Stmt {
+	fn default() -> Self {
+		let expr = Expr::default();
+		return Stmt::mk_expression(expr.location().clone(), expr);
 	}
 }
 
@@ -31,6 +64,11 @@ impl Expr {
 		}
 	}
 
+	// TODO:
+	// Right now the only reason this takes &mut Db rather than &Db is so that
+	// we can use put_type for Expr::New.
+	// We could change this by either storing a general TypId in Expr::New
+	// (either alongside the class or instead of), but should we...?
 	pub fn typ(&self, db: &Db) -> TypId {
 		match self {
 			Expr::Binary(binary) => {
@@ -78,15 +116,26 @@ impl Expr {
 				block.typ
 			},
 			Expr::Unbound(_) => panic!("calling Expr::typ() on Unbound"),
-			Expr::UnboundCall(_) => panic!("calling Expr::typ() on UnboundCall"),
+			Expr::UnboundFunCapture(_) => panic!("calling Expr::typ() on UnboundFunCapture"),
+			Expr::UnboundAssign(_) => panic!("calling Expr::typ() on UnboundAssign"),
 			Expr::Print(print) => {
 				print.exprs[0].typ(db)
 			},
 			Expr::Str(_) => db.types.str_buf,
+			Expr::New(new) => new.typ,
+			Expr::Get(get) => db.get_var_type(get.var),
+			Expr::Set(set) => db.get_var_type(set.var),
+			Expr::Undefined(_) => panic!("calling Expr::typ() on Undefined"),
+			Expr::SelfVal(selfval) => selfval.typ
 		}
 	}
 
 	pub fn promote(&mut self, typ: TypId, db: &Db) -> bool {
+		// Cannot promote to Bottom.
+		if typ == db.types.bottom {
+			return false;
+		}
+
 		match self {
 			Expr::Binary(binary) => {
 				if db.is_not_concrete(binary.typ) && db.is_concrete(typ) {
@@ -119,7 +168,9 @@ impl Expr {
 				if_.typ = typ;
 				true
 			}
+			// TODO: Subclasses...?
 			Expr::Variable(_) => false,
+			Expr::SelfVal(_) => false,
 			Expr::Assign(_) => false,
 			Expr::FunCall(_) => false,
 			Expr::ValCall(_) => false,
@@ -139,11 +190,22 @@ impl Expr {
 				true
 			},
 			Expr::Unbound(_) => false,
-			Expr::UnboundCall(_) => false,
+			Expr::UnboundFunCapture(_) => false,
+			Expr::UnboundAssign(_) => false,
 			Expr::Print(print) => {
 				print.exprs[0].promote(typ, db)
 			},
 			Expr::Str(_) => false,
+			Expr::New(_) => {
+				// TODO: Promote to superclasses of this class.
+				false
+			}
+			Expr::Get(_) => {
+				// TODO: Promote to superclasses..?
+				false
+			},
+			Expr::Set(_) => { false }
+			Expr::Undefined(_) => panic!("calling Expr::promote() on Undefined")
 		}
 	}
 }
@@ -157,6 +219,7 @@ impl Stmt {
 			// The value of a Return is always Bottom, and so it cannot be
 			// affected by promote().
 			Stmt::Return(_) => return false,
+			Stmt::ClassDeclare(_) => return false,
 		}
 	}
 }
@@ -165,6 +228,12 @@ impl Stmt {
 pub struct Var {
 	pub name: Token,
 	pub typ: TypId,
+
+	/// If this variable is a member of a class, this stores the class id.
+	pub class: Option<ClassId>,
+	/// For class members, stores whether this variable was initialized.
+	/// (TODO: Is there a way to not have this field on non-class variables?)
+	pub init: bool,
 }
 
 pub struct Fun {
@@ -175,6 +244,8 @@ pub struct Fun {
 	/// are the values passed by the caller.
 	pub parameters: Vec<VarId>,
 	pub return_type: TypId,
+
+	pub class: Option<ClassId>,
 }
 
 /// Represents a function signature. Includes the types of all parameters
@@ -183,6 +254,15 @@ pub struct Fun {
 pub struct Sig {
 	pub parameters: Vec<TypId>,
 	pub return_type: TypId,
+}
+
+pub struct Class {
+	pub name: Token,
+	pub vars: Vec<VarId>,
+	pub funs: Vec<FunId>,
+
+	pub var_map: FxHashMap<StrId, VarId>,
+	pub fun_map: FxHashMap<StrId, FunId>,
 }
 
 struct BoxAlloc {

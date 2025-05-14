@@ -1,11 +1,11 @@
 use std::path::Path;
 
 use crate::db::*;
-use crate::expr::{Declare, FunDeclare};
+use crate::expr::{Declare, FunDeclare, ClassDeclare};
 use crate::parser::Parser;
 
 pub struct Module {
-	//classes: Vec<ClassId>,
+	pub classes: Vec<ClassDeclare>,
 	pub functions: Vec<FunDeclare>,
 
 	// Globals are simply variable declarations that aren't in any other scope.
@@ -15,6 +15,7 @@ pub struct Module {
 impl Module {
 	pub fn new_empty() -> Self {
 		return Module {
+			classes: Vec::new(),
 			functions: Vec::new(),
 			globals: Vec::new(),
 		}

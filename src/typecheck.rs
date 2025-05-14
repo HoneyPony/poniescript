@@ -21,6 +21,9 @@ struct TypeChecker<'db> {
 	global_scope: bool,
 
 	return_types: Vec<TypId>,
+
+	/// Which class we're currently in. Used to give types to SelfVal.
+	current_class: Option<TypId>,
 }
 
 struct TypeCheckErr;
@@ -87,6 +90,8 @@ impl<'db> TypeChecker<'db> {
 			global_scope: false,
 
 			return_types: Vec::new(),
+
+			current_class: None
 		}
 	}
 
@@ -209,7 +214,7 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
-	fn check_assign(&mut self, at: &SourceLocation, var: VarId, expr: &mut Expr) -> Result<TypId> {
+	fn check_assign(&mut self, at: &SourceLocation, var: VarId, expr: &mut Expr, assign_ty: bool) -> Result<TypId> {
 		let value = self.check_expr(expr, true)?;
 		let computed =
 			self.compute_assignable(self.db.get_var_type(var), value);
@@ -225,13 +230,20 @@ impl<'db> TypeChecker<'db> {
 			self.db.repr_type(value)
 		);
 
-		if computed == self.db.types.void {
-			type_error!(self, at,
-			"Variable '{}' is type 'void' which is not a valid type for a variable.",
-			self.db.repr_var(var));
-		}
+		// Only assign the type if we're in a declaration.
+		if assign_ty && self.db.get_var_type(var) == self.db.types.unassigned {
+			if computed == self.db.types.void {
+				type_error!(self, at,
+				"Variable '{}' is type 'void' which is not a valid type for a variable.",
+				self.db.repr_var(var));
+			}
 
-		self.db.get_mut(var).typ = computed;
+			if computed == self.db.types.bottom {
+				type_error!(self, at, "Variable '{}' is type 'bottom' which is not a valid type for a variable.",
+					self.db.repr_var(var));
+			}
+			self.db.get_mut(var).typ = computed;
+		}
 		expr.promote(computed, self.db);
 
 		Ok(computed)
@@ -385,7 +397,7 @@ impl<'db> TypeChecker<'db> {
 			},
 			Expr::Variable(var) => self.db.get(var.identity).typ,
 			Expr::Assign(assign) => {
-				self.check_assign(&assign.location, assign.identity, &mut assign.value)?
+				self.check_assign(&assign.location, assign.identity, &mut assign.value, false)?
 			},
 			Expr::NumLiteral(lit) => {
 				lit.typ
@@ -411,6 +423,9 @@ impl<'db> TypeChecker<'db> {
 				// last statement then bail with Void.
 				if !value_used {
 					block.stmts.last_mut().map(|stmt| self.check_stmt(stmt, false));
+					// We also need to assign our own type to void in this case
+					// -- our type is not yet assigned.
+					block.typ = self.db.types.void;
 					return Ok(self.db.types.void);
 				}
 
@@ -613,6 +628,97 @@ impl<'db> TypeChecker<'db> {
 				declare.typ
 			},
 
+			Expr::New(new) => {
+				if new.typ == self.db.types.unassigned {
+					panic!("New expression has unassigned type from Binder");
+				}
+
+				for init in &mut new.initializers {
+					self.check_assign(&init.location, init.var, &mut init.value, false)?;
+				}
+
+				new.typ
+			}
+
+			Expr::Get(get) => {
+				// Get the type of the dotted expression. This lets us look up
+				// the property on that type.
+				let lhs = self.check_expr(&mut get.lhs, true)?;
+				let property = self.db.lookup_property(lhs, get.identifier.lexeme);
+
+				let Some(property) = property else {
+					type_error!(self,
+						&get.location,
+						"Object of type '{}' has no such property '{}'",
+						self.db.repr_type(lhs),
+						self.db.get(get.identifier.lexeme));
+				};
+
+				// We must actually store the looked-up property.
+				get.var = property;
+
+				self.db.get_var_type(property)
+			}
+
+			Expr::Set(set) => {
+				// Get the type of the dotted expression. This lets us look up
+				// the property on that type.
+				let lhs = self.check_expr(&mut set.lhs, value_used)?;
+				let property = self.db.lookup_property(lhs, set.identifier.lexeme);
+
+				let Some(property) = property else {
+					type_error!(self,
+						&set.location,
+						"Object of type '{}' has no such property '{}'",
+						self.db.repr_type(lhs),
+						self.db.get(set.identifier.lexeme));
+				};
+
+				// We must actually store the looked-up property.
+				set.var = property;
+
+				// We can't check the variable just like an Assign, as that
+				// will overwrite the type (the type is given ONLY by the class
+				// definition itself). But, we do need to check that the RHS
+				// is assignable to this variable.
+
+				let rhs = self.check_expr(&mut set.rhs, true)?;
+
+				let computed =
+					self.compute_assignable(self.db.get_var_type(property), rhs);
+
+				// TODO: Should we actually use the "computed" value here for
+				// anything?
+				let computed = maybe_type_error!(
+					self,
+					computed,
+
+					&set.location,
+					"Invalid assignment to property '{}': need {}, but value is {}",
+					self.db.repr_var(property),
+					self.db.repr_var_type(property),
+					self.db.repr_type(rhs)
+				);
+
+				// Promote the RHS based on the computed type.
+				set.rhs.promote(computed, self.db);
+
+				self.db.get_var_type(property)
+			}
+
+			Expr::SelfVal(selfval) => {
+				let Some(typ) = self.current_class else {
+					type_error!(
+						self,
+						&selfval.location,
+						"Trying to use 'self' outside of a class."
+					);
+				};
+
+				selfval.typ = typ;
+				typ
+			}
+
 			Expr::Unbound(unbound) => {
 				// In theory we will resolve all idents beforehand? But this might
 				// be different if we have function overloading.
@@ -620,10 +726,65 @@ impl<'db> TypeChecker<'db> {
 					self.db.get(unbound.identifier.lexeme),
 					unbound.location.offset);
 			},
-			Expr::UnboundCall(_) => {
-				panic!("compiler-err:tried-to-typecheck-an-unbound-call-expression");
+			Expr::UnboundFunCapture(capt) => {
+				// Here we will have to replace this UnboundFunCapture with
+				// a FunCapture, for the current state of the project.
+
+				let obj_ty = {
+					let Some(object) = &mut capt.object else {
+						type_error!(self, &capt.location, "Can't resolve function call on no object.");
+					};
+					self.check_expr(object, true)?
+				};
+
+				if let Some(fun) = self.db.lookup_member_fn(obj_ty, capt.identifier.lexeme) {
+					unsafe {
+						// Safety: We're immediately re-initializing this memory after
+						// taking from it.
+						let capt_obj = std::mem::replace(capt, std::mem::zeroed());
+						let as_funcapture = FunCapture {
+							location: capt_obj.location,
+							identity: fun,
+							typ: self.db.types.unassigned,
+							object: capt_obj.object
+						};
+						*expr = Expr::FunCapture(as_funcapture);
+					}
+					return self.check_expr(expr, value_used);
+				}
+
+
+				//let property = self.db.lookup_property(lhs, get.identifier.lexeme);
+
+				type_error!(self,
+					&capt.location,
+					"Could not find a matching function for object.")
 			}
+			Expr::UnboundAssign(_) => panic!("Internal compiler error: Tried to typecheck an UnboundAssign"),
+			Expr::Undefined(_) => panic!("Internal compiler error: Tried to typecheck an Undefined"),
 		})
+	}
+
+	fn check_class(&mut self, class_declare: &mut ClassDeclare) -> Result<()> {
+		let enclosing_class = self.current_class;
+		self.current_class = Some(self.db.put_type(Type::Class(class_declare.identity)));
+
+		// Must fix_fun_declare for class too in order to assign them a sig.
+		for fun in &mut class_declare.funs {
+			self.fix_fun_declare(fun);
+		}
+
+		for declare in &mut class_declare.vars {
+			self.check_declare(declare)?;
+		}
+
+		for fun in &mut class_declare.funs {
+			self.check_fun_declare(fun)?;
+		}
+
+		self.current_class = enclosing_class;
+
+		Ok(())
 	}
 
 	fn check_stmt(&mut self, stmt: &mut Stmt, value_used: bool) -> Result<Option<TypId>> {
@@ -635,6 +796,10 @@ impl<'db> TypeChecker<'db> {
 					return Ok(Some(typ));
 				}
 
+				Ok(None)
+			},
+			Stmt::ClassDeclare(class_declare) => {
+				self.check_class(class_declare)?;
 				Ok(None)
 			},
 			Stmt::Expression(expr) => {
@@ -696,7 +861,7 @@ impl<'db> TypeChecker<'db> {
 	}
 
 	fn check_declare(&mut self, declare: &mut Declare) -> Result<TypId> {
-		self.check_assign(&declare.location, declare.identity, &mut declare.value)
+		self.check_assign(&declare.location, declare.identity, &mut declare.value, true)
 	}
 
 	fn check_fun_declare(&mut self, fun: &mut FunDeclare) -> Result<()> {
@@ -765,6 +930,14 @@ impl<'db> TypeChecker<'db> {
 	}
 
 	fn check_module(&mut self, module: &mut Module) {
+		// HACK: Visit classes first so that type inference for properites works.
+		// We really should get this working so that type inferences can directly
+		// drive class type inference (i.e. type inference for the class members)
+		// when needed.
+		for class in &mut module.classes {
+			self.check_class(class);
+		}
+
 		// For now, in order to get FunCaptures working correctly, we make a first
 		// pass which "fix"es functions, which must be done for all functions
 		// (e.g. call_captured_rev.poni). We might come up with a more sophisticated
@@ -781,6 +954,8 @@ impl<'db> TypeChecker<'db> {
 		for global in &mut module.globals {
 			self.check_declare(global);
 		}
+
+		
 	}
 
 	fn check_modules(&mut self, modules: &mut Vec<Module>) {

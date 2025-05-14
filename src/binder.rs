@@ -2,7 +2,8 @@ use crate::db::*;
 use crate::error::Error;
 use crate::expr::*;
 use crate::module::Module;
-use crate::source::SourceLocation;
+use crate::source::{Source, SourceLocation};
+use crate::typ::Type;
 
 struct NameChecker {
 	buffer: String,
@@ -40,6 +41,7 @@ struct Binder<'db> {
 	db: &'db mut Db,
 
 	had_error: bool,
+	in_class: bool,
 
 	checkers: Vec<NameChecker>,
 }
@@ -50,16 +52,52 @@ impl<'db> Binder<'db> {
 			db,
 
 			had_error: false,
+			in_class: false,
 
 			checkers: Vec::new(),
 		}
+	}
+
+	fn resolve_class_name(&mut self, ident: StrId, location: &SourceLocation) -> Option<ClassId> {
+		for checker in self.checkers.iter_mut().rev() {
+			match checker.check(self.db, ident) {
+				ScopeEntry::Var(var) => break, // TODO: Figure out an ergonomic way to do this.
+				ScopeEntry::Fun(fun) => break,
+				ScopeEntry::Class(class) => {
+					return Some(class)
+				}
+				ScopeEntry::None => continue,
+			}
+		}
+
+		self.db.report_error(Error::simple(
+			format!("Unknown class name '{}'", self.db.get(ident)),
+			location
+		));
+		
+		self.had_error = true;
+		None
+	}
+
+	/// If we're currently inside a class, gets a new SelfVal; otherwise, returns
+	/// None. Useful for resolving AST types that can optionally operate on an
+	/// object.
+	fn get_selfval(&mut self, location: SourceLocation) -> Option<Expr> {
+		if self.in_class {
+			Some(Expr::mk_selfval(location, self.db.types.unassigned))
+		}
+		else { None }
 	}
 
 	fn resolve_unbound(&mut self, ident: StrId, location: SourceLocation) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
-				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location, fun, self.db.types.fun_sig_unassigned)),
+				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location.clone(), fun, self.db.types.fun_sig_unassigned, 
+					self.get_selfval(location))),
+				ScopeEntry::Class(_) => {
+					todo!("What to do when we resolve an Unbound into a Class");
+				}
 				ScopeEntry::None => continue,
 			}
 		}
@@ -73,19 +111,55 @@ impl<'db> Binder<'db> {
 		None
 	}
 
-	fn resolve_unbound_call(&mut self, unbound: &mut UnboundCall) -> Option<Expr> {
+	fn resolve_unbound_assign(&mut self, ident: StrId, location: SourceLocation, expr: Expr) -> Option<Expr> {
+		for checker in self.checkers.iter_mut().rev() {
+			match checker.check(self.db, ident) {
+				ScopeEntry::Var(var) => return Some(Expr::mk_assign(location, var, expr)),
+				ScopeEntry::Fun(fun) => {
+					self.db.report_error(Error::simple(
+						format!("Cannot assign to a function."),
+						&location
+					));
+
+					self.had_error = true;
+					return None;
+				},
+				ScopeEntry::Class(_) => {
+					self.db.report_error(Error::simple(
+						format!("Cannot assign to a class."),
+						&location
+					));
+
+					self.had_error = true;
+					return None;
+				}
+				ScopeEntry::None => continue,
+			}
+		}
+
+		self.had_error = true;
+		None
+	}
+
+	fn resolve_unbound_funcapture(&mut self, unbound: &mut UnboundFunCapture) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, unbound.identifier.lexeme) {
 				ScopeEntry::Var(v) => {
-					let inner = Expr::mk_variable(unbound.location.clone(), v);
-					return Some(Expr::mk_valcall(unbound.location.clone(), inner,
-						std::mem::take(&mut unbound.args), self.db.sig_unassigned));
+					return Some(Expr::mk_variable(unbound.location.clone(), v));
 				}
-				ScopeEntry::Fun(fun) =>
-					return Some(Expr::mk_funcall(unbound.location.clone(), fun, 
-					// TODO: Figure out a better way to get the args out of the UnboundCall
-					// then this, as it likely leads to an additional allocation..?
-						std::mem::take(&mut unbound.args))),
+				ScopeEntry::Fun(fun) => {
+					return Some(Expr::mk_funcapture(unbound.location.clone(), fun, self.db.types.unassigned, 
+						self.get_selfval(unbound.location.clone())))
+				}
+				ScopeEntry::Class(_) => {
+					self.db.report_error(Error::simple(
+						format!("Cannot call a class."),
+						&unbound.location
+					));
+
+					self.had_error = true;
+					return None;
+				}
 				ScopeEntry::None => continue,
 			}
 		}
@@ -155,6 +229,13 @@ impl<'db> Binder<'db> {
 				self.resolve_unbound(ident.identifier.lexeme, ident.location.clone())
 			},
 
+			Expr::UnboundAssign(assign) => {
+				// Important: Must visit the value node too
+				self.visit_expr(&mut assign.value);
+				// TODO: Do we want to avoid the clone here?
+				self.resolve_unbound_assign(assign.identifier.lexeme, assign.location.clone(), std::mem::take(assign.value))
+			},
+
 			Expr::FunCall(call) => {
 				// Must visit all the arguments of the call
 				for arg in &mut call.args {
@@ -174,19 +255,59 @@ impl<'db> Binder<'db> {
 			// Nothing to visit.
 			Expr::FunCapture(capt) => None,
 
-			Expr::UnboundCall(unbound) => {
-				// Must visit all the arguments of the call, so that they can
-				// be bound.
-				for arg in &mut unbound.args {
-					self.visit_expr(arg);
-				}
-				self.resolve_unbound_call(unbound)
+			Expr::UnboundFunCapture(unbound) => {
+				self.resolve_unbound_funcapture(unbound)
 			},
 
 			Expr::FunDeclare(fun_declare) => {
 				self.visit_function(fun_declare);
 				return None;
 			},
+
+			Expr::New(new) => {
+				new.class = self.resolve_class_name(new.identifier.lexeme, &new.location)?;
+				// Set the type here, so we don't have to mess with it again.
+				new.typ = self.db.put_type(Type::Class(new.class));
+
+				for init in &mut new.initializers {
+					self.visit_expr(&mut init.value);
+					
+					if let Some(id) = self.db.lookup_property(new.typ, init.ident.lexeme) {
+						init.var = id;
+					} else {
+						self.db.report_error(Error::simple(
+							format!("Class '{}' has no such property '{}'",
+							self.db.repr_class(new.class),
+							self.db.get(init.ident.lexeme)),
+							&init.location
+						));
+						
+						self.had_error = true;
+					};
+				}
+
+				return None;
+			}
+			
+			Expr::Get(get) => {
+				self.visit_expr(&mut get.lhs);
+				
+				return None;
+			}
+			
+			Expr::Set(set) => {
+				self.visit_expr(&mut set.rhs);
+				self.visit_expr(&mut set.lhs);
+				return None;
+			}
+
+			Expr::SelfVal(_) => {
+				return None;
+			}
+			
+			Expr::Undefined(_) => {
+				return None;
+			}
 		}
 	}
 
@@ -197,10 +318,87 @@ impl<'db> Binder<'db> {
 		}
 	}
 
+	fn visit_class(&mut self, class_declare: &mut ClassDeclare) {
+		let enclosing_in_class = self.in_class;
+		self.in_class = true;
+
+		let class = self.db.get(class_declare.identity);
+		let name = self.db.get(class.name.lexeme);
+		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name);
+		self.checkers.push(new_scope);
+
+		for fun in &mut class_declare.funs {
+			self.visit_function(fun);
+		}
+
+		for var in &mut class_declare.vars {
+			self.visit_expr(&mut var.value);
+
+			// Bind variable types
+			self.visit_var_type(var.identity);
+		}
+
+		self.checkers.pop();
+		self.in_class = enclosing_in_class;
+	}
+
+	fn resolve_type(&mut self, name: StrId, location: &SourceLocation) -> Option<Type> {
+		for checker in self.checkers.iter_mut().rev() {
+			match checker.check(self.db, name) {
+				ScopeEntry::Var(var) => break, // TODO: Figure out an ergonomic way to do this.
+				ScopeEntry::Fun(fun) => break,
+				ScopeEntry::Class(class) => {
+					return Some(Type::Class(class))
+				}
+				ScopeEntry::None => continue,
+			}
+		}
+
+		self.db.report_error(Error::simple(
+			format!("Unknown named type '{}'", self.db.get(name)),
+			location
+		));
+		
+		self.had_error = true;
+		None
+	}
+
+	fn visit_type(&mut self, typ: TypId, location: &SourceLocation) -> TypId {
+		let ty = self.db.get(typ);
+
+		match ty {
+			Type::UnboundIdent(str_id) => {
+				let ty = self.resolve_type(*str_id, location);
+
+				// If we successfully resolved the type, return that; otherwise,
+				// we already reported the error, so just hang on to the unknown
+				// type.
+				if let Some(ty) = ty {
+					return self.db.put_type(ty);
+				}
+				return typ;
+			},
+			_ => { return typ; }
+		}
+	}
+	
+	/// Performs the visit_type logic on a particular VarId using that var's
+	/// source location information. Performs logic common to Stmt::Declare and
+	/// FunDeclare.
+	fn visit_var_type(&mut self, var: VarId) {
+		// TODO: Avoid this clone.
+		let var_type = self.visit_type(self.db.get_var_type(var), &self.db.get(var).name.location.clone());
+		self.db.get_mut(var).typ = var_type;
+	}
+
 	fn visit_stmt(&mut self, stmt: &mut Stmt) {
 		match stmt {
 			Stmt::Declare(declare) => {
 				self.visit_expr(&mut declare.value);
+
+				// Anywhere where the parser might generate a Type::UnboundIdent,
+				// we need to try resolving that identifier.
+				self.visit_var_type(declare.identity);
 			},
 			Stmt::Expression(expr) => {
 				self.visit_expr(&mut expr.expression);
@@ -210,12 +408,25 @@ impl<'db> Binder<'db> {
 					self.visit_expr(expr);
 				}
 			},
+			Stmt::ClassDeclare(class_declare) => {
+				self.visit_class(class_declare);
+			}
 		}
 	}
 
 	fn visit_function(&mut self, function: &mut FunDeclare) {
 		// TODO: Push my name.
 		self.visit_expr(&mut function.value);
+
+		let param_count = self.db.get(function.identity).parameters.len();
+		for param in 0..param_count {
+			let var = self.db.get(function.identity).parameters[param];
+			self.visit_var_type(var);
+		}
+
+		// Visit the function return value type in case it is UnboundIdent.
+		let ret_type = self.visit_type(self.db.get(function.identity).return_type, &function.location);
+		self.db.get_mut(function.identity).return_type = ret_type;
 	}
 
 	pub fn visit_module(&mut self, module: &mut Module) {
@@ -229,6 +440,10 @@ impl<'db> Binder<'db> {
 
 		for fun in &mut module.functions {
 			self.visit_function(fun);
+		}
+
+		for class in &mut module.classes {
+			self.visit_class(class);
 		}
 	}
 }

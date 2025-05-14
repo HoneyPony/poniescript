@@ -1,0 +1,24 @@
+class Test {
+    var number = 20;
+
+    fun horse() {
+        print("horse ", number);
+    }
+
+    fun pony() -> fun() {
+        return horse;
+    }
+
+    fun ponies() -> fun() -> fun() {
+        return pony;
+    }
+}
+
+fun init() {
+    var t = new Test {};
+    var p = t.ponies();
+    var q = p();
+    q(); //! horse 20
+    t.number = 30;
+    q(); //! horse 30
+}

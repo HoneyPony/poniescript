@@ -22,6 +22,7 @@ fn generate_id(file: &mut File, name: &str, ty: &str, arena: &str) -> std::io::R
 	writeln!(file, "pub struct {name}({TY});\n")?;
 	writeln!(file, "impl {name} {{")?;
 	writeln!(file, "\tpub fn to_usize(self) -> usize {{ self.0 as usize }}")?;
+	writeln!(file, "\tpub unsafe fn from_u32(val: u32) -> Self {{ {name}(val) }}")?;
 	//writeln!(file, "\tpub fn from_usize(v: usize) -> Self {{ {name}(v as {TY}) }}")?;
 	writeln!(file, "}}\n")?;
 
@@ -80,6 +81,7 @@ pub fn generate(db_file: &mut File) {
 		("FunId", "Fun"),
 		("TypId", "Type"),
 		("SigId", "Sig"),
+		("ClassId", "Class"),
 		("SourceId", "Source"),
 	];
 

@@ -1,0 +1,15 @@
+// This test tests VERY BASIC assigning to class variables.
+// When this test was written, we had Unbound but no UnboundAssign -- this test
+// probably needs an UnboundAssign node to work.
+
+class Test {
+    var data : int = 10;
+
+    fun no_params() {
+        data = 20;
+    }
+
+    fun with_param(x: int) {
+        data = x;
+    }
+}

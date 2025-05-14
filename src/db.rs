@@ -8,11 +8,13 @@ use crate::error::Error;
 use crate::expr::Var;
 use crate::expr::Fun;
 use crate::expr::Sig;
+use crate::expr::Class;
 use crate::typ::Type;
-use crate::source::{Source};
+use crate::source::{Source, SourceLocation};
 
 use crate::lexer::{Tok, Token};
 
+use clap::builder::Str;
 use rustc_hash::{FxHashMap};
 
 // Include arenas
@@ -22,10 +24,15 @@ include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 pub enum ScopeEntry {
 	Var(VarId),
 	Fun(FunId),
+	Class(ClassId),
 
 	None
 }
 
+pub struct StrProperties {
+	length: VarId,
+	length_key: StrId,
+}
 
 pub struct DbTypes {
 	pub str_const: TypId,
@@ -56,6 +63,7 @@ pub struct Db {
 
 	sig_cname_cache: FxHashMap<SigId, (&'static str, &'static str)>,
 	sig_cdeclared: FxHashMap<SigId, bool>,
+	sig_cgenerated: FxHashMap<SigId, bool>,
 
 	str_simple_const_map: FxHashMap<String, StrConstId>,
 
@@ -64,8 +72,12 @@ pub struct Db {
 	/// Keep a cache of all generated ctypes so that we can quickly re-use them.
 	ctype_cache: Vec<&'static str>,
 
+	known_var_cnames: FxHashMap<VarId, &'static str>,
+
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
+	class_cname_cache: Vec<&'static str>,
+	class_preparer_cache: Vec<&'static str>,
 
 	/// Keep a cache of generated type reprs also for re-using them.
 	type_repr_cache: RefCell<FxHashMap<TypId, &'static str>>,
@@ -77,6 +89,8 @@ pub struct Db {
 
 	pub synthetic: SourceId,
 	pub sig_unassigned: SigId,
+	pub class_unassigned: ClassId,
+	pub var_unassigned: VarId,
 
 	pub errors: Vec<Error>,
 
@@ -97,6 +111,8 @@ pub struct Db {
 
 	pub str_anonymous: StrId,
 	pub str_lambda: StrId,
+
+	prop_str: StrProperties,
 }
 
 impl Db {
@@ -111,17 +127,23 @@ impl Db {
 
 			sig_cname_cache: FxHashMap::default(),
 			sig_cdeclared: FxHashMap::default(),
+			sig_cgenerated: FxHashMap::default(),
 
 			str_simple_const_map: FxHashMap::default(),
 
 			key_lookup_map: FxHashMap::default(),
 
 			ctype_cache: Vec::new(),
+
+			known_var_cnames: FxHashMap::default(),
+
 			type_repr_cache: RefCell::new(FxHashMap::default()),
 			fun_cparams_cache: Vec::new(),
 
 			var_cname_cache: Vec::new(),
 			fun_cname_cache: Vec::new(),
+			class_cname_cache: Vec::new(),
+			class_preparer_cache: Vec::new(),
 
 			errors: Vec::new(),
 
@@ -145,6 +167,8 @@ impl Db {
 
 			synthetic: SourceId(0),
 			sig_unassigned: SigId(0),
+			class_unassigned: ClassId(0),
+			var_unassigned: VarId(0),
 
 			name_map: FxHashMap::default(),
 
@@ -155,6 +179,11 @@ impl Db {
 
 			str_anonymous: StrId(0),
 			str_lambda: StrId(0),
+
+			prop_str: StrProperties {
+				length: VarId(0),
+				length_key: StrId(0)
+			}
 		};
 
 		db.types.str_const  = db.put_type(Type::StrConst);
@@ -177,6 +206,9 @@ impl Db {
 			return_type: db.types.unassigned
 		});
 
+		// TODO: Maybe make class_unassigned a special value...?
+		// For now it's going to cause some unsafety..
+
 		db.types.fun_sig_unassigned = db.put_type(Type::Fun(db.sig_unassigned));
 
 		db.str_anonymous = db.put_str("<anonymous>");
@@ -187,7 +219,40 @@ impl Db {
 		// so it's not a huge inefficiency.
 		db.key_lookup_map = crate::lexer::build_key_lookup_map(&mut db);
 
+		(db.prop_str.length_key, db.prop_str.length) = db.synthesize_property("length", "length", db.types.int);
+
 		return db;
+	}
+
+	pub fn synthetic(&self) -> SourceLocation {
+		SourceLocation {
+			source: self.synthetic,
+			offset: 0,
+			length: 0,
+		}
+	}
+
+	pub fn synthetic_id(&self, name: StrId) -> Token {
+		Token {
+			typ: Tok::Identifier,
+			lexeme: name,
+			location: self.synthetic(),
+		}
+	}
+
+	pub fn synthesize_property(&mut self, str: &'static str, cname: &'static str, typ: TypId) -> (StrId, VarId) {
+		let key = self.put_str(str);
+		let var = Var {
+			name: self.synthetic_id(key),
+			typ,
+			class: None,
+			init: false,
+		};
+		let var = self.new_id(var);
+
+		self.known_var_cnames.insert(var, cname);
+
+		(key, var)
 	}
 
 	pub fn put_sig(&mut self, sig: &Sig) -> SigId {
@@ -247,10 +312,10 @@ impl Db {
 			return *existing;
 		}
 
-		let ctype = typ.gen_ctype(self);
+		//let ctype = typ.gen_ctype(self);
 
 		// IMPORTANT: The pushes() here must line up with new_id() -> TypId
-		self.ctype_cache.push(ctype.leak());
+		//self.ctype_cache.push(ctype.leak());
 
 		let id = self.new_id(typ.clone());
 		self.type_side_map.insert(typ, id);
@@ -280,18 +345,18 @@ impl Db {
 	fn gen_type_dependencies(&mut self, typ: TypId) {
 		match self.get(typ) {
 			Type::FunRaw(sig) | Type::Fun(sig) => {
-				self.use_sig(*sig)
+				self.gen_sig(*sig)
 			},
 
 			_ => { }
 		}
 	}
-
-	pub fn use_sig(&mut self, sig_id: SigId) {
+	
+	fn gen_sig(&mut self, sig_id: SigId) {
 		use crate::inf_write;
 		use crate::inf_writeln;
 
-		if *self.sig_cdeclared.get(&sig_id).unwrap_or(&false) {
+		if *self.sig_cgenerated.get(&sig_id).unwrap_or(&false) {
 			// Return if we've already done it.
 			// TODO: This could just be an FxHashSet...
 			// Other TODO: Figure out cyclic references (e.g. throw an error
@@ -299,8 +364,8 @@ impl Db {
 			return;
 		}
 
-		// Now the sig has been used
-		self.sig_cdeclared.insert(sig_id, true);
+		// Now the sig has been generated
+		self.sig_cgenerated.insert(sig_id, true);
 
 		let (fnptr_name, struct_name) = self.gen_sig_ctype_impl(sig_id);
 
@@ -336,6 +401,19 @@ impl Db {
 
 		inf_writeln!(self.sig_declare_code, "typedef struct {} {{ {} fun; void* closure; }} {};",
 			struct_name, fnptr_name, struct_name);
+	}
+
+	pub fn use_sig(&mut self, sig_id: SigId) {
+		if *self.sig_cdeclared.get(&sig_id).unwrap_or(&false) {
+			// Return if we've already done it.
+			// TODO: This could just be an FxHashSet...
+			// Other TODO: Figure out cyclic references (e.g. throw an error
+			// if gen_type_dependcies calls use_sig on the same value again)
+			return;
+		}
+
+		// Now the sig has been used
+		self.sig_cdeclared.insert(sig_id, true);
 	}
 
 	/// Generates the ctype for a Sig. Note that this ctype might be nonsense,
@@ -389,10 +467,12 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: Token, typ: TypId) -> VarId {
+	pub fn new_var(&mut self, name: Token, typ: TypId, class: Option<ClassId>, init: bool) -> VarId {
 		let var = Var {
 			name,
 			typ,
+			class,
+			init
 		};
 
 		return self.new_id(var);
@@ -407,9 +487,19 @@ impl Db {
 	//
 	// TODO: Consider generating the ctypes as soon as we generate a new type
 	pub fn get_ctype(&self, typ: TypId) -> &'static str {
+
+		if let Some(existing) = self.ctype_cache.get(typ.to_usize()) {
+			return *existing;
+		}
+
+		// Didn't get the type -- give a helpful panic message.
+		let ty_name = self.get(typ).to_string(self);
+		panic!("Tried to get invalid type in get_ctype: {} (TypId {})", ty_name, typ.to_usize());
+
 		// Safety: AS LONG AS we don't call new_id outside of put_type,
 		// the index must be valid.
-		unsafe { self.ctype_cache.get_unchecked(typ.to_usize()) }
+		// TODO: Make this code exist in like a "#[cfg(release)] or whatever."
+		// unsafe { self.ctype_cache.get_unchecked(typ.to_usize()) }
 	}
 
 	pub fn get_var_ctype(&self, var: VarId) -> &'static str {
@@ -469,9 +559,21 @@ impl Db {
 		// called until after type-checking.
 		unsafe { self.fun_cparams_cache.get_unchecked(fun.to_usize()) }
 	}
+	
+	pub fn get_class_cname(&self, class: ClassId) -> &'static str {
+		unsafe { self.class_cname_cache.get_unchecked(class.to_usize()) }
+	}
+
+	pub fn get_class_preparer_cname(&self, class: ClassId) -> &'static str {
+		unsafe { self.class_preparer_cache.get_unchecked(class.to_usize()) }
+	}
 
 	pub fn repr_var(&self, var: VarId) -> &str {
 		self.get(self.get(var).name.lexeme)
+	}
+
+	pub fn repr_class(&self, class: ClassId) -> &str {
+		self.get(self.get(class).name.lexeme)
 	}
 
 	pub fn repr_var_type(&self, var: VarId) -> &'static str {
@@ -521,11 +623,60 @@ impl Db {
 		}
 	}
 	
+	pub fn lookup_property(&self, typ: TypId, propname: StrId) -> Option<VarId> {
+		let ty = self.get(typ);
+		match ty {
+			// HACK: Right now these all do the same thing.
+			Type::Str | Type::StrConst | Type::StrBuf => {
+				if propname == self.prop_str.length_key {
+					return Some(self.prop_str.length);
+				}
+
+				None
+			},
+			Type::Class(class_id) => {
+				let class = self.get(*class_id);
+				let result = class.var_map.get(&propname).copied();
+				result
+			},
+
+			_ => None
+		}
+	}
+
+	pub fn lookup_member_fn(&self, typ: TypId, propname: StrId) -> Option<FunId> {
+		let ty = self.get(typ);
+		match ty {
+			Type::Class(class_id) => {
+				let class = self.get(*class_id);
+				class.fun_map.get(&propname).copied()
+			}
+
+			_ => None
+		}
+	}
+	
 	pub fn generate_codegen_caches(&mut self) {
 		// The order matters, as e.g. var cnames are used for fun cparams.
+		self.generate_class_cnames_cache();
+		self.generate_ctypes_cache();
 		self.generate_var_cnames_cache();
 		self.generate_fun_cnames_cache();
 		self.generate_fun_cparams_cache();
+		self.generate_sigs_cache();
+	}
+
+	fn generate_ctypes_cache(&mut self) {
+		let range = self.arenas.arena_typ.len() as IdType;
+
+		for id in 0..range {
+			let id = TypId(id);
+			// It's OK to clone here because types are lightweight
+			// (specifically because we're doing all this TypId stuff).
+			let ty = self.get(id).clone();
+			let ctype = ty.gen_ctype(self);
+			self.ctype_cache.push(ctype.leak());
+		}
 	}
 
 	fn generate_var_cnames_cache(&mut self) {
@@ -535,6 +686,11 @@ impl Db {
 
 		for id in 0..range {
 			let var = VarId(id);
+
+			if let Some(desired) = self.known_var_cnames.get(&var) {
+				self.var_cname_cache.push(desired);
+				continue;
+			}
 
 			let str_id = self.get(var).name.lexeme;
 			let cname = match used_set.entry(str_id) {
@@ -551,6 +707,34 @@ impl Db {
 			let cname = cname.leak();
 
 			self.var_cname_cache.push(cname);
+		}
+	}
+
+	fn generate_class_cnames_cache(&mut self) {
+		let range = self.arenas.arena_class.len() as IdType;
+
+		let mut used_set = FxHashMap::<StrId, u64>::default();
+
+		for id in 0..range {
+			let class = ClassId(id);
+
+			let str_id = self.get(class).name.lexeme;
+			let cname = match used_set.entry(str_id) {
+				std::collections::hash_map::Entry::Occupied(mut val) => {
+					let result = *val.get();
+					*val.get_mut() += 1;
+					format!("cl_{}{}", self.get(str_id), result)
+				},
+				std::collections::hash_map::Entry::Vacant(val) => {
+					val.insert(0);
+					format!("cl_{}", self.get(str_id))
+				},
+			};
+			let cname = cname.leak();
+			let preparer = format!("i{}", cname).leak();
+
+			self.class_cname_cache.push(cname);
+			self.class_preparer_cache.push(preparer);
 		}
 	}
 
@@ -606,6 +790,14 @@ impl Db {
 			buffer.push_str("void* closure");
 
 			self.fun_cparams_cache.push(buffer.leak());
+		}
+	}
+	
+	fn generate_sigs_cache(&mut self) {
+		let sigs = std::mem::take(&mut self.sig_cdeclared);
+
+		for sig in sigs {
+			self.gen_sig(sig.0);
 		}
 	}
 }

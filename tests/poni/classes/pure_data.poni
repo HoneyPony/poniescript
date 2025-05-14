@@ -1,0 +1,5 @@
+// A very simple test to just get the basic code generation working.
+
+class Data {
+    var x : int = 20;
+}

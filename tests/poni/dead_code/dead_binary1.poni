@@ -1,0 +1,17 @@
+fun ex1() {
+    { print(1); return; }
+}
+
+fun ex2() {
+    1 + { print(2); return; };
+}
+
+fun ex3() {
+    { print(3); return; } + 5;
+}
+
+fun init() {
+    ex1(); //! 1
+    ex2(); //! 2
+    ex3(); //! 3
+}
