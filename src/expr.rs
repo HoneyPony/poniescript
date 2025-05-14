@@ -129,7 +129,8 @@ impl Expr {
 			Expr::Get(get) => db.get_var_type(get.var),
 			Expr::Set(set) => db.get_var_type(set.var),
 			Expr::Undefined(_) => panic!("calling Expr::typ() on Undefined"),
-			Expr::SelfVal(selfval) => selfval.typ
+			Expr::SelfVal(selfval) => selfval.typ,
+			Expr::Index(index) => index.typ,
 		}
 	}
 
@@ -153,6 +154,11 @@ impl Expr {
 				binary.typ = typ;
 				true
 			},
+			Expr::Index(index) => {
+				//index.index.promote(db.types.int, db);
+				index.typ = typ;
+				true
+			}
 			Expr::ArrayLit(lit) => {
 				// Only promote if the incoming type is actually an Array of
 				// something.

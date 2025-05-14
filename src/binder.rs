@@ -315,6 +315,12 @@ impl<'db> Binder<'db> {
 				}
 				return None;
 			}
+
+			Expr::Index(index) => {
+				self.visit_expr(&mut index.value);
+				self.visit_expr(&mut index.index);
+				return None;
+			}
 		}
 	}
 

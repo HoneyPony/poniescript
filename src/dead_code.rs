@@ -329,6 +329,10 @@ impl<'db> DeadCodeElim<'db> {
                 // TODO: Eliminate sequence like all the other ones
                 false
             }
+            Expr::Index(_) => {
+                // TODO eliminate pair like binop
+                false
+            }
             Expr::Undefined(undefined) => unreachable!("dead code Undefined"),
         }
     }

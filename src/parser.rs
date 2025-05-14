@@ -550,20 +550,30 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::LeftBrace | Tok::Identifier | Tok::If | Tok::Fun => {
 				let location = self.start();
 				let mut inner = self.expr_prefix_callable()?;
-				while self.match_(Tok::LeftParen)?.is_some() {
-					// Parse args
-					let mut args = Vec::new();
 
-					while !self.at(Tok::RightParen) && !self.is_at_end() {
-						args.push(self.expression()?);
+				while self.at(Tok::LeftParen) || self.at(Tok::LeftSquare) {
+					while self.match_(Tok::LeftParen)?.is_some() {
+						// Parse args
+						let mut args = Vec::new();
 
-						// TODO: Make sure we require a Comma after every param but the
-						// last.
-						self.match_(Tok::Comma)?;
+						while !self.at(Tok::RightParen) && !self.is_at_end() {
+							args.push(self.expression()?);
+
+							// TODO: Make sure we require a Comma after every param but the
+							// last.
+							self.match_(Tok::Comma)?;
+						}
+
+						expected!(self, Tok::RightParen, "')' after argument list")?;
+						inner = Expr::mk_valcall(self.end(location.clone()), inner, args, self.db.sig_unassigned);
 					}
+					while self.match_(Tok::LeftSquare)?.is_some() {
+						// TODO: Can the index take multiple args?
+						let index = self.expression()?;
+						expected!(self, Tok::RightSquare, "']' after index expression")?;
 
-					expected!(self, Tok::RightParen, "')' after argument list")?;
-					inner = Expr::mk_valcall(self.end(location.clone()), inner, args, self.db.sig_unassigned);
+						inner = Expr::mk_index(self.end(location.clone()), inner, index, self.db.types.unassigned);
+					}
 				}
 
 				return Ok(inner);

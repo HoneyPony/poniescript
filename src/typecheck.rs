@@ -465,6 +465,30 @@ impl<'db> TypeChecker<'db> {
 
 				computed
 			},
+			Expr::Index(index) => {
+				let arr_ty = self.check_expr(&mut index.value, true)?;
+
+				let elem_ty = match self.db.get(arr_ty).clone() {
+					Type::ArrayOf(elem) => elem,
+					_ => type_error!(self, &index.location, "Can only index an array.")
+				};
+
+				let index_ty = self.check_expr(&mut index.index, true)?;
+				let index_computed = self.compute_assignable(self.db.types.int, index_ty);
+				
+				let index_computed = maybe_type_error!(self,
+					index_computed,
+					index.index.location(),
+					"Invalid index expression: Expression has type {}",
+					self.db.repr_type(index_ty)
+				);
+
+				index.index.promote(index_computed, self.db);
+
+				index.typ = elem_ty;
+
+				elem_ty
+			}
 			Expr::Variable(var) => self.db.get(var.identity).typ,
 			Expr::Assign(assign) => {
 				self.check_assign(&assign.location, assign.identity, &mut assign.value, false)?

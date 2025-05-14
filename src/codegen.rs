@@ -978,6 +978,22 @@ impl<'a> Codegen<'a> {
 			Expr::SelfVal(selfval) => {
 				Val::DirectSelf.typed(selfval.typ)
 			}
+
+			Expr::Index(index) => {
+				let val = self.new_val_typed(index.typ);
+				let arr_val = self.expr(&index.value, into);
+				// TODO: Should we store the arr_type on the Index as well so
+				// we can promote to it..?
+				let arr_val_typ = arr_val.typ;
+				let arr_val = self.promote(arr_val, arr_val_typ);
+
+				let idx_val = self.expr(&index.index, into);
+				let idx_val = self.promote(idx_val, self.db.types.int);
+
+				define_val!(self, into, val, " = {arr_val}->contents[{idx_val}];\n");
+
+				val
+			}
 		}
 	}
 
