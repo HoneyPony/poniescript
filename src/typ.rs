@@ -39,6 +39,8 @@ pub enum Type {
 	Class(ClassId),
 	//Function(SignatureId),
 	//ListOf(TypId),
+
+	ArrayOf(TypId),
 	
 	Unassigned,
 	AssumeInt,
@@ -100,6 +102,9 @@ impl Type {
 			Type::Class(class) => {
 				db.get(db.get(*class).name.lexeme).to_string()
 			}
+			Type::ArrayOf(typ) => {
+				format!("Array[{}]", db.get(*typ).to_string(db))
+			}
 
 			Type::AssumeInt => "a number".to_string(),
 			Type::AssumeFloat => "a decimal number".to_string(),
@@ -125,6 +130,8 @@ impl Type {
 
 			// IMPORTANT: We must generate class_cnames before ctypes
 			Type::Class(class_id) => format!("struct {}*", db.get_class_cname(*class_id)),
+
+			Type::ArrayOf(typ) => String::from(db.gen_array_ctype(*typ)),
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 

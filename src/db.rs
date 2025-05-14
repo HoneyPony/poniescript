@@ -65,6 +65,9 @@ pub struct Db {
 	sig_cdeclared: FxHashMap<SigId, bool>,
 	sig_cgenerated: FxHashMap<SigId, bool>,
 
+	array_cname_cache: FxHashMap<TypId, &'static str>,
+	//array_cgenerated: FxHashMap<TypId, bool>,
+
 	str_simple_const_map: FxHashMap<String, StrConstId>,
 
 	key_lookup_map: FxHashMap<StrId, Tok>,
@@ -109,6 +112,11 @@ pub struct Db {
 	/// Some C code to declare each Sig type.
 	pub sig_declare_code: String,
 
+	/// Some C code to declare each Array type.
+	/// TODO: This doesn't quite work, we really need to do a topological
+	/// sort on this stuff.
+	// pub arr_declare_code: String,
+
 	pub str_anonymous: StrId,
 	pub str_lambda: StrId,
 
@@ -128,6 +136,8 @@ impl Db {
 			sig_cname_cache: FxHashMap::default(),
 			sig_cdeclared: FxHashMap::default(),
 			sig_cgenerated: FxHashMap::default(),
+
+			array_cname_cache: FxHashMap::default(),
 
 			str_simple_const_map: FxHashMap::default(),
 
@@ -426,6 +436,18 @@ impl Db {
 	/// but that's OK.
 	pub fn gen_sig_raw_ctype(&mut self, sig: SigId) -> &'static str {
 		self.gen_sig_ctype_impl(sig).0
+	}
+
+	pub fn gen_array_ctype(&mut self, inner_ty: TypId) -> &'static str {
+		if let Some(existing) = self.array_cname_cache.get(&inner_ty) {
+			return existing;
+		}
+
+		let name = format!("ps_arr_{}", inner_ty.0);
+		let name = name.leak();
+		self.array_cname_cache.insert(inner_ty, name);
+
+		name
 	}
 
 	pub fn put_str_const_simple(&mut self, string: &str) -> StrConstId {

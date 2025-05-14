@@ -462,6 +462,7 @@ impl<'a> Codegen<'a> {
 			Type::Fun(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun\", (uintptr_t){val}.fun);"),
 			Type::FunRaw(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun*\", (uintptr_t){val});"),
 			Type::Class(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"object\", (uintptr_t){val});"),
+			Type::ArrayOf(_) => todo!("print() for Array"),
 
 			// TODO: Consider simply making 10.0 a float and 10 an int..?
 			// at least, unless assigned differently..?
@@ -493,6 +494,7 @@ impl<'a> Codegen<'a> {
 			Type::Fun(_) => todo!("str() for functions"),
 			Type::FunRaw(_) => todo!("str() for function pointers"),
 			Type::Class(_) => todo!("str() for classes"),
+			Type::ArrayOf(_) => todo!("str() for Array"),
 			Type::AssumeFloat => todo!(),
 			Type::AssumeInt => todo!(),
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unbound-ident>"),
