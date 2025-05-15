@@ -1,0 +1,21 @@
+class Horse {
+    var greeting = "meow";
+}
+
+fun horse(h: Horse) {
+    print(h.greeting);
+}
+
+fun stampede(fn: fun*(Horse), horse: Horse) {
+    fn(horse);
+    fn(horse);
+    fn(horse);
+}
+
+fun init() {
+    //! neigh!
+    //! neigh!
+    //! neigh!
+    var the_horse = new Horse { greeting: "neigh!" };
+    stampede(horse, the_horse);
+}

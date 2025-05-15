@@ -1,0 +1,21 @@
+class Horse {
+    var hooves = 4;
+}
+
+fun horse() -> Horse {
+    print("neigh!");
+    new Horse {}
+}
+
+fun stampede(fn: fun() -> Horse) {
+    fn();
+    fn();
+    fn();
+}
+
+fun init() {
+    //! neigh!
+    //! neigh!
+    //! neigh!
+    stampede(horse);
+}

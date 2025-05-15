@@ -411,6 +411,44 @@ impl<'db> Binder<'db> {
 				}
 				return typ;
 			},
+			Type::Fun(sig) => {
+				// TODO: Consider adding a flag here that will keep us from re-visiting
+				// the same funs over and over. In particular, any fully resolved TypId
+				// does not have to be visited again. But, any partially unresolved one
+				// does, as the same name may refer to different things in different scopes.
+				let mut resolved_params = self.db.get(sig).parameters.clone();
+				for param in &mut resolved_params {
+					// TODO: Somehow get more location information?
+					*param = self.visit_type(*param, location);
+				}
+
+				let return_type = self.visit_type(self.db.get(sig).return_type, location);
+				
+				let sig = self.db.put_sig(&Sig {
+					parameters: resolved_params,
+					return_type
+				});
+				return self.db.put_type(Type::Fun(sig));
+			},
+			Type::FunRaw(sig) => {
+				// TODO: Consider adding a flag here that will keep us from re-visiting
+				// the same funs over and over. In particular, any fully resolved TypId
+				// does not have to be visited again. But, any partially unresolved one
+				// does, as the same name may refer to different things in different scopes.
+				let mut resolved_params = self.db.get(sig).parameters.clone();
+				for param in &mut resolved_params {
+					// TODO: Somehow get more location information?
+					*param = self.visit_type(*param, location);
+				}
+
+				let return_type = self.visit_type(self.db.get(sig).return_type, location);
+				
+				let sig = self.db.put_sig(&Sig {
+					parameters: resolved_params,
+					return_type
+				});
+				return self.db.put_type(Type::FunRaw(sig));
+			}
 			Type::ArrayOf(inner_typ) => {
 				let inner = self.visit_type(inner_typ, location);
 				if inner != inner_typ {

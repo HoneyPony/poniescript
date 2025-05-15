@@ -95,6 +95,10 @@ pub fn generate(tests_file: &mut File) {
 		("call/", "local_fun"),
 		("call/", "local_fun_lambda"),
 		("call/", "if_simple_lambda"),
+		("call/", "uses_fun_with_class_retval"),
+		("call/", "uses_fun_with_class_param"),
+		("call/", "uses_funstar_with_class_retval"),
+		("call/", "uses_funstar_with_class_param"),
 
 		("classes/", "basic_new_inferred_get"),
 		("classes/", "basic_new_inferred_get_promote"),
