@@ -71,7 +71,7 @@ fun init() {
     //! leg: 8 12
     stable[1].repr();
 
-    stable[1].legs[0] = new Leg { rotation: 13, length: 37 }
+    stable[1].legs[0] = new Leg { rotation: 13, length: 37 };
     //! leg: 13 37
     //! leg: 0 20
     //! leg: 7 11

@@ -551,7 +551,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 				let location = self.start();
 				let mut inner = self.expr_prefix_callable()?;
 
-				while self.at(Tok::LeftParen) || self.at(Tok::LeftSquare) {
+				while self.at(Tok::LeftParen) || self.at(Tok::LeftSquare) || self.at(Tok::Dot) {
 					while self.match_(Tok::LeftParen)?.is_some() {
 						// Parse args
 						let mut args = Vec::new();
@@ -586,6 +586,38 @@ impl<'a, 'b> Parser<'a, 'b> {
 						}
 
 						inner = Expr::mk_index(self.end(location.clone()), inner, index, self.db.types.unassigned);
+					}
+					while self.match_(Tok::Dot)?.is_some() {
+						let identifier = expected!(self, Tok::Identifier, "identifier after property name")?;
+
+						// TODO: Do we want to move this logic into expr_ident to go
+						// with the other ones?
+						if self.match_(Tok::Equal)?.is_some() {
+							let value = self.expression()?;
+							return Expr::mk_set_ok(self.end(location), identifier, inner, self.db.var_unassigned, value);
+						}
+						// Function calls are mutually exclusive with assignment.
+						//
+						// An assignment would be like:
+						// object.thing() = 5;  or object.thing() = new Thing {};
+						// But this doesn't make sense, because in either case we're
+						// basically creating a new temporary that isn't really an lvalue.
+						//
+						// So function calls are distinct from assignments.
+						// 
+						// Same logic as above with arrays--we return early
+						// if we end up making an assignment.
+						else if self.match_(Tok::LeftParen)?.is_some() {
+							// We have to finish the call right now because
+							// it is a call on this particular idenitifer, not
+							// really a call on the previous property.
+							//
+							// (Although, we could make that work too).
+							inner = self.expr_call_finish(location.clone(), identifier, Some(inner))?;
+						}
+						else {
+							inner = Expr::mk_get(self.end(location.clone()), identifier, inner, self.db.var_unassigned);
+						}
 					}
 				}
 
@@ -670,30 +702,6 @@ impl<'a, 'b> Parser<'a, 'b> {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::mk_logical_ok(self.end(location), op.typ, lhs, rhs);
-			}
-
-			Tok::Dot => {
-				let op = self.advance()?;
-				let identifier = expected_after!(self, Tok::Identifier, op, "property name")?;
-
-				// TODO: Do we want to move this logic into expr_ident to go
-				// with the other ones?
-				if self.match_(Tok::Equal)?.is_some() {
-					let value = self.expression()?;
-					return Expr::mk_set_ok(self.end(location), identifier, lhs, self.db.var_unassigned, value);
-				}
-				// Function calls are mutually exclusive with assignment.
-				//
-				// An assignment would be like:
-				// object.thing() = 5;  or object.thing() = new Thing {};
-				// But this doesn't make sense, because in either case we're
-				// basically creating a new temporary that isn't really an lvalue.
-				//
-				// So function calls are distinct from assignments.
-				else if self.match_(Tok::LeftParen)?.is_some() {
-					return self.expr_call_finish(location, identifier, Some(lhs));
-				}
-				return Expr::mk_get_ok(self.end(location), identifier, lhs, self.db.var_unassigned);
 			}
 
 			// We should never call expr_infix() with an invalid operator,
