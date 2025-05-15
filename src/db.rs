@@ -34,6 +34,11 @@ pub struct StrProperties {
 	length_key: StrId,
 }
 
+pub struct ArrayProperties {
+	length: VarId,
+	length_key: StrId,
+}
+
 pub struct DbTypes {
 	pub str_const: TypId,
 	pub str: TypId,
@@ -127,6 +132,7 @@ pub struct Db {
 	pub str_lambda: StrId,
 
 	prop_str: StrProperties,
+	prop_array: ArrayProperties,
 }
 
 impl Db {
@@ -203,7 +209,9 @@ impl Db {
 			prop_str: StrProperties {
 				length: VarId(0),
 				length_key: StrId(0)
-			}
+			},
+
+			prop_array: ArrayProperties { length: VarId(0), length_key: StrId(0) }
 		};
 
 		db.types.str_const  = db.put_type(Type::StrConst);
@@ -240,6 +248,8 @@ impl Db {
 		db.key_lookup_map = crate::lexer::build_key_lookup_map(&mut db);
 
 		(db.prop_str.length_key, db.prop_str.length) = db.synthesize_property("length", "length", db.types.int);
+
+		(db.prop_array.length_key, db.prop_array.length) = db.synthesize_property("length", "header.length", db.types.int);
 
 		return db;
 	}
@@ -709,6 +719,13 @@ impl Db {
 
 				None
 			},
+			Type::ArrayOf(_) => {
+				if propname == self.prop_array.length_key {
+					return Some(self.prop_array.length);
+				}
+
+				None
+			}
 			Type::Class(class_id) => {
 				let class = self.get(*class_id);
 				let result = class.var_map.get(&propname).copied();

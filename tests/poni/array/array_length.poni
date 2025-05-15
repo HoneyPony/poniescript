@@ -1,0 +1,11 @@
+fun init() {
+    var a0 = [0];
+    var a1 = [0, 1];
+    var a2 = [0, 1, 2];
+    var a3 = [0, 1, 2, 3];
+
+    print(a0.length); //! 1
+    print(a1.length); //! 2
+    print(a2.length); //! 3
+    print(a3.length); //! 4
+}

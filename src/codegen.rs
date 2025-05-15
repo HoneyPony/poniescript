@@ -962,6 +962,8 @@ impl<'a> Codegen<'a> {
 					lit.values.len());
 
 				if val.needs_storage() {
+					inf_writeln!(into, "{indent}{}->header.length = {};\n", val.val, lit.values.len());
+
 					let mut idx = 0;
 					for value in &lit.values {
 						let nth = self.expr(value, into);
