@@ -1,0 +1,13 @@
+fun example(arr: Array[int]) {
+    arr[0] = 1;
+    arr[1] = 2;
+    arr[2] = 3;
+}
+
+fun init() {
+    // note: this was originally -1 -1 -1 but we don't have unary - yet...
+    var x = [1, 1, 1];
+    example(x);
+
+    print(x[0], x[1], x[2]); //! 123
+}

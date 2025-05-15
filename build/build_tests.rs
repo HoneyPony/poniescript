@@ -155,6 +155,8 @@ pub fn generate(tests_file: &mut File) {
 		("array/", "array_class_deep_nesting"),
 		("array/", "array_class_deep_nesting_namedif"),
 		("array/", "array_class_deep_simpler"),
+		("array/", "array_of_funs"),
+		("array/", "array_ref_semantics"),
 	];
 
 	for (path, test) in tests {
