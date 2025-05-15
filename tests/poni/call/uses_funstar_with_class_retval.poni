@@ -1,3 +1,5 @@
+// fun* not supported right now
+
 class Horse {
     var hooves = 4;
 }
