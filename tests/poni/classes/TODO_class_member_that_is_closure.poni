@@ -1,0 +1,20 @@
+class Horse {
+    var greeting = "neigh";
+
+    var neigh = fun() {
+        print(greeting);
+    };
+}
+
+fun neigh() {
+    print("neigh!");
+}
+
+fun init() {
+    var h = new Horse {};
+    h.neigh(); //! neigh
+    h.greeting = "hello";
+    h.neigh(); //! hello
+    h.neigh = neigh;
+    h.neigh(); //! neigh!
+}

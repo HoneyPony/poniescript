@@ -891,17 +891,32 @@ impl<'db> TypeChecker<'db> {
 							typ: self.db.types.unassigned,
 							object: capt_obj.object
 						};
-						*expr = Expr::FunCapture(as_funcapture);
+						std::mem::forget(std::mem::replace(expr, Expr::FunCapture(as_funcapture)));
 					}
 					return self.check_expr(expr, value_used);
 				}
 
-
-				//let property = self.db.lookup_property(lhs, get.identifier.lexeme);
+				if let Some(property) = self.db.lookup_property(obj_ty, capt.identifier.lexeme) {
+					unsafe {
+						// TODO: Use MaybeUninit instead..?
+						let capt_obj = std::mem::replace(capt, std::mem::zeroed());
+						let as_get = Get {
+							location: capt_obj.location,
+							identifier: capt_obj.identifier,
+							lhs: capt_obj.object.unwrap(), // Safety: We already checked this above
+							var: property
+						};
+						// Forget the (invalid) zeroed value that we created.
+						std::mem::forget(std::mem::replace(expr, Expr::Get(as_get)));
+					}
+					return self.check_expr(expr, value_used);
+				}
 
 				type_error!(self,
 					&capt.location,
-					"Could not find a matching function for object.")
+					"Object of type {} has no such function or property {}.",
+					self.db.repr_type(obj_ty),
+					self.db.get(capt.identifier.lexeme));
 			}
 			Expr::UnboundAssign(_) => panic!("Internal compiler error: Tried to typecheck an UnboundAssign"),
 			Expr::Undefined(_) => panic!("Internal compiler error: Tried to typecheck an Undefined"),
