@@ -1,0 +1,50 @@
+// Note: Currently there's no way to write the type for something like:
+// fun takes(arr: Array[fun of this type])
+//
+// We would need some sort of maybe "type" construct, like
+//
+// type my_fun = fun(Array[my_fun]);
+//
+// Which is a valid type, because of the level of indirection -- some other
+// valid examples:
+//
+// type my_fun = fun(my_fun);
+// type my_fun = fun() -> my_fun;
+// type my_fun = fun(fun(my_fun));
+//
+// And so forth.
+//
+// What would not be valid is a self-referential value type.
+
+fun complicated(arr: Array[fun(Array[fun(int) -> int], int) -> int], idx1: int, idx2: int) -> int {
+    arr[idx1]([
+        fun(x: int) -> int {
+            return x + 1;
+        },
+        fun(x: int) -> int {
+            return x + 2;
+        },
+        fun(x: int) -> int {
+            return x + 3;
+        }
+    ], idx2)
+}
+
+fun thing1(arr: Array[fun(int) -> int], idx: int) -> int {
+    arr[idx](20)
+}
+
+fun thing2(arr: Array[fun(int) -> int], idx: int) -> int {
+    arr[idx](40)
+}
+
+fun init() {
+    var things = [thing1, thing2];
+    print(complicated(things, 0, 0)); //! 21
+    print(complicated(things, 0, 1)); //! 22
+    print(complicated(things, 0, 2)); //! 23
+
+    print(complicated(things, 1, 0)); //! 41
+    print(complicated(things, 1, 1)); //! 42
+    print(complicated(things, 1, 2)); //! 43
+}
