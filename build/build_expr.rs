@@ -96,6 +96,7 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 	let mut struct_defs = String::new();
 	let mut enum_impl = String::new();
 	let mut loc_match = String::new();
+	let mut debug_impl = String::new();
 
 	writeln!(enum_def, "pub enum {name} {{")?;
 	writeln!(enum_impl, "impl {name} {{")?;
@@ -103,6 +104,10 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 	writeln!(loc_match, "\t#[allow(unused)]")?;
 	writeln!(loc_match, "\tpub fn location(&self) -> &SourceLocation {{")?;
 	writeln!(loc_match, "\t\tmatch self {{")?;
+
+	writeln!(debug_impl, "impl std::fmt::Debug for {name} {{")?;
+	writeln!(debug_impl, "\tfn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {{")?;
+	writeln!(debug_impl, "\t\tmatch self {{")?;
 
 	while let Some(ty_name) = token(&mut spec) {
 		token(&mut spec);
@@ -147,6 +152,8 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 
 		writeln!(loc_match, "\t\t\t{name}::{ty_name}(inner) => &inner.location,")?;
 
+		writeln!(debug_impl, "\t\t\t{name}::{ty_name}(_) => f.write_str(\"{ty_name}\"),")?;
+
 		generate_constructor(name,
 			ty_name,
 			ConstructOpt { wrap_ok: false, to_enum: false },
@@ -174,13 +181,16 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 
 	writeln!(enum_def, "}}")?;
 
-	
+	writeln!(debug_impl, "\t\t}}")?;
+	writeln!(debug_impl, "\t}}")?;
+	writeln!(debug_impl, "}}")?;
 
 	{
 		use std::io::Write;
 		write!(file, "{}\n", struct_defs).unwrap();
 		write!(file, "{}\n", enum_def).unwrap();
 		write!(file, "{}\n", enum_impl).unwrap();
+		write!(file, "{}\n", debug_impl).unwrap();
 	}
 
 	Ok(())

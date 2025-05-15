@@ -1,0 +1,16 @@
+class Leg {
+    fun leg_repr() { print("leg"); }
+}
+
+class Horse {
+    var legs: Array[Leg] = [];
+
+    fun horse_repr() {
+        legs[0].leg_repr();
+    }
+}
+
+fun init() {
+    var h = new Horse { legs: [ new Leg {} ] };
+    h.horse_repr(); //! leg
+}

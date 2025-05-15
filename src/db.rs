@@ -311,6 +311,19 @@ impl Db {
 		return !self.is_not_concrete(id)
 	}
 
+	pub fn is_cgen_safe(&self, id: TypId) -> bool {
+		match self.get(id) {
+			Type::AssumeFloat => false,
+			Type::AssumeInt => false,
+			Type::Unassigned => false,
+
+			Type::UnboundIdent(_) => false,
+			Type::ArrayOf(ty) => self.is_cgen_safe(*ty),
+
+			_ => true
+		}
+	}
+
 	pub fn put_str(&mut self, str: &str) -> StrId {
 		if let Some(existing) = self.str_side_map.get(str) {
 			return *existing;
@@ -453,8 +466,15 @@ impl Db {
 		self.sig_cdeclared.insert(sig_id, true);
 	}
 
-	pub fn use_array(&mut self, elem_ty: TypId) {
-		if self.is_concrete(elem_ty) {
+	/// Should only be called by put_type when a type is generated for the first
+	/// time. That way, we can track the used arrays in a single Vec without
+	/// worrying about pushing redundant copies.
+	fn use_array(&mut self, elem_ty: TypId) {
+		// We only actually use any array that is cgen safe. This is because
+		// we might end up using an intermediate, non-cgen safe type, which is
+		// fine, but should never generate into the C code as it will cause
+		// a problem.
+		if self.is_cgen_safe(elem_ty) {
 			self.array_used.push(elem_ty);
 		}
 	}

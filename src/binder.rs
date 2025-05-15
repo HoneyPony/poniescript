@@ -168,6 +168,7 @@ impl<'db> Binder<'db> {
 	}
 
 	fn resolve_expr(&mut self, expr: &mut Expr) -> Option<Expr> {
+		eprintln!("visit {:?}", expr);
 		match expr {
 			// For most expression types, we simply visit each inner expression
 			// and then return.
