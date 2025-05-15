@@ -143,6 +143,14 @@ pub fn generate(tests_file: &mut File) {
 		("array/", "array_nested_empty_rhs"),
 		("array/", "array_nested_empty"),
 		("array/", "array_nested_infer"),
+		("array/", "array_index_nested"),
+		("array/", "array_init_and_print"),
+		("array/", "array_of_classes"),
+		("array/", "array_set_and_funcall"),
+		("array/", "array_set"),
+		("array/", "array_type_infer"),
+		("array/", "array_type_override"),
+		("array/", "array_type_parse")
 	];
 
 	for (path, test) in tests {

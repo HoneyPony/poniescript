@@ -1,3 +1,5 @@
 fun init() {
     var x: Array[int] = [];
+
+    print("success"); //! success
 }
