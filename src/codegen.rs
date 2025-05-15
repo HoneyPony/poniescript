@@ -995,6 +995,27 @@ impl<'a> Codegen<'a> {
 
 				val
 			}
+
+			Expr::SetIndex(set) => {
+				let val = self.new_val_typed(set.typ);
+				let arr_val = self.expr(&set.value, into);
+				// TODO: Should we store the arr_type on the SetIndex as well so
+				// we can promote to it..?
+				let arr_val_typ = arr_val.typ;
+				let arr_val = self.promote(arr_val, arr_val_typ);
+
+				let idx_val = self.expr(&set.index, into);
+				let idx_val = self.promote(idx_val, self.db.types.int);
+
+				// Promote RHS to the element type of the array (i.e. set.typ)
+				let rhs_val = self.expr(&set.rhs, into);
+				let rhs_val = self.promote(rhs_val, set.typ);
+
+				// TODO: Generate bounds checks
+				define_val!(self, into, val, " = {arr_val}->contents[{idx_val}] = {rhs_val};\n");
+
+				val
+			}
 		}
 	}
 

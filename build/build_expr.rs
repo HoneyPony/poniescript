@@ -214,6 +214,7 @@ pub fn generate(file: &mut File) {
 	SelfVal       : TypId typ
 	ArrayLit      : Vec<Expr> values, TypId elem_typ, TypId arr_typ
 	Index         : Expr value, Expr index, TypId typ
+	SetIndex      : Expr value, Expr index, TypId typ, Expr rhs
 	Undefined     : 
 
 	"#;

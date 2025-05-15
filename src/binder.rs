@@ -321,6 +321,13 @@ impl<'db> Binder<'db> {
 				self.visit_expr(&mut index.index);
 				return None;
 			}
+
+			Expr::SetIndex(set) => {
+				self.visit_expr(&mut set.value);
+				self.visit_expr(&mut set.index);
+				self.visit_expr(&mut set.rhs);
+				return None;
+			}
 		}
 	}
 

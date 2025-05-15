@@ -572,6 +572,19 @@ impl<'a, 'b> Parser<'a, 'b> {
 						let index = self.expression()?;
 						expected!(self, Tok::RightSquare, "']' after index expression")?;
 
+						if self.match_(Tok::Equal)?.is_some() {
+							let rhs = self.expression()?;
+							// TODO: Should this be moved to expr_ident as well...????????
+
+							// Return out of the loop--once we see an equals, we can't keep
+							// consuming more () [].
+							return Expr::mk_setindex_ok(self.end(location),
+								inner,
+								index,
+								self.db.types.unassigned,
+								rhs);
+						}
+
 						inner = Expr::mk_index(self.end(location.clone()), inner, index, self.db.types.unassigned);
 					}
 				}

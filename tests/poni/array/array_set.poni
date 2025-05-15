@@ -1,0 +1,10 @@
+fun init() {
+    var arr = [0, 1, 2, 3];
+
+    print(arr[0], arr[1], arr[2], arr[3]); //! 0123
+
+    arr[0] = 4;
+    arr[3] = 2;
+
+    print(arr[0], arr[1], arr[2], arr[3]); //! 4122
+}

@@ -333,6 +333,10 @@ impl<'db> DeadCodeElim<'db> {
                 // TODO eliminate pair like binop
                 false
             }
+            Expr::SetIndex(_) => {
+                // TODO eliminate
+                false
+            }
             Expr::Undefined(undefined) => unreachable!("dead code Undefined"),
         }
     }

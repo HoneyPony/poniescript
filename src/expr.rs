@@ -131,6 +131,7 @@ impl Expr {
 			Expr::Undefined(_) => panic!("calling Expr::typ() on Undefined"),
 			Expr::SelfVal(selfval) => selfval.typ,
 			Expr::Index(index) => index.typ,
+			Expr::SetIndex(set) => set.typ,
 		}
 	}
 
@@ -157,6 +158,10 @@ impl Expr {
 			Expr::Index(index) => {
 				//index.index.promote(db.types.int, db);
 				index.typ = typ;
+				true
+			}
+			Expr::SetIndex(set) => {
+				set.typ = typ;
 				true
 			}
 			Expr::ArrayLit(lit) => {

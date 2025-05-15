@@ -489,6 +489,55 @@ impl<'db> TypeChecker<'db> {
 
 				elem_ty
 			}
+			Expr::SetIndex(set) => {
+				// Get the type of the dotted expression. This lets us look up
+				// the property on that type.
+				let arr_ty = self.check_expr(&mut set.value, value_used)?;
+
+				let elem_ty = match self.db.get(arr_ty).clone() {
+					Type::ArrayOf(elem) => elem,
+					_ => type_error!(self, &set.location, "Can only index an array.")
+				};
+
+				// We can't check the variable just like an Assign, as that
+				// will overwrite the type (the type is given by the array type).
+				// But, we do need to check that the RHS is assignable here.
+				let rhs = self.check_expr(&mut set.rhs, true)?;
+
+				let computed =
+					self.compute_assignable(elem_ty, rhs);
+
+				let computed = maybe_type_error!(
+					self,
+					computed,
+
+					&set.location,
+					"Invalid assignment to array: need {}, but value is {}",
+					self.db.repr_type(elem_ty),
+					self.db.repr_type(rhs)
+				);
+
+				// Promote the RHS based on the computed type.
+				set.rhs.promote(computed, self.db);
+
+
+				// Handle the index just like in Index.
+				let index_ty = self.check_expr(&mut set.index, true)?;
+				let index_computed = self.compute_assignable(self.db.types.int, index_ty);
+				
+				let index_computed = maybe_type_error!(self,
+					index_computed,
+					set.index.location(),
+					"Invalid index expression: Expression has type {}",
+					self.db.repr_type(index_ty)
+				);
+
+				set.index.promote(index_computed, self.db);
+
+				set.typ = elem_ty;
+
+				elem_ty
+			}
 			Expr::Variable(var) => self.db.get(var.identity).typ,
 			Expr::Assign(assign) => {
 				self.check_assign(&assign.location, assign.identity, &mut assign.value, false)?

@@ -1,0 +1,14 @@
+fun printout(arr: Array[int]) {
+    print(arr[0], arr[1], arr[2], arr[3]);
+}
+
+fun init() {
+    var arr = [0, 1, 2, 3];
+
+    printout(arr); //! 0123
+
+    arr[0] = 4;
+    arr[3] = 2;
+
+    printout(arr); //! 4122
+}
