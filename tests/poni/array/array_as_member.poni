@@ -1,0 +1,19 @@
+class Test {
+    // TODO:
+    // It would be nice to skip this first allocation of an empty array if
+    // we override it in the new {} expression. Maybe new {} should just
+    // generate the entire initializer for the class...???
+    var values: Array[int] = [];
+
+    fun print_them() {
+        print(values[0], values[1], values[2], values[3]);
+    }
+}
+
+fun init() {
+    var a = new Test { values: [0, 1, 2, 3] };
+    var b = new Test { values: [4, 5, 6, 7] };
+
+    a.print_them(); //! 0123
+    b.print_them(); //! 4567
+}

@@ -1,0 +1,85 @@
+class Leg {
+    var rotation: int = 0;
+    var length: int = 5;
+
+    fun repr() {
+        print("leg: ", rotation, " ", length)
+    }
+}
+
+class Horse {
+    var legs: Array[Leg] = [];
+
+    fun repr() {
+        legs[0].repr();
+        legs[1].repr();
+        legs[2].repr();
+        legs[3].repr();
+    }
+}
+
+fun init() {
+    var stable = [
+        new Horse {
+            legs: [
+                new Leg { rotation: 1, length: 3 },
+                new Leg { rotation: 2, length: 4 },
+                new Leg { rotation: 3, length: 5 },
+                new Leg { rotation: 4, length: 6 }
+            ]
+        },
+        new Horse {
+            legs: [
+                new Leg { rotation: 5, length: 9 },
+                new Leg { rotation: 6, length: 10 },
+                new Leg { rotation: 7, length: 11 },
+                new Leg { rotation: 8, length: 12 }
+            ]
+        }
+    ];
+
+    //! leg: 1 3
+    //! leg: 2 4
+    //! leg: 3 5
+    //! leg: 4 6
+    stable[0].repr();
+    //! leg: 5 9
+    //! leg: 6 10
+    //! leg: 7 11
+    //! leg: 8 12
+    stable[1].repr();
+
+    stable[0] = stable[1];
+    //! leg: 5 9
+    //! leg: 6 10
+    //! leg: 7 11
+    //! leg: 8 12
+    stable[0].repr();
+
+    stable[0].legs[0] = stable[0].legs[1];
+    stable[0].legs[0].rotation = 0;
+    stable[0].legs[0].length = 20;
+
+    //! leg: 0 20
+    //! leg: 0 20
+    //! leg: 7 11
+    //! leg: 8 12
+    stable[0].repr();
+    //! leg: 0 20
+    //! leg: 0 20
+    //! leg: 7 11
+    //! leg: 8 12
+    stable[1].repr();
+
+    stable[1].legs[0] = new Leg { rotation: 13, length: 37 }
+    //! leg: 13 37
+    //! leg: 0 20
+    //! leg: 7 11
+    //! leg: 8 12
+    stable[0].repr();
+    //! leg: 13 37
+    //! leg: 0 20
+    //! leg: 7 11
+    //! leg: 8 12
+    stable[1].repr();
+}

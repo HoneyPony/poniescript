@@ -150,7 +150,9 @@ pub fn generate(tests_file: &mut File) {
 		("array/", "array_set"),
 		("array/", "array_type_infer"),
 		("array/", "array_type_override"),
-		("array/", "array_type_parse")
+		("array/", "array_type_parse"),
+		("array/", "array_as_member"),
+		("array/", "array_class_deep_nesting"),
 	];
 
 	for (path, test) in tests {
