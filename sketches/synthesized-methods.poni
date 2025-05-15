@@ -1,0 +1,19 @@
+class Example {
+    // Creates a shallow clone of the object
+    fun clone_shallow() -> Example {}
+    
+    // Creates a deep clone of the object
+    fun clone_deep() -> Example {}
+
+    // Prints out a representation of the object
+    fun print() {}
+
+    // Converts the object to a string
+    fun str() -> StrBuf {}
+
+    // Formats the object to a given writer
+    fun fmt(f: Formatter) {}
+
+    // Draws the object to an immediate-mode UI
+    fun ui(ui: ImmUI) {}
+}
