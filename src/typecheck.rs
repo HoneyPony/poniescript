@@ -1,3 +1,5 @@
+use std::mem::MaybeUninit;
+
 use crate::db::*;
 use crate::module::Module;
 use crate::source::SourceLocation;
@@ -787,20 +789,40 @@ impl<'db> TypeChecker<'db> {
 				// Get the type of the dotted expression. This lets us look up
 				// the property on that type.
 				let lhs = self.check_expr(&mut get.lhs, true)?;
-				let property = self.db.lookup_property(lhs, get.identifier.lexeme);
+				if let Some(property) = self.db.lookup_property(lhs, get.identifier.lexeme) {
+					// We must actually store the looked-up property.
+					get.var = property;
 
-				let Some(property) = property else {
-					type_error!(self,
-						&get.location,
-						"Object of type '{}' has no such property '{}'",
-						self.db.repr_type(lhs),
-						self.db.get(get.identifier.lexeme));
-				};
+					return Ok(self.db.get_var_type(property));
+				}
 
-				// We must actually store the looked-up property.
-				get.var = property;
+				// Check for possible function capture. If so, then we turn this
+				// Get into a FunCapture.
+				if let Some(fun) = self.db.lookup_member_fn(lhs, get.identifier.lexeme) {
+					unsafe {
+						// TODO: Use MaybeUninit instead..?
+						// Apparently Rust really doesn't like us trying to take a Get.
+						// We can do the song and dance with the Default::default() instead,
+						// but this seems even more annoying.
+						let get_obj = std::mem::replace(expr, Default::default());
+						let Expr::Get(get_obj) = get_obj else { unreachable!() };
+						let as_funcapture = FunCapture {
+							location: get_obj.location,
+							identity: fun,
+							typ: self.db.types.unassigned,
+							object: Some(get_obj.lhs),
+						};
+						// Forget the (invalid) zeroed value that we created.
+						std::mem::forget(std::mem::replace(expr, Expr::FunCapture(as_funcapture)));
+					}
+					return self.check_expr(expr, value_used);
+				}
 
-				self.db.get_var_type(property)
+				type_error!(self,
+					&get.location,
+					"Object of type '{}' has no such property '{}'",
+					self.db.repr_type(lhs),
+					self.db.get(get.identifier.lexeme));
 			}
 
 			Expr::Set(set) => {

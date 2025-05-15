@@ -1,0 +1,28 @@
+class Horse {
+    // Note: This test is about storing specifically a 'fun' member of a class,
+    // NOT a variable of that class that stores a fun.
+    //
+    // Note this also means that the stored method will intrinsically be a bound
+    // method.
+
+    var greeting = "neigh";
+
+    fun neigh() {
+        print(greeting);
+    }
+}
+
+fun init() {
+    var horse = new Horse{};
+
+    // Because this function is bound to the Horse, its behavior can change
+    // when we change properties of the Horse.
+    var greet = horse.neigh;
+    greet(); //! neigh
+    
+    horse.greeting = "welcome";
+    greet(); //! welcome
+
+    horse.greeting = "neigh!";
+    greet(); //! neigh!
+}
