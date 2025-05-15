@@ -1,0 +1,12 @@
+fun do_stuff(arr: Array[Animal]) // can't pass Array[Horse]
+
+fun do_stuff(arr: const Array[Animal]) // now we can pass Array[Horse]
+
+fun do_stuff(arr: const Array[const Animal]) // also this...?
+
+fun do_stuff(slice: Slice[Animal]) // can't pass Slice[Horse]
+
+// we could make Slice const by default, you have to pass MutSlice...?
+
+
+// struct ps_slice_header { union { struct ps_arr_ *array; struct ps_list_ *list; } ps_int offset; ps_int length; }

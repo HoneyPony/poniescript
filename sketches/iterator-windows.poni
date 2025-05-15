@@ -1,0 +1,32 @@
+fun init() {
+    // man.. do we want destructuring...?
+    for (a, b) in arr.windows(2) {
+
+    }
+}
+
+class Array {
+    contents: []
+
+    struct Windows {
+        var stride: int;
+        var idx: int;
+
+        
+        impl Iterator {
+            // Pretend this can return a tuple and such
+            fun next() -> Option[Array[T]] {
+                if idx + stride >= length {
+                    return None;
+                }
+                var result = [contents[idx], contents[idx + 1], ...]
+                idx += 1;
+                return Some(result);
+            }
+        }
+    }
+
+    fun windows(x: int) -> Windows {
+        Windows { stride: x, idx: 0 }
+    }
+}

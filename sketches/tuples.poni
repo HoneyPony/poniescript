@@ -1,0 +1,63 @@
+fun do_stuff() -> (int, StrBuf) {
+    return (20, "hello");
+}
+
+fun another() -> (float, float, float) {
+    var x : int = 3;
+    // promotion
+    return (20, 10.5, x);
+}
+
+fun example3() {
+    // tuples of numbers convert to vector types
+    var point: vec3 = (1, 2, 3);
+}
+
+fun example4() {
+    var xy = ("abc", "123");
+
+    // destructuring
+    var (x, y) = xy;
+
+    var abc = (1, 2, 3);
+    var a = 2;
+    var b = 3;
+    var c = 5;
+
+    // destructuring doesn't have to be a declaration
+    (a, b, c) = abc;
+}
+
+class More {
+    var a;
+    var b;
+    var c;
+}
+
+fun example5() {
+    var abc = (1, 2, 3);
+    var m = new More{};
+
+    (m.a, m.b, m.c) = abc;
+}
+
+fun example6() {
+    var strs = ("a", "b", "c", "d", "e");
+    // Any tuple of all the same type can be iterated over
+    for s in strs {
+        print(s);
+    }
+
+    // All tuples have a length field, and .0, .1, etc
+    for i in range(0, strs.length) {
+        // Tuples of the same type have a [] operator
+        print(strs[i]);
+    }
+
+    fun slicer(slice: Slice[Str]) {
+
+    }
+
+    // Tuples of the same type can be passed as a Slice
+    slicer(strs);
+}
