@@ -257,12 +257,19 @@ impl<'db> Binder<'db> {
 			Expr::FunCapture(capt) => None,
 
 			Expr::UnboundFunCapture(unbound) => {
-				// If the UnboundFunCapture is on an object, we do need
-				// to visit that object.
+				// If the UnboundFunCapture is on an object, we need to visit
+				// that object, and we also can't even try to resolve it yet,
+				// as it's bound to an object, not to a scope.
 				if let Some(object) = &mut unbound.object {
 					self.visit_expr(object);
+					None
 				}
-				self.resolve_unbound_funcapture(unbound)
+				else {
+					// If it isn't on an object, then it must be capturing
+					// a function in the lexical scope, so we have to resolve
+					// it lexically.
+					self.resolve_unbound_funcapture(unbound)
+				}
 			},
 
 			Expr::FunDeclare(fun_declare) => {
