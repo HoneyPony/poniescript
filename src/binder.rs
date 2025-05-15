@@ -168,7 +168,7 @@ impl<'db> Binder<'db> {
 	}
 
 	fn resolve_expr(&mut self, expr: &mut Expr) -> Option<Expr> {
-		eprintln!("visit {:?}", expr);
+		// eprintln!("visit {:?}", expr);
 		match expr {
 			// For most expression types, we simply visit each inner expression
 			// and then return.
@@ -257,6 +257,11 @@ impl<'db> Binder<'db> {
 			Expr::FunCapture(capt) => None,
 
 			Expr::UnboundFunCapture(unbound) => {
+				// If the UnboundFunCapture is on an object, we do need
+				// to visit that object.
+				if let Some(object) = &mut unbound.object {
+					self.visit_expr(object);
+				}
 				self.resolve_unbound_funcapture(unbound)
 			},
 
