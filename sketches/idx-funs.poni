@@ -1,0 +1,4 @@
+class Container {
+    fun __get_idx__(idx: int) -> A {}
+    fun __set_idx__(idx: int, obj: A) {}
+}
