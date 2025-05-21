@@ -1,0 +1,23 @@
+struct MyTuple {
+    var v0: float;
+    var v1: int;
+    var v2: float;
+
+    fun __get_property__(property: StrConst) -> Option[Variant] {
+        match property {
+            "0" => Some(v0),
+            "1" => Some(v1),
+            "2" => Some(v2),
+            _ => None
+        }   
+    }
+
+    fun __set_property__(property: StrConst, value: Variant) -> Result[Variant, SetError] {
+        match property {
+            "0" => using v: float = value { Ok(v0 = v) } else { Err(SetError::WrongType(property, value)) },
+            "1" => Ok(v1 = value),
+            "2" => Ok(v2 = value),
+            _ => Err(SetError::PropertyDoesNotExist(property))
+        }
+    }
+}
