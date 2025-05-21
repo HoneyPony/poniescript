@@ -1,0 +1,51 @@
+trait Iterator[T] {
+    fun next() -> Option[T];
+}
+
+// vs
+
+fun my_iter() -> Option[T] { ... }
+
+// in particular...
+
+class Thing {
+    fun iter() -> Iterator[int] {
+        class It {
+            impl Iterator[T] {
+                fun next() -> Option[int] {
+                    None
+                }
+            }
+        }
+
+        return new It;
+    }
+}
+
+// vs...
+
+class Thing {
+    var number: int = 20;
+
+    fun iter() -> Iterator[int] {
+        var x = 0;
+        fun() -> Option[int] {
+            var prev = x;
+            x += 1;
+            if prev < number { Some(x) } else { None };
+        }
+    }
+}
+
+// struct closure_env { uint64_t obj; Thing *parent; int x; option_int (*fun)(); }
+//
+// struct impl_iterator *obj = NULL;
+// if(is_closure_env(sig.closure)) {
+//     obj = sig.closure;
+// }
+// else if(is_trait_impl(sig.fn, sig.closure, TRAIT_ITERATOR)) {
+//     obj = sig.closure;
+// }
+// else {
+//     obj = /* new BindSigToTrait { sig.fn, sig.closure } */ 
+// }
