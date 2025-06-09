@@ -1,0 +1,34 @@
+class Example {
+    impl Debug { fun fmt_debug(formatter: Fmt); }
+    impl CloneShallow[Example] { fun clone_shallow() -> Example; }
+    impl CloneDeep[Example] { fun clone_deep() -> Example; }
+    impl DrawImmUI { fun ui(ui: ImmUI); }
+}
+
+trait Debug {
+    fun fmt_debug(formatter: Fmt);
+
+    fun dbg() {
+        self.fmt_debug(IO.stderr);
+    }
+
+    fun str() -> StrBuf {
+        var s: StrBuf = "";
+        self.fmt_debug(s);
+        return s;
+    }
+}
+
+trait Display {
+    fun fmt_display(formatter: Fmt);
+
+    fun print() {
+        self.fmt_display(IO.stdout);
+    }
+
+    fun repr() -> StrBuf {
+        var s: StrBuf = "";
+        self.fmt_display(s);
+        return s;
+    }
+}

@@ -1,0 +1,58 @@
+// Any object that can be used as a slice requires that it can also be used as
+// a Sliceable.
+trait Slice[T] requires Sliceable[T] {
+    // maybe a good place for exceptions...?
+    fun get_index(idx: int)         -> Option[T];
+    fun set_index(idx: int, obj: T) -> Option[void];
+}
+
+trait Sliceable[T] {
+    fun slice(start: int, end: int) -> Option[Slice[T]];
+    //fun slice_mut(start: int, end: int) -> Option[Slice[mut T]]; //????
+}
+
+class ArraySlice[T] {
+    var parent: Array[T];
+    var start: int;
+    var length: int;
+
+    impl Slice[T] {
+        fun get_index(idx: int) -> Option[T] {
+            if idx < 0 || idx >= length { return none; }
+            return parent[idx + start];
+        }
+
+        fun set_index(idx: int, obj: T) -> Option[void] {
+            if idx < 0 || idx >= length { return none; }
+            parent[idx + start] = obj;
+            return some void;
+        }
+    }
+
+    impl Sliceable[T] {
+        fun slice(start: int, end: int) -> Option[Slice[T]] {
+            // todo better safety check..?
+            if start < 0 || end >= length { return none; }
+
+            return new ArraySlice[T] {
+                parent: self.parent,
+                start: start + self.start,
+                length: end - start
+            }
+        }
+    }
+}
+
+class Array[T] {
+    impl Sliceable[T] {
+        fun slice(start: int, end: int) -> Option[Slice[T]] {
+            if start < 0 || end >= length { return none; }
+
+            return new ArraySlice[T] {
+                parent: self,
+                start,
+                length: end - start
+            };
+        }
+    }
+}
