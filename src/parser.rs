@@ -477,6 +477,16 @@ impl<'a, 'b> Parser<'a, 'b> {
 		match self.peek_typ() {
 			Tok::LeftBrace => self.block(),
 
+			Tok::LeftParen => {
+				// Eat left paren
+				self.advance()?;
+				// Inner expression
+				let inner = self.expression()?;
+				// Expect right paren after expression
+				expected!(self, Tok::RightParen, "')' after parenthesized expression")?;
+				Ok(inner)
+			}
+
 			Tok::Identifier => self.expr_ident(),
 
 			Tok::If => self.expr_if(),
@@ -547,7 +557,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 	fn expr_prefix(&mut self) -> Result<Expr> {
 		match self.peek_typ() {
-			Tok::LeftBrace | Tok::Identifier | Tok::If | Tok::Fun => {
+			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Fun => {
 				let location = self.start();
 				let mut inner = self.expr_prefix_callable()?;
 

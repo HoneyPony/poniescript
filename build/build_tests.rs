@@ -18,6 +18,7 @@ pub fn generate(tests_file: &mut File) {
 	let tests = [
 		("binary/", "binary_doubleblock"),
 		("binary/", "binary_bottom"),
+		("binary/", "binary_parens"),
 
 		// print_nested: the last line is 345 because it should re-print each of the inner print()s.
 		("print/", "print_nested"),
@@ -115,6 +116,7 @@ pub fn generate(tests_file: &mut File) {
 		("misc/", "unused_expr"),
 
 		("parser/", "err_fun_missing_brace"),
+		("parser/", "err_missing_expr_paren"),
 
 		("call/", "call_captured_rev"),
 		("call/", "call_captured"),
