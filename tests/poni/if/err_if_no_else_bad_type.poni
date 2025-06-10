@@ -1,0 +1,6 @@
+fun init() {
+	//? Variable 'x' is type 'void' which is not a valid type for a variable.
+	var x = if true {
+		"hello"
+	};
+}

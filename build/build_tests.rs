@@ -69,9 +69,14 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "basic_if_expr_var"),
 		("if/", "basic_if_expr"),
 		("if/", "basic_if"),
+		("if/", "if_extra_parens"),
 		("if/", "if_no_else"),
 		("if/", "if_no_else_in_print"),
 		("if/", "if_fun_calls"),
+
+		("if/", "err_if_bad_condition"),
+		("if/", "err_if_incompat_types"),
+		("if/", "err_if_no_else_bad_type"),
 
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants"),
