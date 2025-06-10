@@ -1,0 +1,47 @@
+fun example1() -> int? {
+    if(thing) return none;
+    else return 5; // anything that is not itself the desired Option type is automatically promoted to some
+}
+
+fun example2(hello: int?) -> int?? {
+    if(thing) return none;
+    else return hello; // return some hello;
+}
+
+fun create_class() -> SomeClass? {
+    return new SomeClass { } // return some new SomeClass { }
+}
+
+fun takes_pointer(ptr: Object?) -> Object?? {
+    using ptr = ptr {
+        return ptr; // some some ptr
+    }
+
+    return ptr; // some <anything>
+}
+
+class Container {
+    var ponies: Array[Pony?];
+
+    impl Iterable[Pony?] {
+        fun iter() -> Iterator[Pony?] {
+            var i = 0;
+
+            fun () -> Pony?? {
+                var idx = i;
+                i += 1;
+                if idx < ponies.length {
+                    return ponies[idx]; // return some ponies[idx]
+                }
+                return none;
+            }
+        }
+    }
+}
+
+fun matches(ptr: Pony?) {
+    match ptr {
+        some pony => "yay",
+        none      => "neigh",
+    }
+}
