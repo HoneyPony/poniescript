@@ -7,6 +7,6 @@ class Something {
 }
 
 fun init() {
-    //? Should error that Something is different from Example
+    //? Invalid assignment to 'y': need Something, but value is Example
     var y : Something = new Example {};
 }

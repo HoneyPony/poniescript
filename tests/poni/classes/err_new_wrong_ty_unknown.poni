@@ -3,6 +3,6 @@ class Example {
 }
 
 fun init() {
-    //? Should be unable to resolve Something
+    //? Unknown named type 'Something'
     var y : Something = new Example {};
 }

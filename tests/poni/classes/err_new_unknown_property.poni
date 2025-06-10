@@ -3,7 +3,7 @@ class Test {
 }
 
 fun init() {
-    //? unknown property
+    //? Class 'Test' has no such property 'property'
     var y = new Test {
         property: 20
     };

@@ -1,7 +1,7 @@
 fun first() { }
 
-var first = 3; //? redefinition of first
+var first = 3; //? Redefinition of global name 'first'
 
 var second = 5;
 
-fun second() { } //? redefinition of second
+fun second() { } //? Redefinition of global name 'second'

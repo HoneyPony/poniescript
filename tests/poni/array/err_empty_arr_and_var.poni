@@ -1,4 +1,4 @@
 fun init() {
-    //? can't infer type without something inside the array.
+    //? Invalid assignment: Type annotations needed.
     var x = [];
 }

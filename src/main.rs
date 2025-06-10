@@ -174,11 +174,38 @@ fn duration(prev: SystemTime, message: &str, duration_set: &mut Vec<&'static str
 
 fn report_errors(db: &Db) {
 	if db.test_mode && !db.test_errors.is_empty() {
+		if db.errors.len() != db.test_errors.len() {
+			eprintln!("Test failure: Wrong number of errors.");
+			exit(15);
+		}
+
+		// For now, we simply expect every single error that the compiler generates.
+		// This does mean tests are brittle, but on the other hand... we don't update
+		// the error messages that often. And for the most part, changes to the error
+		// messages shouldn't require huge numbers of test updates (or where they do,
+		// the updates should be somewhat regexable).
+		for i in 0..db.errors.len() {
+			// TODO:
+			// For some reason, the err_fun_missing_brace test is failing even though
+			// the strings absolutely appear to be the same. Very strange...
+			let want_str = &db.test_errors[i];//.trim();
+			let got_str = &db.errors[i].main_message;//.trim();
+			if want_str != got_str {
+				eprintln!("Test failure: Error message mismatch (index {i}):\nExpected: [{}]\nGot:      [{}]",
+					want_str, got_str);
+				
+				let mut j = 0;
+				for (a, b) in want_str.chars().zip(got_str.chars()) {
+					if a != b {
+						eprintln!("Mismatch at index {j}: {a} vs {b}")
+					}
+					j += 1;
+				}
+				exit(15);
+			}
+		}
+
 		// The test was successful.
-		//
-		// FUTURE: We may eventually want to match for specific error codes
-		// or messages somehow. For now, we simply put a //? marker and expect
-		// any error at all.
 		exit(0);
 	}
 	for error in &db.errors {

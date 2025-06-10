@@ -3,6 +3,6 @@ class Test {
 }
 
 fun init() {
-    //? can't assign to a class
+    //? Cannot assign to a class.
     Test = 3;
 }

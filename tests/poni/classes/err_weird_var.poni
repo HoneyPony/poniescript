@@ -3,6 +3,6 @@ class Test {
 }
 
 fun init() {
-    //? x is not a real variable.
+    //? This should generate an error message, instead it crashes..????
     x = 20;
 }

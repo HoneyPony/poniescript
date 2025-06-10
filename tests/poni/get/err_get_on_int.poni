@@ -1,4 +1,4 @@
 fun init() {
     var x = 5;
-    print(x.property); //? should error
+    print(x.property); //? Object of type 'int' has no such property 'property'
 }
