@@ -30,6 +30,9 @@ pub fn generate(tests_file: &mut File) {
 		("print/", "print_dif_funs"),
 		("print/", "print_inner_return"),
 
+		("print/", "err_print_empty"),
+
+
 		("globals/", "global_block"),
 		// TODO: Figure out precise float output format we want.
 		("globals/", "globals_3"),
@@ -46,9 +49,17 @@ pub fn generate(tests_file: &mut File) {
 		("typecheck/", "promote_assumes_inside_block"),
 		("typecheck/", "promote_to_float_arithmetic"),
 		("typecheck/", "promote_to_float_assign"),
+		("typecheck/", "promote_to_float_block_assign_assumeint"),
+		("typecheck/", "promote_to_float_block_assign"),
+		("typecheck/", "promote_to_float_block_return"),
+		("typecheck/", "promote_to_float_return"),
 		("typecheck/", "str_types"),
 		("typecheck/", "return_block_return"), // Make sure this one at least compiles
-		// TODO: Add other tests when we get function calls
+
+		("typecheck/", "err_try_assign_float_for_int"),
+		("typecheck/", "err_try_return_float_for_int_short"),
+		("typecheck/", "err_try_return_float_for_int"),
+
 	
 		("string/", "simple_str"),
 		("string/", "str_of_strbuf"),
@@ -91,6 +102,8 @@ pub fn generate(tests_file: &mut File) {
 		("logical/", "short_or_expr_block"),
 		("logical/", "short_or_expr_doubleblock"),
 		("logical/", "or_bottom"),
+
+		("lexer/", "err_unterminated_string"),
 
 		("call/", "call_captured_rev"),
 		("call/", "call_captured"),
