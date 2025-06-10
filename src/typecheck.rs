@@ -109,10 +109,37 @@ impl<'db> TypeChecker<'db> {
 		let promoted = self.promote_ty_from_unassigned(ty);
 
 		if promoted != ty {
-			expr.promote(promoted, &self.db);
+			self.promote(expr, promoted);
 		}
 
 		promoted
+	}
+
+	// In order to properly promote to the Bottom type, we need to separaretly
+	// promote as if the value was unused.
+	//
+	// This is for cases like { 1 } * { return 5 }; where the left-hand side
+	// will be promoted to Bottom, but that doesn't do anything inside expr.promote.
+	//
+	// Instead, we have to manually promote that case.
+	//
+	// TODO: Is this correct? More testing is needed. It would also be nice to
+	// further simplify the bottom logic somehow.
+	fn promote(&mut self, expr: &mut Expr, ty: TypId) {
+		if ty == self.db.types.bottom {
+			// Special case: If we're promoting to bottom, then our expression
+			// is unused. So, instead promote to unassigned.
+			self.promote_from_unassigned(expr);
+			return;
+		}
+		expr.promote(ty, self.db);
+	}
+
+	fn promote_stmt(&mut self, stmt: &mut Stmt, ty: TypId) {
+		match stmt {
+			Stmt::Expression(expr) => self.promote(&mut expr.expression, ty),
+			_ => {}
+		}
 	}
 
 	fn promote_ty_from_unassigned(&mut self, ty: TypId) -> TypId {
@@ -285,7 +312,7 @@ impl<'db> TypeChecker<'db> {
 			}
 			self.db.get_mut(var).typ = computed;
 		}
-		expr.promote(computed, self.db);
+		self.promote(expr, computed);
 
 		Ok(computed)
 	}
@@ -311,8 +338,8 @@ impl<'db> TypeChecker<'db> {
 				);
 
 				binary.typ = computed;
-				binary.left.promote(computed, self.db);
-				binary.right.promote(computed, self.db);
+				self.promote(binary.left, computed);
+				self.promote(binary.right, computed);
 				
 				computed
 			},
@@ -337,7 +364,7 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				for value in &mut lit.values {
-					value.promote(final_ty, self.db);
+					self.promote(value, final_ty);
 				}
 
 				lit.elem_typ = final_ty;
@@ -369,8 +396,8 @@ impl<'db> TypeChecker<'db> {
 				// Keep track of the type that we're "doing the comparison as."
 				compare.compare_as = computed;
 
-				compare.left.promote(computed, self.db);
-				compare.right.promote(computed, self.db);
+				self.promote(compare.left, computed);
+				self.promote(compare.right, computed);
 
 				// Comparisons always return bool.
 				self.db.types.bool
@@ -395,8 +422,8 @@ impl<'db> TypeChecker<'db> {
 					"Invalid conditional expression in RHS to logical operator: Expression has type '{}'",
 					self.db.repr_type(right));
 
-				logical.left.promote(left_check, self.db);
-				logical.right.promote(right_check, self.db);
+				self.promote(logical.left, left_check);
+				self.promote(logical.right, right_check);
 
 				// Logical operators always return bool.
 				self.db.types.bool
@@ -413,7 +440,7 @@ impl<'db> TypeChecker<'db> {
 					"Invalid conditional expression: Expression has type '{}'",
 					self.db.repr_type(condition_ty));
 
-				if_.condition.promote(cond_computed, &self.db);
+				self.promote(if_.condition, cond_computed);
 
 				let then_ty = self.check_expr(&mut if_.then_branch, value_used)?;
 
@@ -460,8 +487,8 @@ impl<'db> TypeChecker<'db> {
 					error
 				});
 
-				if_.then_branch.promote(computed, &self.db);
-				else_branch.promote(computed, &self.db);
+				self.promote(if_.then_branch, computed);
+				self.promote(else_branch, computed);
 
 				if_.typ = computed;
 
@@ -485,7 +512,7 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(index_ty)
 				);
 
-				index.index.promote(index_computed, self.db);
+				self.promote(index.index, index_computed);
 
 				index.typ = elem_ty;
 
@@ -520,7 +547,7 @@ impl<'db> TypeChecker<'db> {
 				);
 
 				// Promote the RHS based on the computed type.
-				set.rhs.promote(computed, self.db);
+				self.promote(set.rhs, computed);
 
 
 				// Handle the index just like in Index.
@@ -534,7 +561,7 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(index_ty)
 				);
 
-				set.index.promote(index_computed, self.db);
+				self.promote(set.index, index_computed);
 
 				set.typ = elem_ty;
 
@@ -591,7 +618,7 @@ impl<'db> TypeChecker<'db> {
 				// Return the computed TypId.
 				block.typ = val;
 
-				stmt.promote(val, self.db);
+				self.promote_stmt(stmt, val);
 
 				val
 			},
@@ -669,7 +696,7 @@ impl<'db> TypeChecker<'db> {
 						self.db.repr_type(arg)
 					);
 
-					call.args[i].promote(computed, self.db);
+					self.promote(&mut call.args[i], computed);
 				}
 
 				self.db.get_fun_ret_type(call.identity)
@@ -687,7 +714,7 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(value));
 
 				// TODO: Also support FunRaw calling..?
-				call.value.promote(computed, &self.db);
+				self.promote(call.value, computed);
 
 				let correct_sig = match self.db.get(computed) {
 					Type::Fun(sig) => *sig,
@@ -728,7 +755,7 @@ impl<'db> TypeChecker<'db> {
 						self.db.repr_type(arg)
 					);
 
-					call.args[i].promote(computed, self.db);
+					self.promote(&mut call.args[i], computed);
 				}
 
 				self.db.get(call.sig).return_type
@@ -866,7 +893,7 @@ impl<'db> TypeChecker<'db> {
 				);
 
 				// Promote the RHS based on the computed type.
-				set.rhs.promote(computed, self.db);
+				self.promote(set.rhs, computed);
 
 				self.db.get_var_type(property)
 			}
@@ -1033,7 +1060,7 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(typ),
 					self.db.repr_type(return_type));
 
-				inner.promote(computed, self.db);
+				self.promote(inner, computed);
 
 				Ok(Some(self.db.types.bottom))
 			}
@@ -1083,7 +1110,7 @@ impl<'db> TypeChecker<'db> {
 				self.db.repr_type(inner),
 				self.db.repr_type(self.db.get_fun_return_typid(fun.identity)));
 		
-			fun.value.promote(computed, self.db);
+			self.promote(fun.value, computed);
 		}
 
 		Ok(())
