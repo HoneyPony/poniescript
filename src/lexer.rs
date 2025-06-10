@@ -268,6 +268,7 @@ impl Lexer {
 		enum CommentKind {
 			None,
 			TestLine,
+			TestErr,
 		}
 
 		let mut kind = CommentKind::None;
@@ -277,6 +278,10 @@ impl Lexer {
 				kind = CommentKind::TestLine;
 
 				// Start the buffer at the beginning of the line.
+				self.buffer.clear();
+			}
+			if self.advance_if('?')? {
+				kind = CommentKind::TestErr;
 				self.buffer.clear();
 			}
 		}
@@ -294,6 +299,11 @@ impl Lexer {
 			CommentKind::TestLine => {
 				let line = self.buffer.trim();
 				db.test_lines.push(line.to_string());
+			}
+
+			CommentKind::TestErr => {
+				let line = self.buffer.trim();
+				db.test_errors.push(line.to_string());
 			}
 		}
 

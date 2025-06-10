@@ -163,6 +163,7 @@ pub fn generate(tests_file: &mut File) {
 		("array/", "array_ref_semantics"),
 		("array/", "array_length"),
 		("array/", "array_complicated_signature"),
+		("array/", "err_empty_arr_and_var"),
 	];
 
 	for (path, test) in tests {

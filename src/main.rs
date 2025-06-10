@@ -173,6 +173,14 @@ fn duration(prev: SystemTime, message: &str, duration_set: &mut Vec<&'static str
 }
 
 fn report_errors(db: &Db) {
+	if db.test_mode && !db.test_errors.is_empty() {
+		// The test was successful.
+		//
+		// FUTURE: We may eventually want to match for specific error codes
+		// or messages somehow. For now, we simply put a //? marker and expect
+		// any error at all.
+		exit(0);
+	}
 	for error in &db.errors {
 		crate::error::show_error(&error, db);
 	}
@@ -264,6 +272,13 @@ fn main() {
 	// If we're in test mode, then we want to run the program and check its
 	// output.
 	if args.test_mode {
+		if !db.test_errors.is_empty() {
+			// In this case, we actually have an error: we expected the compilation
+			// to result in an error, but it didn't. So, report that to the test
+			// runner.
+			eprintln!("Test failure: Expected an error, but compilation suceeded.");
+			exit(15);
+		}
 		// We've already checked the output is an Exe, so just run it at
 		// that path.
 		match test_compiled(&args.output_path, &db) {
