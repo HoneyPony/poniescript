@@ -1,4 +1,4 @@
-use crate::{db::Db, expr::{ClassDeclare, Expr, Stmt}, module::Module};
+use crate::{db::Db, expr::{Block, ClassDeclare, Expr, Expression, Stmt}, module::Module};
 
 struct DeadCodeElim<'db> {
 	db: &'db mut Db,
@@ -10,6 +10,16 @@ impl<'db> DeadCodeElim<'db> {
 			db,
 		}
 	}
+
+    fn mk_pair(&mut self, left: Expr, right: Expr) -> Expr {
+        let left = Stmt::Expression(Expression { location: left.location().clone(), expression: left });
+        let right = Stmt::Expression(Expression { location: right.location().clone(), expression: right });
+        return Expr::Block(Block {
+            location: left.location().clone(),
+            stmts: vec![left, right],
+            typ: self.db.types.unassigned
+        })
+    }
 
     fn elim_expr(&mut self, expr: &mut Expr) -> bool {
         // Counterintuitive but true:
@@ -36,6 +46,9 @@ impl<'db> DeadCodeElim<'db> {
                 }
 
                 if self.elim_expr(&mut binary.right) {
+                    *expr = self.mk_pair(
+                    std::mem::take(binary.left),
+                    std::mem::take(binary.right));
                     return true;
                 }
 
