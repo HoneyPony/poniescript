@@ -1,0 +1,2 @@
+//? Trying to return a decimal number in function returning int
+fun t() -> int { return 1.0; }

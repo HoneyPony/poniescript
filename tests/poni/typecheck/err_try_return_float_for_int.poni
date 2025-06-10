@@ -1,0 +1,5 @@
+//? Trying to return a decimal number in function returning int
+fun test() -> int {
+	var x = 3.0;
+	return x;
+}
