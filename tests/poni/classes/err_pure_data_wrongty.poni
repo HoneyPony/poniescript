@@ -1,0 +1,4 @@
+class Data {
+    //? Invalid assignment to 'x': need int, but value is StrConst
+    var x : int = "hello";
+}

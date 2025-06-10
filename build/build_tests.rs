@@ -155,12 +155,18 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "basic_new_list"),
 		("classes/", "class_member_that_is_fun"),
 		("classes/", "class_member_function_capture"),
+		("classes/", "noout_data_and_fun_assign"),
+		("classes/", "noout_data_and_fun_read"),
+		("classes/", "noout_pure_data_complex"),
+		("classes/", "noout_pure_data_initializers"),
+		("classes/", "noout_pure_data"),
 
 		("classes/", "err_assign_to_class"),
 		("classes/", "err_get_nonexistent_member"),
 		("classes/", "err_new_unknown_property"),
 		("classes/", "err_new_wrong_ty_known"),
 		("classes/", "err_new_wrong_ty_unknown"),
+		("classes/", "err_pure_data_wrongty"),
 		("classes/", "err_try_to_read_class_in_initializer"),
 		("classes/", "err_weird_var"),
 
