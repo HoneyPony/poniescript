@@ -137,6 +137,11 @@ impl<'db> Binder<'db> {
 			}
 		}
 
+		self.db.report_error(Error::simple(
+			format!("Unknown identifier '{}'", self.db.get(ident)),
+			&location
+		));
+
 		self.had_error = true;
 		None
 	}

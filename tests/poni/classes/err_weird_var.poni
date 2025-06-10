@@ -3,6 +3,6 @@ class Test {
 }
 
 fun init() {
-    //? This should generate an error message, instead it crashes..????
+    //? Unknown identifier 'x'
     x = 20;
 }
