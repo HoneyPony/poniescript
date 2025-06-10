@@ -239,7 +239,7 @@ fn main() {
 
 	if had_error {
 		report_errors(&db);
-		exit(1);
+		exit(2);
 	}
 
 	let timer = duration(timer, "binding", &mut duration_set);
@@ -249,7 +249,7 @@ fn main() {
 
 	if had_error {
 		report_errors(&db);
-		exit(2);
+		exit(3);
 	}
 
 	let timer = duration(timer, "type check", &mut duration_set);
