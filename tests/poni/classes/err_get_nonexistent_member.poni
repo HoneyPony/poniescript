@@ -7,5 +7,5 @@ fun init() {
     var e = new Example{};
     print(e.x);
     print(e.y);
-    print(e.z); // compilation failure
+    print(e.z); //? member does not exist
 }

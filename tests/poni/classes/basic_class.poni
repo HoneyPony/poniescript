@@ -8,5 +8,5 @@ class Test {
 
 fun init() {
     var first = new Test { };
-    print(first.example(5));
+    print(first.example(5)); //! 16
 }

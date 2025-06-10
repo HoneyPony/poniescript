@@ -3,5 +3,6 @@ class Test {
 }
 
 fun init() {
+    //? x is not a real variable.
     x = 20;
 }

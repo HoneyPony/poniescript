@@ -4,6 +4,7 @@ class Example {
 }
 
 fun init() {
+    //? can't read from its own members in the initializer
     var e = new Example {
         a: e.b
     };

@@ -98,6 +98,7 @@ pub fn generate(tests_file: &mut File) {
 		("call/", "uses_fun_with_class_retval"),
 		("call/", "uses_fun_with_class_param"),
 
+		("classes/", "basic_class"),
 		("classes/", "basic_new_inferred_get"),
 		("classes/", "basic_new_inferred_get_promote"),
 		("classes/", "basic_new_explicit_get"),
@@ -119,6 +120,14 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "basic_new_list"),
 		("classes/", "class_member_that_is_fun"),
 		("classes/", "class_member_function_capture"),
+
+		("classes/", "err_assign_to_class"),
+		("classes/", "err_get_nonexistent_member"),
+		("classes/", "err_new_unknown_property"),
+		("classes/", "err_new_wrong_ty_known"),
+		("classes/", "err_new_wrong_ty_unknown"),
+		("classes/", "err_try_to_read_class_in_initializer"),
+		("classes/", "err_weird_var"),
 
 		("get/", "get_string_length"),
 

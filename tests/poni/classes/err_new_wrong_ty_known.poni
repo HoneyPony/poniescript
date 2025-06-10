@@ -7,6 +7,6 @@ class Something {
 }
 
 fun init() {
-    // Should error that Something is different from Example
+    //? Should error that Something is different from Example
     var y : Something = new Example {};
 }
