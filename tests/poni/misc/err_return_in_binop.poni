@@ -1,4 +1,5 @@
 fun example() -> int {
+	//? Value of function body is a decimal number but function returns int
 	{ 5.0; } + 
 	{ 3 + 4 + 10; } *
 	{ 1 * 2 * 3; };

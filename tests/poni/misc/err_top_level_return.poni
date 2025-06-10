@@ -1,0 +1,5 @@
+var x = {
+	//? Trying to return outside of a function.
+	3 + 4;
+	return 10;
+};

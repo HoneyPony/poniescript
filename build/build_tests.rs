@@ -63,6 +63,7 @@ pub fn generate(tests_file: &mut File) {
 	
 		("string/", "simple_str"),
 		("string/", "str_of_strbuf"),
+		("string/", "very_simple_str"),
 	
 		("functions/", "parse_params"),
 		("functions/", "param_trailing_comma"),
@@ -93,6 +94,8 @@ pub fn generate(tests_file: &mut File) {
 		("comparison/", "compare_constants"),
 		("comparison/", "compare_doubleblock"),
 
+		("lexer/", "err_unterminated_string"),
+
 		("logical/", "basic_and"),
 		("logical/", "basic_or"),
 		("logical/", "short_and"),
@@ -103,7 +106,15 @@ pub fn generate(tests_file: &mut File) {
 		("logical/", "short_or_expr_doubleblock"),
 		("logical/", "or_bottom"),
 
-		("lexer/", "err_unterminated_string"),
+		("misc/", "complex_return_in_binop"),
+		("misc/", "err_return_in_binop"),
+		("misc/", "err_top_level_return"),
+		("misc/", "noerr_return_in_binop"),
+		("misc/", "simple_var_exprs_and_infer"),
+		("misc/", "test_init"),
+		("misc/", "unused_expr"),
+
+		("parser/", "err_fun_missing_brace"),
 
 		("call/", "call_captured_rev"),
 		("call/", "call_captured"),
