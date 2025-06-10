@@ -3,5 +3,6 @@ fun my_fun() {
 }
 
 fun other() {
+    //? can't assign to a function
     my_fun = 20;
 }

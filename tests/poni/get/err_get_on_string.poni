@@ -1,4 +1,4 @@
 fun init() {
     var x : StrBuf = "hello";
-    print(x.property); // should error
+    print(x.property); //? should error
 }

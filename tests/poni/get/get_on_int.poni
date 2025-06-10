@@ -1,4 +1,0 @@
-fun init() {
-    var x = 5;
-    print(x.property); // should error
-}

@@ -1,0 +1,7 @@
+fun first() { }
+
+var first = 3; //? redefinition of first
+
+var second = 5;
+
+fun second() { } //? redefinition of second

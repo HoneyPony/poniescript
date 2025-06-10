@@ -38,6 +38,10 @@ pub fn generate(tests_file: &mut File) {
 		("globals/", "global_increment_indirect"),
 		("globals/", "global_mutate"),
 
+		("globals/", "err_global_fun_redefine"),
+		("globals/", "err_global_redefine"),
+		("globals/", "errTODO_bad_order"),
+
 		("typecheck/", "print_assume_int"),
 		("typecheck/", "promote_assumes_inside_block"),
 		("typecheck/", "promote_to_float_arithmetic"),
@@ -56,6 +60,8 @@ pub fn generate(tests_file: &mut File) {
 		("functions/", "call_promote"),
 		("functions/", "void_fun"),
 		("functions/", "fib"),
+
+		("functions/", "err_assign_to_fun"),
 
 		("scope/", "block_shadow"),
 
@@ -130,6 +136,8 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "err_weird_var"),
 
 		("get/", "get_string_length"),
+		("get/", "err_get_on_int"),
+		("get/", "err_get_on_string"),
 
 		("set/", "basic_set"),
 		("set/", "set_bottom"),

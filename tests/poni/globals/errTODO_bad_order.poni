@@ -1,0 +1,4 @@
+var first = second;
+var second = 5;
+//? for now, this is not allowed because we require the ordering
+// TODO: fix that.
