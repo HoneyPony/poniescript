@@ -1,4 +1,4 @@
-//? Expected '}' at end of block, got ''
+//? Expected '}' at end of block, got '<EOF>'
 fun test() {
 
 	

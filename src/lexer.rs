@@ -310,9 +310,20 @@ impl Lexer {
 		Ok(())
 	}
 
+	fn mk_eof(&mut self, db: &mut Db) -> std::io::Result<Token> {
+		// When at the EOF, create a lexeme that looks like <EOF> so that
+		// we can nicely output it.
+		//
+		// This also helps with a problem where before we were creating a
+		// lexeme of \0, making it very difficult to test against it.
+		self.buffer.clear();
+		self.buffer.push_str("<EOF>");
+		return self.mk_token_res(db, Tok::Eof);
+	}
+
 	pub fn next_token(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		if self.at_eof {
-			return self.mk_token_res(db, Tok::Eof);
+			return self.mk_eof(db);
 		}
 
 		let c = self.advance_past_whitespace()?;
@@ -386,7 +397,11 @@ impl Lexer {
 				}
 				
 				// TODO: Do we want to introduce a separate "error token" here?
-				Tok::Eof
+
+				// Note that if we're in the self.at_eof == true case, we do
+				// want to return an eof, because we really are there. (Here
+				// we should be matching on the \0 that we generate above.)
+				return self.mk_eof(db);
 			}
 		};
 
