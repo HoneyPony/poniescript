@@ -3,26 +3,33 @@
 The integration tests test the compiler end-to-end, with one of the following goals:
 
 1. Observing a correct write to standard output
-2. Observing a specific error code
+2. Observing a specific error message
 
-For now, neither of these cases are possible. But, here is the plan for generating tests in the future:
+This is accomplished through two special kinds of comments in the source code.
 
-1. Create the associated .poni file
-2. Create a new entry in /build/build_tests.rs that describes the .poni file name
-3. Create the expected test result
-    - This may involve one of the following as-of-yet undecided mechanisms:
-        1. Create a comment in the .poni file, such as // Expected: "result"
-        2. Create a #directive or similar in the .poni file describing the result
-        3. Simply add the information to build_tests.rs directly (this is likely the most straightforward, but makes the test scripts less directly useful).
+To test outputs, use `//!`. Each of these comments denotes exactly one line expected in the output. Additionally, the expected text is always trimmed. This means you can test lines of output like so:
 
-Finally, in order to do error codes, the following mechanism is used:
+```poniescript
+fun init() {
+    print("hello"); //! hello
+    print("world"); //! world
+}
+```
 
-1. Each error that we add to the compiler is given a UUID, created with `uuidgen -r`.
-2. The test simply expects an error with a given UUID. (Perhaps as well with a location, but this is less certain as those may be unstable).
+Notice that we do not have to explicitly list the newline anywhere. Also notice that we do nonetheless *expect* there to be a newline.
 
-It should be the case that the UUIDs never collide, due to the relatively small number of errors in the compiler. Note importantly that the code for an error should generally not change. If it does, of course, the affected tests will have to be fixed.
+To test error messages, use `//?`. Each of these denotes exactly one expected error message. So, for example,
+```poniescript
+//? Expected ')' after parenthesized expression, got ';'
+//? Expected 'var', 'const', 'class', or 'fun', got '<EOF>'
+var x = 2 * (3 + 4;
+```
 
-## Other checks
+Note that these are exact error messages. So in this example, although we're really trying to test the ')' error message, we must also include a second error message for the missing keyword. If the parser is ever updated to not report that second error, we will want to remove it from this test.
+
+This does mean that the error tests are much more fragile than the exepcted output tests. In particular, the expected output tests should keep working barring a change in actual language semantics, while the error tests will break just due to a change in error reporting (and this can be in the parser, the typechecker, etc). So, the intended path of development is that, whenever an error message is changed, simply update the relevant tests at that time.
+
+## Future work
 
 Some other test conditions we could consider including in the future include:
 
