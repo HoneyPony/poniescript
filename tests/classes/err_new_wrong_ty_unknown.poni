@@ -1,0 +1,8 @@
+class Example {
+
+}
+
+fun init() {
+    //? Unknown named type 'Something'
+    var y : Something = new Example {};
+}

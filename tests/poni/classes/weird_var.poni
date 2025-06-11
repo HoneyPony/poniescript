@@ -1,7 +1,0 @@
-class Test {
-    var x = 5;
-}
-
-fun init() {
-    x = 20;
-}

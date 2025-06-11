@@ -1,0 +1,3 @@
+//? Expected ')' after parenthesized expression, got ';'
+//? Expected 'var', 'const', 'class', or 'fun', got '<EOF>'
+var x = 2 * (3 + 4;

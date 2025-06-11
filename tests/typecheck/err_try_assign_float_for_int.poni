@@ -1,0 +1,10 @@
+fun fun1() {
+	var a = 10;
+	//? Invalid assignment to 'a': need int, but value is a decimal number
+	a = 5.0;
+}
+
+fun fun2() {
+	//? Invalid assignment to 'b': need int, but value is a decimal number
+	var b: int = 5.0;
+}

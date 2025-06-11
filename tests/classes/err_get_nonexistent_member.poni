@@ -1,0 +1,11 @@
+class Example {
+    var x = 20;
+    var y = 30;
+}
+
+fun init() {
+    var e = new Example{};
+    print(e.x);
+    print(e.y);
+    print(e.z); //? Object of type 'Example' has no such property 'z'
+}

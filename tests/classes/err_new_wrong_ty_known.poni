@@ -1,0 +1,12 @@
+class Example {
+
+}
+
+class Something {
+    
+}
+
+fun init() {
+    //? Invalid assignment to 'y': need Something, but value is Example
+    var y : Something = new Example {};
+}

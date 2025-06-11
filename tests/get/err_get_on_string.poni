@@ -1,0 +1,4 @@
+fun init() {
+    var x : StrBuf = "hello";
+    print(x.property); //? Object of type 'StrBuf' has no such property 'property'
+}

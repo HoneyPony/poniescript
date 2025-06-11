@@ -1,0 +1,8 @@
+class Test {
+    var data : int = 5;
+}
+
+fun init() {
+    //? Cannot assign to a class.
+    Test = 3;
+}

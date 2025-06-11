@@ -1,0 +1,9 @@
+fun test() {
+	//? Invalid conditional expression: Expression has type 'StrConst'
+	if "hello" {
+		print("hello");
+	}
+	else {
+		print("goodbye");
+	}
+}

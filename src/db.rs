@@ -110,6 +110,11 @@ pub struct Db {
 	/// Note that these do NOT include the newlines or carriage returns. Those
 	/// are assumed to already exist.
 	pub test_lines: Vec<String>,
+	/// Expected errors from the program.
+	/// 
+	/// For now, we do not expect any particular error string; if we have any
+	/// errors in the test_errors array, we simply expect the compilation to fail.
+	pub test_errors: Vec<String>,
 
 	/// Maps names of the form "scope.scope.Item" to ScopeEntries. Used to bind
 	/// names to specific objects.
@@ -197,6 +202,7 @@ impl Db {
 
 			test_mode: false,
 			test_lines: Vec::new(),
+			test_errors: Vec::new(),
 
 			sig_declare_code: String::new(),
 

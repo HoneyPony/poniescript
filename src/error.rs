@@ -23,7 +23,7 @@ struct Note {
 }
 
 pub struct Error {
-	main_message: String,
+	pub main_message: String,
 	main_location: SourceLocation,
 
 	is_warning: bool,

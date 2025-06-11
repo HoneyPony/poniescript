@@ -1,0 +1,8 @@
+fun my_fun() {
+    print("hello!");
+}
+
+fun other() {
+    //? Cannot assign to a function.
+    my_fun = 20;
+}

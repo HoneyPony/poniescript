@@ -1,0 +1,4 @@
+fun init() {
+	//? Parse error: Unterminated string
+	print("hello, world!);
+}

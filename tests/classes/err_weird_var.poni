@@ -1,0 +1,8 @@
+class Test {
+    var x = 5;
+}
+
+fun init() {
+    //? Unknown identifier 'x'
+    x = 20;
+}

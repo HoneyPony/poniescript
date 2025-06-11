@@ -1,0 +1,10 @@
+class Test {
+    var x = 10;
+}
+
+fun init() {
+    //? Class 'Test' has no such property 'property'
+    var y = new Test {
+        property: 20
+    };
+}

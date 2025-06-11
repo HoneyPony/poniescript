@@ -1,8 +1,0 @@
-class Example {
-
-}
-
-fun init() {
-    // Should be unable to resolve Something
-    var y : Something = new Example {};
-}

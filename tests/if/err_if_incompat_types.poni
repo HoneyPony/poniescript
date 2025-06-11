@@ -1,0 +1,9 @@
+fun test(val: bool) {
+	//? Branches of 'if' expression are incompatible: then has type 'a number' but else has type 'StrConst'
+	var x = if val {
+		3
+	}
+	else {
+		"hello"
+	};
+}

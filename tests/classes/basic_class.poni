@@ -1,0 +1,12 @@
+class Test {
+    var y: int = 10;
+
+    fun example(x: int) -> int {
+        return x + y + 1;
+    }
+}
+
+fun init() {
+    var first = new Test { };
+    print(first.example(5)); //! 16
+}

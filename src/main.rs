@@ -173,6 +173,41 @@ fn duration(prev: SystemTime, message: &str, duration_set: &mut Vec<&'static str
 }
 
 fn report_errors(db: &Db) {
+	if db.test_mode && !db.test_errors.is_empty() {
+		if db.errors.len() != db.test_errors.len() {
+			eprintln!("Test failure: Wrong number of errors.");
+			exit(15);
+		}
+
+		// For now, we simply expect every single error that the compiler generates.
+		// This does mean tests are brittle, but on the other hand... we don't update
+		// the error messages that often. And for the most part, changes to the error
+		// messages shouldn't require huge numbers of test updates (or where they do,
+		// the updates should be somewhat regexable).
+		for i in 0..db.errors.len() {
+			// TODO:
+			// For some reason, the err_fun_missing_brace test is failing even though
+			// the strings absolutely appear to be the same. Very strange...
+			let want_str = &db.test_errors[i];//.trim();
+			let got_str = &db.errors[i].main_message;//.trim();
+			if want_str != got_str {
+				eprintln!("Test failure: Error message mismatch (index {i}):\nExpected: [{}]\nGot:      [{}]",
+					want_str, got_str);
+				
+				let mut j = 0;
+				for (a, b) in want_str.chars().zip(got_str.chars()) {
+					if a != b {
+						eprintln!("Mismatch at index {j}: {a} vs {b}")
+					}
+					j += 1;
+				}
+				exit(15);
+			}
+		}
+
+		// The test was successful.
+		exit(0);
+	}
 	for error in &db.errors {
 		crate::error::show_error(&error, db);
 	}
@@ -204,7 +239,7 @@ fn main() {
 
 	if had_error {
 		report_errors(&db);
-		exit(1);
+		exit(2);
 	}
 
 	let timer = duration(timer, "binding", &mut duration_set);
@@ -214,7 +249,7 @@ fn main() {
 
 	if had_error {
 		report_errors(&db);
-		exit(2);
+		exit(3);
 	}
 
 	let timer = duration(timer, "type check", &mut duration_set);
@@ -264,6 +299,13 @@ fn main() {
 	// If we're in test mode, then we want to run the program and check its
 	// output.
 	if args.test_mode {
+		if !db.test_errors.is_empty() {
+			// In this case, we actually have an error: we expected the compilation
+			// to result in an error, but it didn't. So, report that to the test
+			// runner.
+			eprintln!("Test failure: Expected an error, but compilation suceeded.");
+			exit(15);
+		}
 		// We've already checked the output is an Exe, so just run it at
 		// that path.
 		match test_compiled(&args.output_path, &db) {

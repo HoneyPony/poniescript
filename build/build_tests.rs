@@ -1,23 +1,37 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write as _;
 
-fn generate_test(file: &mut File, path: &str, test_name: &str) -> std::io::Result<()> {
-	writeln!(file, "#[test]")?;
-	writeln!(file, "fn {test_name}() {{")?;
+struct BuiltTests {
+	modules: HashMap<String, String>
+}
+
+fn generate_test(bt: &mut BuiltTests, path: &str, test_name: &str) {
+	let out = if let Some(out) = bt.modules.get_mut(path) {
+		out
+	}
+	else {
+		bt.modules.insert(path.to_string(), "".to_string());
+		bt.modules.get_mut(path).unwrap()
+	};
+
+	use std::fmt::Write;
+
+	writeln!(out, "\t#[test]").unwrap();
+	writeln!(out, "\tfn {test_name}() {{").unwrap();
 
 	// We let the generated test code actually do the concat!.
 	let exe_path = format!("concat!(env!(\"CARGO_TARGET_TMPDIR\"), \"/{test_name}\")");
 
-	writeln!(file, "\trun_integration_test(\"tests/poni/{path}{test_name}.poni\", {exe_path});")?;
-	writeln!(file, "}}")?;
-
-	Ok(())
+	writeln!(out, "\t\trun_integration_test(\"tests/{path}{test_name}.poni\", {exe_path});").unwrap();
+	writeln!(out, "\t}}").unwrap();
 }
 
 pub fn generate(tests_file: &mut File) {
 	let tests = [
 		("binary/", "binary_doubleblock"),
 		("binary/", "binary_bottom"),
+		("binary/", "binary_parens"),
 
 		// print_nested: the last line is 345 because it should re-print each of the inner print()s.
 		("print/", "print_nested"),
@@ -30,6 +44,9 @@ pub fn generate(tests_file: &mut File) {
 		("print/", "print_dif_funs"),
 		("print/", "print_inner_return"),
 
+		("print/", "err_print_empty"),
+
+
 		("globals/", "global_block"),
 		// TODO: Figure out precise float output format we want.
 		("globals/", "globals_3"),
@@ -38,16 +55,29 @@ pub fn generate(tests_file: &mut File) {
 		("globals/", "global_increment_indirect"),
 		("globals/", "global_mutate"),
 
+		("globals/", "err_global_fun_redefine"),
+		("globals/", "err_global_redefine"),
+		("globals/", "errTODO_bad_order"),
+
 		("typecheck/", "print_assume_int"),
 		("typecheck/", "promote_assumes_inside_block"),
 		("typecheck/", "promote_to_float_arithmetic"),
 		("typecheck/", "promote_to_float_assign"),
+		("typecheck/", "promote_to_float_block_assign_assumeint"),
+		("typecheck/", "promote_to_float_block_assign"),
+		("typecheck/", "promote_to_float_block_return"),
+		("typecheck/", "promote_to_float_return"),
 		("typecheck/", "str_types"),
 		("typecheck/", "return_block_return"), // Make sure this one at least compiles
-		// TODO: Add other tests when we get function calls
+
+		("typecheck/", "err_try_assign_float_for_int"),
+		("typecheck/", "err_try_return_float_for_int_short"),
+		("typecheck/", "err_try_return_float_for_int"),
+
 	
 		("string/", "simple_str"),
 		("string/", "str_of_strbuf"),
+		("string/", "very_simple_str"),
 	
 		("functions/", "parse_params"),
 		("functions/", "param_trailing_comma"),
@@ -57,19 +87,28 @@ pub fn generate(tests_file: &mut File) {
 		("functions/", "void_fun"),
 		("functions/", "fib"),
 
+		("functions/", "err_assign_to_fun"),
+
 		("scope/", "block_shadow"),
 
 		("if/", "basic_if_expr_ret"),
 		("if/", "basic_if_expr_var"),
 		("if/", "basic_if_expr"),
 		("if/", "basic_if"),
+		("if/", "if_extra_parens"),
 		("if/", "if_no_else"),
 		("if/", "if_no_else_in_print"),
 		("if/", "if_fun_calls"),
 
+		("if/", "err_if_bad_condition"),
+		("if/", "err_if_incompat_types"),
+		("if/", "err_if_no_else_bad_type"),
+
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants"),
 		("comparison/", "compare_doubleblock"),
+
+		("lexer/", "err_unterminated_string"),
 
 		("logical/", "basic_and"),
 		("logical/", "basic_or"),
@@ -80,6 +119,17 @@ pub fn generate(tests_file: &mut File) {
 		("logical/", "short_or_expr_block"),
 		("logical/", "short_or_expr_doubleblock"),
 		("logical/", "or_bottom"),
+
+		("misc/", "complex_return_in_binop"),
+		("misc/", "err_return_in_binop"),
+		("misc/", "err_top_level_return"),
+		("misc/", "noerr_return_in_binop"),
+		("misc/", "simple_var_exprs_and_infer"),
+		("misc/", "test_init"),
+		("misc/", "unused_expr"),
+
+		("parser/", "err_fun_missing_brace"),
+		("parser/", "err_missing_expr_paren"),
 
 		("call/", "call_captured_rev"),
 		("call/", "call_captured"),
@@ -98,6 +148,7 @@ pub fn generate(tests_file: &mut File) {
 		("call/", "uses_fun_with_class_retval"),
 		("call/", "uses_fun_with_class_param"),
 
+		("classes/", "basic_class"),
 		("classes/", "basic_new_inferred_get"),
 		("classes/", "basic_new_inferred_get_promote"),
 		("classes/", "basic_new_explicit_get"),
@@ -119,8 +170,24 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "basic_new_list"),
 		("classes/", "class_member_that_is_fun"),
 		("classes/", "class_member_function_capture"),
+		("classes/", "noout_data_and_fun_assign"),
+		("classes/", "noout_data_and_fun_read"),
+		("classes/", "noout_pure_data_complex"),
+		("classes/", "noout_pure_data_initializers"),
+		("classes/", "noout_pure_data"),
+
+		("classes/", "err_assign_to_class"),
+		("classes/", "err_get_nonexistent_member"),
+		("classes/", "err_new_unknown_property"),
+		("classes/", "err_new_wrong_ty_known"),
+		("classes/", "err_new_wrong_ty_unknown"),
+		("classes/", "err_pure_data_wrongty"),
+		("classes/", "err_try_to_read_class_in_initializer"),
+		("classes/", "err_weird_var"),
 
 		("get/", "get_string_length"),
+		("get/", "err_get_on_int"),
+		("get/", "err_get_on_string"),
 
 		("set/", "basic_set"),
 		("set/", "set_bottom"),
@@ -163,9 +230,21 @@ pub fn generate(tests_file: &mut File) {
 		("array/", "array_ref_semantics"),
 		("array/", "array_length"),
 		("array/", "array_complicated_signature"),
+		("array/", "err_empty_arr_and_var"),
 	];
 
+	let mut bt = BuiltTests {
+		modules: HashMap::new()
+	};
 	for (path, test) in tests {
-		generate_test(tests_file, path, test).unwrap();
+		generate_test(&mut bt, path, test);
+	}
+	for (k, v) in &bt.modules {
+		// get rid of slash
+		let substr = &k[..k.len() - 1];
+		writeln!(tests_file, "mod r#{substr} {{").unwrap();
+		writeln!(tests_file, "\tuse crate::run_integration_test;").unwrap();
+		writeln!(tests_file, "{v}").unwrap();
+		writeln!(tests_file, "}}").unwrap();
 	}
 }

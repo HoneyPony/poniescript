@@ -1,8 +1,0 @@
-fun test() {
-	if "hello" {
-		print("hello");
-	}
-	else {
-		print("goodbye");
-	}
-}

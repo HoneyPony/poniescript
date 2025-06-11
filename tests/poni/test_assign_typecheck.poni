@@ -1,4 +1,0 @@
-fun test() {
-	var x: int = 5;
-	x = 10.0;
-}

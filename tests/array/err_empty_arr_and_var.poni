@@ -1,0 +1,4 @@
+fun init() {
+    //? Invalid assignment: Type annotations needed.
+    var x = [];
+}
