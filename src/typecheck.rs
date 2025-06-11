@@ -790,6 +790,21 @@ impl<'db> TypeChecker<'db> {
 
 				// If we're capturing the value from the function, make sure
 				// the sig is used.
+				
+				// Note: We actually have to use the sig unconditionally. See
+				// noout_pure_data_initializers.poni. Essentially, we can have
+				// something like:
+				// 
+				// fun whatever() {
+				//    fun helper() { }
+				//    print("a", helper(), "b");
+				// }
+				//
+				// And because the helper() value is not actually used by the
+				// print (?), the sig ends up not being used.
+				//
+				// Hmm. That doesn't seem right. Instead whatever is capturing
+				// the function should use the sig..?
 				if value_used {
 					self.db.use_sig(sig);
 				}
