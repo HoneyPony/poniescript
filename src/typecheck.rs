@@ -758,6 +758,8 @@ impl<'db> TypeChecker<'db> {
 					self.promote(&mut call.args[i], computed);
 				}
 
+				// TODO: Should ValCall's use_sig their sig?
+
 				self.db.get(call.sig).return_type
 			},
 
