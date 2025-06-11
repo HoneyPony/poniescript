@@ -1,17 +1,30 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write as _;
 
-fn generate_test(file: &mut File, path: &str, test_name: &str) -> std::io::Result<()> {
-	writeln!(file, "#[test]")?;
-	writeln!(file, "fn {test_name}() {{")?;
+struct BuiltTests {
+	modules: HashMap<String, String>
+}
+
+fn generate_test(bt: &mut BuiltTests, path: &str, test_name: &str) {
+	let out = if let Some(out) = bt.modules.get_mut(path) {
+		out
+	}
+	else {
+		bt.modules.insert(path.to_string(), "".to_string());
+		bt.modules.get_mut(path).unwrap()
+	};
+
+	use std::fmt::Write;
+
+	writeln!(out, "\t#[test]").unwrap();
+	writeln!(out, "\tfn {test_name}() {{").unwrap();
 
 	// We let the generated test code actually do the concat!.
 	let exe_path = format!("concat!(env!(\"CARGO_TARGET_TMPDIR\"), \"/{test_name}\")");
 
-	writeln!(file, "\trun_integration_test(\"tests/poni/{path}{test_name}.poni\", {exe_path});")?;
-	writeln!(file, "}}")?;
-
-	Ok(())
+	writeln!(out, "\t\trun_integration_test(\"tests/poni/{path}{test_name}.poni\", {exe_path});").unwrap();
+	writeln!(out, "\t}}").unwrap();
 }
 
 pub fn generate(tests_file: &mut File) {
@@ -220,7 +233,18 @@ pub fn generate(tests_file: &mut File) {
 		("array/", "err_empty_arr_and_var"),
 	];
 
+	let mut bt = BuiltTests {
+		modules: HashMap::new()
+	};
 	for (path, test) in tests {
-		generate_test(tests_file, path, test).unwrap();
+		generate_test(&mut bt, path, test);
+	}
+	for (k, v) in &bt.modules {
+		// get rid of slash
+		let substr = &k[..k.len() - 1];
+		writeln!(tests_file, "mod r#{substr} {{").unwrap();
+		writeln!(tests_file, "\tuse crate::run_integration_test;").unwrap();
+		writeln!(tests_file, "{v}").unwrap();
+		writeln!(tests_file, "}}").unwrap();
 	}
 }
