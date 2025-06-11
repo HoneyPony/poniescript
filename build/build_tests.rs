@@ -23,7 +23,7 @@ fn generate_test(bt: &mut BuiltTests, path: &str, test_name: &str) {
 	// We let the generated test code actually do the concat!.
 	let exe_path = format!("concat!(env!(\"CARGO_TARGET_TMPDIR\"), \"/{test_name}\")");
 
-	writeln!(out, "\t\trun_integration_test(\"tests/poni/{path}{test_name}.poni\", {exe_path});").unwrap();
+	writeln!(out, "\t\trun_integration_test(\"tests/{path}{test_name}.poni\", {exe_path});").unwrap();
 	writeln!(out, "\t}}").unwrap();
 }
 
