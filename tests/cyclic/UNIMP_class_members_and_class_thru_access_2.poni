@@ -5,8 +5,16 @@ class Wrapper {
 }
 
 class Example {
-    // Note: This requires us to have "default-new" implemented.
-    var value = b + c;
+    var value = new Bee{}.val + new Cee{}.val;
+}
+
+class Bee {
+    // Doesn't make sense for classes...
+    var val = b;
+}
+
+class Cee {
+    var val = c;
 }
 
 fun init() {

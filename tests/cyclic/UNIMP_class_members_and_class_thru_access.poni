@@ -5,15 +5,8 @@ class Wrapper {
 }
 
 class Example {
-    var value = new Bee{}.val + new Cee{}.val;
-}
-
-class Bee {
-    var val = b;
-}
-
-class Cee {
-    var val = c;
+    // This doesn't make sense for classes...
+    var value = b + c;
 }
 
 fun init() {
