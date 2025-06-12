@@ -1,0 +1,32 @@
+class Example {
+    // Not possible: test1 wants to take self as a param,
+    // so the class needs to already be initialized.
+    var a1 = test1();
+
+    fun test1() -> int {
+        return b + c;
+    }
+
+    // Not possible: test2 wants to take self as a param,
+    // so even though the data is only based on the parameters,
+    // the class still must be initialized.
+    //
+    // Note: Maybe we will want an optimization that converts
+    // methods that don't use self into static methods.
+    var a2 = test2(b, c);
+
+    fun test2(x: int, y: int) -> int {
+        return x + y;
+    }
+
+    var b = 10;
+    var c = 20;
+}
+
+fun test() -> int {
+    return b * c;
+}
+
+fun init() {
+    print(a, " ", b, " ", c); //! 200 10 20
+}

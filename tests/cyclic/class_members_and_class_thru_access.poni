@@ -1,0 +1,15 @@
+class Wrapper {
+    var a = new Example { }.value;
+    var b = 10;
+    var c = 20;
+}
+
+class Example {
+    // Note: This requires us to have "default-new" implemented.
+    var value = b + c;
+}
+
+fun init() {
+    var w = new Wrapper{};
+    print(w.a, " ", w.b, " ", w.c); //! 30 10 20
+}

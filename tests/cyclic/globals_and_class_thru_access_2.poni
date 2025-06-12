@@ -1,0 +1,19 @@
+var a = new Example { }.value;
+var b = 10;
+var c = 20;
+
+class Example {
+    var value = new Bee{}.val + new Cee{}.val;
+}
+
+class Bee {
+    var val = b;
+}
+
+class Cee {
+    var val = c;
+}
+
+fun init() {
+    print(a, " ", b, " ", c); //! 30 10 20
+}

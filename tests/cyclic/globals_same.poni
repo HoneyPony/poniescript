@@ -1,0 +1,7 @@
+var a = b;
+var b = c;
+var c = 1;
+
+fun init() {
+    print(a, " ", b, " ", c); //! 1 1 1
+}

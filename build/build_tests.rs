@@ -33,6 +33,19 @@ pub fn generate(tests_file: &mut File) {
 		("binary/", "binary_bottom"),
 		("binary/", "binary_parens"),
 
+		("cyclic/", "class_members_and_class_thru_access_2"),
+		("cyclic/", "class_members_and_class_thru_access"),
+		("cyclic/", "class_members_and_fun_thru_param"),
+		("cyclic/", "class_members_expr"),
+		("cyclic/", "class_members_same"),
+		("cyclic/", "globals_and_class_thru_access_2"),
+		("cyclic/", "globals_and_class_thru_access"),
+		("cyclic/", "globals_and_fun_thru_access_2"),
+		("cyclic/", "globals_and_fun_thru_access"),
+		("cyclic/", "globals_and_fun_thru_param"),
+		("cyclic/", "globals_expr"),
+		("cyclic/", "globals_same"),
+
 		// print_nested: the last line is 345 because it should re-print each of the inner print()s.
 		("print/", "print_nested"),
 		("print/", "print_string_literal"),

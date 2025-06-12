@@ -1,0 +1,74 @@
+// The following is technically implementable in the code. helper
+// is never called inside test, only referred to. So, technically
+// this could compile.
+var a = test();
+
+fun test() -> fun(x: int) -> int {
+    fun helper(x: int) -> int {
+        if(x < 0) return 0;
+
+        return a(x - 1) + 1;
+    }
+
+    return helper;
+}
+
+// But now this is definitely a violation, because helper *could* be
+// called, even though it can't be.
+var b = test2();
+
+fun test2() -> fun(x: int) -> int {
+    fun helper(x: int) -> int {
+        if(x < 0) return 0;
+
+        return b(x - 1) + 1;
+    }
+
+    var fake = fun(x: int) -> int { x };
+    if(false) { fake = helper; }
+
+    print(fake(5));
+
+    return helper;
+}
+
+// But wait. This could be allowed, even without needing to DCE the if(false),
+// but now there's a new problem.
+//
+// Essentially, we have to do escape analysis if we want to say this is valid.
+// That is, we must prove that 'helper' is never stored into a variable that
+// might be called by test3. 
+var c = test3();
+
+fun test3() -> fun(x: int) -> int {
+    fun helper(x: int) -> int {
+        if(x < 0) return 0;
+
+        return c(x - 1) + 1;
+    }
+
+    var proxy = fun(x: int) -> int { x };
+    proxy = helper;
+
+    return helper;
+}
+
+// Which means something like:
+class A { var the_fun: fun(int) -> int; }
+
+fun test4() {
+    // ...
+    var a: A = get_a();
+    a.the_fun = helper;
+
+    // Now whether this sequence works depends on what the expression
+    // 'get_a' is. If it's local to this function, then we could allow this
+    // code, but if it's not, then we can't.
+    return helper;
+}
+
+// Overall, it seems like the best solution might be to just forbid any circular
+// reference where a function *syntactically* refers to a variable that refers to
+// that function. This would mean that changes to the function code beyond just
+// adding/removing a reference to the var could not possibly change the cyclic
+// behavior, which seems like a good thing.

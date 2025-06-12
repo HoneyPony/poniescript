@@ -1,0 +1,18 @@
+// The compiler needs to figure out that a gets initialized after
+// b & c, specifically because they're both needed by test(),
+// and in this case, because bee() needs b and test() needs bee().
+var a = test();
+var b = 10;
+var c = 20;
+
+fun test() -> int {
+    return bee() * c;
+}
+
+fun bee() -> int {
+    return b + 5;
+}
+
+fun init() {
+    print(a, " ", b, " ", c); //! 300 10 20
+}

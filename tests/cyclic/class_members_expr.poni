@@ -1,0 +1,10 @@
+class Example {
+    var a = b + 30;
+    var b = c * 20;
+    var c = 1;
+}
+
+fun init() {
+    var x = new Example{};
+    print(x.a, " ", x.b, " ", x.c); //! 50 20 1
+}

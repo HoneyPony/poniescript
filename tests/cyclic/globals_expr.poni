@@ -1,0 +1,7 @@
+var a = b + 30;
+var b = c * 20;
+var c = 1;
+
+fun init() {
+    print(a, " ", b, " ", c); //! 50 20 1
+}

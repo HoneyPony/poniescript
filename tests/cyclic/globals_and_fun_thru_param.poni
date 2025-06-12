@@ -1,0 +1,13 @@
+// The compiler needs to figure out that a gets initialized after
+// b & c.
+var a = test(b, c);
+var b = 10;
+var c = 20;
+
+fun test(x: int, y: int) -> int {
+    return x * y;
+}
+
+fun init() {
+    print(a, " ", b, " ", c); //! 200 10 20
+}
