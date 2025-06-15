@@ -347,7 +347,7 @@ impl Db {
 
 		let leaked = str.to_owned().leak();
 
-		let id = IdFuncs::<StrId, &'static str>::push(self, leaked);
+		let id = IdFuncs::<StrId>::push(self, leaked);
 		self.str_side_map.insert(leaked.to_string(), id);
 
 		return id;
@@ -524,7 +524,7 @@ impl Db {
 			return *existing;
 		}
 
-		let id: StrConstId = IdFuncs::<StrConstId, &'static str>::push(self, string.to_string().leak());
+		let id: StrConstId = IdFuncs::<StrConstId>::push(self, string.to_string().leak());
 		self.str_simple_const_map.insert(string.to_string(), id);
 		id
 	}
@@ -963,12 +963,12 @@ impl Iterator for StrConstIter {
 }
 
 /// Lets the Db implement some functions for every type of id.
-pub trait IdFuncs<Id, T> {
-	/// TODO: Consider making 'T' a type of IdFuncs, so it is only parameterized
-	/// by Id.
-	fn get(&self, id: Id) -> &T;
+pub trait IdFuncs<Id> {
+	type Object;
 
-	fn get_mut(&mut self, id: Id) -> &mut T;
+	fn get(&self, id: Id) -> &Self::Object;
 
-	fn push(&mut self, t: T) -> Id;
+	fn get_mut(&mut self, id: Id) -> &mut Self::Object;
+
+	fn push(&mut self, t: Self::Object) -> Id;
 }

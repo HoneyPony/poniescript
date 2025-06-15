@@ -26,7 +26,9 @@ fn generate_id(file: &mut File, name: &str, ty: &str, arena: &str) -> std::io::R
 	//writeln!(file, "\tpub fn from_usize(v: usize) -> Self {{ {name}(v as {TY}) }}")?;
 	writeln!(file, "}}\n")?;
 
-	writeln!(file, "impl IdFuncs<{name}, {ty}> for Db {{")?;
+	writeln!(file, "impl IdFuncs<{name}> for Db {{")?;
+
+	writeln!(file, "\ttype Object = {ty};")?;
 
 	writeln!(file, "\tfn get(&self, id: {name}) -> &{ty} {{")?;
 	writeln!(file, "\t\tunsafe {{ self.arenas.{arena}.get_unchecked(id.to_usize()) }} ")?;
