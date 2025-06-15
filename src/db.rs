@@ -703,21 +703,6 @@ impl Db {
 			_ => true,
 		}
 	}
-
-	pub fn var_range(&self) -> VarIter {
-		// TODO: Implement this as something over Arena..?
-		return VarIter { 
-			len: self.arenas.arena_var.len() as IdType,
-			current: 0
-		};
-	}
-
-	pub fn str_const_range(&self) -> StrConstIter {
-		return StrConstIter {
-			len: self.arenas.arena_strconst.len() as IdType,
-			current: 0
-		}
-	}
 	
 	pub fn lookup_property(&self, typ: TypId, propname: StrId) -> Option<VarId> {
 		let ty = self.get(typ);
@@ -909,47 +894,6 @@ impl Db {
 		for elem_ty in arrays {
 			self.gen_array(elem_ty);
 		}
-	}
-}
-
-pub struct VarIter {
-	len: IdType,
-	current: IdType,
-}
-
-impl Iterator for VarIter {
-	type Item = VarId;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		let result = if self.current == self.len {
-			None
-		}
-		else { unsafe { Some(VarId::from_index(self.current as usize)) } };
-
-		self.current += 1;
-
-		result
-	}
-}
-
-// TODO: Just generate these using build_db.rs
-pub struct StrConstIter {
-	len: IdType,
-	current: IdType,
-}
-
-impl Iterator for StrConstIter {
-	type Item = StrConstId;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		let result = if self.current == self.len {
-			None
-		}
-		else { unsafe { Some(StrConstId::from_index(self.current as usize)) } };
-
-		self.current += 1;
-
-		result
 	}
 }
 

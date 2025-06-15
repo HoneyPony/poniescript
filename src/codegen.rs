@@ -1214,7 +1214,7 @@ impl<'a> Codegen<'a> {
 
 	fn compile_string_constant_init(&mut self, define: &mut String, init: &mut String) {
 		inf_writeln!(init, "void poni_init_strings(void) {{");
-		for id in self.db.str_const_range() {
+		for id in self.db.iter_strconst() {
 			inf_writeln!(define, "const ps_str* ps_str_const{} = NULL;", id.to_index());
 			inf_writeln!(init, "\tps_str_const{} = ps_str_from_literal({});",
 				id.to_index(), self.db.get(id));
