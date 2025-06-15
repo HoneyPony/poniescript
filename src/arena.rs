@@ -55,10 +55,41 @@ pub struct Arena<Ty, Key: ArenaKey> {
     phantom: PhantomData<Key>
 }
 
+pub struct ArenaIterator<'arena, Ty, Key: ArenaKey> {
+    len: usize,
+    current: usize,
+
+    phantom: PhantomData<&'arena Arena<Ty, Key>>
+}
+
+impl<'arena, Ty, Key: ArenaKey> std::iter::Iterator for ArenaIterator<'arena, Ty, Key> {
+    type Item = Key;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current == self.len {
+            return None;
+        }
+
+        let result = unsafe { Some(Key::from_index(self.current)) };
+
+        self.current += 1;
+
+        result
+    }
+}
+
 impl<Ty, Key: ArenaKey> Arena<Ty, Key> {
     pub fn new() -> Self {
         Arena {
             objects: Vec::new(),
+            phantom: PhantomData{}
+        }
+    }
+
+    pub fn iter(&self) -> ArenaIterator<Ty, Key> {
+        ArenaIterator {
+            len: self.objects.len(),
+            current: 0,
             phantom: PhantomData{}
         }
     }

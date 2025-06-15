@@ -784,13 +784,9 @@ impl Db {
 	}
 
 	fn generate_var_cnames_cache(&mut self) {
-		let range = self.arenas.arena_var.len() as IdType;
-
 		let mut used_set = FxHashMap::<StrId, u64>::default();
 
-		for id in 0..range {
-			let var = unsafe { VarId::from_index(id as usize) };
-
+		for var in self.arenas.arena_var.iter() {
 			if let Some(desired) = self.known_var_cnames.get(&var) {
 				self.var_cname_cache.push(desired);
 				continue;
@@ -815,13 +811,9 @@ impl Db {
 	}
 
 	fn generate_class_cnames_cache(&mut self) {
-		let range = self.arenas.arena_class.len() as IdType;
-
 		let mut used_set = FxHashMap::<StrId, u64>::default();
 
-		for id in 0..range {
-			let class = unsafe { ClassId::from_index(id as usize) };
-
+		for class in self.arenas.arena_class.iter() {
 			let str_id = self.get(class).name.lexeme;
 			let cname = match used_set.entry(str_id) {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
@@ -843,13 +835,10 @@ impl Db {
 	}
 
 	fn generate_fun_cnames_cache(&mut self) {
-		let range = self.arenas.arena_fun.len() as IdType;
 
 		let mut used_set = FxHashMap::<StrId, u64>::default();
 
-		for id in 0..range {
-			let fun = unsafe { FunId::from_index(id as usize) };
-
+		for fun in self.arenas.arena_fun.iter() {
 			// TODO: Actual name mangling and such
 			let cname_id = if let Some(name) = &self.get(fun).name {
 				name.lexeme
@@ -873,10 +862,7 @@ impl Db {
 	}
 
 	fn generate_fun_cparams_cache(&mut self) {
-		let range = self.arenas.arena_fun.len() as IdType;
-
-		for id in 0..range {
-			let id = unsafe { FunId::from_index(id as usize) };
+		for id in self.arenas.arena_fun.iter() {
 			let mut buffer = String::new();
 
 			let mut comma = false;
