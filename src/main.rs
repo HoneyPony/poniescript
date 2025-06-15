@@ -1,3 +1,4 @@
+mod arena;
 mod db;
 mod expr;
 mod typ;
