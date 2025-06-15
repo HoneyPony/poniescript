@@ -233,7 +233,7 @@ impl Db {
 		db.types.assume_float = db.put_type(Type::AssumeFloat);
 		db.types.assume_int = db.put_type(Type::AssumeInt);
 
-		db.synthetic = db.new_id(Source::Synthetic);
+		db.synthetic = db.push(Source::Synthetic);
 
 		db.sig_unassigned = db.put_sig(&Sig {
 			parameters: vec![],
@@ -284,7 +284,7 @@ impl Db {
 			class: None,
 			init: false,
 		};
-		let var = self.new_id(var);
+		let var = self.push(var);
 
 		self.known_var_cnames.insert(var, cname);
 
@@ -296,7 +296,7 @@ impl Db {
 			return *existing;
 		}
 
-		let id = self.new_id(sig.clone());
+		let id = self.push(sig.clone());
 
 		self.sig_side_map.insert(sig.clone(), id);
 
@@ -347,7 +347,7 @@ impl Db {
 
 		let leaked = str.to_owned().leak();
 
-		let id = IdFuncs::<StrId, &'static str>::new_id(self, leaked);
+		let id = IdFuncs::<StrId, &'static str>::push(self, leaked);
 		self.str_side_map.insert(leaked.to_string(), id);
 
 		return id;
@@ -361,7 +361,7 @@ impl Db {
 		let buf = path.to_path_buf();
 		let source = Source::new(buf.clone());
 
-		let id = self.new_id(source);
+		let id = self.push(source);
 		self.source_side_map.insert(buf, id);
 
 		return id;
@@ -383,7 +383,7 @@ impl Db {
 			_ => { }
 		}
 
-		let id = self.new_id(typ.clone());
+		let id = self.push(typ.clone());
 		self.type_side_map.insert(typ, id);
 
 		return id;
@@ -524,7 +524,7 @@ impl Db {
 			return *existing;
 		}
 
-		let id: StrConstId = IdFuncs::<StrConstId, &'static str>::new_id(self, string.to_string().leak());
+		let id: StrConstId = IdFuncs::<StrConstId, &'static str>::push(self, string.to_string().leak());
 		self.str_simple_const_map.insert(string.to_string(), id);
 		id
 	}
@@ -566,7 +566,7 @@ impl Db {
 			init
 		};
 
-		return self.new_id(var);
+		return self.push(var);
 	}
 
 	pub fn get_cname(&self, var: VarId) -> &'static str {
@@ -970,5 +970,5 @@ pub trait IdFuncs<Id, T> {
 
 	fn get_mut(&mut self, id: Id) -> &mut T;
 
-	fn new_id(&mut self, t: T) -> Id;
+	fn push(&mut self, t: T) -> Id;
 }

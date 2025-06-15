@@ -1006,7 +1006,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let name_str = name.as_ref().map(|t| t.lexeme);
 
 		// TODO: Maybe make this also take a non-ref for speed?
-		let identity = self.db.new_id(Fun {
+		let identity = self.db.push(Fun {
 			name,
 			parameters,
 			return_type,
@@ -1112,7 +1112,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_id(Class {
+		let identity = self.db.push(Class {
 			name,
 			vars,
 			funs,

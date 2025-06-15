@@ -36,7 +36,7 @@ fn generate_id(file: &mut File, name: &str, ty: &str, arena: &str) -> std::io::R
 	writeln!(file, "\t\tunsafe {{ self.arenas.{arena}.get_unchecked_mut(id.to_usize()) }} ")?;
 	writeln!(file, "\t}}")?;
 
-	writeln!(file, "\tfn new_id(&mut self, item: {ty}) -> {name} {{")?;
+	writeln!(file, "\tfn push(&mut self, item: {ty}) -> {name} {{")?;
 	writeln!(file, "\t\tlet index = self.arenas.{arena}.len() as {TY};")?;
 	writeln!(file, "\t\tself.arenas.{arena}.push(item);")?;
 	writeln!(file, "\t\t{name}(index)")?;
