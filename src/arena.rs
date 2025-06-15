@@ -53,7 +53,7 @@ impl<Ty, Key: ArenaKey> Arena<Ty, Key> {
         }
     }
 
-    pub fn add(&mut self, object: Ty) {
+    pub fn push(&mut self, object: Ty) {
         self.objects.push(object);
     }
 
@@ -147,7 +147,7 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
         }
     }
 
-    pub fn add(&mut self, object: Ty) -> Key {
+    pub fn push(&mut self, object: Ty) -> Key {
         self.objects.get_mut().push(object);
         
         #[cfg(debug_assertions)]
@@ -224,7 +224,7 @@ mod tests {
         let mut keys: Vec<TestId> = vec![];
 
         for _ in 0..5 {
-            keys.push(arena.add(10));
+            keys.push(arena.push(10));
         }
 
         fn update_all(arena: &ArenaCell<i32, TestId>, keys: &Vec<TestId>) {
@@ -246,8 +246,8 @@ mod tests {
     #[should_panic(expected = "ArenaCell: double-borrow for 0 (second mutable borrow)")]
     fn test_failure_mut() {
         let mut arena = ArenaCell::<i32, TestId>::new();
-        let a = arena.add(5);
-        arena.add(10);
+        let a = arena.push(5);
+        arena.push(10);
 
         let a_borrow = arena.get_mut(a);
         // should panic
@@ -261,8 +261,8 @@ mod tests {
     #[should_panic(expected = "ArenaCell: double-borrow for 0 (immutable borrow during mutable borrow)")]
     fn test_failure_immut() {
         let mut arena = ArenaCell::<i32, TestId>::new();
-        let a = arena.add(5);
-        arena.add(10);
+        let a = arena.push(5);
+        arena.push(10);
 
         let a_borrow = arena.get_mut(a);
         // should panic
