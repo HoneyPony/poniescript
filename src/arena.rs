@@ -39,6 +39,45 @@ macro_rules! define_arena_key {
         }
     }
 }
+
+struct Arena<Ty, Key: ArenaKey> {
+    objects: Vec<Ty>,
+    phantom: PhantomData<Key>
+}
+
+impl<Ty, Key: ArenaKey> Arena<Ty, Key> {
+    pub fn new() -> Self {
+        Arena {
+            objects: Vec::new(),
+            phantom: PhantomData{}
+        }
+    }
+
+    pub fn add(&mut self, object: Ty) {
+        self.objects.push(object);
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn get(&self, key: Key) -> &Ty {
+        self.objects.get(key.to_index()).unwrap()
+    }
+
+    #[cfg(not(debug_assertions))]
+    pub fn get(&self, key: Key) -> &Ty {
+        unsafe { self.objects.get_unchecked(key.to_index()) }
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn get_mut(&mut self, key: Key) -> &mut Ty {
+        self.objects.get_mut(key.to_index()).unwrap()
+    }
+
+    #[cfg(not(debug_assertions))]
+    pub fn get_mut(&mut self, key: Key) -> &mut Ty {
+        unsafe { self.objects.get_unchecked_mut(key.to_index()) }
+    }
+}
+
 struct ArenaCell<Ty, Key: ArenaKey> {
     objects: UnsafeCell<Vec<Ty>>,
 
@@ -128,7 +167,13 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
             }
         }
 
-        unsafe { self.objects.get().as_mut().unwrap().get(idx).unwrap() }
+        #[cfg(debug_assertions)]
+        let ptr = unsafe { self.objects.get().as_mut().unwrap().get(idx).unwrap() };
+
+        #[cfg(not(debug_assertions))]
+        let ptr = unsafe { self.objects.get().as_mut().unwrap_unchecked().get_unchecked(idx) };
+
+        ptr
     }
 
     pub fn get_mut(&self, id: Key) -> ArenaBorrow<Ty, Key> {
@@ -144,7 +189,11 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
         }
 
         // This nonsense makes Miri happy
+        #[cfg(debug_assertions)]
         let ptr = unsafe { self.objects.get().as_mut().unwrap().as_mut_ptr().add(idx).as_mut().unwrap() };
+
+        #[cfg(not(debug_assertions))]
+        let ptr = unsafe { self.objects.get().as_mut().unwrap_unchecked().as_mut_ptr().add(idx).as_mut().unwrap_unchecked() };
 
         // Perhaps the more natural expression:
         // let ptr = unsafe { self.exprs.get().as_mut().unwrap().get_mut(id).unwrap() };
