@@ -937,14 +937,14 @@ impl<'db> TypeChecker<'db> {
 					unsafe {
 						// Safety: We're immediately re-initializing this memory after
 						// taking from it.
-						let capt_obj = std::mem::replace(capt, std::mem::zeroed());
+						let capt_obj = std::ptr::read(capt);
 						let as_funcapture = FunCapture {
 							location: capt_obj.location,
 							identity: fun,
 							typ: self.db.types.unassigned,
 							object: capt_obj.object
 						};
-						std::mem::forget(std::mem::replace(expr, Expr::FunCapture(as_funcapture)));
+						std::ptr::write(expr, Expr::FunCapture(as_funcapture));
 					}
 					return self.check_expr(expr, value_used);
 				}
@@ -952,7 +952,7 @@ impl<'db> TypeChecker<'db> {
 				if let Some(property) = self.db.lookup_property(obj_ty, capt.identifier.lexeme) {
 					unsafe {
 						// TODO: Use MaybeUninit instead..?
-						let capt_obj = std::mem::replace(capt, std::mem::zeroed());
+						let capt_obj = std::ptr::read(capt);
 						let as_get = Get {
 							location: capt_obj.location,
 							identifier: capt_obj.identifier,
@@ -960,7 +960,7 @@ impl<'db> TypeChecker<'db> {
 							var: property
 						};
 						// Forget the (invalid) zeroed value that we created.
-						std::mem::forget(std::mem::replace(expr, Expr::Get(as_get)));
+						std::ptr::write(expr, Expr::Get(as_get));
 					}
 					return self.check_expr(expr, value_used);
 				}
