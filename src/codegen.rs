@@ -1,3 +1,4 @@
+use crate::arena::ArenaKey;
 use crate::db::*;
 use crate::lexer::Tok;
 use crate::module::Module;
@@ -237,7 +238,7 @@ impl std::fmt::Display for Val {
 			}
 
 			// String literals are always stored in variables with a consistent naming scheme.
-			Val::StringLit { id } => write!(f, "ps_str_const{}", id.to_usize()),
+			Val::StringLit { id } => write!(f, "ps_str_const{}", id.to_index()),
 			Val::BoolLit { val } => match val {
 				true => write!(f, "((ps_bool)1)"),
 				false => write!(f, "((ps_bool)0)"),
@@ -1214,9 +1215,9 @@ impl<'a> Codegen<'a> {
 	fn compile_string_constant_init(&mut self, define: &mut String, init: &mut String) {
 		inf_writeln!(init, "void poni_init_strings(void) {{");
 		for id in self.db.str_const_range() {
-			inf_writeln!(define, "const ps_str* ps_str_const{} = NULL;", id.to_usize());
+			inf_writeln!(define, "const ps_str* ps_str_const{} = NULL;", id.to_index());
 			inf_writeln!(init, "\tps_str_const{} = ps_str_from_literal({});",
-				id.to_usize(), self.db.get(id));
+				id.to_index(), self.db.get(id));
 		}
 		inf_writeln!(init, "}}");
 	}

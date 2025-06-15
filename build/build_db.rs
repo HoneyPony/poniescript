@@ -12,36 +12,31 @@ fn generate_struct(struct_: &mut String, id: &str, ty: &str) -> String {
 	// straight into lowercase? It doesn't seem like it.
 	let new_name = format!("arena_{}", new_name);
 
-	writeln!(struct_, "\t{new_name}: Vec<{ty}>,").unwrap();
+	writeln!(struct_, "\t{new_name}: Arena<{ty}, {id}>,").unwrap();
 
 	new_name
 }
 
 fn generate_id(file: &mut File, name: &str, ty: &str, arena: &str) -> std::io::Result<()> {
-	writeln!(file, "#[derive(Clone, Copy, PartialEq, Eq, Hash)]")?;
-	writeln!(file, "pub struct {name}({TY});\n")?;
-	writeln!(file, "impl {name} {{")?;
-	writeln!(file, "\tpub fn to_usize(self) -> usize {{ self.0 as usize }}")?;
-	writeln!(file, "\tpub unsafe fn from_u32(val: u32) -> Self {{ {name}(val) }}")?;
-	//writeln!(file, "\tpub fn from_usize(v: usize) -> Self {{ {name}(v as {TY}) }}")?;
-	writeln!(file, "}}\n")?;
+	writeln!(file, "define_arena_key!({name});")?;
 
 	writeln!(file, "impl IdFuncs<{name}> for Db {{")?;
 
 	writeln!(file, "\ttype Object = {ty};")?;
 
+	writeln!(file, "\t#[inline(always)]")?;
 	writeln!(file, "\tfn get(&self, id: {name}) -> &{ty} {{")?;
-	writeln!(file, "\t\tunsafe {{ self.arenas.{arena}.get_unchecked(id.to_usize()) }} ")?;
+	writeln!(file, "\t\tself.arenas.{arena}.get(id)")?;
 	writeln!(file, "\t}}")?;
 
+	writeln!(file, "\t#[inline(always)]")?;
 	writeln!(file, "\tfn get_mut(&mut self, id: {name}) -> &mut {ty} {{")?;
-	writeln!(file, "\t\tunsafe {{ self.arenas.{arena}.get_unchecked_mut(id.to_usize()) }} ")?;
+	writeln!(file, "\t\tself.arenas.{arena}.get_mut(id)")?;
 	writeln!(file, "\t}}")?;
 
+	writeln!(file, "\t#[inline(always)]")?;	
 	writeln!(file, "\tfn push(&mut self, item: {ty}) -> {name} {{")?;
-	writeln!(file, "\t\tlet index = self.arenas.{arena}.len() as {TY};")?;
-	writeln!(file, "\t\tself.arenas.{arena}.push(item);")?;
-	writeln!(file, "\t\t{name}(index)")?;
+	writeln!(file, "\t\tself.arenas.{arena}.push(item)")?;
 	writeln!(file, "\t}}")?;
 
 	writeln!(file, "}}")?;
@@ -52,6 +47,7 @@ fn generate_id(file: &mut File, name: &str, ty: &str, arena: &str) -> std::io::R
 fn generate_impl(file: &mut File, pairs: &Vec<(&str, &str)>) {
 	let mut init = String::new();
 	let mut struct_ = String::new();
+	writeln!(file, "use crate::arena::Arena;").unwrap();
 	writeln!(file, "pub type IdType = {TY};").unwrap();
 	writeln!(init, "impl DbArenas {{").unwrap();
 	writeln!(init, "\tpub fn new() -> Self {{").unwrap();
@@ -62,7 +58,7 @@ fn generate_impl(file: &mut File, pairs: &Vec<(&str, &str)>) {
 		let arena = generate_struct(&mut struct_, pair.0, pair.1);
 		generate_id(file, pair.0, pair.1, &arena).unwrap();
 
-		writeln!(init, "\t\t\t{arena}: Vec::new(),").unwrap();
+		writeln!(init, "\t\t\t{arena}: Arena::new(),").unwrap();
 	}
 	writeln!(struct_, "}}").unwrap();
 

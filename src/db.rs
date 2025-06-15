@@ -11,6 +11,7 @@ use crate::expr::Sig;
 use crate::expr::Class;
 use crate::typ::Type;
 use crate::source::{Source, SourceLocation};
+use crate::arena::*;
 
 use crate::lexer::{Tok, Token};
 
@@ -142,7 +143,7 @@ pub struct Db {
 
 impl Db {
 	pub fn new() -> Self {
-		let mut db = Db {
+		let mut db = unsafe { Db {
 			arenas: DbArenas::new(),
 
 			str_side_map: FxHashMap::default(),
@@ -177,26 +178,29 @@ impl Db {
 
 			fun_init: None,
 			types: DbTypes {
-				str_const: TypId(0),
-				str: TypId(0),
-				str_buf: TypId(0),
-				void: TypId(0),
-				unassigned: TypId(0),
-				int: TypId(0),
-				float: TypId(0),
-				bool: TypId(0),
-				bottom: TypId(0),
+				// TODO: Get rid of all these invalid() and instead build these
+				// based on the Arena. Might required splitting Db into two
+				// pieces.
+				str_const: TypId::invalid(),
+				str: TypId::invalid(),
+				str_buf: TypId::invalid(),
+				void: TypId::invalid(),
+				unassigned: TypId::invalid(),
+				int: TypId::invalid(),
+				float: TypId::invalid(),
+				bool: TypId::invalid(),
+				bottom: TypId::invalid(),
 
-				assume_int: TypId(0),
-				assume_float: TypId(0),
+				assume_int: TypId::invalid(),
+				assume_float: TypId::invalid(),
 
-				fun_sig_unassigned: TypId(0),
+				fun_sig_unassigned: TypId::invalid(),
 			},
 
-			synthetic: SourceId(0),
-			sig_unassigned: SigId(0),
-			class_unassigned: ClassId(0),
-			var_unassigned: VarId(0),
+			synthetic: SourceId::invalid(),
+			sig_unassigned: SigId::invalid(),
+			class_unassigned: ClassId::invalid(),
+			var_unassigned: VarId::invalid(),
 
 			name_map: FxHashMap::default(),
 
@@ -209,16 +213,16 @@ impl Db {
 			arr_declare_code: String::new(),
 			arr_define_code: String::new(),
 
-			str_anonymous: StrId(0),
-			str_lambda: StrId(0),
+			str_anonymous: StrId::invalid(),
+			str_lambda: StrId::invalid(),
 
 			prop_str: StrProperties {
-				length: VarId(0),
-				length_key: StrId(0)
+				length: VarId::invalid(),
+				length_key: StrId::invalid()
 			},
 
-			prop_array: ArrayProperties { length: VarId(0), length_key: StrId(0) }
-		};
+			prop_array: ArrayProperties { length: VarId::invalid(), length_key: StrId::invalid() }
+		} };
 
 		db.types.str_const  = db.put_type(Type::StrConst);
 		db.types.str        = db.put_type(Type::Str);
@@ -445,7 +449,7 @@ impl Db {
 		}
 
 		// Now, we can generate the actual code for that sig.
-		let sig = &self.arenas.arena_sig[sig_id.0 as usize];
+		let sig = &self.arenas.arena_sig.get(sig_id);
 
 		// TODO: We have to topologically sort these declarations so that ones
 		// that use earlier ones work correctly.
@@ -571,7 +575,7 @@ impl Db {
 
 	pub fn get_cname(&self, var: VarId) -> &'static str {
 		// TODO: Cname generation, as well as 'extern C' sort of thing
-		unsafe { self.var_cname_cache.get_unchecked(var.to_usize()) }
+		unsafe { self.var_cname_cache.get_unchecked(var.to_index()) }
 	}
 
 	// These should definitely be cached rather than generated each time, but..
@@ -579,13 +583,13 @@ impl Db {
 	// TODO: Consider generating the ctypes as soon as we generate a new type
 	pub fn get_ctype(&self, typ: TypId) -> &'static str {
 
-		if let Some(existing) = self.ctype_cache.get(typ.to_usize()) {
+		if let Some(existing) = self.ctype_cache.get(typ.to_index()) {
 			return *existing;
 		}
 
 		// Didn't get the type -- give a helpful panic message.
 		let ty_name = self.get(typ).to_string(self);
-		panic!("Tried to get invalid type in get_ctype: {} (TypId {})", ty_name, typ.to_usize());
+		panic!("Tried to get invalid type in get_ctype: {} (TypId {})", ty_name, typ.to_index());
 
 		// Safety: AS LONG AS we don't call new_id outside of put_type,
 		// the index must be valid.
@@ -630,7 +634,7 @@ impl Db {
 	
 	pub fn get_fun_cname(&self, fun: FunId) -> &str {
 		// TODO: Cname generation
-		unsafe { self.fun_cname_cache.get_unchecked(fun.to_usize()) }
+		unsafe { self.fun_cname_cache.get_unchecked(fun.to_index()) }
 	}
 
 	pub fn get_fun_return_typid(&self, fun: FunId) -> TypId {
@@ -648,15 +652,15 @@ impl Db {
 		// This is a bit less safe. It cannot be called until
 		// db.generate_fun_cparams_cache() has been called, which can't be
 		// called until after type-checking.
-		unsafe { self.fun_cparams_cache.get_unchecked(fun.to_usize()) }
+		unsafe { self.fun_cparams_cache.get_unchecked(fun.to_index()) }
 	}
 	
 	pub fn get_class_cname(&self, class: ClassId) -> &'static str {
-		unsafe { self.class_cname_cache.get_unchecked(class.to_usize()) }
+		unsafe { self.class_cname_cache.get_unchecked(class.to_index()) }
 	}
 
 	pub fn get_class_preparer_cname(&self, class: ClassId) -> &'static str {
-		unsafe { self.class_preparer_cache.get_unchecked(class.to_usize()) }
+		unsafe { self.class_preparer_cache.get_unchecked(class.to_index()) }
 	}
 
 	pub fn repr_var(&self, var: VarId) -> &str {
@@ -701,6 +705,7 @@ impl Db {
 	}
 
 	pub fn var_range(&self) -> VarIter {
+		// TODO: Implement this as something over Arena..?
 		return VarIter { 
 			len: self.arenas.arena_var.len() as IdType,
 			current: 0
@@ -769,7 +774,7 @@ impl Db {
 		let range = self.arenas.arena_typ.len() as IdType;
 
 		for id in 0..range {
-			let id = TypId(id);
+			let id = unsafe { TypId::from_index(id as usize) };
 			// It's OK to clone here because types are lightweight
 			// (specifically because we're doing all this TypId stuff).
 			let ty = self.get(id).clone();
@@ -784,7 +789,7 @@ impl Db {
 		let mut used_set = FxHashMap::<StrId, u64>::default();
 
 		for id in 0..range {
-			let var = VarId(id);
+			let var = unsafe { VarId::from_index(id as usize) };
 
 			if let Some(desired) = self.known_var_cnames.get(&var) {
 				self.var_cname_cache.push(desired);
@@ -815,7 +820,7 @@ impl Db {
 		let mut used_set = FxHashMap::<StrId, u64>::default();
 
 		for id in 0..range {
-			let class = ClassId(id);
+			let class = unsafe { ClassId::from_index(id as usize) };
 
 			let str_id = self.get(class).name.lexeme;
 			let cname = match used_set.entry(str_id) {
@@ -843,7 +848,7 @@ impl Db {
 		let mut used_set = FxHashMap::<StrId, u64>::default();
 
 		for id in 0..range {
-			let fun = FunId(id);
+			let fun = unsafe { FunId::from_index(id as usize) };
 
 			// TODO: Actual name mangling and such
 			let cname_id = if let Some(name) = &self.get(fun).name {
@@ -871,7 +876,7 @@ impl Db {
 		let range = self.arenas.arena_fun.len() as IdType;
 
 		for id in 0..range {
-			let id = FunId(id);
+			let id = unsafe { FunId::from_index(id as usize) };
 			let mut buffer = String::new();
 
 			let mut comma = false;
@@ -933,7 +938,7 @@ impl Iterator for VarIter {
 		let result = if self.current == self.len {
 			None
 		}
-		else { Some(VarId(self.current)) };
+		else { unsafe { Some(VarId::from_index(self.current as usize)) } };
 
 		self.current += 1;
 
@@ -954,7 +959,7 @@ impl Iterator for StrConstIter {
 		let result = if self.current == self.len {
 			None
 		}
-		else { Some(StrConstId(self.current)) };
+		else { unsafe { Some(StrConstId::from_index(self.current as usize)) } };
 
 		self.current += 1;
 

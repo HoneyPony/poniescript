@@ -1,46 +1,56 @@
 use std::{cell::UnsafeCell, marker::PhantomData, num::{NonZeroU32, NonZeroUsize}, ops::{Deref, DerefMut}};
 
-trait ArenaKey: Copy {
-    fn to_usize(self) -> NonZeroUsize;
-    unsafe fn from_u32(id: NonZeroU32) -> Self;
+pub trait ArenaKey: Copy {
+    fn to_nonzero_usize(self) -> NonZeroUsize;
+    unsafe fn from_nonzero_u32(id: NonZeroU32) -> Self;
 
+    #[inline(always)]
     fn to_index(self) -> usize {
-        self.to_usize().get() - 1
+        self.to_nonzero_usize().get() - 1
     }
 
+    #[inline(always)]
     unsafe fn from_index(index: usize) -> Self {
         #[cfg(debug_assertions)]
         {
-            Self::from_u32(NonZeroU32::new(index as u32 + 1).unwrap())
+            Self::from_nonzero_u32(NonZeroU32::new(index as u32 + 1).unwrap())
         }
 
         #[cfg(not(debug_assertions))]
         {
-            Self::from_u32(NonZeroU32::new_unchecked(index as u32 + 1))
+            Self::from_nonzero_u32(NonZeroU32::new_unchecked(index as u32 + 1))
         }
+    }
+
+    #[inline(always)]
+    unsafe fn invalid() -> Self {
+        Self::from_index(0)
     }
 }
 
 macro_rules! define_arena_key {
     ($key_name:ident) => {
         #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-        struct $key_name(NonZeroU32);
+        pub struct $key_name(std::num::NonZeroU32);
 
-        impl ArenaKey for $key_name {
-            fn to_usize(self) -> NonZeroUsize {
+        // TODO: Is this the best fully qualified name for this trait?
+        impl crate::arena::ArenaKey for $key_name {
+            #[inline(always)]
+            fn to_nonzero_usize(self) -> std::num::NonZeroUsize {
                 // Safety: Our self.0 is always nonzero, so this should always also
                 // return nonzero.
-                unsafe { NonZeroUsize::new_unchecked(self.0.get() as usize) }
+                unsafe { std::num::NonZeroUsize::new_unchecked(self.0.get() as usize) }
             }
 
-            unsafe fn from_u32(id: NonZeroU32) -> Self {
+            #[inline(always)]
+            unsafe fn from_nonzero_u32(id: std::num::NonZeroU32) -> Self {
                 $key_name(id)
             }
         }
     }
 }
 
-struct Arena<Ty, Key: ArenaKey> {
+pub struct Arena<Ty, Key: ArenaKey> {
     objects: Vec<Ty>,
     phantom: PhantomData<Key>
 }
@@ -53,8 +63,13 @@ impl<Ty, Key: ArenaKey> Arena<Ty, Key> {
         }
     }
 
-    pub fn push(&mut self, object: Ty) {
+    pub fn push(&mut self, object: Ty) -> Key {
         self.objects.push(object);
+        unsafe { Key::from_index(self.objects.len() - 1) }
+    }
+
+    pub fn len(&self) -> usize {
+        self.objects.len()
     }
 
     #[cfg(debug_assertions)]
@@ -78,7 +93,7 @@ impl<Ty, Key: ArenaKey> Arena<Ty, Key> {
     }
 }
 
-struct ArenaCell<Ty, Key: ArenaKey> {
+pub struct ArenaCell<Ty, Key: ArenaKey> {
     objects: UnsafeCell<Vec<Ty>>,
 
     phantom: PhantomData<Key>,
@@ -87,7 +102,7 @@ struct ArenaCell<Ty, Key: ArenaKey> {
     borrowed: UnsafeCell<Vec<bool>>,
 }
 
-struct ArenaBorrow<'a, Ty, Key: ArenaKey> {
+pub struct ArenaBorrow<'a, Ty, Key: ArenaKey> {
     inner: &'a mut Ty,
 
     #[cfg(debug_assertions)]
@@ -130,7 +145,7 @@ impl<'a, Ty, Key: ArenaKey> Drop for ArenaBorrow<'a, Ty, Key> {
         #[cfg(debug_assertions)]
         unsafe {
             let borrows = self.parent.borrowed.get().as_mut().unwrap();
-            borrows[self.idx.to_usize().get() - 1] = false;
+            borrows[self.idx.to_index()] = false;
         }
     }
 }

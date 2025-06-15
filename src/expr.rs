@@ -4,6 +4,7 @@ use std::mem::MaybeUninit;
 
 use rustc_hash::FxHashMap;
 
+use crate::arena::ArenaKey;
 use crate::typ::Type;
 use crate::{db::*, lexer::Token};
 use crate::source::SourceLocation;
@@ -31,7 +32,7 @@ impl std::default::Default for Expr {
 			// that will no longer be accessed.
 			// 
 			// (this is sketch... maybe we can come up with something better?)
-			source: unsafe { SourceId::from_u32(0) },
+			source: unsafe { SourceId::from_index(0) },
 			offset: 0,
 			length: 0
 		})

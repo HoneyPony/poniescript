@@ -1,3 +1,4 @@
+#[macro_use]
 mod arena;
 mod db;
 mod expr;
