@@ -13,7 +13,7 @@ use crate::lexer::Tok;
 pub struct NewInitElem {
 	pub var: VarId,
 	pub ident: Token,
-	pub value: Expr,
+	pub value: ExprId,
 	pub location: SourceLocation
 }
 

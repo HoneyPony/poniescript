@@ -34,21 +34,33 @@ struct Opt {
 struct ConstructOpt {
 	wrap_ok: bool,
 	to_enum: bool,
+	in_ast: bool,
 }
 
-fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt: &Opt, fields: &Vec<(&str, &str)>, into: &mut String) -> std::fmt::Result {
-	let prefix = if copt.to_enum { "mk_" } else { "new_" };
+fn generate_constructor(id_name: &str, ast_field: &str, enum_name: &str, ty_name: &str, copt: ConstructOpt, opt: &Opt, fields: &Vec<(&str, &str)>, into: &mut String) -> std::fmt::Result {
+	let mut prefix = if copt.to_enum { "mk_" } else { "new_" };
+	if copt.in_ast { prefix = "put_"; }
+	let prefix = prefix;
 	let suffix = if copt.wrap_ok { "_ok" } else { "" };
 
 	let return_type = match copt {
-		ConstructOpt { wrap_ok: false, to_enum: false } => ty_name.to_string(),
-		ConstructOpt { wrap_ok: false, to_enum: true } => enum_name.to_string(),
-		ConstructOpt { wrap_ok: true, to_enum: false } => format!("crate::parser::Result<{ty_name}>"),
-		ConstructOpt { wrap_ok: true, to_enum: true } => format!("crate::parser::Result<{enum_name}>"),
+		ConstructOpt { wrap_ok: false, to_enum: false, in_ast: false } => ty_name.to_string(),
+		ConstructOpt { wrap_ok: false, to_enum: true , in_ast: false } => enum_name.to_string(),
+		ConstructOpt { wrap_ok: true , to_enum: false, in_ast: false } => format!("crate::parser::Result<{ty_name}>"),
+		ConstructOpt { wrap_ok: true , to_enum: true , in_ast: false } => format!("crate::parser::Result<{enum_name}>"),
+
+		ConstructOpt { wrap_ok: false, to_enum: false, in_ast: true  } => panic!("invalid combo"),
+		ConstructOpt { wrap_ok: false, to_enum: true , in_ast: true  } => id_name.to_string(),
+		ConstructOpt { wrap_ok: true , to_enum: false, in_ast: true  } => panic!("invalid combo"),
+		ConstructOpt { wrap_ok: true , to_enum: true , in_ast: true  } => format!("crate::parser::Result<{id_name}>"),
 	};
 	
 	writeln!(into, "\t#[allow(unused)]")?;
 	write!(into, "\tpub fn {prefix}{}{suffix}(", ty_name.to_ascii_lowercase())?;
+
+	if copt.in_ast {
+		write!(into, "ast: &mut Ast, ")?;
+	}
 
 	let mut add_comma = false;
 	for field in fields {
@@ -76,6 +88,7 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 	}
 	write!(into, "\t\t")?;
 	if copt.wrap_ok { write!(into, "Ok(")?; }
+	if copt.in_ast  { write!(into, "ast.{ast_field}.push(")?; }
 	if copt.to_enum { write!(into, "{enum_name}::{ty_name}(")?; }
 	write!(into, "{ty_name} {{")?;
 	for field in fields {
@@ -83,6 +96,7 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 	}
 	write!(into, "}}")?;
 	if copt.to_enum { write!(into, ")")?; }
+	if copt.in_ast  { write!(into, ")")?; }
 	if copt.wrap_ok { write!(into, ")")?; }
 	writeln!(into, "")?;
 
@@ -91,7 +105,7 @@ fn generate_constructor(enum_name: &str, ty_name: &str, copt: ConstructOpt, opt:
 	Ok(())
 }
 
-fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::fmt::Result {
+fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::fmt::Result {
 	let mut enum_def = String::new();
 	let mut struct_defs = String::new();
 	let mut enum_impl = String::new();
@@ -109,6 +123,8 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 	writeln!(debug_impl, "\tfn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {{")?;
 	writeln!(debug_impl, "\t\tmatch self {{")?;
 
+	let id_name = format!("{name}Id");
+
 	while let Some(ty_name) = token(&mut spec) {
 		token(&mut spec);
 
@@ -124,13 +140,19 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 			let Some(mut ty) = token(&mut spec) else { return Ok(()); };
 
 			if ty == "Expr" && opt.box_exprs {
-				ty = "&'static mut Expr";
+				ty = "ExprId";
 			}
 			if ty == "Option<Expr>" && opt.box_exprs {
-				ty = "Option<&'static mut Expr>";
+				ty = "Option<ExprId>";
+			}
+			if ty == "Vec<Expr>" {
+				ty = "Vec<ExprId>";
 			}
 			if ty == "Stmt" {
-				ty = "&'static mut Stmt";
+				ty = "StmtId";
+			}
+			if ty == "Vec<Stmt>" {
+				ty = "Vec<StmtId>";
 			}
 
 			let Some(mut name) = token(&mut spec) else { return Ok(()); };
@@ -154,21 +176,30 @@ fn generate_spec(name: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::
 
 		writeln!(debug_impl, "\t\t\t{name}::{ty_name}(_) => f.write_str(\"{ty_name}\"),")?;
 
-		generate_constructor(name,
+		generate_constructor(&id_name, ast_field, name,
 			ty_name,
-			ConstructOpt { wrap_ok: false, to_enum: false },
+			ConstructOpt { wrap_ok: false, to_enum: false, in_ast: false },
 			&opt, &fields, &mut enum_impl)?;
-		generate_constructor(name,
+		generate_constructor(&id_name, ast_field, name,
 			ty_name,
-			ConstructOpt { wrap_ok: false, to_enum: true },
+			ConstructOpt { wrap_ok: false, to_enum: true , in_ast: false },
 			&opt, &fields, &mut enum_impl)?;
-		generate_constructor(name,
+		generate_constructor(&id_name, ast_field, name,
 			ty_name,
-			ConstructOpt { wrap_ok: true, to_enum: false },
+			ConstructOpt { wrap_ok: true , to_enum: false, in_ast: false },
 			&opt, &fields, &mut enum_impl)?;
-		generate_constructor(name,
+		generate_constructor(&id_name, ast_field, name,
 			ty_name,
-			ConstructOpt { wrap_ok: true, to_enum: true },
+			ConstructOpt { wrap_ok: true , to_enum: true , in_ast: false },
+			&opt, &fields, &mut enum_impl)?;
+
+		generate_constructor(&id_name, ast_field, name,
+			ty_name,
+			ConstructOpt { wrap_ok: false, to_enum: true , in_ast: true  },
+			&opt, &fields, &mut enum_impl)?;
+		generate_constructor(&id_name, ast_field, name,
+			ty_name,
+			ConstructOpt { wrap_ok: true , to_enum: true , in_ast: true  },
 			&opt, &fields, &mut enum_impl)?;
 	}
 
@@ -245,9 +276,9 @@ pub fn generate(file: &mut File) {
 	};
 
 	let stmt_opt = Opt {
-		box_exprs: false,
+		box_exprs: true,
 	};
 
-	generate_spec("Expr", expr_spec, expr_opt, file).unwrap();
-	generate_spec("Stmt", stmt_spec, stmt_opt, file).unwrap();
+	generate_spec("Expr", "exprs", expr_spec, expr_opt, file).unwrap();
+	generate_spec("Stmt", "stmts", stmt_spec, stmt_opt, file).unwrap();
 }

@@ -5,7 +5,8 @@ use std::cell::RefCell;
 
 use crate::error::Error;
 // Import relevant things.
-use crate::expr::Var;
+use crate::expr::Expr;
+use crate::expr::Stmt;
 use crate::expr::Fun;
 use crate::expr::Sig;
 use crate::expr::Class;
@@ -20,6 +21,23 @@ use rustc_hash::{FxHashMap};
 
 // Include arenas
 include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
+
+define_arena_key!(ExprId);
+define_arena_key!(StmtId);
+
+pub struct Ast {
+	pub exprs: ArenaCell<Expr, ExprId>,
+	pub stmts: ArenaCell<Stmt, StmtId>,
+}
+
+impl Ast {
+	pub fn new() -> Ast {
+		Ast {
+			exprs: ArenaCell::new(),
+			stmts: ArenaCell::new()
+		}
+	}
+}
 
 #[derive(Clone, Copy)]
 pub enum ScopeEntry {

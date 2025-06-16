@@ -224,6 +224,7 @@ fn main() {
 	let args = Args::parse();
 
 	let mut db = db::Db::new();
+	let mut ast = db::Ast::new();
 	db.test_mode = args.test_mode;
 
 	// Pass 1: Parse

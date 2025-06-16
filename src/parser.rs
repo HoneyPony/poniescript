@@ -30,6 +30,7 @@ pub struct Parser<'a, 'b> {
 	lexer: Lexer,
 	module: &'a mut Module,
 	db: &'b mut Db,
+	ast: &'b mut Ast,
 
 	current: Token,
 	last_location: SourceLocation,
@@ -133,7 +134,7 @@ macro_rules! expected_after {
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
-	pub fn new(input: File, source_id: SourceId, db: &'b mut Db, module: &'a mut Module) -> std::io::Result<Self> {
+	pub fn new(input: File, source_id: SourceId, db: &'b mut Db, ast: &'b mut Ast, module: &'a mut Module) -> std::io::Result<Self> {
 		let mut lexer = Lexer::new(input, source_id);
 
 		// TODO: Move File initialization to Lexer
@@ -146,6 +147,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			module,
 			db,
+			ast,
 
 			scopes: Vec::new(),
 			// TODO: Push and pop things from this name
@@ -290,7 +292,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		return self.peek_typ() == ty;
 	}
 
-	fn number(&mut self) -> Result<Expr> {
+	fn number(&mut self) -> Result<ExprId> {
 		let number = self.advance()?; // Eat numerical token... TODO expected! with multiple
 		// types..?
 		//let number = expected!(self, Tok::Number, "number literal")?;
@@ -301,13 +303,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 			_ => unreachable!()
 		};
 
-		return Expr::mk_numliteral_ok(number.location.clone(),
+		return Expr::put_numliteral_ok(self.ast, number.location.clone(),
 			number,
 			self.db.put_type(typ));
 	}
 
 	// Expects to be at the first param, after the LeftParen.
-	fn expr_call_finish(&mut self, location: SourceLocation, ident: Token, object: Option<Expr>) -> Result<Expr> {
+	fn expr_call_finish(&mut self, location: SourceLocation, ident: Token, object: Option<ExprId>) -> Result<ExprId> {
 		let mut args = Vec::new();
 
 		while !self.at(Tok::RightParen) && !self.is_at_end() {
@@ -327,31 +329,31 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		match self.scope_lookup(ident.lexeme) {
 			ScopeEntry::Var(v) => {
-				let inner = Expr::mk_variable(location.clone(), v);
-				return Expr::mk_valcall_ok(self.end(location), inner, args, self.db.sig_unassigned)
+				let inner = Expr::put_variable(self.ast, location.clone(), v);
+				return Expr::put_valcall_ok(self.ast, self.end(location), inner, args, self.db.sig_unassigned)
 			},
 
 			// It may seem in poor taste to have a specific Expr for function
 			// calls all throughout the syntax tree. But, the hope is that this
 			// makes it easier to generate reasonable code in the common cases.
-			ScopeEntry::Fun(fun) => Expr::mk_funcall_ok(location, fun, args),
+			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, location, fun, args),
 
 			ScopeEntry::Class(class) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), &self.current.location));
 
 				// Just return an UnboundCall, as we have a semantic error rather than parse error.
-				let call = Expr::mk_unboundfuncapture(self.end(location.clone()), ident, object);
-				Expr::mk_valcall_ok(self.end(location), call, args, self.db.sig_unassigned)
+				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
+				Expr::put_valcall_ok(self.ast, self.end(location), call, args, self.db.sig_unassigned)
 			}
 
 			ScopeEntry::None => {
-				let call = Expr::mk_unboundfuncapture(self.end(location.clone()), ident, object);
-				Expr::mk_valcall_ok(location, call, args, self.db.sig_unassigned)
+				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
+				Expr::put_valcall_ok(self.ast, location, call, args, self.db.sig_unassigned)
 			}
 		}
 	}
 
-	fn expr_ident(&mut self) -> Result<Expr> {
+	fn expr_ident(&mut self) -> Result<ExprId> {
 		let location = self.start();
 		let ident = expected!(self, Tok::Identifier, "identifier")?;
 
@@ -378,16 +380,16 @@ impl<'a, 'b> Parser<'a, 'b> {
 			// Assignment
 			match expr {
 				Expr::Variable(variable) => 
-					return Expr::mk_assign_ok(self.end(location), variable.identity, rhs),
+					return Expr::put_assign_ok(self.ast, self.end(location), variable.identity, rhs),
 				Expr::FunCapture(_) => {
 					let error = Error::simple(format!("Cannot assign to a function"), &self.end(location));
 					semantic_error_with!(self, error);
 
 					// semantic error, but the parse tree is still basically fine.
-					return Ok(expr);
+					return Ok(self.ast.exprs.push(expr));
 				}
 				Expr::Unbound(unbound) => {
-					return Expr::mk_unboundassign_ok(self.end(location), unbound.identifier, rhs)
+					return Expr::put_unboundassign_ok(self.ast, self.end(location), unbound.identifier, rhs)
 				}
 				Expr::Get(_) => {
 					panic!("omg!");
@@ -396,10 +398,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 			}
 		}
 
-		Ok(expr)
+		Ok(self.ast.exprs.push(expr))
 	}
 
-	fn expr_print_or_str(&mut self, is_print: bool) -> Result<Expr> {
+	fn expr_print_or_str(&mut self, is_print: bool) -> Result<ExprId> {
 		let kind = if is_print { "print" } else { "str" };
 
 		let location = self.start();
@@ -423,14 +425,14 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 
 		if is_print {
-			Expr::mk_print_ok(self.end(location), exprs, self.db.types.unassigned)
+			Expr::put_print_ok(self.ast, self.end(location), exprs, self.db.types.unassigned)
 		}
 		else {
-			Expr::mk_str_ok(self.end(location), exprs)
+			Expr::put_str_ok(self.ast, self.end(location), exprs)
 		}
 	}
 
-	fn expr_if(&mut self) -> Result<Expr> {
+	fn expr_if(&mut self) -> Result<ExprId> {
 		let location = self.start();
 
 		expected!(self, Tok::If, "'if'")?;
@@ -463,7 +465,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			}
 		} else { None };
 
-		Expr::mk_if_ok(self.end(location),
+		Expr::put_if_ok(self.ast, self.end(location),
 			condition, 
 			then_branch,
 			else_branch,
@@ -473,7 +475,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		)
 	}
 
-	fn expr_prefix_callable(&mut self) -> Result<Expr> {
+	fn expr_prefix_callable(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
 			Tok::LeftBrace => self.block(),
 
@@ -493,7 +495,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			Tok::Fun => {
 				let fun = self.fun_declaration(false)?;
-				return Ok(Expr::FunDeclare(fun));
+				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
 			}
 
 			_ => unreachable!()
@@ -509,7 +511,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 	}
 
 	/// Parses a 'new' expression, e.g. new Example {}
-	fn new_(&mut self) -> Result<Expr> {
+	fn new_(&mut self) -> Result<ExprId> {
 		let location = self.start();
 
 		let key_new = expected!(self, Tok::New, "'new'")?;
@@ -532,13 +534,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// TODO: Parse inner arguments, etc.
 		expected!(self, Tok::RightBrace, "'}}' in 'new' expression");
 
-		Expr::mk_new_ok(self.end(location), name, 
+		Expr::put_new_ok(self.ast, self.end(location), name, 
 			self.db.class_unassigned,
 			self.db.types.unassigned,
 			initializers)
 	}
 
-	fn array_literal(&mut self) -> Result<Expr> {
+	fn array_literal(&mut self) -> Result<ExprId> {
 		let location = self.start();
 		let lbracket = self.advance()?;
 
@@ -552,10 +554,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::RightSquare, "']' at end of array literal");
 
-		Expr::mk_arraylit_ok(self.end(location), values, self.db.types.unassigned, self.db.types.unassigned)
+		Expr::put_arraylit_ok(self.ast, self.end(location), values, self.db.types.unassigned, self.db.types.unassigned)
 	}
 
-	fn expr_prefix(&mut self) -> Result<Expr> {
+	fn expr_prefix(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
 			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Fun => {
 				let location = self.start();
@@ -575,7 +577,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 						}
 
 						expected!(self, Tok::RightParen, "')' after argument list")?;
-						inner = Expr::mk_valcall(self.end(location.clone()), inner, args, self.db.sig_unassigned);
+						inner = Expr::put_valcall(self.ast, self.end(location.clone()), inner, args, self.db.sig_unassigned);
 					}
 					while self.match_(Tok::LeftSquare)?.is_some() {
 						// TODO: Can the index take multiple args?
@@ -588,14 +590,14 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 							// Return out of the loop--once we see an equals, we can't keep
 							// consuming more () [].
-							return Expr::mk_setindex_ok(self.end(location),
+							return Expr::put_setindex_ok(self.ast, self.end(location),
 								inner,
 								index,
 								self.db.types.unassigned,
 								rhs);
 						}
 
-						inner = Expr::mk_index(self.end(location.clone()), inner, index, self.db.types.unassigned);
+						inner = Expr::put_index(self.ast, self.end(location.clone()), inner, index, self.db.types.unassigned);
 					}
 					while self.match_(Tok::Dot)?.is_some() {
 						let identifier = expected!(self, Tok::Identifier, "identifier after property name")?;
@@ -604,7 +606,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 						// with the other ones?
 						if self.match_(Tok::Equal)?.is_some() {
 							let value = self.expression()?;
-							return Expr::mk_set_ok(self.end(location), identifier, inner, self.db.var_unassigned, value);
+							return Expr::put_set_ok(self.ast, self.end(location), identifier, inner, self.db.var_unassigned, value);
 						}
 						// Function calls are mutually exclusive with assignment.
 						//
@@ -626,7 +628,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 							inner = self.expr_call_finish(location.clone(), identifier, Some(inner))?;
 						}
 						else {
-							inner = Expr::mk_get(self.end(location.clone()), identifier, inner, self.db.var_unassigned);
+							inner = Expr::put_get(self.ast, self.end(location.clone()), identifier, inner, self.db.var_unassigned);
 						}
 					}
 				}
@@ -641,15 +643,21 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::Print => self.expr_print_or_str(true),
 			Tok::Str => self.expr_print_or_str(false),
 
-			Tok::True => Expr::mk_boolliteral_ok(self.advance()?.location, true),
-			Tok::False => Expr::mk_boolliteral_ok(self.advance()?.location, false),
+			Tok::True => {
+				let location = self.advance()?.location;
+				Expr::put_boolliteral_ok(self.ast, location, true)
+			}
+			Tok::False => {
+				let location = self.advance()?.location;
+				Expr::put_boolliteral_ok(self.ast, location, false)
+			}
 
 			Tok::StringSimple => {
 				let lit = self.advance()?;
 				let id = self.db.put_str_const_simple(self.db.get(lit.lexeme));
 				// TODO: Make sure the contents of the string literal are
 				// what we expect...
-				Expr::mk_strliteral_ok(lit.location, id)
+				Expr::put_strliteral_ok(self.ast, lit.location, id)
 			}
 
 			Tok::New => {
@@ -685,7 +693,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 	}
 
-	fn expr_infix(&mut self, lhs: Expr) -> Result<Expr> {
+	fn expr_infix(&mut self, lhs: ExprId) -> Result<ExprId> {
 		// TODO: Pass location downwards so that we get the correct value for
 		// infix operators.
 		let location = self.start();
@@ -699,19 +707,19 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash => {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
-				return Expr::mk_binary_ok(self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
+				return Expr::put_binary_ok(self.ast, self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
 			},
 
 			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual => {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
-				return Expr::mk_comparison_ok(self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
+				return Expr::put_comparison_ok(self.ast, self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
 			}
 
 			Tok::And | Tok::Or => {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
-				return Expr::mk_logical_ok(self.end(location), op.typ, lhs, rhs);
+				return Expr::put_logical_ok(self.ast, self.end(location), op.typ, lhs, rhs);
 			}
 
 			// We should never call expr_infix() with an invalid operator,
@@ -721,7 +729,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		}
 	}
 
-	fn expr_precedence(&mut self, precedence: u32) -> Result<Expr> {
+	fn expr_precedence(&mut self, precedence: u32) -> Result<ExprId> {
 		let mut expr = self.expr_prefix()?;
 
 		// Our precedence is coming from the right of the previous expr, so we compare to the left-hand
@@ -733,7 +741,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		Ok(expr)
 	}
 
-	fn expression(&mut self) -> Result<Expr> {
+	fn expression(&mut self) -> Result<ExprId> {
 		self.expr_precedence(0)
 	}
 
@@ -854,7 +862,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		return Stmt::new_declare_ok(self.end(location), identity, initializer);
 	}
 
-	fn block(&mut self) -> Result<Expr> {
+	fn block(&mut self) -> Result<ExprId> {
 		let location = self.start();
 		expected!(self, Tok::LeftBrace, "'{{' at beginning of block")?;
 
@@ -881,30 +889,31 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// last statement is return; because bottom can be assigned to void.
 		//
 		// We may want to consider simply deleting the Void type.
-		Expr::mk_block_ok(self.end(location), stmts, self.db.types.unassigned)
+		Expr::put_block_ok(self.ast, self.end(location), stmts, self.db.types.unassigned)
 	}
 
-	fn stmt(&mut self) -> Result<Stmt> {
+	fn stmt(&mut self) -> Result<StmtId> {
 		let location = self.start();
 		match self.peek_typ() {
 			Tok::Return => {
 				self.advance()?;
 				// If there's an immediate Semicolon, it's an empty return.
 				if self.match_(Tok::Semicolon)?.is_some() {
-					return Stmt::mk_return_ok(self.end(location), None);
+					return Stmt::put_return_ok(self.ast, self.end(location), None);
 				}
 
 				let inner = self.expression()?;
 				expected!(self, Tok::Semicolon, "';' after return value")?;
-				Stmt::mk_return_ok(self.end(location), Some(inner))
+				Stmt::put_return_ok(self.ast, self.end(location), Some(inner))
 			},
 			Tok::Var => {
-				Ok(Stmt::Declare(self.var_declaration()?))
+				let inner = self.var_declaration()?;
+				Ok(self.ast.stmts.push(Stmt::Declare(inner)))
 			},
 			_ => {
 				let inner = self.expression()?;
 
-				let mut expect_semicolon = match &inner {
+				let mut expect_semicolon = match self.ast.exprs.get(inner) {
 					// If the inner expression is a block or a similar "block-like"
 					// thing, then we don't need a semicolon.
 					Expr::Block(_) | Expr::If(_) => false,
@@ -927,7 +936,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 					// Still consume a semicolon if needed.
 					self.match_(Tok::Semicolon)?;
 				}
-				Stmt::mk_expression_ok(self.end(location), inner)
+				Stmt::put_expression_ok(self.ast, self.end(location), inner)
 			}
 		}
 	}
