@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell, marker::PhantomData, num::{NonZeroU32, NonZeroUsize}, ops::{Deref, DerefMut}};
+use std::{cell::UnsafeCell, marker::PhantomData, num::{NonZeroU32, NonZeroUsize}, ops::{Deref, DerefMut}, pin::Pin};
 
 pub trait ArenaKey: Copy {
     fn to_nonzero_usize(self) -> NonZeroUsize;
@@ -133,11 +133,25 @@ pub struct ArenaCell<Ty, Key: ArenaKey> {
     borrowed: UnsafeCell<Vec<bool>>,
 }
 
+pub struct ArenaCellProxy<'ar, Ty, Key: ArenaKey> {
+    arena: &'ar ArenaCell<Ty, Key>,
+
+    added: UnsafeCell<Vec<Box<Ty>>>,
+
+    #[cfg(debug_assertions)]
+    borrowed: UnsafeCell<Vec<bool>>,
+}
+
+enum ArenaBorrowParent<'a, Ty, Key: ArenaKey> {
+    Cell(&'a ArenaCell<Ty, Key>),
+    Proxy(&'a ArenaCellProxy<'a, Ty, Key>)
+}
+
 pub struct ArenaBorrow<'a, Ty, Key: ArenaKey> {
     inner: &'a mut Ty,
 
     #[cfg(debug_assertions)]
-    parent: &'a ArenaCell<Ty, Key>,
+    parent: ArenaBorrowParent<'a, Ty, Key>,
     #[cfg(debug_assertions)]
     idx: Key,
 
@@ -175,8 +189,25 @@ impl<'a, Ty, Key: ArenaKey> Drop for ArenaBorrow<'a, Ty, Key> {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
         unsafe {
-            let borrows = self.parent.borrowed.get().as_mut().unwrap();
-            borrows[self.idx.to_index()] = false;
+            match self.parent {
+                ArenaBorrowParent::Cell(arena_cell) => {
+                    let borrows = arena_cell.borrowed.get().as_mut().unwrap();
+                    borrows[self.idx.to_index()] = false;
+                }
+                ArenaBorrowParent::Proxy(arena_cell_proxy) => {
+                    let idx = self.idx.to_index();
+                    if idx < arena_cell_proxy.parent_len() {
+                        let borrows = arena_cell_proxy.arena.borrowed.get().as_mut().unwrap();
+                        borrows[idx] = false;
+                    }
+                    else {
+                        let idx = idx - arena_cell_proxy.parent_len();
+                        let borrows = arena_cell_proxy.borrowed.get().as_mut().unwrap();
+                        borrows[idx] = false;
+                    }
+                }
+            }
+            
         }
     }
 }
@@ -200,6 +231,23 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
         self.borrowed.get_mut().push(false);
 
         unsafe { Key::from_index(self.objects.get_mut().len() - 1) }
+    }
+
+    pub fn get_proxy(&mut self) -> ArenaCellProxy<Ty, Key> {
+        return ArenaCellProxy { arena: self, added: UnsafeCell::new(Vec::new()), borrowed: UnsafeCell::new(Vec::new()) }
+    }
+
+    pub fn commit_proxy(&mut self, proxy: ArenaCellProxy<Ty, Key>) {
+        // TODO:
+        // Do the items in the Proxy need to be Pinned? Maybe????
+        let items: Vec<_> = proxy.added.into_inner();
+        for item in items {
+            self.objects.get_mut().push(*item);
+
+            // TODO: Do we need to copy the borrowed value from the Proxy?
+            #[cfg(debug_assertions)]
+            self.borrowed.get_mut().push(false);
+        }
     }
 
     pub fn get(&self, id: Key) -> &Ty {
@@ -247,7 +295,90 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
         return ArenaBorrow {
             inner: ptr,
             #[cfg(debug_assertions)]
-            parent: self,
+            parent: ArenaBorrowParent::Cell(self),
+            #[cfg(debug_assertions)]
+            idx: id,
+
+            #[cfg(not(debug_assertions))]
+            phantom: PhantomData{},
+        };
+    }
+}
+
+impl <'ar, Ty, Key: ArenaKey> ArenaCellProxy<'ar, Ty, Key> {
+    fn parent_len(&self) -> usize {
+        unsafe { (*self.arena.objects.get()).len() }
+    }
+
+    pub fn push(&self, object: Ty) -> Key {
+        unsafe {
+            (*self.added.get()).push(Box::new(object));
+        
+            #[cfg(debug_assertions)]
+            (*self.borrowed.get()).push(false);
+
+            Key::from_index(self.parent_len() + (*self.added.get()).len() - 1)
+        }
+    }
+
+    pub fn get(&self, id: Key) -> &Ty {
+        let idx = id.to_index();
+
+        if idx < self.parent_len() {
+            return self.arena.get(id);
+        }
+
+        let idx = idx - self.parent_len();
+
+        #[cfg(debug_assertions)]
+        unsafe {
+            let borrows = self.borrowed.get().as_mut().unwrap();
+            if borrows[idx] {
+                panic!("ArenaCell: double-borrow for {idx} (immutable borrow during mutable borrow)");
+            }
+        }
+
+        #[cfg(debug_assertions)]
+        let ptr = unsafe { self.added.get().as_mut().unwrap().get(idx).unwrap().as_ref() };
+
+        #[cfg(not(debug_assertions))]
+        let ptr = unsafe { self.objects.get().as_mut().unwrap_unchecked().get_unchecked(idx).as_ref() };
+
+        ptr
+    }
+
+    pub fn get_mut(&self, id: Key) -> ArenaBorrow<Ty, Key> {
+        let idx = id.to_index();
+
+        if idx < self.parent_len() {
+            return self.arena.get_mut(id);
+        }
+
+        let idx = idx - self.parent_len();
+
+        #[cfg(debug_assertions)]
+        unsafe {
+            let borrows = self.borrowed.get().as_mut().unwrap();
+            if borrows[idx] {
+                panic!("ArenaCell: double-borrow for {idx} (second mutable borrow)");
+            }
+            borrows[idx] = true;
+        }
+
+        // This nonsense makes Miri happy
+        #[cfg(debug_assertions)]
+        let ptr = unsafe { self.added.get().as_mut().unwrap().as_mut_ptr().add(idx).as_mut().unwrap().as_mut() };
+
+        #[cfg(not(debug_assertions))]
+        let ptr = unsafe { self.added.get().as_mut().unwrap_unchecked().as_mut_ptr().add(idx).as_mut().unwrap_unchecked().as_mut() };
+
+        // Perhaps the more natural expression:
+        // let ptr = unsafe { self.exprs.get().as_mut().unwrap().get_mut(id).unwrap() };
+
+        return ArenaBorrow {
+            inner: ptr,
+            #[cfg(debug_assertions)]
+            parent: ArenaBorrowParent::Proxy(self),
             #[cfg(debug_assertions)]
             idx: id,
 
