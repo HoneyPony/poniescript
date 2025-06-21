@@ -23,6 +23,8 @@ use db::Db;
 use module::Module;
 use clap::Parser as _;
 
+use crate::db::Ast;
+
 #[derive(clap::Parser)]
 struct Args {
 	#[arg(short = 'o', long = "output")]
@@ -125,13 +127,13 @@ impl CompileMode {
 	}
 }
 
-fn parse_all_modules(db: &mut db::Db, args: &Args) -> (Vec<Module>, bool) {
+fn parse_all_modules(ast: &mut Ast, db: &mut db::Db, args: &Args) -> (Vec<Module>, bool) {
 	let mut modules = vec![];
 
 	let mut had_error = false;
 
 	for path in &args.input_paths {
-		match module::parse_module(db, &path) {
+		match module::parse_module(ast, db, &path) {
 			Ok((module, false)) => { modules.push(module) },
 			Ok((_, true)) => {
 				had_error = true;
@@ -228,7 +230,7 @@ fn main() {
 	db.test_mode = args.test_mode;
 
 	// Pass 1: Parse
-	let (mut modules, had_error) = parse_all_modules(&mut db, &args);
+	let (mut modules, had_error) = parse_all_modules(&mut ast, &mut db, &args);
 
 	if had_error {
 		report_errors(&db);
@@ -238,7 +240,7 @@ fn main() {
 	let timer = duration(timer, "parsing", &mut duration_set);
 
 	// Pass 2: Binding
-	let had_error = binder::bind(&mut db, &mut modules);
+	let had_error = binder::bind(&mut db, &mut ast, &mut modules);
 
 	if had_error {
 		report_errors(&db);
@@ -248,7 +250,7 @@ fn main() {
 	let timer = duration(timer, "binding", &mut duration_set);
 
 	// Pass 3: Type check and infer
-	let had_error = typecheck::typecheck(&mut db, &mut modules);
+	let had_error = typecheck::typecheck(&mut db, &ast, &mut modules);
 
 	if had_error {
 		report_errors(&db);
@@ -257,7 +259,7 @@ fn main() {
 
 	let timer = duration(timer, "type check", &mut duration_set);
 
-	dead_code::eliminate_dead_code(&mut db, &mut modules);
+	dead_code::eliminate_dead_code(&mut db, &mut ast, &mut modules);
 
 	let timer = duration(timer, "dead code", &mut duration_set);
 
@@ -268,7 +270,7 @@ fn main() {
 	let compile_mode = CompileMode::parse(&args.output_path);
 	let (mut output, cc) = compile_mode.get_output(&args);
 
-	if let Err(err) = codegen::codegen(&mut db, &modules, &mut output) {
+	if let Err(err) = codegen::codegen(&mut db, &mut ast, &modules, &mut output) {
 		eprintln!("Unable to write output file: {err}");
 		exit(4);
 	}

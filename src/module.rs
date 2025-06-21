@@ -22,14 +22,14 @@ impl Module {
 	}
 }
 
-pub fn parse_module(db: &mut Db, path: &Path) -> std::io::Result<(Module, bool)> {
+pub fn parse_module(ast: &mut Ast, db: &mut Db, path: &Path) -> std::io::Result<(Module, bool)> {
 	let source_id = db.put_source_path(path);
 
 	let file = db.get(source_id).to_file()?;
 	
 	let mut module = Module::new_empty();
 
-	let mut parser = Parser::new(file, source_id, db, &mut module)?;
+	let mut parser = Parser::new(file, source_id, db, ast, &mut module)?;
 	parser.parse()?;
 
 	let had_error = parser.had_error;
