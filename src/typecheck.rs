@@ -842,6 +842,7 @@ impl<'db> TypeChecker<'db> {
 					};
 
 					*expr = Expr::FunCapture(as_funcapture);
+					drop(binding);
 					return self.check_expr(ast, expr_id, value_used);
 				}
 
@@ -937,6 +938,7 @@ impl<'db> TypeChecker<'db> {
 						object: capt.object
 					};
 					*expr = Expr::FunCapture(as_funcapture);
+					drop(binding);
 					return self.check_expr(ast, expr_id, value_used);
 				}
 
@@ -948,6 +950,7 @@ impl<'db> TypeChecker<'db> {
 						var: property
 					};
 					*expr = Expr::Get(as_get);
+					drop(binding);
 					return self.check_expr(ast, expr_id, value_used);
 				}
 
