@@ -237,16 +237,29 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
         return ArenaCellProxy { arena: self, added: UnsafeCell::new(Vec::new()), borrowed: UnsafeCell::new(Vec::new()) }
     }
 
-    pub fn commit_proxy(&mut self, proxy: ArenaCellProxy<Ty, Key>) {
+    // TODO:
+    // Rust appears to get angry if we do the following:
+    //
+    //    let p = a.get_proxy();
+    //    ...
+    //    a.commit_proxy(p);
+    //
+    // In the case that commit_proxy takes an &mut self. This is because the
+    // commit_proxy counts as a second borrow, even though the whole point
+    // is that we're consuming the old borrow. So for now, we just do it
+    // a stupid way where we take &self even though that is NOT safe.
+    pub fn commit_proxy(&self, proxy: ArenaCellProxy<Ty, Key>) {
         // TODO:
         // Do the items in the Proxy need to be Pinned? Maybe????
         let items: Vec<_> = proxy.added.into_inner();
-        for item in items {
-            self.objects.get_mut().push(*item);
+        unsafe {
+            for item in items {
+                self.objects.get().as_mut().unwrap().push(*item);
 
-            // TODO: Do we need to copy the borrowed value from the Proxy?
-            #[cfg(debug_assertions)]
-            self.borrowed.get_mut().push(false);
+                // TODO: Do we need to copy the borrowed value from the Proxy?
+                #[cfg(debug_assertions)]
+                self.borrowed.get().as_mut().unwrap().push(false);
+            }
         }
     }
 
@@ -308,6 +321,10 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
 impl <'ar, Ty, Key: ArenaKey> ArenaCellProxy<'ar, Ty, Key> {
     fn parent_len(&self) -> usize {
         unsafe { (*self.arena.objects.get()).len() }
+    }
+
+    pub fn commit(self) {
+        self.arena.commit_proxy(self);
     }
 
     pub fn push(&self, object: Ty) -> Key {

@@ -10,6 +10,7 @@ use crate::expr::Stmt;
 use crate::expr::Fun;
 use crate::expr::Sig;
 use crate::expr::Class;
+use crate::expr::Var;
 use crate::typ::Type;
 use crate::source::{Source, SourceLocation};
 use crate::arena::*;
@@ -30,11 +31,31 @@ pub struct Ast {
 	pub stmts: ArenaCell<Stmt, StmtId>,
 }
 
+pub struct AstProxy<'ar> {
+	pub exprs: ArenaCellProxy<'ar, Expr, ExprId>,
+	pub stmts: ArenaCellProxy<'ar, Stmt, StmtId>,
+}
+
+impl<'ar> AstProxy<'ar> {
+	pub fn commit(self) {
+		let (exprs, stmts) = (self.exprs, self.stmts);
+		exprs.commit();
+		stmts.commit();
+	}
+}
+
 impl Ast {
 	pub fn new() -> Ast {
 		Ast {
 			exprs: ArenaCell::new(),
 			stmts: ArenaCell::new()
+		}
+	}
+
+	pub fn get_proxy(&mut self) -> AstProxy {
+		return AstProxy {
+			exprs: self.exprs.get_proxy(),
+			stmts: self.stmts.get_proxy()
 		}
 	}
 }

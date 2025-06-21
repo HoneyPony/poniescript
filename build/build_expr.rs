@@ -37,9 +37,9 @@ struct ConstructOpt {
 	in_ast: bool,
 }
 
-fn generate_constructor(id_name: &str, ast_field: &str, enum_name: &str, ty_name: &str, copt: ConstructOpt, opt: &Opt, fields: &Vec<(&str, &str)>, into: &mut String) -> std::fmt::Result {
+fn generate_constructor(use_proxy: bool, id_name: &str, ast_field: &str, enum_name: &str, ty_name: &str, copt: ConstructOpt, opt: &Opt, fields: &Vec<(&str, &str)>, into: &mut String) -> std::fmt::Result {
 	let mut prefix = if copt.to_enum { "mk_" } else { "new_" };
-	if copt.in_ast { prefix = "put_"; }
+	if copt.in_ast { prefix = "put_"; if use_proxy { prefix = "push_" } };
 	let prefix = prefix;
 	let suffix = if copt.wrap_ok { "_ok" } else { "" };
 
@@ -59,7 +59,12 @@ fn generate_constructor(id_name: &str, ast_field: &str, enum_name: &str, ty_name
 	write!(into, "\tpub fn {prefix}{}{suffix}(", ty_name.to_ascii_lowercase())?;
 
 	if copt.in_ast {
-		write!(into, "ast: &mut Ast, ")?;
+		if use_proxy {
+			write!(into, "ast: &AstProxy, ")?;
+		}
+		else {
+			write!(into, "ast: &mut Ast, ")?;
+		}
 	}
 
 	let mut add_comma = false;
@@ -176,28 +181,37 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 
 		writeln!(debug_impl, "\t\t\t{name}::{ty_name}(_) => f.write_str(\"{ty_name}\"),")?;
 
-		generate_constructor(&id_name, ast_field, name,
+		generate_constructor(false, &id_name, ast_field, name,
 			ty_name,
 			ConstructOpt { wrap_ok: false, to_enum: false, in_ast: false },
 			&opt, &fields, &mut enum_impl)?;
-		generate_constructor(&id_name, ast_field, name,
+		generate_constructor(false, &id_name, ast_field, name,
 			ty_name,
 			ConstructOpt { wrap_ok: false, to_enum: true , in_ast: false },
 			&opt, &fields, &mut enum_impl)?;
-		generate_constructor(&id_name, ast_field, name,
+		generate_constructor(false, &id_name, ast_field, name,
 			ty_name,
 			ConstructOpt { wrap_ok: true , to_enum: false, in_ast: false },
 			&opt, &fields, &mut enum_impl)?;
-		generate_constructor(&id_name, ast_field, name,
+		generate_constructor(false, &id_name, ast_field, name,
 			ty_name,
 			ConstructOpt { wrap_ok: true , to_enum: true , in_ast: false },
 			&opt, &fields, &mut enum_impl)?;
 
-		generate_constructor(&id_name, ast_field, name,
+		generate_constructor(false, &id_name, ast_field, name,
 			ty_name,
 			ConstructOpt { wrap_ok: false, to_enum: true , in_ast: true  },
 			&opt, &fields, &mut enum_impl)?;
-		generate_constructor(&id_name, ast_field, name,
+		generate_constructor(false, &id_name, ast_field, name,
+			ty_name,
+			ConstructOpt { wrap_ok: true , to_enum: true , in_ast: true  },
+			&opt, &fields, &mut enum_impl)?;
+
+		generate_constructor(true, &id_name, ast_field, name,
+			ty_name,
+			ConstructOpt { wrap_ok: false, to_enum: true , in_ast: true  },
+			&opt, &fields, &mut enum_impl)?;
+		generate_constructor(true, &id_name, ast_field, name,
 			ty_name,
 			ConstructOpt { wrap_ok: true , to_enum: true , in_ast: true  },
 			&opt, &fields, &mut enum_impl)?;

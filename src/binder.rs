@@ -82,19 +82,19 @@ impl<'db> Binder<'db> {
 	/// If we're currently inside a class, gets a new SelfVal; otherwise, returns
 	/// None. Useful for resolving AST types that can optionally operate on an
 	/// object.
-	fn get_selfval(&mut self, location: SourceLocation) -> Option<Expr> {
+	fn get_selfval(&mut self, ast: &AstProxy, location: SourceLocation) -> Option<ExprId> {
 		if self.in_class {
-			Some(Expr::mk_selfval(location, self.db.types.unassigned))
+			Some(Expr::push_selfval(ast, location, self.db.types.unassigned))
 		}
 		else { None }
 	}
 
-	fn resolve_unbound(&mut self, ident: StrId, location: SourceLocation) -> Option<Expr> {
+	fn resolve_unbound(&mut self, ast: &AstProxy, ident: StrId, location: SourceLocation) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
 				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location.clone(), fun, self.db.types.fun_sig_unassigned, 
-					self.get_selfval(location))),
+					self.get_selfval(ast, location))),
 				ScopeEntry::Class(_) => {
 					todo!("What to do when we resolve an Unbound into a Class");
 				}
@@ -111,7 +111,7 @@ impl<'db> Binder<'db> {
 		None
 	}
 
-	fn resolve_unbound_assign(&mut self, ident: StrId, location: SourceLocation, expr: Expr) -> Option<Expr> {
+	fn resolve_unbound_assign(&mut self, ident: StrId, location: SourceLocation, expr: ExprId) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_assign(location, var, expr)),
@@ -146,7 +146,7 @@ impl<'db> Binder<'db> {
 		None
 	}
 
-	fn resolve_unbound_funcapture(&mut self, unbound: &mut UnboundFunCapture) -> Option<Expr> {
+	fn resolve_unbound_funcapture(&mut self, ast: &AstProxy, unbound: &mut UnboundFunCapture) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, unbound.identifier.lexeme) {
 				ScopeEntry::Var(v) => {
@@ -154,7 +154,7 @@ impl<'db> Binder<'db> {
 				}
 				ScopeEntry::Fun(fun) => {
 					return Some(Expr::mk_funcapture(unbound.location.clone(), fun, self.db.types.unassigned, 
-						self.get_selfval(unbound.location.clone())))
+						self.get_selfval(ast, unbound.location.clone())))
 				}
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
@@ -172,55 +172,55 @@ impl<'db> Binder<'db> {
 		None
 	}
 
-	fn resolve_expr(&mut self, expr: &mut Expr) -> Option<Expr> {
+	fn resolve_expr(&mut self, ast: &AstProxy, expr: &mut Expr) -> Option<Expr> {
 		// eprintln!("visit {:?}", expr);
 		match expr {
 			// For most expression types, we simply visit each inner expression
 			// and then return.
 
 			Expr::Binary(binary) => {
-				self.visit_expr(&mut binary.left);
-				self.visit_expr(&mut binary.right);
+				self.visit_expr(ast, binary.left);
+				self.visit_expr(ast, binary.right);
 				return None;
 			},
 
 			Expr::Comparison(compare) => {
-				self.visit_expr(&mut compare.left);
-				self.visit_expr(&mut compare.right);
+				self.visit_expr(ast, compare.left);
+				self.visit_expr(ast, compare.right);
 				return None;
 			},
 
 			Expr::Logical(logical) => {
-				self.visit_expr(&mut logical.left);
-				self.visit_expr(&mut logical.right);
+				self.visit_expr(ast, logical.left);
+				self.visit_expr(ast, logical.right);
 				return None;
 			}
 
 			Expr::If(if_) => {
-				self.visit_expr(&mut if_.condition);
-				self.visit_expr(&mut if_.then_branch);
-				//if_.else_branch.as_mut().map(|e| self.visit_expr(e));
-				if let Some(else_b) = &mut if_.else_branch {
-					self.visit_expr(else_b);
+				self.visit_expr(ast, if_.condition);
+				self.visit_expr(ast, if_.then_branch);
+				//if_.else_branch.as_mut().map(|e| self.visit_expr(ast, e));
+				if let Some(else_b) = if_.else_branch {
+					self.visit_expr(ast, else_b);
 				}
 				None
 			}
 			
 			Expr::Assign(assign) => {
-				self.visit_expr(&mut assign.value);
+				self.visit_expr(ast, assign.value);
 				return None;
 			},
 
 			Expr::Block(block) => {
-				for stmt in &mut block.stmts {
-					self.visit_stmt(stmt);
+				for stmt in &block.stmts {
+					self.visit_stmt(ast, *stmt);
 				}
 				return None;
 			},
 			
 			Expr::Print(Print { exprs, .. }) | Expr::Str(Str { exprs, .. }) => {
 				for expr in exprs {
-					self.visit_expr(expr);
+					self.visit_expr(ast, *expr);
 				}
 				return None;
 			}
@@ -232,28 +232,28 @@ impl<'db> Binder<'db> {
 			
 			Expr::Unbound(ident) => {
 				// TODO: Do we want to avoid the clone here..?
-				self.resolve_unbound(ident.identifier.lexeme, ident.location.clone())
+				self.resolve_unbound(ast, ident.identifier.lexeme, ident.location.clone())
 			},
 
 			Expr::UnboundAssign(assign) => {
 				// Important: Must visit the value node too
-				self.visit_expr(&mut assign.value);
+				self.visit_expr(ast, assign.value);
 				// TODO: Do we want to avoid the clone here?
-				self.resolve_unbound_assign(assign.identifier.lexeme, assign.location.clone(), std::mem::take(assign.value))
+				self.resolve_unbound_assign(assign.identifier.lexeme, assign.location.clone(), assign.value)
 			},
 
 			Expr::FunCall(call) => {
 				// Must visit all the arguments of the call
-				for arg in &mut call.args {
-					self.visit_expr(arg);
+				for arg in &call.args {
+					self.visit_expr(ast, *arg);
 				}
 				None
 			},
 
 			Expr::ValCall(call) => {
-				self.visit_expr(&mut call.value);
-				for arg in &mut call.args {
-					self.visit_expr(arg);
+				self.visit_expr(ast, call.value);
+				for arg in &call.args {
+					self.visit_expr(ast, *arg);
 				}
 				None
 			},
@@ -265,20 +265,20 @@ impl<'db> Binder<'db> {
 				// If the UnboundFunCapture is on an object, we need to visit
 				// that object, and we also can't even try to resolve it yet,
 				// as it's bound to an object, not to a scope.
-				if let Some(object) = &mut unbound.object {
-					self.visit_expr(object);
+				if let Some(object) = unbound.object {
+					self.visit_expr(ast, object);
 					None
 				}
 				else {
 					// If it isn't on an object, then it must be capturing
 					// a function in the lexical scope, so we have to resolve
 					// it lexically.
-					self.resolve_unbound_funcapture(unbound)
+					self.resolve_unbound_funcapture(ast, unbound)
 				}
 			},
 
 			Expr::FunDeclare(fun_declare) => {
-				self.visit_function(fun_declare);
+				self.visit_function(ast, fun_declare);
 				return None;
 			},
 
@@ -288,7 +288,7 @@ impl<'db> Binder<'db> {
 				new.typ = self.db.put_type(Type::Class(new.class));
 
 				for init in &mut new.initializers {
-					self.visit_expr(&mut init.value);
+					self.visit_expr(ast, init.value);
 					
 					if let Some(id) = self.db.lookup_property(new.typ, init.ident.lexeme) {
 						init.var = id;
@@ -308,14 +308,14 @@ impl<'db> Binder<'db> {
 			}
 			
 			Expr::Get(get) => {
-				self.visit_expr(&mut get.lhs);
+				self.visit_expr(ast, get.lhs);
 				
 				return None;
 			}
 			
 			Expr::Set(set) => {
-				self.visit_expr(&mut set.rhs);
-				self.visit_expr(&mut set.lhs);
+				self.visit_expr(ast, set.rhs);
+				self.visit_expr(ast, set.lhs);
 				return None;
 			}
 
@@ -328,35 +328,35 @@ impl<'db> Binder<'db> {
 			}
 
 			Expr::ArrayLit(lit) => {
-				for val in &mut lit.values {
-					self.visit_expr(val);
+				for val in &lit.values {
+					self.visit_expr(ast, *val);
 				}
 				return None;
 			}
 
 			Expr::Index(index) => {
-				self.visit_expr(&mut index.value);
-				self.visit_expr(&mut index.index);
+				self.visit_expr(ast, index.value);
+				self.visit_expr(ast, index.index);
 				return None;
 			}
 
 			Expr::SetIndex(set) => {
-				self.visit_expr(&mut set.value);
-				self.visit_expr(&mut set.index);
-				self.visit_expr(&mut set.rhs);
+				self.visit_expr(ast, set.value);
+				self.visit_expr(ast, set.index);
+				self.visit_expr(ast, set.rhs);
 				return None;
 			}
 		}
 	}
 
-	fn visit_expr(&mut self, expr: &mut Expr) {
-		if let Some(resolved) = self.resolve_expr(expr) {
+	fn visit_expr(&mut self, ast: &AstProxy, expr: ExprId) {
+		if let Some(resolved) = self.resolve_expr(ast, ast.exprs.get_mut(expr).as_mut()) {
 			// Replace the unbound identifier with the resolved expression.
-			*expr = resolved;
+			*ast.exprs.get_mut(expr) = resolved;
 		}
 	}
 
-	fn visit_class(&mut self, class_declare: &mut ClassDeclare) {
+	fn visit_class(&mut self, ast: &AstProxy, class_declare: &mut ClassDeclare) {
 		let enclosing_in_class = self.in_class;
 		self.in_class = true;
 
@@ -366,11 +366,11 @@ impl<'db> Binder<'db> {
 		self.checkers.push(new_scope);
 
 		for fun in &mut class_declare.funs {
-			self.visit_function(fun);
+			self.visit_function(ast, fun);
 		}
 
 		for var in &mut class_declare.vars {
-			self.visit_expr(&mut var.value);
+			self.visit_expr(ast, var.value);
 
 			// Bind variable types
 			self.visit_var_type(var.identity);
@@ -474,32 +474,32 @@ impl<'db> Binder<'db> {
 		self.db.get_mut(var).typ = var_type;
 	}
 
-	fn visit_stmt(&mut self, stmt: &mut Stmt) {
-		match stmt {
+	fn visit_stmt(&mut self, ast: &AstProxy, stmt: StmtId) {
+		match ast.stmts.get_mut(stmt).as_mut() {
 			Stmt::Declare(declare) => {
-				self.visit_expr(&mut declare.value);
+				self.visit_expr(ast, declare.value);
 
 				// Anywhere where the parser might generate a Type::UnboundIdent,
 				// we need to try resolving that identifier.
 				self.visit_var_type(declare.identity);
 			},
 			Stmt::Expression(expr) => {
-				self.visit_expr(&mut expr.expression);
+				self.visit_expr(ast, expr.expression);
 			},
 			Stmt::Return(ret) => {
 				if let Some(expr) = &mut ret.expression {
-					self.visit_expr(expr);
+					self.visit_expr(ast, *expr);
 				}
 			},
 			Stmt::ClassDeclare(class_declare) => {
-				self.visit_class(class_declare);
+				self.visit_class(ast, class_declare);
 			}
 		}
 	}
 
-	fn visit_function(&mut self, function: &mut FunDeclare) {
+	fn visit_function(&mut self, ast: &AstProxy, function: &mut FunDeclare) {
 		// TODO: Push my name.
-		self.visit_expr(&mut function.value);
+		self.visit_expr(ast, function.value);
 
 		let param_count = self.db.get(function.identity).parameters.len();
 		for param in 0..param_count {
@@ -512,9 +512,9 @@ impl<'db> Binder<'db> {
 		self.db.get_mut(function.identity).return_type = ret_type;
 	}
 
-	pub fn visit_module(&mut self, module: &mut Module) {
+	pub fn visit_module(&mut self, ast: &AstProxy, module: &mut Module) {
 		for global in &mut module.globals {
-			self.visit_expr(&mut global.value);
+			self.visit_expr(ast, global.value);
 		}
 
 		// Don't add the global() checker until after the globals have been
@@ -522,25 +522,29 @@ impl<'db> Binder<'db> {
 		self.checkers.push(NameChecker::global());
 
 		for fun in &mut module.functions {
-			self.visit_function(fun);
+			self.visit_function(ast, fun);
 		}
 
 		for class in &mut module.classes {
-			self.visit_class(class);
+			self.visit_class(ast, class);
 		}
 	}
 }
 
-pub fn bind(db: &mut Db, modules: &mut Vec<Module>) -> bool {
+pub fn bind(db: &mut Db, ast: &mut Ast, modules: &mut Vec<Module>) -> bool {
 	let mut had_error = false;
+
+	let proxy = ast.get_proxy();
 
 	for module in modules {
 		// TODO: Run one binder per thread.
 		let mut binder = Binder::new(db);
-		binder.visit_module(module);
+		binder.visit_module(&proxy, module);
 
 		if binder.had_error { had_error = true; }
 	}
+
+	proxy.commit();
 
 	had_error
 }
