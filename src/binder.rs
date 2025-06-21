@@ -5,6 +5,8 @@ use crate::module::Module;
 use crate::source::{Source, SourceLocation};
 use crate::typ::Type;
 
+use crate::arena::IndexCell;
+
 struct NameChecker {
 	buffer: String,
 	own_length: usize,

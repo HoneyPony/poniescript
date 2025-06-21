@@ -8,6 +8,8 @@ use crate::typ::Type;
 use crate::expr::*;
 use crate::error::Error;
 
+use crate::arena::IndexCell;
+
 // Current plan for type inference:
 // variable declarations may infer a type for the variable:
 //     var x = new Player(); // x is now a Player

@@ -6,6 +6,8 @@ use crate::typ::Type;
 
 use crate::expr::*;
 
+use crate::arena::IndexCell;
+
 use std::fmt::Write as _;
 
 struct Codegen<'a> {

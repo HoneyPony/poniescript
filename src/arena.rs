@@ -142,6 +142,11 @@ pub struct ArenaCellProxy<'ar, Ty, Key: ArenaKey> {
     borrowed: UnsafeCell<Vec<bool>>,
 }
 
+pub trait IndexCell<Ty, Key: ArenaKey> {
+    fn get(&self, key: Key) -> &Ty;
+    fn get_mut(&self, key: Key) -> ArenaBorrow<Ty, Key>;
+}
+
 enum ArenaBorrowParent<'a, Ty, Key: ArenaKey> {
     Cell(&'a ArenaCell<Ty, Key>),
     Proxy(&'a ArenaCellProxy<'a, Ty, Key>)
@@ -262,8 +267,10 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
             }
         }
     }
+}
 
-    pub fn get(&self, id: Key) -> &Ty {
+impl<Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCell<Ty, Key> {
+    fn get(&self, id: Key) -> &Ty {
         let idx = id.to_index();
 
         #[cfg(debug_assertions)]
@@ -283,7 +290,7 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
         ptr
     }
 
-    pub fn get_mut(&self, id: Key) -> ArenaBorrow<Ty, Key> {
+    fn get_mut(&self, id: Key) -> ArenaBorrow<Ty, Key> {
         let idx = id.to_index();
 
         #[cfg(debug_assertions)]
@@ -337,8 +344,10 @@ impl <'ar, Ty, Key: ArenaKey> ArenaCellProxy<'ar, Ty, Key> {
             Key::from_index(self.parent_len() + (*self.added.get()).len() - 1)
         }
     }
+}
 
-    pub fn get(&self, id: Key) -> &Ty {
+impl<'a, Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCellProxy<'a, Ty, Key> {
+    fn get(&self, id: Key) -> &Ty {
         let idx = id.to_index();
 
         if idx < self.parent_len() {
@@ -364,7 +373,7 @@ impl <'ar, Ty, Key: ArenaKey> ArenaCellProxy<'ar, Ty, Key> {
         ptr
     }
 
-    pub fn get_mut(&self, id: Key) -> ArenaBorrow<Ty, Key> {
+    fn get_mut(&self, id: Key) -> ArenaBorrow<Ty, Key> {
         let idx = id.to_index();
 
         if idx < self.parent_len() {

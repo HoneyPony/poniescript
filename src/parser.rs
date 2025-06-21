@@ -14,6 +14,8 @@ use crate::error::Error;
 use crate::source::SourceLocation;
 use crate::typ::Type;
 
+use crate::arena::IndexCell;
+
 struct Scope {
 	map: FxHashMap<StrId, ScopeEntry>,
 }

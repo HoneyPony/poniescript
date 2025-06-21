@@ -3,6 +3,8 @@ use crate::{db::{Ast, AstProxy, Db}, expr::{ClassDeclare, Expr, Stmt}, module::M
 use crate::db::ExprId;
 use crate::db::StmtId;
 
+use crate::arena::IndexCell;
+
 struct DeadCodeElim<'db> {
 	db: &'db mut Db,
 }
@@ -105,7 +107,7 @@ impl<'db> DeadCodeElim<'db> {
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::push_expression(ast, arg.location_p(ast).clone(), arg));
+                        new_exprs.push(Stmt::push_expression(ast, arg.location(ast).clone(), arg));
                     }
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
@@ -137,7 +139,7 @@ impl<'db> DeadCodeElim<'db> {
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::push_expression(ast, arg.location_p(ast).clone(), arg));
+                        new_exprs.push(Stmt::push_expression(ast, arg.location(ast).clone(), arg));
                     }
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
@@ -188,7 +190,7 @@ impl<'db> DeadCodeElim<'db> {
                 // if e.g. the conditional evaluates to true. But we might need
                 // a constant folding pass for that to work.
                 self.elim_expr(ast, &mut if_.condition);
-                if if_.condition.typ_p(ast, &self.db) == self.db.types.bottom {
+                if if_.condition.typ(ast, &self.db) == self.db.types.bottom {
                     *expr_id = if_.condition;
                     return true;
                 }
@@ -226,7 +228,7 @@ impl<'db> DeadCodeElim<'db> {
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::push_expression(ast, arg.location_p(ast).clone(), arg));
+                        new_exprs.push(Stmt::push_expression(ast, arg.location(ast).clone(), arg));
                     }
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
@@ -255,7 +257,7 @@ impl<'db> DeadCodeElim<'db> {
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::push_expression(ast, arg.location_p(ast).clone(), arg));
+                        new_exprs.push(Stmt::push_expression(ast, arg.location(ast).clone(), arg));
                     }
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
@@ -285,7 +287,7 @@ impl<'db> DeadCodeElim<'db> {
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::push_expression(ast, arg.value.location_p(ast).clone(), arg.value));
+                        new_exprs.push(Stmt::push_expression(ast, arg.value.location(ast).clone(), arg.value));
                     }
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
@@ -356,7 +358,7 @@ impl<'db> DeadCodeElim<'db> {
 
                 // If the eliminated expression is a Bottom, then we can replace
                 // ourselves with it.
-                if declare.value.typ_p(ast, self.db) == self.db.types.bottom {
+                if declare.value.typ(ast, self.db) == self.db.types.bottom {
                     *stmt = Stmt::mk_expression(declare.location.clone(), declare.value);
                     return true
                 }
@@ -365,7 +367,7 @@ impl<'db> DeadCodeElim<'db> {
             },
             Stmt::Expression(expression) => {
                 self.elim_expr(ast, &mut expression.expression);
-                expression.expression.typ_p(ast, self.db) == self.db.types.bottom
+                expression.expression.typ(ast, self.db) == self.db.types.bottom
             },
             Stmt::Return(ret) => {
                 if let Some(inner) = &mut ret.expression {
