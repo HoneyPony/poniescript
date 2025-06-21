@@ -352,7 +352,9 @@ impl<'db> Binder<'db> {
 	}
 
 	fn visit_expr(&mut self, ast: &AstProxy, expr: ExprId) {
-		if let Some(resolved) = self.resolve_expr(ast, ast.exprs.get_mut(expr).as_mut()) {
+		let mut binding = ast.exprs.get_mut(expr);
+		if let Some(resolved) = self.resolve_expr(ast, binding.as_mut()) {
+			drop(binding);
 			// Replace the unbound identifier with the resolved expression.
 			*ast.exprs.get_mut(expr) = resolved;
 		}
