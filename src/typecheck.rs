@@ -104,12 +104,12 @@ impl<'db> TypeChecker<'db> {
 	// includes:
 	// - arguments to print()
 	// - statement expressions whose value is not used
-	fn promote_from_unassigned(&mut self, expr: &mut Expr) -> TypId {
-		let ty = expr.typ(self.db);
+	fn promote_from_unassigned(&mut self, ast: &Ast, expr: ExprId) -> TypId {
+		let ty = expr.typ(ast, self.db);
 		let promoted = self.promote_ty_from_unassigned(ty);
 
 		if promoted != ty {
-			self.promote(expr, promoted);
+			self.promote(ast, expr, promoted);
 		}
 
 		promoted
@@ -125,19 +125,19 @@ impl<'db> TypeChecker<'db> {
 	//
 	// TODO: Is this correct? More testing is needed. It would also be nice to
 	// further simplify the bottom logic somehow.
-	fn promote(&mut self, expr: &mut Expr, ty: TypId) {
+	fn promote(&mut self, ast: &Ast, expr: ExprId, ty: TypId) {
 		if ty == self.db.types.bottom {
 			// Special case: If we're promoting to bottom, then our expression
 			// is unused. So, instead promote to unassigned.
-			self.promote_from_unassigned(expr);
+			self.promote_from_unassigned(ast, expr);
 			return;
 		}
-		expr.promote(ty, self.db);
+		expr.promote(ty, ast, self.db);
 	}
 
-	fn promote_stmt(&mut self, stmt: &mut Stmt, ty: TypId) {
-		match stmt {
-			Stmt::Expression(expr) => self.promote(&mut expr.expression, ty),
+	fn promote_stmt(&mut self, ast: &Ast, stmt_id: StmtId, ty: TypId) {
+		match ast.stmts.get_mut(stmt_id).as_mut() {
+			Stmt::Expression(expr) => self.promote(ast, expr.expression, ty),
 			_ => {}
 		}
 	}
@@ -277,8 +277,8 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
-	fn check_assign(&mut self, at: &SourceLocation, var: VarId, expr: &mut Expr, assign_ty: bool) -> Result<TypId> {
-		let value = self.check_expr(expr, true)?;
+	fn check_assign(&mut self, ast: &Ast, at: &SourceLocation, var: VarId, expr_id: ExprId, assign_ty: bool) -> Result<TypId> {
+		let value = self.check_expr(ast, expr_id, true)?;
 
 		if self.db.get_var_type(var) == self.db.types.unassigned && value == self.db.types.unassigned {
 			type_error!(self, at, "Invalid assignment: Type annotations needed.");
@@ -312,7 +312,7 @@ impl<'db> TypeChecker<'db> {
 			}
 			self.db.get_mut(var).typ = computed;
 		}
-		self.promote(expr, computed);
+		self.promote(ast, expr_id, computed);
 
 		Ok(computed)
 	}
@@ -321,11 +321,13 @@ impl<'db> TypeChecker<'db> {
 	// TODO: We could, inside this function, just directly call
 	// promote_from_unassigned on any expr that has value_used = false -- we
 	// should consider if that would make sense.
-	fn check_expr(&mut self, expr: &mut Expr, value_used: bool) -> Result<TypId> {
+	fn check_expr(&mut self, ast: &Ast, expr_id: ExprId, value_used: bool) -> Result<TypId> {
+		let mut binding = ast.exprs.get_mut(expr_id);
+		let expr = binding.as_mut();
 		Ok(match expr {
 			Expr::Binary(binary) => {
-				let left = self.check_expr(&mut binary.left, true)?;
-				let right = self.check_expr(&mut binary.right, true)?;
+				let left = self.check_expr(ast, binary.left, true)?;
+				let right = self.check_expr(ast, binary.right, true)?;
 
 				let computed = maybe_type_error!(
 					self,
@@ -338,8 +340,8 @@ impl<'db> TypeChecker<'db> {
 				);
 
 				binary.typ = computed;
-				self.promote(binary.left, computed);
-				self.promote(binary.right, computed);
+				self.promote(ast, binary.left, computed);
+				self.promote(ast, binary.right, computed);
 				
 				computed
 			},
@@ -347,9 +349,9 @@ impl<'db> TypeChecker<'db> {
 				let mut final_ty: TypId = self.db.types.unassigned;
 
 				if let Some((first, rest)) = lit.values.split_first_mut() {
-					final_ty = self.check_expr(first, true)?;
+					final_ty = self.check_expr(ast, *first, true)?;
 					for value in rest {
-						let value_ty = self.check_expr(value, true)?;
+						let value_ty = self.check_expr(ast, *value, true)?;
 						
 						final_ty = maybe_type_error!(
 							self,
@@ -364,7 +366,7 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				for value in &mut lit.values {
-					self.promote(value, final_ty);
+					self.promote(ast, *value, final_ty);
 				}
 
 				lit.elem_typ = final_ty;
@@ -375,8 +377,8 @@ impl<'db> TypeChecker<'db> {
 				lit.arr_typ
 			}
 			Expr::Comparison(compare) => {
-				let left = self.check_expr(&mut compare.left, true)?;
-				let right = self.check_expr(&mut compare.right, true)?;
+				let left = self.check_expr(ast, compare.left, true)?;
+				let right = self.check_expr(ast, compare.right, true)?;
 
 				let computed = maybe_type_error!(
 					self,
@@ -396,8 +398,8 @@ impl<'db> TypeChecker<'db> {
 				// Keep track of the type that we're "doing the comparison as."
 				compare.compare_as = computed;
 
-				self.promote(compare.left, computed);
-				self.promote(compare.right, computed);
+				self.promote(ast, compare.left, computed);
+				self.promote(ast, compare.right, computed);
 
 				// Comparisons always return bool.
 				self.db.types.bool
@@ -406,43 +408,43 @@ impl<'db> TypeChecker<'db> {
 				// We are expecting a real kind of value from the sub-expressions
 				// (namely a bool, or promotable to bool), so we must say that the
 				// value is used.
-				let left = self.check_expr(&mut logical.left, true)?;
-				let right = self.check_expr(&mut logical.right, true)?;
+				let left = self.check_expr(ast, logical.left, true)?;
+				let right = self.check_expr(ast, logical.right, true)?;
 
 				let left_check = self.compute_assignable(self.db.types.bool, left);
 				let right_check = self.compute_assignable(self.db.types.bool, right);
 
 				let left_check = maybe_type_error!(self, left_check,
-					logical.left.location(),
+					logical.left.location(ast),
 					"Invalid conditional expression in LHS to logical operator: Expression has type '{}'",
 					self.db.repr_type(left));
 
 				let right_check = maybe_type_error!(self, right_check,
-					logical.right.location(),
+					logical.right.location(ast),
 					"Invalid conditional expression in RHS to logical operator: Expression has type '{}'",
 					self.db.repr_type(right));
 
-				self.promote(logical.left, left_check);
-				self.promote(logical.right, right_check);
+				self.promote(ast, logical.left, left_check);
+				self.promote(ast, logical.right, right_check);
 
 				// Logical operators always return bool.
 				self.db.types.bool
 			}
 			Expr::If(if_) => {
-				let condition_ty = self.check_expr(&mut if_.condition, true)?;
+				let condition_ty = self.check_expr(ast, if_.condition, true)?;
 				let cond_computed =
 					self.compute_assignable(self.db.types.bool, condition_ty);
 
 				// TODO: Report the error at condition.location(), we need an
 				// autogenerated method that does this.
 				let cond_computed = maybe_type_error!(self, cond_computed,
-					if_.condition.location(),
+					if_.condition.location(ast),
 					"Invalid conditional expression: Expression has type '{}'",
 					self.db.repr_type(condition_ty));
 
-				self.promote(if_.condition, cond_computed);
+				self.promote(ast, if_.condition, cond_computed);
 
-				let then_ty = self.check_expr(&mut if_.then_branch, value_used)?;
+				let then_ty = self.check_expr(ast, if_.then_branch, value_used)?;
 
 				let Some(else_branch) = if_.else_branch.as_mut() else {
 					// If there's no else branch, then things are a bit weird:
@@ -458,7 +460,7 @@ impl<'db> TypeChecker<'db> {
 				// essentially just requires two types where one can be promoted
 				// to the other.
 
-				let else_ty = self.check_expr(else_branch, value_used)?;
+				let else_ty = self.check_expr(ast, *else_branch, value_used)?;
 
 				// If the value is not used, though, we can just return type.void and
 				// call it a day. This is so if branches can have differing types in
@@ -480,39 +482,39 @@ impl<'db> TypeChecker<'db> {
 						&if_.location.begin()
 					);
 					let error = error.add_note(format!("then branch has type '{}'", self.db.repr_type(then_ty)),
-						Some(if_.then_branch.val_location()));
+						Some(if_.then_branch.val_location(ast)));
 					let error = error.add_note(format!("else branch has type '{}'", self.db.repr_type(else_ty)),
-						Some(else_branch.val_location()));
+						Some(else_branch.val_location(ast)));
 
 					error
 				});
 
-				self.promote(if_.then_branch, computed);
-				self.promote(else_branch, computed);
+				self.promote(ast, if_.then_branch, computed);
+				self.promote(ast, *else_branch, computed);
 
 				if_.typ = computed;
 
 				computed
 			},
 			Expr::Index(index) => {
-				let arr_ty = self.check_expr(&mut index.value, true)?;
+				let arr_ty = self.check_expr(ast, index.value, true)?;
 
 				let elem_ty = match self.db.get(arr_ty).clone() {
 					Type::ArrayOf(elem) => elem,
 					_ => type_error!(self, &index.location, "Can only index an array.")
 				};
 
-				let index_ty = self.check_expr(&mut index.index, true)?;
+				let index_ty = self.check_expr(ast, index.index, true)?;
 				let index_computed = self.compute_assignable(self.db.types.int, index_ty);
 				
 				let index_computed = maybe_type_error!(self,
 					index_computed,
-					index.index.location(),
+					index.index.location(ast),
 					"Invalid index expression: Expression has type {}",
 					self.db.repr_type(index_ty)
 				);
 
-				self.promote(index.index, index_computed);
+				self.promote(ast, index.index, index_computed);
 
 				index.typ = elem_ty;
 
@@ -521,7 +523,7 @@ impl<'db> TypeChecker<'db> {
 			Expr::SetIndex(set) => {
 				// Get the type of the dotted expression. This lets us look up
 				// the property on that type.
-				let arr_ty = self.check_expr(&mut set.value, value_used)?;
+				let arr_ty = self.check_expr(ast, set.value, value_used)?;
 
 				let elem_ty = match self.db.get(arr_ty).clone() {
 					Type::ArrayOf(elem) => elem,
@@ -531,7 +533,7 @@ impl<'db> TypeChecker<'db> {
 				// We can't check the variable just like an Assign, as that
 				// will overwrite the type (the type is given by the array type).
 				// But, we do need to check that the RHS is assignable here.
-				let rhs = self.check_expr(&mut set.rhs, true)?;
+				let rhs = self.check_expr(ast, set.rhs, true)?;
 
 				let computed =
 					self.compute_assignable(elem_ty, rhs);
@@ -547,21 +549,21 @@ impl<'db> TypeChecker<'db> {
 				);
 
 				// Promote the RHS based on the computed type.
-				self.promote(set.rhs, computed);
+				self.promote(ast, set.rhs, computed);
 
 
 				// Handle the index just like in Index.
-				let index_ty = self.check_expr(&mut set.index, true)?;
+				let index_ty = self.check_expr(ast, set.index, true)?;
 				let index_computed = self.compute_assignable(self.db.types.int, index_ty);
 				
 				let index_computed = maybe_type_error!(self,
 					index_computed,
-					set.index.location(),
+					set.index.location(ast),
 					"Invalid index expression: Expression has type {}",
 					self.db.repr_type(index_ty)
 				);
 
-				self.promote(set.index, index_computed);
+				self.promote(ast, set.index, index_computed);
 
 				set.typ = elem_ty;
 
@@ -569,7 +571,7 @@ impl<'db> TypeChecker<'db> {
 			}
 			Expr::Variable(var) => self.db.get(var.identity).typ,
 			Expr::Assign(assign) => {
-				self.check_assign(&assign.location, assign.identity, &mut assign.value, false)?
+				self.check_assign(ast, &assign.location, assign.identity, assign.value, false)?
 			},
 			Expr::NumLiteral(lit) => {
 				lit.typ
@@ -588,13 +590,13 @@ impl<'db> TypeChecker<'db> {
 					n => n - 1,
 				};
 				for stmt in &mut block.stmts[0..all_but_last] {
-					self.check_stmt(stmt, false)?;
+					self.check_stmt(ast, *stmt, false)?;
 				}
 
 				// If the value isn't used, we can simply type-check the
 				// last statement then bail with Void.
 				if !value_used {
-					block.stmts.last_mut().map(|stmt| self.check_stmt(stmt, false));
+					block.stmts.last_mut().map(|stmt| self.check_stmt(ast, *stmt, false));
 					// We also need to assign our own type to void in this case
 					// -- our type is not yet assigned.
 					block.typ = self.db.types.void;
@@ -610,7 +612,7 @@ impl<'db> TypeChecker<'db> {
 
 				// If the block has a statement, defer to self.stmt(). But we
 				// need to get a TypId at the end.
-				let Some(val) = self.check_stmt(stmt, true)? else {
+				let Some(val) = self.check_stmt(ast, *stmt, true)? else {
 					type_error!(self, &block.location,
 						"Return value of block is used, but its last statement has no value.");
 				};
@@ -618,7 +620,7 @@ impl<'db> TypeChecker<'db> {
 				// Return the computed TypId.
 				block.typ = val;
 
-				self.promote_stmt(stmt, val);
+				self.promote_stmt(ast, *stmt, val);
 
 				val
 			},
@@ -635,12 +637,12 @@ impl<'db> TypeChecker<'db> {
 					//
 					// This logic is the same as unused statement expressions and the like,
 					// so it gets its own helper function.
-					self.check_expr(expr, true)?;
-					self.promote_from_unassigned(expr);
+					self.check_expr(ast, *expr, true)?;
+					self.promote_from_unassigned(ast, *expr);
 				}
 
-				self.check_expr(&mut print.exprs[0], true)?;
-				let computed = self.promote_from_unassigned(expr);
+				self.check_expr(ast, print.exprs[0], true)?;
+				let computed = self.promote_from_unassigned(ast, print.exprs[0]);
 
 				// TODO: We could store this type directly on the print() if we
 				// wanted to -- that's what other ast nodes do...
@@ -650,8 +652,8 @@ impl<'db> TypeChecker<'db> {
 				// Str is very similar to print(), except it always return StrBuf instead
 				// of its first argument.
 				for expr in &mut str.exprs {
-					self.check_expr(expr, true)?;
-					self.promote_from_unassigned(expr);
+					self.check_expr(ast, *expr, true)?;
+					self.promote_from_unassigned(ast, *expr);
 				}
 
 				self.db.types.str_buf
@@ -679,7 +681,7 @@ impl<'db> TypeChecker<'db> {
 
 				for i in 0..fun_arity {
 					// Check each argument against the corresponding parameter.
-					let arg = self.check_expr(&mut call.args[i], true)?;
+					let arg = self.check_expr(ast, call.args[i], true)?;
 
 					let param = self.db.get(call.identity).parameters[i];
 
@@ -696,14 +698,14 @@ impl<'db> TypeChecker<'db> {
 						self.db.repr_type(arg)
 					);
 
-					self.promote(&mut call.args[i], computed);
+					self.promote(ast, call.args[i], computed);
 				}
 
 				self.db.get_fun_ret_type(call.identity)
 			},
 
 			Expr::ValCall(call) => {
-				let value = self.check_expr(&mut call.value, true)?;
+				let value = self.check_expr(ast, call.value, true)?;
 			
 				// Now, we need to make sure that the value is Assignable to
 				// a function type.
@@ -714,7 +716,7 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(value));
 
 				// TODO: Also support FunRaw calling..?
-				self.promote(call.value, computed);
+				self.promote(ast, call.value, computed);
 
 				let correct_sig = match self.db.get(computed) {
 					Type::Fun(sig) => *sig,
@@ -740,7 +742,7 @@ impl<'db> TypeChecker<'db> {
 
 				// Check each argument against the corresponding parameter.
 				for i in 0..fun_arity {
-					let arg = self.check_expr(&mut call.args[i], true)?;
+					let arg = self.check_expr(ast, call.args[i], true)?;
 
 					let param = self.db.get(call.sig).parameters[i];
 
@@ -755,7 +757,7 @@ impl<'db> TypeChecker<'db> {
 						self.db.repr_type(arg)
 					);
 
-					self.promote(&mut call.args[i], computed);
+					self.promote(ast, call.args[i], computed);
 				}
 
 				// TODO: Should ValCall's use_sig their sig?
@@ -781,7 +783,7 @@ impl<'db> TypeChecker<'db> {
 
 			Expr::FunDeclare(declare) => {
 				self.fix_fun_declare(declare);
-				self.check_fun_declare(declare)?;
+				self.check_fun_declare(ast, declare)?;
 
 				let sig = self.db.get(declare.identity).sig;
 
@@ -810,7 +812,7 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				for init in &mut new.initializers {
-					self.check_assign(&init.location, init.var, &mut init.value, false)?;
+					self.check_assign(ast, &init.location, init.var, init.value, false)?;
 				}
 
 				new.typ
@@ -819,7 +821,7 @@ impl<'db> TypeChecker<'db> {
 			Expr::Get(get) => {
 				// Get the type of the dotted expression. This lets us look up
 				// the property on that type.
-				let lhs = self.check_expr(&mut get.lhs, true)?;
+				let lhs = self.check_expr(ast, get.lhs, true)?;
 				if let Some(property) = self.db.lookup_property(lhs, get.identifier.lexeme) {
 					// We must actually store the looked-up property.
 					get.var = property;
@@ -830,23 +832,15 @@ impl<'db> TypeChecker<'db> {
 				// Check for possible function capture. If so, then we turn this
 				// Get into a FunCapture.
 				if let Some(fun) = self.db.lookup_member_fn(lhs, get.identifier.lexeme) {
-					unsafe {
-						// TODO: Use MaybeUninit instead..?
-						// Apparently Rust really doesn't like us trying to take a Get.
-						// We can do the song and dance with the Default::default() instead,
-						// but this seems even more annoying.
-						let get_obj = std::mem::replace(expr, Default::default());
-						let Expr::Get(get_obj) = get_obj else { unreachable!() };
-						let as_funcapture = FunCapture {
-							location: get_obj.location,
-							identity: fun,
-							typ: self.db.types.unassigned,
-							object: Some(get_obj.lhs),
-						};
-						// Forget the (invalid) zeroed value that we created.
-						std::mem::forget(std::mem::replace(expr, Expr::FunCapture(as_funcapture)));
-					}
-					return self.check_expr(expr, value_used);
+					let as_funcapture = FunCapture {
+						location: get.location.clone(),
+						identity: fun,
+						typ: self.db.types.unassigned,
+						object: Some(get.lhs),
+					};
+
+					*expr = Expr::FunCapture(as_funcapture);
+					return self.check_expr(ast, expr_id, value_used);
 				}
 
 				type_error!(self,
@@ -859,7 +853,7 @@ impl<'db> TypeChecker<'db> {
 			Expr::Set(set) => {
 				// Get the type of the dotted expression. This lets us look up
 				// the property on that type.
-				let lhs = self.check_expr(&mut set.lhs, value_used)?;
+				let lhs = self.check_expr(ast, set.lhs, value_used)?;
 				let property = self.db.lookup_property(lhs, set.identifier.lexeme);
 
 				let Some(property) = property else {
@@ -878,7 +872,7 @@ impl<'db> TypeChecker<'db> {
 				// definition itself). But, we do need to check that the RHS
 				// is assignable to this variable.
 
-				let rhs = self.check_expr(&mut set.rhs, true)?;
+				let rhs = self.check_expr(ast, set.rhs, true)?;
 
 				let computed =
 					self.compute_assignable(self.db.get_var_type(property), rhs);
@@ -897,7 +891,7 @@ impl<'db> TypeChecker<'db> {
 				);
 
 				// Promote the RHS based on the computed type.
-				self.promote(set.rhs, computed);
+				self.promote(ast, set.rhs, computed);
 
 				self.db.get_var_type(property)
 			}
@@ -930,39 +924,29 @@ impl<'db> TypeChecker<'db> {
 					let Some(object) = &mut capt.object else {
 						type_error!(self, &capt.location, "Can't resolve function call on no object.");
 					};
-					self.check_expr(object, true)?
+					self.check_expr(ast, *object, true)?
 				};
 
 				if let Some(fun) = self.db.lookup_member_fn(obj_ty, capt.identifier.lexeme) {
-					unsafe {
-						// Safety: We're immediately re-initializing this memory after
-						// taking from it.
-						let capt_obj = std::ptr::read(capt);
-						let as_funcapture = FunCapture {
-							location: capt_obj.location,
-							identity: fun,
-							typ: self.db.types.unassigned,
-							object: capt_obj.object
-						};
-						std::ptr::write(expr, Expr::FunCapture(as_funcapture));
-					}
-					return self.check_expr(expr, value_used);
+					let as_funcapture = FunCapture {
+						location: capt.location.clone(),
+						identity: fun,
+						typ: self.db.types.unassigned,
+						object: capt.object
+					};
+					*expr = Expr::FunCapture(as_funcapture);
+					return self.check_expr(ast, expr_id, value_used);
 				}
 
 				if let Some(property) = self.db.lookup_property(obj_ty, capt.identifier.lexeme) {
-					unsafe {
-						// TODO: Use MaybeUninit instead..?
-						let capt_obj = std::ptr::read(capt);
-						let as_get = Get {
-							location: capt_obj.location,
-							identifier: capt_obj.identifier,
-							lhs: capt_obj.object.unwrap(), // Safety: We already checked this above
-							var: property
-						};
-						// Forget the (invalid) zeroed value that we created.
-						std::ptr::write(expr, Expr::Get(as_get));
-					}
-					return self.check_expr(expr, value_used);
+					let as_get = Get {
+						location: capt.location.clone(),
+						identifier: capt.identifier.clone(),
+						lhs: capt.object.unwrap(), // Safety: We already checked this above
+						var: property
+					};
+					*expr = Expr::Get(as_get);
+					return self.check_expr(ast, expr_id, value_used);
 				}
 
 				type_error!(self,
@@ -976,7 +960,7 @@ impl<'db> TypeChecker<'db> {
 		})
 	}
 
-	fn check_class(&mut self, class_declare: &mut ClassDeclare) -> Result<()> {
+	fn check_class(&mut self, ast: &Ast, class_declare: &mut ClassDeclare) -> Result<()> {
 		let enclosing_class = self.current_class;
 		self.current_class = Some(self.db.put_type(Type::Class(class_declare.identity)));
 
@@ -986,11 +970,11 @@ impl<'db> TypeChecker<'db> {
 		}
 
 		for declare in &mut class_declare.vars {
-			self.check_declare(declare)?;
+			self.check_declare(ast, declare)?;
 		}
 
 		for fun in &mut class_declare.funs {
-			self.check_fun_declare(fun)?;
+			self.check_fun_declare(ast, fun)?;
 		}
 
 		self.current_class = enclosing_class;
@@ -998,10 +982,10 @@ impl<'db> TypeChecker<'db> {
 		Ok(())
 	}
 
-	fn check_stmt(&mut self, stmt: &mut Stmt, value_used: bool) -> Result<Option<TypId>> {
-		match stmt {
+	fn check_stmt(&mut self, ast: &Ast, stmt_id: StmtId, value_used: bool) -> Result<Option<TypId>> {
+		match ast.stmts.get_mut(stmt_id).as_mut() {
 			Stmt::Declare(declare) => {
-				let typ = self.check_declare(declare)?;
+				let typ = self.check_declare(ast, declare)?;
 
 				if typ == self.db.types.bottom {
 					return Ok(Some(typ));
@@ -1010,16 +994,16 @@ impl<'db> TypeChecker<'db> {
 				Ok(None)
 			},
 			Stmt::ClassDeclare(class_declare) => {
-				self.check_class(class_declare)?;
+				self.check_class(ast, class_declare)?;
 				Ok(None)
 			},
 			Stmt::Expression(expr) => {
-				let mut typ = self.check_expr(&mut expr.expression, value_used)?;
+				let mut typ = self.check_expr(ast, expr.expression, value_used)?;
 				if !value_used {
 					// Non-value-used exprs should be promoted from unassigned.
 					// If their value is used, the value-user will be responsible
 					// for calling promote() with the proper type.
-					typ = self.promote_from_unassigned(&mut expr.expression);
+					typ = self.promote_from_unassigned(ast, expr.expression);
 				}
 				Ok(Some(typ))
 			},
@@ -1051,7 +1035,7 @@ impl<'db> TypeChecker<'db> {
 					},
 				};
 
-				let typ = self.check_expr(inner, true)?;
+				let typ = self.check_expr(ast, *inner, true)?;
 				let computed = self.compute_assignable( 
 					return_type,
 					typ);
@@ -1064,18 +1048,18 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(typ),
 					self.db.repr_type(return_type));
 
-				self.promote(inner, computed);
+				self.promote(ast, *inner, computed);
 
 				Ok(Some(self.db.types.bottom))
 			}
 		}
 	}
 
-	fn check_declare(&mut self, declare: &mut Declare) -> Result<TypId> {
-		self.check_assign(&declare.location, declare.identity, &mut declare.value, true)
+	fn check_declare(&mut self, ast: &Ast, declare: &mut Declare) -> Result<TypId> {
+		self.check_assign(ast, &declare.location, declare.identity, declare.value, true)
 	}
 
-	fn check_fun_declare(&mut self, fun: &mut FunDeclare) -> Result<()> {
+	fn check_fun_declare(&mut self, ast: &Ast, fun: &mut FunDeclare) -> Result<()> {
 		// The idea with whether we need the value to be used is somewhat tricky.
 		// Basically, in the simplest case, if we DO need a return value, then
 		// either we need:
@@ -1096,7 +1080,7 @@ impl<'db> TypeChecker<'db> {
 
 		self.return_types.push(return_type);
 
-		let inner = self.check_expr(&mut fun.value, value_used)?;
+		let inner = self.check_expr(ast, fun.value, value_used)?;
 
 		self.return_types.pop();
 
@@ -1114,7 +1098,7 @@ impl<'db> TypeChecker<'db> {
 				self.db.repr_type(inner),
 				self.db.repr_type(self.db.get_fun_return_typid(fun.identity)));
 		
-			self.promote(fun.value, computed);
+			self.promote(ast, fun.value, computed);
 		}
 
 		Ok(())
@@ -1140,13 +1124,13 @@ impl<'db> TypeChecker<'db> {
 		self.db.get_mut(fun_declare.identity).sig = sig;
 	}
 
-	fn check_module(&mut self, module: &mut Module) {
+	fn check_module(&mut self, ast: &Ast, module: &mut Module) {
 		// HACK: Visit classes first so that type inference for properites works.
 		// We really should get this working so that type inferences can directly
 		// drive class type inference (i.e. type inference for the class members)
 		// when needed.
 		for class in &mut module.classes {
-			self.check_class(class);
+			self.check_class(ast, class);
 		}
 
 		// For now, in order to get FunCaptures working correctly, we make a first
@@ -1159,28 +1143,28 @@ impl<'db> TypeChecker<'db> {
 
 		for fun in &mut module.functions {
 			// Ignore errors at this point as there's no need to unwind the stack.
-			let _ = self.check_fun_declare(fun);
+			let _ = self.check_fun_declare(ast, fun);
 		}
 
 		for global in &mut module.globals {
-			self.check_declare(global);
+			self.check_declare(ast, global);
 		}
 
 		
 	}
 
-	fn check_modules(&mut self, modules: &mut Vec<Module>) {
+	fn check_modules(&mut self, ast: &Ast, modules: &mut Vec<Module>) {
 		self.global_scope = true;
 		for module in modules {
-			self.check_module(module);
+			self.check_module(ast, module);
 		}
 	}
 }
 
-pub fn typecheck(db: &mut Db, modules: &mut Vec<Module>) -> bool {
+pub fn typecheck(db: &mut Db, ast: &Ast, modules: &mut Vec<Module>) -> bool {
 	let mut checker = TypeChecker::new(db);
 
-	checker.check_modules(modules);
+	checker.check_modules(ast, modules);
 
 	checker.had_error
 }

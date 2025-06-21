@@ -35,8 +35,27 @@ impl ExprId {
 		ast.exprs.get(self).location()
 	}
 
+	pub fn typ(self, ast: &Ast, db: &Db) -> TypId {
+		ast.exprs.get(self).typ(ast, db)
+	}
+
 	pub fn typ_p(self, ast: &AstProxy, db: &Db) -> TypId {
-		ast.exprs.get(self).typ(db)
+		// TODO: Make this work
+		ast.exprs.get(self).typ(ast, db)
+	}
+
+	pub fn promote(self, typ: TypId, ast: &Ast, db: &Db) -> bool {
+		ast.exprs.get_mut(self).promote(typ, ast, db)
+	}
+
+	pub fn val_location<'a>(self, ast: &'a Ast) -> &'a SourceLocation {
+		ast.exprs.get(self).val_location(ast)
+	}
+}
+
+impl StmtId {
+	pub fn val_location<'a>(self, ast: &'a Ast) -> &'a SourceLocation {
+		ast.stmts.get(self).val_location(ast)
 	}
 }
 

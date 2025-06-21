@@ -18,7 +18,7 @@ pub struct NewInitElem {
 }
 
 impl Stmt {
-	pub fn val_location(&self) -> &SourceLocation {
+	pub fn val_location(&self, ast: &Ast) -> &SourceLocation {
 		self.location()
 	}
 }
@@ -47,11 +47,11 @@ impl std::default::Default for Stmt {
 }
 
 impl Expr {
-	pub fn val_location(&self) -> &SourceLocation {
+	pub fn val_location<'a>(&self, ast: &'a Ast) -> &'a SourceLocation {
 		match self {
 			Expr::Block(block) => {
 				if let Some(last) = block.stmts.last() {
-					return last.val_location()
+					return last.val_location(ast)
 				}
 				else {
 					// If we have no expression at all, the whole block is
@@ -70,7 +70,7 @@ impl Expr {
 	// we can use put_type for Expr::New.
 	// We could change this by either storing a general TypId in Expr::New
 	// (either alongside the class or instead of), but should we...?
-	pub fn typ(&self, db: &Db) -> TypId {
+	pub fn typ(&self, ast: &Ast, db: &Db) -> TypId {
 		match self {
 			Expr::ArrayLit(lit) => {
 				lit.arr_typ
@@ -123,7 +123,7 @@ impl Expr {
 			Expr::UnboundFunCapture(_) => panic!("calling Expr::typ() on UnboundFunCapture"),
 			Expr::UnboundAssign(_) => panic!("calling Expr::typ() on UnboundAssign"),
 			Expr::Print(print) => {
-				print.exprs[0].typ(db)
+				print.exprs[0].typ(ast, db)
 			},
 			Expr::Str(_) => db.types.str_buf,
 			Expr::New(new) => new.typ,
@@ -136,7 +136,7 @@ impl Expr {
 		}
 	}
 
-	pub fn promote(&mut self, typ: TypId, db: &Db) -> bool {
+	pub fn promote(&mut self, typ: TypId, ast: &Ast, db: &Db) -> bool {
 		// Cannot promote to Bottom.
 		if typ == db.types.bottom {
 			return false;
@@ -150,8 +150,8 @@ impl Expr {
 					// NOTE that this is still O(n) in the number of AST nodes,
 					// because once a type is promoted to concrete once, it cannot
 					// have to do it again.
-					binary.left.promote(typ, db);
-					binary.right.promote(typ, db);
+					binary.left.promote(typ, ast, db);
+					binary.right.promote(typ, ast, db);
 				}
 				binary.typ = typ;
 				true
@@ -180,7 +180,7 @@ impl Expr {
 					// because once a type is promoted to concrete once, it cannot
 					// have to do it again.
 					for expr in &mut lit.values {
-						expr.promote(incoming_elem_typ, db);
+						expr.promote(incoming_elem_typ, ast, db);
 					}
 				}
 				// The array type is the direct incoming typ.
@@ -200,8 +200,8 @@ impl Expr {
 			Expr::If(if_) => {
 				if db.is_not_concrete(if_.typ) && db.is_concrete(typ) {
 					// Same idea as binary.
-					if_.then_branch.promote(typ, db);
-					if_.else_branch.as_mut().map(|b| b.promote(typ, db));
+					if_.then_branch.promote(typ, ast, db);
+					if_.else_branch.as_mut().map(|b| b.promote(typ, ast, db));
 				}
 				if_.typ = typ;
 				true
@@ -223,7 +223,7 @@ impl Expr {
 			Expr::Block(block) => {
 				block.typ = typ;
 				if let Some(last) = block.stmts.last_mut() {
-					return last.promote(typ, db);
+					return last.promote(typ, ast, db);
 				}
 				true
 			},
@@ -231,7 +231,7 @@ impl Expr {
 			Expr::UnboundFunCapture(_) => false,
 			Expr::UnboundAssign(_) => false,
 			Expr::Print(print) => {
-				print.exprs[0].promote(typ, db)
+				print.exprs[0].promote(typ, ast, db)
 			},
 			Expr::Str(_) => false,
 			Expr::New(_) => {
@@ -249,10 +249,10 @@ impl Expr {
 }
 
 impl Stmt {
-	pub fn promote(&mut self, typ: TypId, db: &Db) -> bool {
+	pub fn promote(&mut self, typ: TypId, ast: &Ast, db: &Db) -> bool {
 		match self {
 			Stmt::Declare(_) => return false,
-			Stmt::Expression(expr) => expr.expression.promote(typ, db),
+			Stmt::Expression(expr) => expr.expression.promote(typ, ast, db),
 
 			// The value of a Return is always Bottom, and so it cannot be
 			// affected by promote().
