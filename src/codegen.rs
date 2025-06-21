@@ -385,14 +385,14 @@ impl<'a> Codegen<'a> {
 		panic!("compiler err: unknown promotion {} -> {}", self.db.repr_type(val.typ), self.db.repr_type(to));
 	}
 
-	fn compile_binary(&mut self, binary: &Binary, into: &mut String) -> TypedVal {
-		let left = self.expr(&binary.left, into);
+	fn compile_binary(&mut self, ast: &Ast, binary: &Binary, into: &mut String) -> TypedVal {
+		let left = self.expr(ast, binary.left, into);
 		if left.is_bottom() { return left; /* Val::Bottom */ }
 		// TODO: Maybe we should have each function return a (Val, TypId) tuple,
 		// so that we can save time here..?
 		let left = self.promote(left, binary.typ);
 
-		let right = self.expr(&binary.right, into);
+		let right = self.expr(ast, binary.right, into);
 		if right.is_bottom() { return right; /* Val::Bottom */ }
 		let right = self.promote(right, binary.typ);
 
@@ -413,11 +413,11 @@ impl<'a> Codegen<'a> {
 		val.typed(binary.typ)
 	}
 
-	fn compile_comparison(&mut self, compare: &Comparison, into: &mut String) -> TypedVal {
-		let left = self.expr(&compare.left, into);
+	fn compile_comparison(&mut self, ast: &Ast, compare: &Comparison, into: &mut String) -> TypedVal {
+		let left = self.expr(ast, compare.left, into);
 		if left.is_bottom() { return left; }
 
-		let right = self.expr(&compare.right, into);
+		let right = self.expr(ast, compare.right, into);
 		if right.is_bottom() { return right; }
 
 		let op = match compare.op {
@@ -502,10 +502,10 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn compile_if(&mut self, if_: &If, into: &mut String) -> TypedVal {
+	fn compile_if(&mut self, ast: &Ast, if_: &If, into: &mut String) -> TypedVal {
 		let indent = self.indent();
 
-		let cond = self.expr(&if_.condition, into);
+		let cond = self.expr(ast, if_.condition, into);
 		let cond = self.promote(cond, self.db.types.bool);
 
 		// Generate storage for the value of the expression, if relevant.
@@ -514,7 +514,7 @@ impl<'a> Codegen<'a> {
 
 		inf_writeln!(into, "{indent}if ({cond}) {{");
 		self.indent_level += 1;
-		let then_val = self.expr(&if_.then_branch, into);
+		let then_val = self.expr(ast, if_.then_branch, into);
 		
 		// Save the value, if relevant.
 		// IMPORTANT: set_val will only call promote() if the value is needed.
@@ -527,7 +527,7 @@ impl<'a> Codegen<'a> {
 			inf_writeln!(into, "{indent}else {{");
 			self.indent_level += 1;
 
-			let else_val = self.expr(&else_branch, into);
+			let else_val = self.expr(ast, *else_branch, into);
 			// Save the value, if relevant.
 			set_val!(self, into, own_val, " = {};\n", self.promote(else_val, if_.typ));
 			self.indent_level -= 1;
@@ -537,17 +537,17 @@ impl<'a> Codegen<'a> {
 		own_val
 	}
 
-	fn expr(&mut self, expr: &Expr, into: &mut String) -> TypedVal {
+	fn expr(&mut self, ast: &Ast, expr: ExprId, into: &mut String) -> TypedVal {
 		let indent = self.indent();
-		match expr {
-			Expr::Binary(binary) => self.compile_binary(binary, into),
-			Expr::Comparison(compare) => self.compile_comparison(compare, into),
-			Expr::If(if_) => self.compile_if(if_, into),
+		match ast.exprs.get(expr) {
+			Expr::Binary(binary) => self.compile_binary(ast, binary, into),
+			Expr::Comparison(compare) => self.compile_comparison(ast, compare, into),
+			Expr::If(if_) => self.compile_if(ast, if_, into),
 
 			Expr::Logical(logical) => {
 				// Compute the left value up-front. The right value will be
 				// computed inside the if, for short-circuiting.
-				let left = self.expr(&logical.left, into);
+				let left = self.expr(ast, logical.left, into);
 				if left.is_bottom() { return left; }
 
 				let left = self.promote(left, self.db.types.bool);
@@ -569,7 +569,7 @@ impl<'a> Codegen<'a> {
 				self.indent_level += 1;
 
 				// Generate the right expression inside the if.
-				let right = self.expr(&logical.right, into);
+				let right = self.expr(ast, logical.right, into);
 
 				// Only store the value if not Bottom.
 				if !right.is_bottom() {
@@ -613,7 +613,7 @@ impl<'a> Codegen<'a> {
 					.typed(self.db.get_var_type(variable.identity))
 			},
 			Expr::Assign(assign) => {
-				self.compile_assign(assign.identity, assign.value, into, false)
+				self.compile_assign(ast, assign.identity, assign.value, into, false)
 			},
 			Expr::FunCall(call) => {
 				let ret_type = self.db.get_fun_ret_type(call.identity);
@@ -623,7 +623,7 @@ impl<'a> Codegen<'a> {
 				let mut vals = Vec::new();
 				for idx in 0..call.args.len() {
 					let arg = &call.args[idx];
-					let val = self.expr(arg, into);
+					let val = self.expr(ast, *arg, into);
 					if val.is_bottom() {
 						return val;
 					}
@@ -680,7 +680,7 @@ impl<'a> Codegen<'a> {
 				inf_writeln!(into, "{indent}{{");
 				self.indent_level += 1;
 				for stmt in &block.stmts[0..all_but_last] {
-					let val = self.compile_stmt(stmt, into);
+					let val = self.compile_stmt(ast, *stmt, into);
 					if let Some(val) = val {
 						if val.is_bottom() {
 							// If we see a Bottom val inside a block, we have
@@ -699,13 +699,13 @@ impl<'a> Codegen<'a> {
 					// If the block has no val, then generate a statement
 					// and return Val::Void.
 					(last, Val::Void) => {
-						last.map(|last| self.compile_stmt(last, into));
+						last.map(|last| self.compile_stmt(ast, *last, into));
 						Val::Void
 					},
 
 					// Simmilar case for Val::Bottom
 					(last, Val::Bottom) => {
-						last.map(|last| self.compile_stmt(last, into));
+						last.map(|last| self.compile_stmt(ast, *last, into));
 						Val::Bottom
 					},
 
@@ -713,7 +713,7 @@ impl<'a> Codegen<'a> {
 					// (otherwise the type checker is broken)
 					// so return its value.
 					(last, val) => {
-						let last = self.compile_stmt(last.unwrap(), into);
+						let last = self.compile_stmt(ast, *last.unwrap(), into);
 						let last = last.unwrap();
 						if last.needs_storage() && val.needs_storage() {
 							let last = self.promote(last, block.typ);
@@ -733,7 +733,7 @@ impl<'a> Codegen<'a> {
 				let mut vals = Vec::new();
 
 				for expr in &print.exprs {
-					let val = self.expr(expr, into);
+					let val = self.expr(ast, *expr, into);
 
 					// Propogate bottom values up. As a rule of thumb, always
 					// bail from compiling as early as possible, for the dead-code
@@ -764,7 +764,7 @@ impl<'a> Codegen<'a> {
 				let mut vals = Vec::new();
 
 				for expr in &str.exprs {
-					let val = self.expr(expr, into);
+					let val = self.expr(ast, *expr, into);
 
 					// Propogate bottom values up. 
 					if val.is_bottom() {
@@ -805,7 +805,7 @@ impl<'a> Codegen<'a> {
 
 				let closure = match &capt.object {
 					Some(expr) => {
-						Some(self.expr(expr, into))
+						Some(self.expr(ast, *expr, into))
 					},
 					None => None
 				};
@@ -831,7 +831,7 @@ impl<'a> Codegen<'a> {
 			},
 
 			Expr::ValCall(call) => {
-				let fun_val = self.expr(call.value, into);
+				let fun_val = self.expr(ast, call.value, into);
 				if fun_val.is_bottom() {
 					return fun_val;
 				}
@@ -845,7 +845,7 @@ impl<'a> Codegen<'a> {
 				let mut vals = Vec::new();
 				for idx in 0..call.args.len() {
 					let arg = &call.args[idx];
-					let val = self.expr(arg, into);
+					let val = self.expr(ast, *arg, into);
 					if val.is_bottom() {
 						return val;
 					}
@@ -875,7 +875,7 @@ impl<'a> Codegen<'a> {
 			Expr::FunDeclare(declare) => {
 				let val = self.new_val_typed(declare.typ);
 
-				self.compile_function(declare.identity, declare.value);
+				self.compile_function(ast, declare.identity, declare.value);
 
 				// BIG TODO: Support closures. Not exactly clear how that will work.
 				// Also, when we do this, either we probably want to desugar
@@ -909,7 +909,7 @@ impl<'a> Codegen<'a> {
 						val.val);
 
 					for init in &new.initializers {
-						let rhs = self.expr(&init.value, into);
+						let rhs = self.expr(ast, init.value, into);
 						let rhs = self.promote(rhs, self.db.get_var_type(init.var));
 						let varname = self.db.get_cname(init.var);
 
@@ -924,7 +924,7 @@ impl<'a> Codegen<'a> {
 				let typ = self.db.get_var_type(get.var);
 				let val = self.new_val_typed(typ);
 			
-				let lhs = self.expr(get.lhs, into);
+				let lhs = self.expr(ast, get.lhs, into);
 				
 				let varname = self.db.get_cname(get.var);
 
@@ -938,11 +938,11 @@ impl<'a> Codegen<'a> {
 				let typ = self.db.get_var_type(set.var);
 				let val = self.new_val_typed(typ);
 			
-				let rhs = self.expr(set.rhs, into);
+				let rhs = self.expr(ast, set.rhs, into);
 				if rhs.is_bottom() {
 					return rhs;
 				}
-				let lhs = self.expr(set.lhs, into);
+				let lhs = self.expr(ast, set.lhs, into);
 				// TODO: What happens if lhs is Bottom?
 				let rhs = self.promote(rhs, typ);
 				
@@ -967,7 +967,7 @@ impl<'a> Codegen<'a> {
 
 					let mut idx = 0;
 					for value in &lit.values {
-						let nth = self.expr(value, into);
+						let nth = self.expr(ast, *value, into);
 						let nth = self.promote(nth, lit.elem_typ);
 						inf_writeln!(into, "{indent}{}->contents[{idx}] = {nth};", val.val);
 
@@ -984,13 +984,13 @@ impl<'a> Codegen<'a> {
 
 			Expr::Index(index) => {
 				let val = self.new_val_typed(index.typ);
-				let arr_val = self.expr(&index.value, into);
+				let arr_val = self.expr(ast, index.value, into);
 				// TODO: Should we store the arr_type on the Index as well so
 				// we can promote to it..?
 				let arr_val_typ = arr_val.typ;
 				let arr_val = self.promote(arr_val, arr_val_typ);
 
-				let idx_val = self.expr(&index.index, into);
+				let idx_val = self.expr(ast, index.index, into);
 				let idx_val = self.promote(idx_val, self.db.types.int);
 
 				// TODO: Generate bounds checks
@@ -1001,17 +1001,17 @@ impl<'a> Codegen<'a> {
 
 			Expr::SetIndex(set) => {
 				let val = self.new_val_typed(set.typ);
-				let arr_val = self.expr(&set.value, into);
+				let arr_val = self.expr(ast, set.value, into);
 				// TODO: Should we store the arr_type on the SetIndex as well so
 				// we can promote to it..?
 				let arr_val_typ = arr_val.typ;
 				let arr_val = self.promote(arr_val, arr_val_typ);
 
-				let idx_val = self.expr(&set.index, into);
+				let idx_val = self.expr(ast, set.index, into);
 				let idx_val = self.promote(idx_val, self.db.types.int);
 
 				// Promote RHS to the element type of the array (i.e. set.typ)
-				let rhs_val = self.expr(&set.rhs, into);
+				let rhs_val = self.expr(ast, set.rhs, into);
 				let rhs_val = self.promote(rhs_val, set.typ);
 
 				// TODO: Generate bounds checks
@@ -1022,7 +1022,7 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn compile_class(&mut self, class_declare: &ClassDeclare) {
+	fn compile_class(&mut self, ast: &Ast, class_declare: &ClassDeclare) {
 		// For the class, it does not generate any direct code.
 		// But, we do have to generate a struct for the class,
 		// as well as each of its function definitions.
@@ -1030,7 +1030,7 @@ impl<'a> Codegen<'a> {
 		self.inside_class.push(class_declare.identity);
 
 		for fun in &class_declare.funs {
-			self.compile_function(fun.identity, &fun.value);
+			self.compile_function(ast, fun.identity, fun.value);
 		}
 
 		// Write the struct definition.
@@ -1056,7 +1056,7 @@ impl<'a> Codegen<'a> {
 		for var in &class_declare.vars {
 			// Compile the assignment into the 'preparer' function. This is where
 			// the variable value will be initialized.
-			self.compile_assign(var.identity, &var.value, &mut preparer, false);
+			self.compile_assign(ast, var.identity, var.value, &mut preparer, false);
 			// Compile the variable declaration into the struct.
 			inf_writeln!(struc, "\t{} {};", self.db.get_var_ctype(var.identity), self.db.get_cname(var.identity));
 		}
@@ -1072,15 +1072,15 @@ impl<'a> Codegen<'a> {
 		self.inside_class.pop();
 	}
 
-	fn compile_stmt(&mut self, stmt: &Stmt, into: &mut String) -> Option<TypedVal> {
+	fn compile_stmt(&mut self, ast: &Ast, stmt: StmtId, into: &mut String) -> Option<TypedVal> {
 		let indent = self.indent();
-		match stmt {
+		match ast.stmts.get(stmt) {
 			Stmt::Declare(declare) => {
-				self.compile_assign(declare.identity, &declare.value, into, true);
+				self.compile_assign(ast, declare.identity, declare.value, into, true);
 				None
 			},
 			Stmt::ClassDeclare(class_declare) => {
-				self.compile_class(class_declare);
+				self.compile_class(ast, class_declare);
 				None
 			}
 			Stmt::Expression(expression) => {
@@ -1090,13 +1090,13 @@ impl<'a> Codegen<'a> {
 				//
 				// And, because the expression itself generates any code,
 				// this function simply has to delegate to it.
-				Some(self.expr(&expression.expression, into))
+				Some(self.expr(ast, expression.expression, into))
 			},
 			Stmt::Return(ret) => {
 				match &ret.expression {
 					Some(value) => {
 						let needed_type = *self.return_types.last().unwrap();
-						let val = self.expr(value, into);
+						let val = self.expr(ast, *value, into);
 
 						// Promote to the needed return type
 						let val = self.promote(val, needed_type);
@@ -1137,9 +1137,9 @@ impl<'a> Codegen<'a> {
 			.typed(self.db.get_var_type(var))
 	}
 
-	fn compile_assign(&mut self, var: VarId, expr: &Expr, into: &mut String, is_declaration: bool) -> TypedVal {
+	fn compile_assign(&mut self, ast: &Ast, var: VarId, expr: ExprId, into: &mut String, is_declaration: bool) -> TypedVal {
 		let needed_type = self.db.get_var_type(var);
-		let value = self.expr(expr, into);
+		let value = self.expr(ast, expr, into);
 
 		// Don't compile anything at all for variables that are bottom.
 		if value.is_bottom() || value.typ == self.db.types.bottom { // TODO: Fix the value thingyingy
@@ -1163,7 +1163,7 @@ impl<'a> Codegen<'a> {
 
 	// Does not generate the code for a function declaration (e.g. assigning
 	// it to a local).
-	fn compile_function(&mut self, fun: FunId, body: &Expr) {
+	fn compile_function(&mut self, ast: &Ast, fun: FunId, body: ExprId) {
 		let is_init = Some(fun) == self.db.fun_init;
 
 		let enclosing_indent = self.indent_level;
@@ -1188,7 +1188,7 @@ impl<'a> Codegen<'a> {
 		let own_return_type = self.db.get_fun_return_typid(fun);
 		self.return_types.push(own_return_type);
 
-		let val = self.expr(body, &mut own_buffer);
+		let val = self.expr(ast, body, &mut own_buffer);
 		if val.needs_storage() {
 			let val = self.promote(val, own_return_type);
 			// If it does have a value, then we write it as a default
@@ -1222,7 +1222,7 @@ impl<'a> Codegen<'a> {
 		inf_writeln!(init, "}}");
 	}
 
-	fn codegen_to_buffers(&mut self, module: &Module, out: &mut CodegenOutputs) {
+	fn codegen_to_buffers(&mut self, ast: &Ast, module: &Module, out: &mut CodegenOutputs) {
 		// Use an indent level of 1 for the initialization code for all global variables.
 		self.indent_level = 1;
 		for global in &module.globals {
@@ -1232,8 +1232,8 @@ impl<'a> Codegen<'a> {
 
 			// For globals, the initializer is not itself a declaration. So,
 			// do tell self.compile_assign() that it's not a declaration.
-			self.compile_assign(global.identity,
-				&global.value,
+			self.compile_assign(ast, global.identity,
+				global.value,
 				&mut out.global_init,
 				false);
 		}
@@ -1250,11 +1250,11 @@ impl<'a> Codegen<'a> {
 					self.db.get_fun_cparams(fun.identity));
 			}
 			
-			self.compile_function(fun.identity, &fun.value);
+			self.compile_function(ast, fun.identity, fun.value);
 		}
 
 		for class in &module.classes {
-			self.compile_class(class);
+			self.compile_class(ast, class);
 
 			// For now: Write the forward declarations for these icl's here.
 			// We might need to change how this works when we have nested classes.
@@ -1266,11 +1266,11 @@ impl<'a> Codegen<'a> {
 		self.compile_string_constant_init(&mut out.string_const_define, &mut out.string_const_init);
 	}
 
-	fn codegen(&mut self, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
+	fn codegen(&mut self, ast: &Ast, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 		let mut outputs = CodegenOutputs::new();
 
 		for module in modules {
-			self.codegen_to_buffers(module, &mut outputs);
+			self.codegen_to_buffers(ast, module, &mut outputs);
 		}
 
 		writeln!(output, "#include \"poni/poni.h\"")?;
@@ -1305,8 +1305,8 @@ impl<'a> Codegen<'a> {
 	}
 }
 
-pub fn codegen(db: &mut Db, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
+pub fn codegen(db: &mut Db, ast: &Ast, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 	let mut codegen = Codegen::new(db);
 
-	codegen.codegen(modules, output)
+	codegen.codegen(ast, modules, output)
 }
