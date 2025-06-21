@@ -26,6 +26,20 @@ include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 define_arena_key!(ExprId);
 define_arena_key!(StmtId);
 
+impl ExprId {
+	pub fn location(self, ast: &Ast) -> &SourceLocation {
+		ast.exprs.get(self).location()
+	}
+
+	pub fn location_p<'a>(self, ast: &'a AstProxy) -> &'a SourceLocation {
+		ast.exprs.get(self).location()
+	}
+
+	pub fn typ_p(self, ast: &AstProxy, db: &Db) -> TypId {
+		ast.exprs.get(self).typ(db)
+	}
+}
+
 pub struct Ast {
 	pub exprs: ArenaCell<Expr, ExprId>,
 	pub stmts: ArenaCell<Stmt, StmtId>,

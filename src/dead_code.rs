@@ -1,4 +1,7 @@
-use crate::{db::Db, expr::{ClassDeclare, Expr, Stmt}, module::Module};
+use crate::{db::{Ast, AstProxy, Db}, expr::{ClassDeclare, Expr, Stmt}, module::Module};
+
+use crate::db::ExprId;
+use crate::db::StmtId;
 
 struct DeadCodeElim<'db> {
 	db: &'db mut Db,
@@ -11,7 +14,7 @@ impl<'db> DeadCodeElim<'db> {
 		}
 	}
 
-    fn elim_expr(&mut self, expr: &mut Expr) -> bool {
+    fn elim_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId) -> bool {
         // Counterintuitive but true:
         // For any binary expression, such as a + b, if the LHS is Bottom, 
         // we can replace the whole expression with the LHS (because the RHS
@@ -27,15 +30,19 @@ impl<'db> DeadCodeElim<'db> {
         // 
         // We can either implement this as a separate Expr::Sequence node or
         // something, or by making the codegen stage understand how to do that.
+
+        let mut binding = ast.exprs.get_mut(*expr_id);
+        let expr = binding.as_mut();
+
         match expr {
             Expr::Binary(binary) => {
-                if self.elim_expr(&mut binary.left) {
-                    let left = std::mem::take(binary.left);
-                    *expr = left;
+                if self.elim_expr(ast, &mut binary.left) {
+                    let left = binary.left;
+                    *expr_id = left;
                     return true;
                 }
 
-                if self.elim_expr(&mut binary.right) {
+                if self.elim_expr(ast, &mut binary.right) {
                     return true;
                 }
 
@@ -46,15 +53,12 @@ impl<'db> DeadCodeElim<'db> {
                 // }
             },
             Expr::Comparison(comparison) => {
-                
-
-                if self.elim_expr(&mut comparison.left) {
-                    let left = std::mem::take(comparison.left);
-                    *expr = left;
+                if self.elim_expr(ast, &mut comparison.left) {
+                    *expr_id = comparison.left;
                     return true;
                 }
 
-                if self.elim_expr(&mut comparison.right) {
+                if self.elim_expr(ast, &mut comparison.right) {
                     return true;
                 }
 
@@ -68,15 +72,14 @@ impl<'db> DeadCodeElim<'db> {
                 false
             },
             Expr::Logical(logical) => {
-                if self.elim_expr(&mut logical.left) {
-                    let left = std::mem::take(logical.left);
-                    *expr = left;
+                if self.elim_expr(ast, &mut logical.left) {
+                    *expr_id = logical.left;
                     return true;
                 }
 
                 // Don't return true if logical.right is a Bottom, because it
                 // might not always be evaluated.
-                self.elim_expr(&mut logical.right);
+                self.elim_expr(ast, &mut logical.right);
 
                 false
                 // else if logical.right.typ(self.db) == self.db.types.bottom {
@@ -88,7 +91,7 @@ impl<'db> DeadCodeElim<'db> {
                 let mut last_needed_idx = None;
 
                 for idx in 0..fun_call.args.len() {
-                    if self.elim_expr(&mut fun_call.args[idx]) {
+                    if self.elim_expr(ast, &mut fun_call.args[idx]) {
                         last_needed_idx = Some(idx);
                         break;
                     }
@@ -102,7 +105,7 @@ impl<'db> DeadCodeElim<'db> {
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::mk_expression(arg.location().clone(), arg));
+                        new_exprs.push(Stmt::push_expression(ast, arg.location_p(ast).clone(), arg));
                     }
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
@@ -114,13 +117,13 @@ impl<'db> DeadCodeElim<'db> {
                 false
             },
             Expr::FunDeclare(fun_declare) => {
-                self.elim_expr(&mut fun_declare.value)
+                self.elim_expr(ast, &mut fun_declare.value)
             },
             Expr::ValCall(val_call) => {
                 let mut last_needed_idx = None;
 
                 for idx in 0..val_call.args.len() {
-                    if self.elim_expr(&mut val_call.args[idx]) {
+                    if self.elim_expr(ast, &mut val_call.args[idx]) {
                         last_needed_idx = Some(idx);
                         break;
                     }
@@ -134,7 +137,7 @@ impl<'db> DeadCodeElim<'db> {
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::mk_expression(arg.location().clone(), arg));
+                        new_exprs.push(Stmt::push_expression(ast, arg.location_p(ast).clone(), arg));
                     }
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
@@ -147,9 +150,8 @@ impl<'db> DeadCodeElim<'db> {
             },
             Expr::FunCapture(fun_capture) => { false },
             Expr::Assign(assign) => {
-                if self.elim_expr(&mut assign.value) {
-                    let value = std::mem::take(assign.value);
-                    *expr = value;
+                if self.elim_expr(ast, &mut assign.value) {
+                    *expr_id = assign.value;
                     return true;
                 }
                 false
@@ -162,7 +164,7 @@ impl<'db> DeadCodeElim<'db> {
                 let mut last_needed_idx = None;
 
                 for idx in 0..block.stmts.len() {
-                    if self.elim_stmt(&mut block.stmts[idx]) {
+                    if self.elim_stmt(ast, &mut block.stmts[idx]) {
                         last_needed_idx = Some(idx);
                         break;
                     }
@@ -185,10 +187,9 @@ impl<'db> DeadCodeElim<'db> {
                 // Note: We might want to eventually also prune dead branches
                 // if e.g. the conditional evaluates to true. But we might need
                 // a constant folding pass for that to work.
-                self.elim_expr(&mut if_.condition);
-                if if_.condition.typ(&self.db) == self.db.types.bottom {
-                    let replace = std::mem::take(if_.condition);
-                    *expr = replace;
+                self.elim_expr(ast, &mut if_.condition);
+                if if_.condition.typ_p(ast, &self.db) == self.db.types.bottom {
+                    *expr_id = if_.condition;
                     return true;
                 }
                 else {
@@ -197,9 +198,9 @@ impl<'db> DeadCodeElim<'db> {
                     // been deleted at this point!)
                     //
                     // Although in this case Rust will yell at us if we try.
-                    let mut is_bottom = self.elim_expr(&mut if_.then_branch);
+                    let mut is_bottom = self.elim_expr(ast, &mut if_.then_branch);
                     if let Some(else_) = &mut if_.else_branch {
-                        is_bottom = is_bottom && self.elim_expr(else_);
+                        is_bottom = is_bottom && self.elim_expr(ast, else_);
                     }
 
                     return is_bottom
@@ -211,7 +212,7 @@ impl<'db> DeadCodeElim<'db> {
                 let mut last_needed_idx = None;
 
                 for idx in 0..print.exprs.len() {
-                    if self.elim_expr(&mut print.exprs[idx]) {
+                    if self.elim_expr(ast, &mut print.exprs[idx]) {
                         last_needed_idx = Some(idx);
                         break;
                     }
@@ -225,7 +226,7 @@ impl<'db> DeadCodeElim<'db> {
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::mk_expression(arg.location().clone(), arg));
+                        new_exprs.push(Stmt::push_expression(ast, arg.location_p(ast).clone(), arg));
                     }
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
@@ -240,7 +241,7 @@ impl<'db> DeadCodeElim<'db> {
                 let mut last_needed_idx = None;
 
                 for idx in 0..str.exprs.len() {
-                    if self.elim_expr(&mut str.exprs[idx]) {
+                    if self.elim_expr(ast, &mut str.exprs[idx]) {
                         last_needed_idx = Some(idx);
                         break;
                     }
@@ -254,7 +255,7 @@ impl<'db> DeadCodeElim<'db> {
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::mk_expression(arg.location().clone(), arg));
+                        new_exprs.push(Stmt::push_expression(ast, arg.location_p(ast).clone(), arg));
                     }
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
@@ -270,7 +271,7 @@ impl<'db> DeadCodeElim<'db> {
                 let mut last_needed_idx = None;
 
                 for idx in 0..new.initializers.len() {
-                    if self.elim_expr(&mut new.initializers[idx].value) {
+                    if self.elim_expr(ast, &mut new.initializers[idx].value) {
                         last_needed_idx = Some(idx);
                         break;
                     }
@@ -284,7 +285,7 @@ impl<'db> DeadCodeElim<'db> {
                     
                     let mut new_exprs = Vec::new();
                     for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::mk_expression(arg.location.clone(), arg.value));
+                        new_exprs.push(Stmt::push_expression(ast, arg.value.location_p(ast).clone(), arg.value));
                     }
 
                     let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
@@ -296,21 +297,19 @@ impl<'db> DeadCodeElim<'db> {
                 false
             },
             Expr::Get(get) => {
-                if self.elim_expr(get.lhs) {
-                    let replace = std::mem::take(get.lhs);
-                    *expr = replace;
+                if self.elim_expr(ast, &mut get.lhs) {
+                    *expr_id = get.lhs;
                     return true;
                 }
                 false
             },
             Expr::Set(set) => {
-                if self.elim_expr(set.lhs) {
-                    let replace = std::mem::take(set.lhs);
-                    *expr = replace;
+                if self.elim_expr(ast, &mut set.lhs) {
+                    *expr_id = set.lhs;
                     return true;
                 }
 
-                if self.elim_expr(set.rhs) {
+                if self.elim_expr(ast, &mut set.rhs) {
                     return true;
                 }
 
@@ -342,7 +341,9 @@ impl<'db> DeadCodeElim<'db> {
     }
 
     // Returns whether the Stmt "evaluates" to Bottom.
-    fn elim_stmt(&mut self, stmt: &mut Stmt) -> bool {
+    fn elim_stmt(&mut self, ast: &AstProxy, stmt_id: &mut StmtId) -> bool {
+        let mut binding = ast.stmts.get_mut(*stmt_id);
+        let stmt = binding.as_mut();
         match stmt {
             Stmt::Declare(declare) => {
                 // So even though we can't declare variables as Bottom, we
@@ -351,25 +352,24 @@ impl<'db> DeadCodeElim<'db> {
                 // Which is valid.
                 // In these cases, we do have to propogate whatever value
                 // we found inside the assignment upwards.
-                self.elim_expr(&mut declare.value);
+                self.elim_expr(ast, &mut declare.value);
 
                 // If the eliminated expression is a Bottom, then we can replace
                 // ourselves with it.
-                if declare.value.typ(self.db) == self.db.types.bottom {
-                    let value = std::mem::take(&mut declare.value);
-                    *stmt = Stmt::mk_expression(declare.location.clone(), value);
+                if declare.value.typ_p(ast, self.db) == self.db.types.bottom {
+                    *stmt = Stmt::mk_expression(declare.location.clone(), declare.value);
                     return true
                 }
 
                 false
             },
             Stmt::Expression(expression) => {
-                self.elim_expr(&mut expression.expression);
-                expression.expression.typ(self.db) == self.db.types.bottom
+                self.elim_expr(ast, &mut expression.expression);
+                expression.expression.typ_p(ast, self.db) == self.db.types.bottom
             },
             Stmt::Return(ret) => {
                 if let Some(inner) = &mut ret.expression {
-                    self.elim_expr(inner);
+                    self.elim_expr(ast, inner);
                 }
 
                 true
@@ -384,19 +384,19 @@ impl<'db> DeadCodeElim<'db> {
             // that are private to a Block can only be used by code after that
             // class has been declared..
             Stmt::ClassDeclare(class_declare) => {
-                self.elim_class(class_declare);
+                self.elim_class(ast, class_declare);
                 false
             },
         }
     }
 
-    fn elim_class(&mut self, class: &mut ClassDeclare) {
+    fn elim_class(&mut self, ast: &AstProxy, class: &mut ClassDeclare) {
         for fun in &mut class.funs {
-            self.elim_expr(fun.value);
+            self.elim_expr(ast, &mut fun.value);
         }
     }
 
-    fn elim_module(&mut self, module: &mut Module) {
+    fn elim_module(&mut self, ast: &AstProxy, module: &mut Module) {
         // TODO: I think that maybe variable declarations should not be
         // allowed to have type Bottom.
         // for var in &mut module.globals {
@@ -404,23 +404,27 @@ impl<'db> DeadCodeElim<'db> {
         // }
 
         for fun in &mut module.functions {
-            self.elim_expr(fun.value);
+            self.elim_expr(ast, &mut fun.value);
         }
         for class in &mut module.classes {
-            self.elim_class(class);
+            self.elim_class(ast, class);
         }
     }
 
-    fn elim_modules(&mut self, modules: &mut Vec<Module>) {
+    fn elim_modules(&mut self, ast: &AstProxy, modules: &mut Vec<Module>) {
         for module in modules {
-            self.elim_module(module);
+            self.elim_module(ast, module);
         }
     }
 }
 
 
-pub fn eliminate_dead_code(db: &mut Db, modules: &mut Vec<Module>) {
+pub fn eliminate_dead_code(db: &mut Db, ast: &mut Ast, modules: &mut Vec<Module>) {
 	let mut dc = DeadCodeElim::new(db);
 
-	dc.elim_modules(modules);
+    let proxy = ast.get_proxy();
+
+	dc.elim_modules(&proxy, modules);
+
+    proxy.commit();
 }
