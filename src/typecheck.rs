@@ -968,9 +968,14 @@ impl<'db> TypeChecker<'db> {
 		let enclosing_class = self.current_class;
 		self.current_class = Some(self.db.put_type(Type::Class(class_declare.identity)));
 
-		for declare in &mut class_declare.vars {
-			self.check_declare(ast, declare)?;
+		// Iterate class variables in the order found in the DB.
+		let vars = std::mem::take(&mut self.db.get_mut(class_declare.identity).vars);
+		for var in &vars {
+			if let Some(initializer) = self.db.get(*var).initializer {
+				self.check_assign(ast, &self.db.get(*var).location.clone(), *var, initializer, true)?;
+			}
 		}
+		self.db.get_mut(class_declare.identity).vars = vars;
 
 		for fun in &mut class_declare.funs {
 			self.check_fun_declare(ast, fun)?;

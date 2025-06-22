@@ -1055,12 +1055,14 @@ impl<'a> Codegen<'a> {
 				self.db.get_class_preparer_cname(class_declare.identity),
 				self.db.get_class_cname(class_declare.identity));
 		
-		for var in &class_declare.vars {
+		for var in &self.db.get(class_declare.identity).vars {
 			// Compile the assignment into the 'preparer' function. This is where
 			// the variable value will be initialized.
-			self.compile_assign(ast, var.identity, var.value, &mut preparer, false);
+			if let Some(initializer) = self.db.get(*var).initializer {
+				self.compile_assign(ast, *var, initializer, &mut preparer, false);
+			}
 			// Compile the variable declaration into the struct.
-			inf_writeln!(struc, "\t{} {};", self.db.get_var_ctype(var.identity), self.db.get_cname(var.identity));
+			inf_writeln!(struc, "\t{} {};", self.db.get_var_ctype(*var), self.db.get_cname(*var));
 		}
 
 		inf_writeln!(struc, "}};");

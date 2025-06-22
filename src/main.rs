@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::process::{exit, Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, SystemTime};
 
-use db::Db;
+use db::*;
 use module::Module;
 use clap::Parser as _;
 
@@ -262,6 +262,14 @@ fn main() {
 	// TODO: Is there a way to make this pattern cleaner..?
 	let mut globals = std::mem::take(&mut db.globals);
 	init_ordering::topological_sort(&mut globals, &ast, &mut db);
+
+	for class in db.iter_class() {
+		let mut vars = std::mem::take(&mut db.get_mut(class).vars);
+
+		init_ordering::topological_sort(&mut vars, &ast, &mut db);
+
+		db.get_mut(class).vars = vars;
+	}
 	db.globals = globals;
 
 	if !db.errors.is_empty() {
