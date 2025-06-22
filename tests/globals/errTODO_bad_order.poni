@@ -1,4 +1,0 @@
-var first = second;
-var second = 5;
-//? Unknown identifier 'second'
-// TODO: fix that.

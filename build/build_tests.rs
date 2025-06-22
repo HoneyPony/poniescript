@@ -69,7 +69,6 @@ pub fn generate(tests_file: &mut File) {
 
 		("globals/", "err_global_fun_redefine"),
 		("globals/", "err_global_redefine"),
-		("globals/", "errTODO_bad_order"),
 
 		("typecheck/", "print_assume_int"),
 		("typecheck/", "promote_assumes_inside_block"),
