@@ -12,6 +12,7 @@ mod codegen;
 mod error;
 mod binder;
 mod dead_code;
+mod init_ordering;
 
 use std::fs::File;
 use std::io::Read;

@@ -110,12 +110,13 @@ fn generate_constructor(use_proxy: bool, id_name: &str, ast_field: &str, enum_na
 	Ok(())
 }
 
-fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &mut File) -> std::fmt::Result {
+fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &mut File, visit_trait: &mut String) -> std::fmt::Result {
 	let mut enum_def = String::new();
 	let mut struct_defs = String::new();
 	let mut enum_impl = String::new();
 	let mut loc_match = String::new();
 	let mut debug_impl = String::new();
+	let mut visit_trait_visit_fn = String::new();
 
 	writeln!(enum_def, "pub enum {name} {{")?;
 	writeln!(enum_impl, "impl {name} {{")?;
@@ -128,7 +129,14 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 	writeln!(debug_impl, "\tfn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {{")?;
 	writeln!(debug_impl, "\t\tmatch self {{")?;
 
+	let lname = name.to_ascii_lowercase();
 	let id_name = format!("{name}Id");
+
+	writeln!(visit_trait_visit_fn, "\tfn visit_{lname}(&mut self, ast: &Ast, db: &mut Db, id: {id_name}) {{")?;
+	writeln!(visit_trait_visit_fn, "\t\tlet binding = ast.{lname}s.get(id);")?;
+	writeln!(visit_trait_visit_fn, "\t\tmatch binding {{")?;
+	
+	
 
 	while let Some(ty_name) = token(&mut spec) {
 		token(&mut spec);
@@ -181,6 +189,35 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 
 		writeln!(debug_impl, "\t\t\t{name}::{ty_name}(_) => f.write_str(\"{ty_name}\"),")?;
 
+		// TODO: We could pass both id and the node itself, although then whenever
+		// we override a thing we have to also do that.
+		writeln!(visit_trait, "\tfn visit_{}(&mut self, ast: &Ast, db: &mut Db, id: {id_name}) {{", ty_name.to_ascii_lowercase())?;
+		writeln!(visit_trait, "\t\tlet {name}::{ty_name}({lname}) = ast.{lname}s.get(id) else {{ return; }};")?;
+		for field in &fields {
+			if field.0 == "ExprId" {
+				writeln!(visit_trait, "\t\tself.visit_expr(ast, db, {lname}.{});", field.1)?;
+			}
+			if field.0 == "Vec<ExprId>" {
+				writeln!(visit_trait, "\t\tfor item in &{lname}.{} {{", field.1)?;
+				writeln!(visit_trait, "\t\t\tself.visit_expr(ast, db, *item);")?;
+				writeln!(visit_trait, "\t\t}}")?;
+			}
+			if field.0 == "StmtId" {
+				writeln!(visit_trait, "\t\tself.visit_stmt(ast, db, {lname}.{});", field.1)?;
+			}
+			if field.0 == "Vec<StmtId>" {
+				writeln!(visit_trait, "\t\tfor item in &{lname}.{} {{", field.1)?;
+				writeln!(visit_trait, "\t\t\tself.visit_stmt(ast, db, *item);")?;
+				writeln!(visit_trait, "\t\t}}")?;
+			}
+		}
+		writeln!(visit_trait, "\t}}")?;
+
+		writeln!(visit_trait_visit_fn, "\t\t\t{name}::{ty_name}(inner) => {{")?;
+		writeln!(visit_trait_visit_fn, "\t\t\t\tdrop(binding);")?;
+		writeln!(visit_trait_visit_fn, "\t\t\t\tself.visit_{}(ast, db, id);", ty_name.to_ascii_lowercase())?;
+		writeln!(visit_trait_visit_fn, "\t\t\t}}")?;
+
 		generate_constructor(false, &id_name, ast_field, name,
 			ty_name,
 			ConstructOpt { wrap_ok: false, to_enum: false, in_ast: false },
@@ -229,6 +266,10 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 	writeln!(debug_impl, "\t\t}}")?;
 	writeln!(debug_impl, "\t}}")?;
 	writeln!(debug_impl, "}}")?;
+
+	writeln!(visit_trait_visit_fn, "\t\t}}")?;	
+	writeln!(visit_trait_visit_fn, "\t}}")?;
+	writeln!(visit_trait, "{}", visit_trait_visit_fn)?;
 
 	{
 		use std::io::Write;
@@ -293,6 +334,18 @@ pub fn generate(file: &mut File) {
 		box_exprs: true,
 	};
 
-	generate_spec("Expr", "exprs", expr_spec, expr_opt, file).unwrap();
-	generate_spec("Stmt", "stmts", stmt_spec, stmt_opt, file).unwrap();
+	let mut visit_trait = String::new();
+
+
+	writeln!(visit_trait, "pub trait VisitAst {{").unwrap();
+
+	generate_spec("Expr", "exprs", expr_spec, expr_opt, file, &mut visit_trait).unwrap();
+	generate_spec("Stmt", "stmts", stmt_spec, stmt_opt, file, &mut visit_trait).unwrap();
+
+	writeln!(visit_trait, "}}").unwrap();
+
+	{
+		use std::io::Write;
+		write!(file, "{}\n", visit_trait).unwrap();
+	}
 }
