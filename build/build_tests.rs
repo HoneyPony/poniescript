@@ -65,6 +65,7 @@ pub fn generate(tests_file: &mut File) {
 		("globals/", "global_increment"),
 		("globals/", "global_increment_indirect"),
 		("globals/", "global_mutate"),
+		("globals/", "global_after_fun"),
 
 		("globals/", "err_global_fun_redefine"),
 		("globals/", "err_global_redefine"),

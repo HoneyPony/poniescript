@@ -517,13 +517,13 @@ impl<'db> Binder<'db> {
 	}
 
 	pub fn visit_module(&mut self, ast: &AstProxy, module: &mut Module) {
+		// Now that we have the topological sort pass, we want to have the
+		// globals scope available even for the global variables.
+		self.checkers.push(NameChecker::global());
+
 		for global in &mut module.globals {
 			self.visit_expr(ast, global.value);
 		}
-
-		// Don't add the global() checker until after the globals have been
-		// visited. This prevents cyclic references in the globals.
-		self.checkers.push(NameChecker::global());
 
 		for fun in &mut module.functions {
 			self.visit_function(ast, fun);

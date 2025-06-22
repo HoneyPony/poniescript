@@ -1,0 +1,9 @@
+fun printer() {
+    print(a);
+}
+
+var a = 10;
+
+fun init() {
+    printer(); //! 10
+}
