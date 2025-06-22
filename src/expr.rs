@@ -254,6 +254,8 @@ pub struct Var {
 
 	/// The initializer for this variable.
 	pub initializer: Option<ExprId>,
+	/// The "location" for the variable.
+	pub location: SourceLocation,
 }
 
 pub struct Fun {

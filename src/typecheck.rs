@@ -1151,15 +1151,25 @@ impl<'db> TypeChecker<'db> {
 			let _ = self.check_fun_declare(ast, fun);
 		}
 
-		for global in &mut module.globals {
-			self.check_declare(ast, global);
-		}
+		//for global in &mut module.globals {
+		//	self.check_declare(ast, global);
+		//}
 
 		
 	}
 
 	fn check_modules(&mut self, ast: &Ast, modules: &mut Vec<Module>) {
 		self.global_scope = true;
+		// Check globals based on the ordering in db.
+		let globals = std::mem::take(&mut self.db.globals);
+		for global in &globals {
+			let Some(initializer) = self.db.get(*global).initializer else {
+				panic!("ICE: Trying to typecheck global without initializer");
+			};
+			let _ = self.check_assign(ast, &self.db.get(*global).location.clone(), *global, initializer, true);
+		}
+		self.db.globals = globals;
+
 		for module in modules {
 			self.check_module(ast, module);
 		}

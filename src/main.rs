@@ -250,7 +250,23 @@ fn main() {
 
 	let timer = duration(timer, "binding", &mut duration_set);
 
-	// Pass 3: Type check and infer
+	// Pass 3: Initialization orders. Fix initialization order of various things,
+	// including globals.
+	//
+	// This must come before type check, otherwise the type checker won't be
+	// able to figure out the types of certain global patterns (e.g. cyclic/globals_same)
+	//
+	// It is also valid for it to come after binding, as after that, all the variables
+	// are essentially lexically bound, and we don't actually care about type
+	// information during the sorting stage.
+	// TODO: Is there a way to make this pattern cleaner..?
+	let mut globals = std::mem::take(&mut db.globals);
+	init_ordering::topological_sort(&mut globals, &ast, &mut db);
+	db.globals = globals;
+
+	let timer = duration(timer, "initializer sort", &mut duration_set);
+
+	// Pass 4: Type check and infer
 	let had_error = typecheck::typecheck(&mut db, &ast, &mut modules);
 
 	if had_error {
@@ -263,15 +279,6 @@ fn main() {
 	dead_code::eliminate_dead_code(&mut db, &mut ast, &mut modules);
 
 	let timer = duration(timer, "dead code", &mut duration_set);
-
-	// Pass 4: Initialization orders. Fix initialization order of various things,
-	// including globals.
-	// TODO: Is there a way to make this pattern cleaner..?
-	let mut globals = std::mem::take(&mut db.globals);
-	init_ordering::topological_sort(&mut globals, &ast, &mut db);
-	db.globals = globals;
-
-	let timer = duration(timer, "initializer sort", &mut duration_set);
 
 	// Pass 5: Codegen
 	// Generate any caches that require type checking info.

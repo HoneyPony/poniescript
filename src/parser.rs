@@ -855,7 +855,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// class.
 		//
 		// TODO: For classes, support variables that don't have an initializer?
-		let identity = self.db.new_var(name, typ, None, true, Some(initializer));
+		let identity = self.db.new_var(name, typ, None, true, Some(initializer),self.end(location.clone()));
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -950,7 +950,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name, typ, None, false, None);
+		let identity = self.db.new_var(name, typ, None, false, None,
+			self.last_location.clone());
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		Ok(identity)

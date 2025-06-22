@@ -410,6 +410,7 @@ impl Db {
 			class: None,
 			init: false,
 			initializer: None,
+			location: self.synthetic(),
 		};
 		let var = self.push(var);
 
@@ -685,13 +686,14 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: Token, typ: TypId, class: Option<ClassId>, init: bool, initializer: Option<ExprId>) -> VarId {
+	pub fn new_var(&mut self, name: Token, typ: TypId, class: Option<ClassId>, init: bool, initializer: Option<ExprId>, location: SourceLocation) -> VarId {
 		let var = Var {
 			name,
 			typ,
 			class,
 			init,
-			initializer
+			initializer,
+			location
 		};
 
 		return self.push(var);
