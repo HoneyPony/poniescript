@@ -55,14 +55,16 @@ pub struct Arena<Ty, Key: ArenaKey> {
     phantom: PhantomData<Key>
 }
 
-pub struct ArenaIterator<'arena, Ty, Key: ArenaKey> {
+// Note: Previously we also had a phantom lifetime parameter, but that is more
+// annoying than it is worth.
+pub struct ArenaIterator<Ty, Key: ArenaKey> {
     len: usize,
     current: usize,
 
-    phantom: PhantomData<&'arena Arena<Ty, Key>>
+    phantom: PhantomData<(Ty, Key)>,
 }
 
-impl<'arena, Ty, Key: ArenaKey> std::iter::Iterator for ArenaIterator<'arena, Ty, Key> {
+impl<Ty, Key: ArenaKey> std::iter::Iterator for ArenaIterator<Ty, Key> {
     type Item = Key;
 
     fn next(&mut self) -> Option<Self::Item> {

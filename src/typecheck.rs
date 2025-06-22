@@ -784,7 +784,6 @@ impl<'db> TypeChecker<'db> {
 			},
 
 			Expr::FunDeclare(declare) => {
-				self.fix_fun_declare(declare);
 				self.check_fun_declare(ast, declare)?;
 
 				let sig = self.db.get(declare.identity).sig;
@@ -969,11 +968,6 @@ impl<'db> TypeChecker<'db> {
 		let enclosing_class = self.current_class;
 		self.current_class = Some(self.db.put_type(Type::Class(class_declare.identity)));
 
-		// Must fix_fun_declare for class too in order to assign them a sig.
-		for fun in &mut class_declare.funs {
-			self.fix_fun_declare(fun);
-		}
-
 		for declare in &mut class_declare.vars {
 			self.check_declare(ast, declare)?;
 		}
@@ -1115,18 +1109,18 @@ impl<'db> TypeChecker<'db> {
 	/// 
 	/// I suppose the signature could be generated in the parser, and then
 	/// the unbound type names in that signature would be fixed by binder?
-	fn fix_fun_declare(&mut self, fun_declare: &mut FunDeclare) {
+	fn fix_fun_declare(&mut self, fun: FunId) {
 		let mut sig = Sig { parameters: vec![], return_type: self.db.types.unassigned };
 
-		for param in &self.db.get(fun_declare.identity).parameters {
+		for param in &self.db.get(fun).parameters {
 			// We're essentially assuming that the type of param is good so far...
 			// which is probably not true...
 			sig.parameters.push(self.db.get_var_type(*param));
 		}
-		sig.return_type = self.db.get(fun_declare.identity).return_type;
+		sig.return_type = self.db.get(fun).return_type;
 
 		let sig = self.db.put_sig(&sig);
-		self.db.get_mut(fun_declare.identity).sig = sig;
+		self.db.get_mut(fun).sig = sig;
 	}
 
 	fn check_module(&mut self, ast: &Ast, module: &mut Module) {
@@ -1138,13 +1132,7 @@ impl<'db> TypeChecker<'db> {
 			self.check_class(ast, class);
 		}
 
-		// For now, in order to get FunCaptures working correctly, we make a first
-		// pass which "fix"es functions, which must be done for all functions
-		// (e.g. call_captured_rev.poni). We might come up with a more sophisticated
-		// system later...
-		for fun in &mut module.functions {
-			self.fix_fun_declare(fun);
-		}
+		
 
 		for fun in &mut module.functions {
 			// Ignore errors at this point as there's no need to unwind the stack.
@@ -1160,6 +1148,17 @@ impl<'db> TypeChecker<'db> {
 
 	fn check_modules(&mut self, ast: &Ast, modules: &mut Vec<Module>) {
 		self.global_scope = true;
+
+		// Before anything else, fix all function signatures.
+		//
+		// For now, in order to get FunCaptures working correctly, we make a first
+		// pass which "fix"es functions, which must be done for all functions
+		// (e.g. call_captured_rev.poni). We might come up with a more sophisticated
+		// system later...
+		for fun in self.db.iter_fun() {
+			self.fix_fun_declare(fun);
+		}
+
 		// Check globals based on the ordering in db.
 		let globals = std::mem::take(&mut self.db.globals);
 		for global in &globals {
