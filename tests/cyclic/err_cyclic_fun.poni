@@ -1,0 +1,7 @@
+//? Cycle in variable initilization order
+var a: int = get_b();
+var b: int = a;
+
+fun get_b() -> int {
+    return b;
+}

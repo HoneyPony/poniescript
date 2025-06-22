@@ -202,6 +202,10 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 				writeln!(visit_trait, "\t\t\tself.visit_expr(ast, db, *item);")?;
 				writeln!(visit_trait, "\t\t}}")?;
 			}
+			// TODO: Also do this for Option<StmtId>
+			if field.0 == "Option<ExprId>" {
+				writeln!(visit_trait, "\t\tif let Some(inner) = {lname}.{} {{ self.visit_expr(ast, db, inner); }}", field.1)?;
+			}
 			if field.0 == "StmtId" {
 				writeln!(visit_trait, "\t\tself.visit_stmt(ast, db, {lname}.{});", field.1)?;
 			}

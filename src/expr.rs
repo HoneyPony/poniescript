@@ -268,6 +268,8 @@ pub struct Fun {
 	pub return_type: TypId,
 
 	pub class: Option<ClassId>,
+
+	pub expression: ExprId,
 }
 
 /// Represents a function signature. Includes the types of all parameters

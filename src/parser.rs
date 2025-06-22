@@ -1059,6 +1059,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			return_type,
 			sig: self.db.sig_unassigned,
 			class: None, // Class is not assigned for now, the class parser will assign it later.
+			expression: value,
 		});
 
 		// We must pop our pushed_name before we put the function name in the scope.

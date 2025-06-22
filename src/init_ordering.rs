@@ -40,6 +40,39 @@ impl<'a> VisitAst for OrderVisitor<'a> {
         let Expr::Variable(var) = ast.get_expr(id) else { return; };
         self.push_dfs(ast, db, var.identity);
     }
+
+    fn visit_funcall(&mut self,ast: &Ast,db: &mut Db,id:ExprId) {
+        let Expr::FunCall(call) = ast.get_expr(id) else { return; };
+
+         eprintln!("Visit FunCall");
+        
+        // Default behavior: Visit all args
+        for arg in &call.args {
+            self.visit_expr(ast, db, *arg);
+        }
+
+        // Additionally visit function body
+        // TODO: Cache dependencies of a function body..?
+        self.visit_expr(ast, db, db.get(call.identity).expression);
+    }
+
+    fn visit_funcapture(&mut self,ast: &Ast, db: &mut Db, id:ExprId) {
+        let Expr::FunCapture(capt) = ast.get_expr(id) else { return; };
+
+        eprintln!("Visit FunCapture");
+        
+        // Note: You could argue that this is too conservative. Like, you could
+        // have something like:
+        //
+        // var a = {
+        //     var b = a_fun;
+        //     10;
+        // };
+        // fun a_fun() { print(a); }
+        //
+        // But I think that's OK.
+        self.visit_expr(ast, db, db.get(capt.identity).expression);
+    }
 }
 
 pub fn topological_sort(ord: &mut Vec<VarId>, ast: &Ast, db: &mut Db) {
