@@ -1,0 +1,16 @@
+var a = new Example{}.value;
+var b = a;
+var c = 10;
+
+// In order to pass this test, we must be able to have a global depend on a class
+// and a class depend on a global.
+
+class Example {
+    var value = c + d;
+}
+
+var d = 15;
+
+fun init() {
+    print(a, " ", b, " ", c, " ", d); //! 25 25 10 15
+}
