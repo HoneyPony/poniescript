@@ -1225,20 +1225,7 @@ impl<'a> Codegen<'a> {
 	}
 
 	fn codegen_to_buffers(&mut self, ast: &Ast, module: &Module, out: &mut CodegenOutputs) {
-		// Use an indent level of 1 for the initialization code for all global variables.
-		self.indent_level = 1;
-		for global in &module.globals {
-			// Just dierectly encode the indentation..
-			inf_writeln!(out.global_define, "{} {};",
-				self.db.get_var_ctype(global.identity), self.db.get_cname(global.identity));
-
-			// For globals, the initializer is not itself a declaration. So,
-			// do tell self.compile_assign() that it's not a declaration.
-			self.compile_assign(ast, global.identity,
-				global.value,
-				&mut out.global_init,
-				false);
-		}
+		
 
 		self.indent_level = 0;
 		for fun in &module.functions {
@@ -1270,6 +1257,29 @@ impl<'a> Codegen<'a> {
 
 	fn codegen(&mut self, ast: &Ast, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 		let mut outputs = CodegenOutputs::new();
+
+		// Generate global variables in one pass as their ordering is a global
+		// property.
+
+		// Use an indent level of 1 for the initialization code for all global variables.
+		self.indent_level = 1;
+		for global in &self.db.globals {
+			let global = *global;
+			// Just dierectly encode the indentation..
+			inf_writeln!(outputs.global_define, "{} {};",
+				self.db.get_var_ctype(global), self.db.get_cname(global));
+
+			let Some(initializer) = self.db.get(global).initializer else {
+				panic!("ICE: Codegen of global variable without initializer");
+			};
+
+			// For globals, the initializer is not itself a declaration. So,
+			// do tell self.compile_assign() that it's not a declaration.
+			self.compile_assign(ast, global,
+				initializer,
+				&mut outputs.global_init,
+				false);
+		}
 
 		for module in modules {
 			self.codegen_to_buffers(ast, module, &mut outputs);

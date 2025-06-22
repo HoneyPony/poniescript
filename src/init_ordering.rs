@@ -1,75 +1,49 @@
 use rustc_hash::FxHashMap;
 
+use crate::arena::ArenaKey;
 use crate::{db::*, error::Error, source::SourceLocation};
 use crate::expr::*;
 
-trait VisitExpr {
-    fn visit_binary(ast: &Ast, db: &mut Db, id: ExprId, item: &Binary) {
+struct OrderVisitor<'a> {
+    ord: &'a mut Vec<VarId>,
+    map: FxHashMap<VarId, bool>,
+}
+
+impl<'a> OrderVisitor<'a> {
+    fn push_dfs(&mut self, ast: &Ast, db: &mut Db, item: VarId) {
+        // If the variable is in the map, then it's one of the ones in this InitOrdering.
+        // Otherwise, it's an unrelated variable, so don't check it.
+        let Some(entry) = self.map.get_mut(&item) else { return; };
+
+        if *entry {
+            // If the entry has already been visited, that means that we have a cycle
+            // in the graph. Report an error.
+            //
+            // TODO: Store a location for each variable..?
+            // let location = 
+            // db.report_error(Error::simple("Cycle in variable initilization order".into(), );
+            panic!("Cycle in variable initilization order");
+        }
+        self.map.insert(item, true);
+
+        // Visit the expression initializing this variable in a DFS. 
+        if let Some(var_initializer) = db.get(item).initializer {
+            self.visit_expr(ast, db, var_initializer);
+        }
         
-    }
-
-    fn visit(ast: &Ast, db: &mut Db, item: ExprId) {
-        match ast.get_expr(item) {
-            Expr::Binary(binary) => {
-                
-            },
-            Expr::Comparison(comparison) => todo!(),
-            Expr::Variable(variable) => todo!(),
-            Expr::Logical(logical) => todo!(),
-            Expr::FunCall(fun_call) => todo!(),
-            Expr::FunDeclare(fun_declare) => todo!(),
-            Expr::ValCall(val_call) => todo!(),
-            Expr::FunCapture(fun_capture) => todo!(),
-            Expr::Assign(assign) => todo!(),
-            Expr::UnboundAssign(unbound_assign) => todo!(),
-            Expr::NumLiteral(num_literal) => todo!(),
-            Expr::StrLiteral(str_literal) => todo!(),
-            Expr::BoolLiteral(bool_literal) => todo!(),
-            Expr::Block(block) => todo!(),
-            Expr::If(_) => todo!(),
-            Expr::Unbound(unbound) => todo!(),
-            Expr::UnboundFunCapture(unbound_fun_capture) => todo!(),
-            Expr::Print(print) => todo!(),
-            Expr::Str(_) => todo!(),
-            Expr::New(_) => todo!(),
-            Expr::Get(get) => todo!(),
-            Expr::Set(set) => todo!(),
-            Expr::SelfVal(self_val) => todo!(),
-            Expr::ArrayLit(array_lit) => todo!(),
-            Expr::Index(index) => todo!(),
-            Expr::SetIndex(set_index) => todo!(),
-            Expr::Undefined(undefined) => todo!(),
-        }  
+        self.ord.push(item);
     }
 }
 
-struct InitOrdering {
-    vars: Vec<VarId>,
-}
-
-fn push_dfs(ord: &mut InitOrdering, ast: &Ast, db: &mut Db, map: &mut FxHashMap<VarId, bool>, item: VarId) {
-    // If the variable is in the map, then it's one of the ones in this InitOrdering.
-    // Otherwise, it's an unrelated variable, so don't check it.
-    let Some(entry) = map.get_mut(&item) else { return; };
-
-    if *entry {
-        // If the entry has already been visited, that means that we have a cycle
-        // in the graph. Report an error.
-        //
-        // TODO: Store a location for each variable..?
-        // let location = 
-        // db.report_error(Error::simple("Cycle in variable initilization order".into(), );
-        panic!("Cycle in variable initilization order");
+impl<'a> VisitAst for OrderVisitor<'a> {
+    fn visit_variable(&mut self, ast: &Ast, db: &mut Db, id:ExprId) {
+        let Expr::Variable(var) = ast.get_expr(id) else { return; };
+        self.push_dfs(ast, db, var.identity);
     }
-    map.insert(item, true);
-
-    /* visit dfs */
-
-    ord.vars.push(item);
 }
 
-fn topological_sort(ord: &mut InitOrdering, ast: &Ast, db: &mut Db) {
-    let mut queue = std::mem::take(&mut ord.vars);
+pub fn topological_sort(ord: &mut Vec<VarId>, ast: &Ast, db: &mut Db) {
+    let mut queue = std::mem::take(ord);
 
     let mut map: FxHashMap<VarId, bool> = FxHashMap::default();
 
@@ -80,7 +54,30 @@ fn topological_sort(ord: &mut InitOrdering, ast: &Ast, db: &mut Db) {
         map.insert(*item, false);
     }
 
+    let mut visitor = OrderVisitor {
+        ord, map
+    };
+
+    let mut last_pushed = 0;
+
     for item in &queue {
-        push_dfs(ord, ast, db, &mut map, *item);
+        visitor.push_dfs(ast, db, *item);
+
+        // After visiting a variable, ALL the variables that were successfully
+        // added to the final ordering should no longer count as real variables.
+        //
+        // This is because it is completely valid for any variables that come next
+        // to reference them, and it is impossible for those "variables coming
+        // next" to have been referenced earlier, as otherwise we would have seen
+        // them already.
+        //
+        // So effectively, all the variables that were added to the ordering
+        // by a particular graph traversal become "unrelated variables" to
+        // any future graph traversals.
+
+        for i in last_pushed..visitor.ord.len() {
+            visitor.map.remove(&visitor.ord[i]);
+        }
+        last_pushed = visitor.ord.len();
     }
 }

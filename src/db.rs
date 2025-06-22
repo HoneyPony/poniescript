@@ -254,6 +254,9 @@ pub struct Db {
 	pub str_anonymous: StrId,
 	pub str_lambda: StrId,
 
+	/// The list of globals. The initializer ordering pass will sort them.
+	pub globals: Vec<VarId>,
+
 	prop_str: StrProperties,
 	prop_array: ArrayProperties,
 }
@@ -338,6 +341,8 @@ impl Db {
 				length_key: StrId::invalid()
 			},
 
+			globals: Vec::new(),
+
 			prop_array: ArrayProperties { length: VarId::invalid(), length_key: StrId::invalid() }
 		} };
 
@@ -404,6 +409,7 @@ impl Db {
 			typ,
 			class: None,
 			init: false,
+			initializer: None,
 		};
 		let var = self.push(var);
 
@@ -679,12 +685,13 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: Token, typ: TypId, class: Option<ClassId>, init: bool) -> VarId {
+	pub fn new_var(&mut self, name: Token, typ: TypId, class: Option<ClassId>, init: bool, initializer: Option<ExprId>) -> VarId {
 		let var = Var {
 			name,
 			typ,
 			class,
-			init
+			init,
+			initializer
 		};
 
 		return self.push(var);

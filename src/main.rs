@@ -264,7 +264,16 @@ fn main() {
 
 	let timer = duration(timer, "dead code", &mut duration_set);
 
-	// Pass 4: Codegen
+	// Pass 4: Initialization orders. Fix initialization order of various things,
+	// including globals.
+	// TODO: Is there a way to make this pattern cleaner..?
+	let mut globals = std::mem::take(&mut db.globals);
+	init_ordering::topological_sort(&mut globals, &ast, &mut db);
+	db.globals = globals;
+
+	let timer = duration(timer, "initializer sort", &mut duration_set);
+
+	// Pass 5: Codegen
 	// Generate any caches that require type checking info.
 	db.generate_codegen_caches();
 

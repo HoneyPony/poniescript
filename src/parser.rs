@@ -855,7 +855,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// class.
 		//
 		// TODO: For classes, support variables that don't have an initializer?
-		let identity = self.db.new_var(name, typ, None, true);
+		let identity = self.db.new_var(name, typ, None, true, Some(initializer));
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -950,7 +950,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name, typ, None, false);
+		let identity = self.db.new_var(name, typ, None, false, None);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		Ok(identity)
@@ -1152,6 +1152,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			Tok::Var => {
 				let global = self.var_declaration()?;
+				self.db.globals.push(global.identity);
 				self.module.globals.push(global);
 			},
 

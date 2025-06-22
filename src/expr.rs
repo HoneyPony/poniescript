@@ -251,6 +251,9 @@ pub struct Var {
 	/// For class members, stores whether this variable was initialized.
 	/// (TODO: Is there a way to not have this field on non-class variables?)
 	pub init: bool,
+
+	/// The initializer for this variable.
+	pub initializer: Option<ExprId>,
 }
 
 pub struct Fun {
