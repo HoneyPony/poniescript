@@ -264,6 +264,11 @@ fn main() {
 	init_ordering::topological_sort(&mut globals, &ast, &mut db);
 	db.globals = globals;
 
+	if !db.errors.is_empty() {
+		report_errors(&db);
+		exit(3);
+	}
+
 	let timer = duration(timer, "initializer sort", &mut duration_set);
 
 	// Pass 4: Type check and infer
@@ -271,7 +276,7 @@ fn main() {
 
 	if had_error {
 		report_errors(&db);
-		exit(3);
+		exit(4);
 	}
 
 	let timer = duration(timer, "type check", &mut duration_set);
@@ -289,7 +294,7 @@ fn main() {
 
 	if let Err(err) = codegen::codegen(&mut db, &mut ast, &modules, &mut output) {
 		eprintln!("Unable to write output file: {err}");
-		exit(4);
+		exit(5);
 	}
 
 	// Wait for the C compiler and exit with an error if it failed.

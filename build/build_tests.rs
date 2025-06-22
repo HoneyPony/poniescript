@@ -45,6 +45,11 @@ pub fn generate(tests_file: &mut File) {
 		("cyclic/", "globals_same"),
 		("cyclic/", "globals_and_class_thru_difficult"),
 
+		("cyclic/", "err_cyclic"),
+		("cyclic/", "err_cyclic_fun"),
+		("cyclic/", "err_cyclic_multi_fun"),
+		("cyclic/", "err_cyclic_fun_five"),
+
 		// print_nested: the last line is 345 because it should re-print each of the inner print()s.
 		("print/", "print_nested"),
 		("print/", "print_string_literal"),

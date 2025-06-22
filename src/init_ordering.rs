@@ -20,9 +20,21 @@ impl<'a> OrderVisitor<'a> {
             // in the graph. Report an error.
             //
             // TODO: Store a location for each variable..?
-            // let location = 
-            // db.report_error(Error::simple("Cycle in variable initilization order".into(), );
-            panic!("Cycle in variable initilization order");
+            let location = db.get(item).location.clone();
+            let mut error = Error::simple("Cycle in variable initialization order".into(), &location);
+
+            for (k, v) in &self.map {
+                if *k == item { continue; }
+                if *v {
+                    // Any items that are set to true in the map are part of
+                    // the error. This is due to the map-removing logic below.
+                    let location = db.get(*k).location.clone();
+                    error = error.add_note("Additional variable in cycle".into(), Some(&location));
+                }
+            }
+
+            db.report_error(error);
+            return;
         }
         self.map.insert(item, true);
 
@@ -43,8 +55,6 @@ impl<'a> VisitAst for OrderVisitor<'a> {
 
     fn visit_funcall(&mut self,ast: &Ast,db: &mut Db,id:ExprId) {
         let Expr::FunCall(call) = ast.get_expr(id) else { return; };
-
-         eprintln!("Visit FunCall");
         
         // Default behavior: Visit all args
         for arg in &call.args {
@@ -58,8 +68,6 @@ impl<'a> VisitAst for OrderVisitor<'a> {
 
     fn visit_funcapture(&mut self,ast: &Ast, db: &mut Db, id:ExprId) {
         let Expr::FunCapture(capt) = ast.get_expr(id) else { return; };
-
-        eprintln!("Visit FunCapture");
         
         // Note: You could argue that this is too conservative. Like, you could
         // have something like:

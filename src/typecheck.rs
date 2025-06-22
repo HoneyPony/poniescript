@@ -924,7 +924,7 @@ impl<'db> TypeChecker<'db> {
 
 				let obj_ty = {
 					let Some(object) = &mut capt.object else {
-						type_error!(self, &capt.location, "Can't resolve function call on no object.");
+						type_error!(self, &capt.location, "Can't resolve function call.");
 					};
 					self.check_expr(ast, *object, true)?
 				};

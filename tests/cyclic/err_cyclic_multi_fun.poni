@@ -1,0 +1,19 @@
+//? Cycle in variable initialization order
+var a = b;
+var b = get_a();
+
+fun get_a() -> int {
+    get_a_2();
+}
+
+fun get_a_2() -> int {
+    get_a_3();
+}
+
+fun get_a_3() -> int {
+    get_a_4() + 10 - 10
+}
+
+fun get_a_4() -> int {
+    a
+}
