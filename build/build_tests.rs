@@ -116,6 +116,8 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "err_if_incompat_types"),
 		("if/", "err_if_no_else_bad_type"),
 
+		("new/", "new_dotted"),
+
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants"),
 		("comparison/", "compare_doubleblock"),

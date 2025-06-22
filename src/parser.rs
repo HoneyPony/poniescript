@@ -724,6 +724,41 @@ impl<'a, 'b> Parser<'a, 'b> {
 				return Expr::put_logical_ok(self.ast, self.end(location), op.typ, lhs, rhs);
 			}
 
+			// TODO: Deduplicate this with the expr_prefix stuff..?
+			Tok::Dot => {
+				let op = self.advance()?;
+				let identifier = expected!(self, Tok::Identifier, "identifier after property name")?;
+
+				// TODO: Do we want to move this logic into expr_ident to go
+				// with the other ones?
+				if self.match_(Tok::Equal)?.is_some() {
+					let value = self.expression()?;
+					return Expr::put_set_ok(self.ast, self.end(location), identifier, lhs, self.db.var_unassigned, value);
+				}
+				// Function calls are mutually exclusive with assignment.
+				//
+				// An assignment would be like:
+				// object.thing() = 5;  or object.thing() = new Thing {};
+				// But this doesn't make sense, because in either case we're
+				// basically creating a new temporary that isn't really an lvalue.
+				//
+				// So function calls are distinct from assignments.
+				// 
+				// Same logic as above with arrays--we return early
+				// if we end up making an assignment.
+				else if self.match_(Tok::LeftParen)?.is_some() {
+					// We have to finish the call right now because
+					// it is a call on this particular idenitifer, not
+					// really a call on the previous property.
+					//
+					// (Although, we could make that work too).
+					return self.expr_call_finish(location.clone(), identifier, Some(lhs));
+				}
+				else {
+					return Expr::put_get_ok(self.ast, self.end(location.clone()), identifier, lhs, self.db.var_unassigned);
+				}
+			}
+
 			// We should never call expr_infix() with an invalid operator,
 			// because we have to go through the peek_precedence() table to
 			// get here.

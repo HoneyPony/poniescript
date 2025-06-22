@@ -1,0 +1,12 @@
+class Horse {
+    var greeting = "neigh!";
+
+    fun greet() {
+        print(greeting);
+    }
+}
+
+fun init() {
+    print(new Horse{}.greeting); //! neigh!
+    new Horse{}.greet(); //! neigh!
+}
