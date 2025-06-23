@@ -241,7 +241,12 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
     }
 
     pub fn get_proxy(&mut self) -> ArenaCellProxy<Ty, Key> {
-        return ArenaCellProxy { arena: self, added: UnsafeCell::new(Vec::new()), borrowed: UnsafeCell::new(Vec::new()) }
+        return ArenaCellProxy {
+            arena: self, added: UnsafeCell::new(Vec::new()),
+
+            #[cfg(debug_assertions)]
+            borrowed: UnsafeCell::new(Vec::new())
+        }
     }
 
     // TODO:
@@ -370,7 +375,7 @@ impl<'a, Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCellProxy<'a, Ty, Key> {
         let ptr = unsafe { self.added.get().as_mut().unwrap().get(idx).unwrap().as_ref() };
 
         #[cfg(not(debug_assertions))]
-        let ptr = unsafe { self.objects.get().as_mut().unwrap_unchecked().get_unchecked(idx).as_ref() };
+        let ptr = unsafe { self.added.get().as_mut().unwrap_unchecked().get_unchecked(idx).as_ref() };
 
         ptr
     }
