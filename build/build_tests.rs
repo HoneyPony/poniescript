@@ -226,6 +226,7 @@ pub fn generate(tests_file: &mut File) {
 		("dead_code/", "dead_ops"),
 		("dead_code/", "dead_op_single"),
 		("dead_code/", "dead_args"),
+		("dead_code/", "dead_args_array"),
 		("dead_code/", "dead_args_print"),
 		("dead_code/", "dead_args_str"),
 		("dead_code/", "dead_args_valcall"),

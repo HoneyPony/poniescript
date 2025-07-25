@@ -1,4 +1,4 @@
-use crate::{db::{Ast, AstProxy, Db}, expr::{ClassDeclare, Expr, Stmt}, module::Module};
+use crate::{db::{Ast, AstProxy, Db}, expr::*, module::Module, source::SourceLocation};
 
 use crate::db::ExprId;
 use crate::db::StmtId;
@@ -9,12 +9,65 @@ struct DeadCodeElim<'db> {
 	db: &'db mut Db,
 }
 
+macro_rules! into {
+    ($value:expr, $variant:ident) => {
+        {
+            let Expr::$variant(v) = $value else { unreachable!() };
+            v
+        }
+    };
+}
+
+macro_rules! elim_sequence {
+    ($self:expr, $ast:expr, $expr:expr, $variant:ident, $seq_id:ident) => {
+        $self.elim_sequence::<$variant, _, _>($ast, 
+            |it| { &mut into!(it, $variant).$seq_id }, 
+            |it| { into!(it, $variant).$seq_id },
+            $expr)
+    }
+}
+
 impl<'db> DeadCodeElim<'db> {
 	pub fn new(db: &'db mut Db) -> Self {
 		return DeadCodeElim {
 			db,
 		}
 	}
+
+    fn elim_sequence<T, F, G>(&mut self, ast: &AstProxy, exprs: F, take_exprs: G, expr: &mut Expr) -> bool
+        where F: Fn(&mut Expr) -> &mut Vec<ExprId>,
+        G: Fn(Expr) -> Vec<ExprId>
+    {
+        let mut last_needed_idx = None;
+
+        let exprs_check = exprs(expr);
+
+        for idx in 0..exprs_check.len() {
+            if self.elim_expr(ast, &mut exprs_check[idx]) {
+                last_needed_idx = Some(idx);
+                break;
+            }
+        }
+
+        if let Some(last) = last_needed_idx {
+            let old = std::mem::take(expr);
+            let location = old.location().clone();
+
+            let mut old_exprs = take_exprs(old);
+
+            let mut new_exprs = Vec::new();
+            for expr in old_exprs.drain(0..=last) {
+                new_exprs.push(Stmt::push_expression(ast, expr.location(ast).clone(), expr));
+            }
+
+            let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
+            *expr = new_block;
+
+            return true;
+        }
+
+        false
+    }
 
     fn elim_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId) -> bool {
         // Counterintuitive but true:
@@ -90,66 +143,20 @@ impl<'db> DeadCodeElim<'db> {
                 //     *expr = left;
                 // }
             },
-            Expr::FunCall(fun_call) => {
-                let mut last_needed_idx = None;
-
-                for idx in 0..fun_call.args.len() {
-                    if self.elim_expr(ast, &mut fun_call.args[idx]) {
-                        last_needed_idx = Some(idx);
-                        break;
-                    }
-                }
-
-                if let Some(last) = last_needed_idx {
-                    let old = std::mem::take(expr);
-                    let Expr::FunCall(old) = old else { unreachable!() };
-
-                    let (mut args, location) = (old.args, old.location);
-                    
-                    let mut new_exprs = Vec::new();
-                    for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::push_expression(ast, arg.location(ast).clone(), arg));
-                    }
-
-                    let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
-                    *expr = new_block;
-
-                    return true;
-                }
-
-                false
+            Expr::FunCall(_) => {
+                elim_sequence!(self, ast, expr,
+                    FunCall, args)
             },
             Expr::FunDeclare(fun_declare) => {
-                self.elim_expr(ast, &mut fun_declare.value)
-            },
-            Expr::ValCall(val_call) => {
-                let mut last_needed_idx = None;
+                self.elim_expr(ast, &mut fun_declare.value);
 
-                for idx in 0..val_call.args.len() {
-                    if self.elim_expr(ast, &mut val_call.args[idx]) {
-                        last_needed_idx = Some(idx);
-                        break;
-                    }
-                }
-
-                if let Some(last) = last_needed_idx {
-                    let old = std::mem::take(expr);
-                    let Expr::ValCall(old) = old else { unreachable!() };
-
-                    let (mut args, location) = (old.args, old.location);
-                    
-                    let mut new_exprs = Vec::new();
-                    for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::push_expression(ast, arg.location(ast).clone(), arg));
-                    }
-
-                    let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
-                    *expr = new_block;
-
-                    return true;
-                }
-
+                // A FunDeclare itself never evaluates to Bottom. It always evaluates
+                // to a function type.
                 false
+            },
+            Expr::ValCall(_) => {
+                elim_sequence!(self, ast, expr,
+                    ValCall, args)
             },
             Expr::FunCapture(fun_capture) => { false },
             Expr::Assign(assign) => {
@@ -212,62 +219,12 @@ impl<'db> DeadCodeElim<'db> {
             Expr::Unbound(_) => panic!("ICE: Tried to DCE Unbound"),
             Expr::UnboundFunCapture(_) => panic!("ICE: Tried to DCE UnboundFunCapture"),
             Expr::Print(print) => {
-                let mut last_needed_idx = None;
-
-                for idx in 0..print.exprs.len() {
-                    if self.elim_expr(ast, &mut print.exprs[idx]) {
-                        last_needed_idx = Some(idx);
-                        break;
-                    }
-                }
-
-                if let Some(last) = last_needed_idx {
-                    let old = std::mem::take(expr);
-                    let Expr::Print(old) = old else { unreachable!() };
-
-                    let (mut args, location) = (old.exprs, old.location);
-                    
-                    let mut new_exprs = Vec::new();
-                    for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::push_expression(ast, arg.location(ast).clone(), arg));
-                    }
-
-                    let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
-                    *expr = new_block;
-
-                    return true;
-                }
-
-                false
+                elim_sequence!(self, ast, expr,
+                    Print, exprs)
             },
             Expr::Str(str) => {
-                let mut last_needed_idx = None;
-
-                for idx in 0..str.exprs.len() {
-                    if self.elim_expr(ast, &mut str.exprs[idx]) {
-                        last_needed_idx = Some(idx);
-                        break;
-                    }
-                }
-
-                if let Some(last) = last_needed_idx {
-                    let old = std::mem::take(expr);
-                    let Expr::Str(old) = old else { unreachable!() };
-
-                    let (mut args, location) = (old.exprs, old.location);
-                    
-                    let mut new_exprs = Vec::new();
-                    for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::push_expression(ast, arg.location(ast).clone(), arg));
-                    }
-
-                    let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
-                    *expr = new_block;
-
-                    return true;
-                }
-
-                false
+                elim_sequence!(self, ast, expr,
+                    Str, exprs)
             },
             Expr::New(new) => {
                 // TODO: Deduplicate all this code.
@@ -328,8 +285,8 @@ impl<'db> DeadCodeElim<'db> {
                 false
             }
             Expr::ArrayLit(_) => {
-                // TODO: Eliminate sequence like all the other ones
-                false
+                elim_sequence!(self, ast, expr,
+                    ArrayLit, values)
             }
             Expr::Index(_) => {
                 // TODO eliminate pair like binop
