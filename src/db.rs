@@ -86,9 +86,9 @@ pub struct AstProxy<'ar> {
 }
 
 pub trait AstAbstract {
-	fn get_expr_mut(&self, id: ExprId) -> ArenaBorrow<Expr, ExprId>;
-	fn get_expr(&self, id: ExprId) -> ArenaBorrowUnmut<Expr, ExprId>;
-	fn get_stmt(&self, id: StmtId) -> ArenaBorrowUnmut<Stmt, StmtId>;
+	fn get_expr_mut(&self, id: ExprId) -> ArenaBorrowMut<Expr, ExprId>;
+	fn get_expr(&self, id: ExprId) -> ArenaBorrow<Expr, ExprId>;
+	fn get_stmt(&self, id: StmtId) -> ArenaBorrow<Stmt, StmtId>;
 }
 
 impl<'ar> AstProxy<'ar> {
@@ -116,29 +116,29 @@ impl Ast {
 }
 
 impl AstAbstract for Ast {
-	fn get_expr_mut(&self, id: ExprId) -> ArenaBorrow<Expr, ExprId> {
+	fn get_expr_mut(&self, id: ExprId) -> ArenaBorrowMut<Expr, ExprId> {
 		self.exprs.get_mut(id)
 	}
 
-	fn get_expr(&self, id: ExprId) -> ArenaBorrowUnmut<Expr, ExprId> {
+	fn get_expr(&self, id: ExprId) -> ArenaBorrow<Expr, ExprId> {
 		self.exprs.get(id)
 	}
 
-	fn get_stmt(&self, id: StmtId) -> ArenaBorrowUnmut<Stmt, StmtId> {
+	fn get_stmt(&self, id: StmtId) -> ArenaBorrow<Stmt, StmtId> {
 		self.stmts.get(id)
 	}
 }
 
 impl<'a> AstAbstract for AstProxy<'a> {
-	fn get_expr_mut(&self, id: ExprId) -> ArenaBorrow<Expr, ExprId> {
+	fn get_expr_mut(&self, id: ExprId) -> ArenaBorrowMut<Expr, ExprId> {
 		self.exprs.get_mut(id)
 	}
 
-	fn get_expr(&self, id: ExprId) -> ArenaBorrowUnmut<Expr, ExprId> {
+	fn get_expr(&self, id: ExprId) -> ArenaBorrow<Expr, ExprId> {
 		self.exprs.get(id)
 	}
 
-	fn get_stmt(&self, id: StmtId) -> ArenaBorrowUnmut<Stmt, StmtId> {
+	fn get_stmt(&self, id: StmtId) -> ArenaBorrow<Stmt, StmtId> {
 		self.stmts.get(id)
 	}
 }
