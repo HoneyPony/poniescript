@@ -1,0 +1,9 @@
+// This code will lead to an infinite loop in the codegen, which is bad.
+
+class A {
+    var b = new B{};
+}
+
+class B {
+    var a = new A{};
+}
