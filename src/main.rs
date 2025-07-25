@@ -54,6 +54,8 @@ struct Args {
 enum CompileMode {
 	ToCFile,
 	ToExeFile,
+	ToObjectFile,
+	ToSharedLibary,
 	// Will be useful if we can do hot code reloading
 	// ToSharedLibrary,
 }
@@ -68,9 +70,9 @@ impl CompileMode {
 
 		if extension == "c" { return CompileMode::ToCFile; }
 		if extension == "exe" { return CompileMode::ToExeFile; }
-		if extension == "o" { todo!("outputting to .o files"); }
-		if extension == "dll" { todo!("outputting to .dll files"); }
-		if extension == "so" { todo!("outputting to .so files"); }
+		if extension == "o" { return CompileMode::ToObjectFile; }
+		if extension == "dll" { return CompileMode::ToSharedLibary; }
+		if extension == "so" { return CompileMode::ToSharedLibary; }
 
 		// Any other extension, we'll happily do Exe, but also print a warning.
 		eprintln!("warning: unknown output file extension '.{}' -- generating executable.", extension.to_string_lossy());
@@ -95,13 +97,25 @@ impl CompileMode {
 					}
 				}
 			},
-			CompileMode::ToExeFile => {
+			CompileMode::ToExeFile | CompileMode::ToObjectFile | CompileMode::ToSharedLibary => {
 				// TODO: Why is as_deref giving &str?? As long as it works...
 				let compiler = args.c_compiler.as_deref().unwrap_or("gcc");
-				let cc = Command::new(compiler)
-					.stdin(Stdio::piped())
-					// .arg("-std=c11") // TODO: Do we want this? It seems tcc does not support it.
-					.arg("-o")
+				let mut cc = Command::new(compiler);
+				let mut cc = cc.stdin(Stdio::piped());
+
+				// .arg("-std=c11") // TODO: Do we want this? It seems tcc does not support it.
+
+				match self {
+					CompileMode::ToObjectFile => {
+						cc = cc.arg("-c");
+					},
+					CompileMode::ToSharedLibary => {
+						cc = cc.arg("-shared").arg("-fPIC");
+					}
+					_ => {}
+				};
+					
+				let cc = cc.arg("-o")
 					.arg(&args.output_path)
 					.arg("-I.")
 					.arg("-x")
