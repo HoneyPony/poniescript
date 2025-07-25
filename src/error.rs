@@ -1,3 +1,7 @@
+// anstream's eprintln & eprint macros apparently have a cfg called 'test'. This
+// gives us a warning, which isn't very helpful.
+#![allow(unexpected_cfgs)]
+
 use crate::source::SourceLocation;
 use crate::db::*;
 
