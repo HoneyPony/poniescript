@@ -977,7 +977,10 @@ impl Db {
 					// HACK: Just add "*" to the front of the name. That way,
 					// whenever it is referenced, it will be a pointer; also,
 					// when it is defined, it will be a pointer.
-					cname = format!("*{cname}");
+					//
+					// Note that we also have to surround it in (). This will
+					// have consequences primarily for where it is declared.
+					cname = format!("(*{cname})");
 				}
 			}
 

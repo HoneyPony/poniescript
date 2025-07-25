@@ -1,8 +1,25 @@
-var a = 20;
-var b = 100;
+class Horse {
+    var hooves = 10;
+
+    fun jump() {
+        hooves = hooves + 1;
+    }
+
+    fun neigh() {
+        print("neigh!!!");
+    }
+}
+
+var the_horse = new Horse{};
+
+//var a = 20;
+//var b = 100;
 
 fun tick() {
-    print("a = ", a);
-    print("b does = ", b);
+    print(the_horse.hooves);
+    the_horse.jump();
+    the_horse.neigh();
+    //print("a = ", a);
+   // print("b does = ", b);
     //a = a + 2;
 }

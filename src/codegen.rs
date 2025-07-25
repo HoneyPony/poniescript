@@ -12,6 +12,7 @@ use std::fmt::Write as _;
 
 struct Codegen<'a> {
 	functions: Vec<String>,
+	fun_declares: Vec<String>,
 	structs: Vec<String>,
 	struct_declares: Vec<String>,
 
@@ -286,6 +287,7 @@ impl<'a> Codegen<'a> {
 	fn new(db: &'a Db) -> Self {
 		return Codegen {
 			functions: Vec::new(),
+			fun_declares: Vec::new(),
 			structs: Vec::new(),
 			struct_declares: Vec::new(),
 
@@ -1198,6 +1200,17 @@ impl<'a> Codegen<'a> {
 		else {
 			self.functions.push(own_buffer);
 		}
+
+		// Don't write declaration for the init() function.
+		if !is_init {
+			let mut declare = String::new();
+			// TODO: Possibly write directly to Out::FunDeclare
+			inf_writeln!(declare, "{} {}({});",
+				self.db.get_fun_ret_ctype(fun),
+				self.db.get_fun_cname(fun),
+				self.db.get_fun_cparams(fun));
+			self.fun_declares.push(declare);
+		}
 	}
 
 	fn compile_string_constant_init(&mut self, define: &mut String, init: &mut String) {
@@ -1215,16 +1228,6 @@ impl<'a> Codegen<'a> {
 
 		self.indent_level = 0;
 		for fun in &module.functions {
-			let is_init = Some(fun.identity) == self.db.fun_init;
-
-			// Don't write declaration for the init() function.
-			if !is_init {
-				inf_writeln!(out.fun_declare, "{} {}({});",
-					self.db.get_fun_ret_ctype(fun.identity),
-					self.db.get_fun_cname(fun.identity),
-					self.db.get_fun_cparams(fun.identity));
-			}
-			
 			self.compile_function(ast, fun.identity, fun.value);
 		}
 
@@ -1252,8 +1255,16 @@ impl<'a> Codegen<'a> {
 		for global in &self.db.globals {
 			let global = *global;
 			// Just dierectly encode the indentation..
+			let mut global_name = self.db.get_cname(global);
+			if args.hot {
+				// To contend with the Hot option, we have to chop off the ( )
+				// surrounding the variable name when declaring it.
+				//
+				// Note that we leave the * on, because it does stuff for us.
+				global_name = &global_name[1..global_name.len() - 1];
+			}
 			inf_writeln!(outputs.global_define, "{} {};",
-				self.db.get_var_ctype(global), self.db.get_cname(global));
+				self.db.get_var_ctype(global), global_name);
 
 			let Some(initializer) = self.db.get(global).initializer else {
 				panic!("ICE: Codegen of global variable without initializer");
@@ -1265,8 +1276,8 @@ impl<'a> Codegen<'a> {
 			if args.hot {
 				let indent = self.indent();
 				inf_writeln!(outputs.global_init, "{indent}{} = poni_hot_lookup(\"{} {};\", sizeof({}), &existed);",
-					// HACK: Chop off the * at the beginning
-					&self.db.get_cname(global)[1..],
+					// HACK: Chop off the * (the () have already been chopped)
+					&global_name[1..],
 					// Replicate the initializer
 					self.db.get_var_ctype(global), self.db.get_cname(global),
 					// For sizeof() we do want the * cause that tells us the
@@ -1320,6 +1331,9 @@ impl<'a> Codegen<'a> {
 		writeln!(output, "// --- struct definitions (ps_array) ---\n{}", self.db.arr_define_code)?;
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
+		for dec in &self.fun_declares {
+			writeln!(output, "{}", dec)?;
+		}
 		writeln!(output, "// --- function definitions ---")?;
 		for fun in &self.functions {
 			writeln!(output, "{}", fun)?;
