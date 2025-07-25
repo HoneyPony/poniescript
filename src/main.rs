@@ -53,7 +53,12 @@ struct Args {
 	#[arg(short = 'e', long = "engine")]
 	/// Compile this code for integration into the PonyGame engine. In particular,
 	/// don't include poni_standalone.h.
-	engine: bool
+	engine: bool,
+
+	#[arg(long = "hot")]
+	/// Compile this code for hot reload (integration with poni_hot). Not recommended
+	/// for release builds.
+	hot: bool,
 }
 
 enum CompileMode {
@@ -314,7 +319,7 @@ fn main() {
 
 	// Pass 5: Codegen
 	// Generate any caches that require type checking info.
-	db.generate_codegen_caches();
+	db.generate_codegen_caches(&args);
 
 	let compile_mode = CompileMode::parse(&args.output_path);
 	let (mut output, cc) = compile_mode.get_output(&args);

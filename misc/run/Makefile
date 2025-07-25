@@ -1,2 +1,2 @@
 poni_run: poni_run.c
-	cc $< -o $@
+	cc $< -o $@ -g -rdynamic

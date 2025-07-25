@@ -1,5 +1,8 @@
 var a = 20;
+var b = 100;
 
 fun tick() {
-    print("b equals ", a);
+    print("a = ", a);
+    print("b does = ", b);
+    //a = a + 2;
 }

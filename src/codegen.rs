@@ -1259,12 +1259,38 @@ impl<'a> Codegen<'a> {
 				panic!("ICE: Codegen of global variable without initializer");
 			};
 
+			// In hot-code reloading, we need to do two things:
+			// 1. Allocate the variable based on a pointer.
+			// 2. Initialize it, if it *didn't* already exist.
+			if args.hot {
+				let indent = self.indent();
+				inf_writeln!(outputs.global_init, "{indent}{} = poni_hot_lookup(\"{} {};\", sizeof({}), &existed);",
+					// HACK: Chop off the * at the beginning
+					&self.db.get_cname(global)[1..],
+					// Replicate the initializer
+					self.db.get_var_ctype(global), self.db.get_cname(global),
+					// For sizeof() we do want the * cause that tells us the
+					// real size
+					self.db.get_cname(global));
+				inf_writeln!(outputs.global_init, "{indent}if(!existed) {{");
+
+				self.indent_level += 1;
+			}
+
 			// For globals, the initializer is not itself a declaration. So,
 			// do tell self.compile_assign() that it's not a declaration.
 			self.compile_assign(ast, global,
 				initializer,
 				&mut outputs.global_init,
 				false);
+
+			// Finish hot compilation
+			if args.hot {
+				self.indent_level -= 1;
+
+				let indent = self.indent();
+				inf_writeln!(outputs.global_init, "{indent}}}");
+			}
 		}
 
 		for module in modules {
@@ -1275,6 +1301,9 @@ impl<'a> Codegen<'a> {
 		// Engine code does not include poni_standalone.h.
 		if !args.engine {
 			writeln!(output, "#include \"poni/poni_standalone.h\"")?;
+		}
+		if args.hot {
+			writeln!(output, "#include \"poni/poni_hot.h\"")?;
 		}
 
 		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
@@ -1296,9 +1325,19 @@ impl<'a> Codegen<'a> {
 			writeln!(output, "{}", fun)?;
 		}
 		writeln!(output, "{}", outputs.string_const_init)?;
-		writeln!(output, "void poni_init() {{")?;
-		writeln!(output, "\tponi_init_strings();")?;
+
+		// The various poni initializer functions are split into several pieces,
+		// so as to enable hot code reloading.
+		writeln!(output, "void poni_init_globals() {{")?;
+		if args.hot {
+			// For hot-code reloading, we need the bool flag 'existed' to decide
+			// whether to run each initializer
+			writeln!(output, "\tbool existed = false;")?;
+		}
 		writeln!(output, "{}", outputs.global_init)?;
+		writeln!(output, "}}")?;
+
+		writeln!(output, "void poni_init() {{")?;
 		writeln!(output, "{}", self.fun_init_buffer)?;
 		writeln!(output, "}}")?;
 

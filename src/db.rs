@@ -13,7 +13,7 @@ use crate::expr::Class;
 use crate::expr::Var;
 use crate::typ::Type;
 use crate::source::{Source, SourceLocation};
-use crate::arena::*;
+use crate::{arena::*, Args};
 
 use crate::lexer::{Tok, Token};
 
@@ -925,11 +925,11 @@ impl Db {
 		}
 	}
 	
-	pub fn generate_codegen_caches(&mut self) {
+	pub fn generate_codegen_caches(&mut self, args: &Args) {
 		// The order matters, as e.g. var cnames are used for fun cparams.
 		self.generate_class_cnames_cache();
 		self.generate_ctypes_cache();
-		self.generate_var_cnames_cache();
+		self.generate_var_cnames_cache(args);
 		self.generate_fun_cnames_cache();
 		self.generate_fun_cparams_cache();
 		self.generate_sigs_cache();
@@ -949,7 +949,7 @@ impl Db {
 		}
 	}
 
-	fn generate_var_cnames_cache(&mut self) {
+	fn generate_var_cnames_cache(&mut self, args: &Args) {
 		let mut used_set = FxHashMap::<StrId, u64>::default();
 
 		for var in self.arenas.arena_var.iter() {
@@ -959,7 +959,7 @@ impl Db {
 			}
 
 			let str_id = self.get(var).name.lexeme;
-			let cname = match used_set.entry(str_id) {
+			let mut cname = match used_set.entry(str_id) {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
 					let result = *val.get();
 					*val.get_mut() += 1;
@@ -970,6 +970,17 @@ impl Db {
 					format!("v_{}", self.get(str_id))
 				},
 			};
+
+			if args.hot {
+				// TODO: Use a hashset?
+				if self.globals.contains(&var) {
+					// HACK: Just add "*" to the front of the name. That way,
+					// whenever it is referenced, it will be a pointer; also,
+					// when it is defined, it will be a pointer.
+					cname = format!("*{cname}");
+				}
+			}
+
 			let cname = cname.leak();
 
 			self.var_cname_cache.push(cname);

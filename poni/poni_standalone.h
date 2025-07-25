@@ -10,10 +10,15 @@
 
 // Standalone programs include their own main() function.
 
+void poni_init_strings(void);
+void poni_init_globals(void);
 void poni_init(void);
 
 int
 main(int argc, char **argv) {
+	// Must do strings before globals
+	poni_init_strings();
+	poni_init_globals();
 	poni_init();
 }
 
