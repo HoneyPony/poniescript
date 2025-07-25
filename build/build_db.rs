@@ -63,6 +63,8 @@ fn generate_impl(file: &mut File, pairs: &Vec<(&str, &str)>) {
 
 		writeln!(init, "\t\t\t{arena}: Arena::new(),").unwrap();
 
+		// We don't care if the iterator for a particular type goes unused.
+		writeln!(db_impl, "\t#[allow(unused)]").unwrap();
 		writeln!(db_impl, "\t#[inline(always)]").unwrap();
 		writeln!(db_impl, "\tpub fn iter_{lower}(&self) -> ArenaIterator<{}, {}> {{ self.arenas.{arena}.iter() }}", pair.1, pair.0).unwrap();
 	}

@@ -191,34 +191,34 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 
 		// TODO: We could pass both id and the node itself, although then whenever
 		// we override a thing we have to also do that.
-		writeln!(visit_trait, "\tfn visit_{}(&mut self, ast: &Ast, db: &mut Db, id: {id_name}) {{", ty_name.to_ascii_lowercase())?;
+		writeln!(visit_trait, "\tfn visit_{}(&mut self, ast: &Ast, _db: &mut Db, id: {id_name}) {{", ty_name.to_ascii_lowercase())?;
 		writeln!(visit_trait, "\t\tlet binding = ast.{lname}s.get(id);")?;
-		writeln!(visit_trait, "\t\tlet {name}::{ty_name}({lname}) = binding.as_ref() else {{ return; }};")?;
+		writeln!(visit_trait, "\t\tlet {name}::{ty_name}(_{lname}) = binding.as_ref() else {{ return; }};")?;
 		for field in &fields {
 			if field.0 == "ExprId" {
-				writeln!(visit_trait, "\t\tself.visit_expr(ast, db, {lname}.{});", field.1)?;
+				writeln!(visit_trait, "\t\tself.visit_expr(ast, _db, _{lname}.{});", field.1)?;
 			}
 			if field.0 == "Vec<ExprId>" {
-				writeln!(visit_trait, "\t\tfor item in &{lname}.{} {{", field.1)?;
-				writeln!(visit_trait, "\t\t\tself.visit_expr(ast, db, *item);")?;
+				writeln!(visit_trait, "\t\tfor item in &_{lname}.{} {{", field.1)?;
+				writeln!(visit_trait, "\t\t\tself.visit_expr(ast, _db, *item);")?;
 				writeln!(visit_trait, "\t\t}}")?;
 			}
 			// TODO: Also do this for Option<StmtId>
 			if field.0 == "Option<ExprId>" {
-				writeln!(visit_trait, "\t\tif let Some(inner) = {lname}.{} {{ self.visit_expr(ast, db, inner); }}", field.1)?;
+				writeln!(visit_trait, "\t\tif let Some(inner) = _{lname}.{} {{ self.visit_expr(ast, _db, inner); }}", field.1)?;
 			}
 			if field.0 == "StmtId" {
-				writeln!(visit_trait, "\t\tself.visit_stmt(ast, db, {lname}.{});", field.1)?;
+				writeln!(visit_trait, "\t\tself.visit_stmt(ast, _db, _{lname}.{});", field.1)?;
 			}
 			if field.0 == "Vec<StmtId>" {
-				writeln!(visit_trait, "\t\tfor item in &{lname}.{} {{", field.1)?;
-				writeln!(visit_trait, "\t\t\tself.visit_stmt(ast, db, *item);")?;
+				writeln!(visit_trait, "\t\tfor item in &_{lname}.{} {{", field.1)?;
+				writeln!(visit_trait, "\t\t\tself.visit_stmt(ast, _db, *item);")?;
 				writeln!(visit_trait, "\t\t}}")?;
 			}
 		}
 		writeln!(visit_trait, "\t}}")?;
 
-		writeln!(visit_trait_visit_fn, "\t\t\t{name}::{ty_name}(inner) => {{")?;
+		writeln!(visit_trait_visit_fn, "\t\t\t{name}::{ty_name}(_inner) => {{")?;
 		writeln!(visit_trait_visit_fn, "\t\t\t\tdrop(binding);")?;
 		writeln!(visit_trait_visit_fn, "\t\t\t\tself.visit_{}(ast, db, id);", ty_name.to_ascii_lowercase())?;
 		writeln!(visit_trait_visit_fn, "\t\t\t}}")?;
