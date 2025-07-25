@@ -1,0 +1,33 @@
+// This is explicitly called out as not supported in the source code right now,
+// so let's be sure to solidify that semantic with a test case.
+//
+// Basically, the cyclic checks are & will remain, by and large, *syntactic*,
+// rather than truly deep analysis of the semantics. The initializer of a
+// *syntactically* refers to a_fun which refers to a, even though the initializer
+// of a does not ever *semantically* actually refer to itself.
+//
+// This is still considered an error, because otherwise you have to do things
+// like escape analysis, and the definition of valid code becomes very complicated
+// and prone to change.
+//
+// This simpler, but more restrictive semantics, is at least easy to understand,
+// which is good for the compiler and the programmer. In particular, if the main
+// relationship creating cycles is *syntactic reference* to a variable, then it
+// becomes very clear that to break the cycle simply means to remove one of the
+// syntactic references in the chain, rather than to carefully micromanage the
+// semantics of every function in the chain.
+//
+// And, of course, there's really no reason a variable initializer should depend
+// on a function that depends on that variable. If you really must, you can just
+// initialize the variable to a dummy value then call the "real" initializer in
+// init(). (Could be inconvenient for option types, but I really am willing to
+// make that sacrifice).
+
+//? Cycle in variable initialization order
+
+var a = {
+    var b = a_fun;
+    10;
+};
+
+fun a_fun() { print(a); }

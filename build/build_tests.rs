@@ -46,6 +46,7 @@ pub fn generate(tests_file: &mut File) {
 		("cyclic/", "globals_and_class_thru_difficult"),
 
 		("cyclic/", "err_cyclic"),
+		("cyclic/", "err_granularity_fun_in_init"),
 		("cyclic/", "err_cyclic_fun"),
 		("cyclic/", "err_cyclic_multi_fun"),
 		("cyclic/", "err_cyclic_fun_five"),
