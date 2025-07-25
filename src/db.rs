@@ -466,6 +466,8 @@ impl Db {
 			Type::AssumeInt => false,
 			Type::Unassigned => false,
 
+			Type::Bottom => false,
+
 			Type::UnboundIdent(_) => false,
 			Type::ArrayOf(ty) => self.is_cgen_safe(*ty),
 
