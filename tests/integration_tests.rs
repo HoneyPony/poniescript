@@ -1,6 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/tests.gen.rs"));
 
-use std::{io::Read, path::PathBuf, process::{Command, Stdio}};
+use std::{path::PathBuf, process::{Command}};
 
 const CC: Option<&str> = option_env!("PONI_CC");
 
