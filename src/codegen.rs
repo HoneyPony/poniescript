@@ -139,7 +139,6 @@ enum PromotedVal {
 	Simple(Val),
 	Promoted(Val, &'static str),
 	Bottom,
-	Void,
 }
 
 impl PromotedVal {
@@ -147,15 +146,6 @@ impl PromotedVal {
 		match self {
 			PromotedVal::Bottom => true,
 			PromotedVal::Simple(v) | PromotedVal::Promoted(v, _) => v.is_bottom(),
-			PromotedVal::Void => false,
-		}
-	}
-
-	pub fn is_void(&self) -> bool {
-		match self {
-			PromotedVal::Bottom => false,
-			PromotedVal::Simple(v) | PromotedVal::Promoted(v, _) => v.is_void(),
-			PromotedVal::Void => true,
 		}
 	}
 }
@@ -260,7 +250,6 @@ impl std::fmt::Display for PromotedVal {
 			PromotedVal::Simple(inner) => write!(f, "{}", inner),
 			PromotedVal::Promoted(inner, promo_fn) => write!(f, "{promo_fn}({inner})"),
 			PromotedVal::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
-			PromotedVal::Void => Ok(()),
 		}
 	}
 }
