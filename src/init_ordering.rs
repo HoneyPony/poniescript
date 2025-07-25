@@ -21,7 +21,7 @@ impl<'a> OrderVisitor<'a> {
             //
             // TODO: Store a location for each variable..?
             let location = db.get(item).location.clone();
-            let mut error = Error::simple("Cycle in variable initialization order".into(), &location);
+            let mut error = Error::simple("Cycle in variable initialization order".into(), location.clone());
 
             for (k, v) in &self.map {
                 if *k == item { continue; }
@@ -29,7 +29,7 @@ impl<'a> OrderVisitor<'a> {
                     // Any items that are set to true in the map are part of
                     // the error. This is due to the map-removing logic below.
                     let location = db.get(*k).location.clone();
-                    error = error.add_note("Additional variable in cycle".into(), Some(&location));
+                    error = error.add_note("Additional variable in cycle".into(), Some(location.clone()));
                 }
             }
 
@@ -49,12 +49,14 @@ impl<'a> OrderVisitor<'a> {
 
 impl<'a> VisitAst for OrderVisitor<'a> {
     fn visit_variable(&mut self, ast: &Ast, db: &mut Db, id:ExprId) {
-        let Expr::Variable(var) = ast.get_expr(id) else { return; };
+        let borrow = ast.get_expr(id);
+        let Expr::Variable(var) = borrow.as_ref() else { return; };
         self.push_dfs(ast, db, var.identity);
     }
 
     fn visit_funcall(&mut self,ast: &Ast,db: &mut Db,id:ExprId) {
-        let Expr::FunCall(call) = ast.get_expr(id) else { return; };
+        let borrow = ast.get_expr(id);
+        let Expr::FunCall(call) = borrow.as_ref() else { return; };
         
         // Default behavior: Visit all args
         for arg in &call.args {
@@ -67,7 +69,8 @@ impl<'a> VisitAst for OrderVisitor<'a> {
     }
 
     fn visit_funcapture(&mut self,ast: &Ast, db: &mut Db, id:ExprId) {
-        let Expr::FunCapture(capt) = ast.get_expr(id) else { return; };
+        let borrow = ast.get_expr(id);
+        let Expr::FunCapture(capt) = borrow.as_ref() else { return; };
         
         // Note: You could argue that this is too conservative. Like, you could
         // have something like:

@@ -47,7 +47,7 @@ macro_rules! maybe_type_error {
 				$self.had_error = true;
 				$self.db.report_error(Error::simple(
 					format!($($arg)*),
-					$location
+					$location.clone()
 				));
 
 				return Err(TypeCheckErr)
@@ -76,7 +76,7 @@ macro_rules! type_error {
 			$self.had_error = true;
 			$self.db.report_error(Error::simple(
 				format!($($arg)*),
-				$location
+				$location.clone()
 			));
 
 			return Err(TypeCheckErr)
@@ -481,7 +481,7 @@ impl<'db> TypeChecker<'db> {
 					let error = Error::simple(
 						format!("Branches of 'if' expression are incompatible: then has type '{}' but else has type '{}'",
 							self.db.repr_type(then_ty), self.db.repr_type(else_ty)),
-						&if_.location.begin()
+						if_.location.begin()
 					);
 					let error = error.add_note(format!("then branch has type '{}'", self.db.repr_type(then_ty)),
 						Some(if_.then_branch.val_location(ast)));

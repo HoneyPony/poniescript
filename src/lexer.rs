@@ -220,7 +220,7 @@ impl Lexer {
 		self.had_error = true;
 		db.report_error(Error::simple(
 			format!("Parse error: {}", message),
-			&self.get_current_location()
+			self.get_current_location()
 		));
 	}
 

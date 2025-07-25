@@ -29,8 +29,12 @@ define_arena_key!(ExprId);
 define_arena_key!(StmtId);
 
 impl ExprId {
-	pub fn location(self, ast: &impl AstAbstract) -> &SourceLocation {
-		ast.get_expr(self).location()
+	// TODO: Get this back to returning a &SourceLocation, or at least some kind
+	// of borrow that points to the SourceLocation.
+	//
+	// May require jank.
+	pub fn location(self, ast: &impl AstAbstract) -> SourceLocation {
+		ast.get_expr(self).location().clone()
 	}
 
 	pub fn typ(self, ast: &impl AstAbstract, db: &Db) -> TypId {
@@ -41,16 +45,17 @@ impl ExprId {
 		ast.exprs.get_mut(self).promote(typ, ast, db)
 	}
 
-	pub fn val_location<'a>(self, ast: &'a impl AstAbstract) -> &'a SourceLocation {
-		match ast.get_expr(self) {
+	// TODO: Less clones
+	pub fn val_location<'a>(self, ast: &'a impl AstAbstract) -> SourceLocation {
+		match ast.get_expr(self).as_ref() {
 			Expr::Block(block) => {
 				if let Some(last) = block.stmts.last() {
-					return last.val_location(ast)
+					return last.val_location(ast).clone()
 				}
 				else {
 					// If we have no expression at all, the whole block is
 					// the closest thing.
-					return &block.location
+					return block.location.clone()
 				}
 			},
 
@@ -61,7 +66,8 @@ impl ExprId {
 }
 
 impl StmtId {
-	pub fn val_location<'a>(self, ast: &impl AstAbstract) -> &SourceLocation {
+	// TODO: Less clones
+	pub fn val_location<'a>(self, ast: &impl AstAbstract) -> SourceLocation {
 		ast.get_stmt(self).val_location(ast)
 	}
 
@@ -82,8 +88,8 @@ pub struct AstProxy<'ar> {
 
 pub trait AstAbstract {
 	fn get_expr_mut(&self, id: ExprId) -> ArenaBorrow<Expr, ExprId>;
-	fn get_expr(&self, id: ExprId) -> &Expr;
-	fn get_stmt(&self, id: StmtId) -> &Stmt;
+	fn get_expr(&self, id: ExprId) -> ArenaBorrowUnmut<Expr, ExprId>;
+	fn get_stmt(&self, id: StmtId) -> ArenaBorrowUnmut<Stmt, StmtId>;
 }
 
 impl<'ar> AstProxy<'ar> {
@@ -115,11 +121,11 @@ impl AstAbstract for Ast {
 		self.exprs.get_mut(id)
 	}
 
-	fn get_expr(&self, id: ExprId) -> &Expr {
+	fn get_expr(&self, id: ExprId) -> ArenaBorrowUnmut<Expr, ExprId> {
 		self.exprs.get(id)
 	}
 
-	fn get_stmt(&self, id: StmtId) -> &Stmt {
+	fn get_stmt(&self, id: StmtId) -> ArenaBorrowUnmut<Stmt, StmtId> {
 		self.stmts.get(id)
 	}
 }
@@ -129,11 +135,11 @@ impl<'a> AstAbstract for AstProxy<'a> {
 		self.exprs.get_mut(id)
 	}
 
-	fn get_expr(&self, id: ExprId) -> &Expr {
+	fn get_expr(&self, id: ExprId) -> ArenaBorrowUnmut<Expr, ExprId> {
 		self.exprs.get(id)
 	}
 
-	fn get_stmt(&self, id: StmtId) -> &Stmt {
+	fn get_stmt(&self, id: StmtId) -> ArenaBorrowUnmut<Stmt, StmtId> {
 		self.stmts.get(id)
 	}
 }

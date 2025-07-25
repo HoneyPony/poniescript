@@ -541,7 +541,7 @@ impl<'a> Codegen<'a> {
 
 	fn expr(&mut self, ast: &Ast, expr: ExprId, into: &mut String) -> TypedVal {
 		let indent = self.indent();
-		match ast.exprs.get(expr) {
+		match ast.exprs.get(expr).as_ref() {
 			Expr::Binary(binary) => self.compile_binary(ast, binary, into),
 			Expr::Comparison(compare) => self.compile_comparison(ast, compare, into),
 			Expr::If(if_) => self.compile_if(ast, if_, into),
@@ -1078,7 +1078,7 @@ impl<'a> Codegen<'a> {
 
 	fn compile_stmt(&mut self, ast: &Ast, stmt: StmtId, into: &mut String) -> Option<TypedVal> {
 		let indent = self.indent();
-		match ast.stmts.get(stmt) {
+		match ast.stmts.get(stmt).as_ref() {
 			Stmt::Declare(declare) => {
 				self.compile_assign(ast, declare.identity, declare.value, into, true);
 				None

@@ -74,7 +74,7 @@ impl<'db> Binder<'db> {
 
 		self.db.report_error(Error::simple(
 			format!("Unknown class name '{}'", self.db.get(ident)),
-			location
+			location.clone()
 		));
 		
 		self.had_error = true;
@@ -106,7 +106,7 @@ impl<'db> Binder<'db> {
 
 		self.db.report_error(Error::simple(
 			format!("Unknown identifier '{}'", self.db.get(ident)),
-			&location
+			location.clone()
 		));
 		
 		self.had_error = true;
@@ -120,7 +120,7 @@ impl<'db> Binder<'db> {
 				ScopeEntry::Fun(fun) => {
 					self.db.report_error(Error::simple(
 						format!("Cannot assign to a function."),
-						&location
+						location.clone()
 					));
 
 					self.had_error = true;
@@ -129,7 +129,7 @@ impl<'db> Binder<'db> {
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
 						format!("Cannot assign to a class."),
-						&location
+						location.clone()
 					));
 
 					self.had_error = true;
@@ -141,7 +141,7 @@ impl<'db> Binder<'db> {
 
 		self.db.report_error(Error::simple(
 			format!("Unknown identifier '{}'", self.db.get(ident)),
-			&location
+			location.clone()
 		));
 
 		self.had_error = true;
@@ -161,7 +161,7 @@ impl<'db> Binder<'db> {
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
 						format!("Cannot call a class."),
-						&unbound.location
+						unbound.location.clone()
 					));
 
 					self.had_error = true;
@@ -299,7 +299,7 @@ impl<'db> Binder<'db> {
 							format!("Class '{}' has no such property '{}'",
 							self.db.repr_class(new.class),
 							self.db.get(init.ident.lexeme)),
-							&init.location
+							init.location.clone()
 						));
 						
 						self.had_error = true;
@@ -398,7 +398,7 @@ impl<'db> Binder<'db> {
 
 		self.db.report_error(Error::simple(
 			format!("Unknown named type '{}'", self.db.get(name)),
-			location
+			location.clone()
 		));
 		
 		self.had_error = true;

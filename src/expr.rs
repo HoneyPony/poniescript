@@ -20,8 +20,8 @@ pub struct NewInitElem {
 }
 
 impl Stmt {
-	pub fn val_location(&self, ast: &impl AstAbstract) -> &SourceLocation {
-		self.location()
+	pub fn val_location(&self, ast: &impl AstAbstract) -> SourceLocation {
+		self.location().clone()
 	}
 }
 

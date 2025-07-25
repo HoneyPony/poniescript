@@ -134,7 +134,7 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 
 	writeln!(visit_trait_visit_fn, "\tfn visit_{lname}(&mut self, ast: &Ast, db: &mut Db, id: {id_name}) {{")?;
 	writeln!(visit_trait_visit_fn, "\t\tlet binding = ast.{lname}s.get(id);")?;
-	writeln!(visit_trait_visit_fn, "\t\tmatch binding {{")?;
+	writeln!(visit_trait_visit_fn, "\t\tmatch binding.as_ref() {{")?;
 	
 	
 
@@ -192,7 +192,8 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 		// TODO: We could pass both id and the node itself, although then whenever
 		// we override a thing we have to also do that.
 		writeln!(visit_trait, "\tfn visit_{}(&mut self, ast: &Ast, db: &mut Db, id: {id_name}) {{", ty_name.to_ascii_lowercase())?;
-		writeln!(visit_trait, "\t\tlet {name}::{ty_name}({lname}) = ast.{lname}s.get(id) else {{ return; }};")?;
+		writeln!(visit_trait, "\t\tlet binding = ast.{lname}s.get(id);")?;
+		writeln!(visit_trait, "\t\tlet {name}::{ty_name}({lname}) = binding.as_ref() else {{ return; }};")?;
 		for field in &fields {
 			if field.0 == "ExprId" {
 				writeln!(visit_trait, "\t\tself.visit_expr(ast, db, {lname}.{});", field.1)?;

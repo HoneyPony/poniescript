@@ -55,7 +55,7 @@ macro_rules! begin_error {
 	($parser:ident, $($arg:tt)*) => {
 		Error::simple(
 			format!($($arg)*),
-			&$parser.current.location
+			$parser.current.location.clone()
 		)
 	}
 }
@@ -89,7 +89,7 @@ macro_rules! parse_error {
 		if $parser.should_report_errors() {
 			$parser.db.report_error(Error::simple(
 				format!($($arg)*),
-				&$parser.current.location
+				$parser.current.location.clone()
 			)) 
 		}
     };
@@ -193,19 +193,19 @@ impl<'a, 'b> Parser<'a, 'b> {
 		location
 	}
 
-	fn location_of(&self, entry: &ScopeEntry) -> &SourceLocation {
+	fn location_of(&self, entry: &ScopeEntry) -> SourceLocation {
 		match entry {
-			ScopeEntry::Var(var) => &self.db.get(*var).name.location,
+			ScopeEntry::Var(var) => self.db.get(*var).name.location.clone(),
 			ScopeEntry::Fun(fun) => {
 				if let Some(name) = &self.db.get(*fun).name {
-					&name.location
+					name.location.clone()
 				}
 				else {
 					todo!("how do we location_of() for functions without names..?")
 				}
 			}
 			ScopeEntry::Class(class) => {
-				&self.db.get(*class).name.location
+				self.db.get(*class).name.location.clone()
 			}
 			ScopeEntry::None => todo!(),
 		}
@@ -341,7 +341,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, location, fun, args),
 
 			ScopeEntry::Class(class) => {
-				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), &self.current.location));
+				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), self.current.location.clone()));
 
 				// Just return an UnboundCall, as we have a semantic error rather than parse error.
 				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
@@ -384,7 +384,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 				Expr::Variable(variable) => 
 					return Expr::put_assign_ok(self.ast, self.end(location), variable.identity, rhs),
 				Expr::FunCapture(_) => {
-					let error = Error::simple(format!("Cannot assign to a function"), &self.end(location));
+					let error = Error::simple(format!("Cannot assign to a function"), self.end(location));
 					semantic_error_with!(self, error);
 
 					// semantic error, but the parse tree is still basically fine.
@@ -950,7 +950,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			_ => {
 				let inner = self.expression()?;
 
-				let mut expect_semicolon = match self.ast.exprs.get(inner) {
+				let mut expect_semicolon = match self.ast.exprs.get(inner).as_ref() {
 					// If the inner expression is a block or a similar "block-like"
 					// thing, then we don't need a semicolon.
 					Expr::Block(_) | Expr::If(_) => false,
@@ -1008,7 +1008,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			if require_name {
 				let error = Error::simple(
 					format!("Expected function name after 'fun'"),
-					&self.current.location
+					self.current.location.clone()
 				);
 				semantic_error_with!(self, error);
 			}

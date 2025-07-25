@@ -32,10 +32,10 @@ pub struct Error {
 }
 
 impl Error {
-	pub fn simple(message: String, location: &SourceLocation) -> Error {
+	pub fn simple(message: String, location: SourceLocation) -> Error {
 		Error {
 			main_message: message,
-			main_location: location.clone(),
+			main_location: location,
 
 			is_warning: false,
 
@@ -43,8 +43,8 @@ impl Error {
 		}
 	}
 
-	pub fn add_note(mut self, note: String, location: Option<&SourceLocation>) -> Error {
-		self.notes.push(Note { note, location: location.cloned() });
+	pub fn add_note(mut self, note: String, location: Option<SourceLocation>) -> Error {
+		self.notes.push(Note { note, location });
 
 		self
 	}
