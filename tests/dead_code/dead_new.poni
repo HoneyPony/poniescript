@@ -1,0 +1,30 @@
+class Horse {
+    var teeth: int = 0;
+    var legs: int = 0;
+    var tails: int = 0;
+}
+
+fun test_all() {
+    new Horse {
+        teeth: print(10),
+        legs:  print(20),
+        tails: print(30)
+    };
+}
+
+fun test_ret() {
+    new Horse {
+        teeth: print(10),
+        legs:  { return; },
+        tails: print(30)
+    }
+}
+
+fun init() {
+    //! 10
+    //! 20
+    //! 30
+    test_all();
+    //! 10
+    test_ret();
+}

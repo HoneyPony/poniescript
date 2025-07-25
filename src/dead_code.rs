@@ -21,7 +21,8 @@ macro_rules! into {
 macro_rules! elim_sequence {
     ($self:expr, $ast:expr, $expr:expr, $variant:ident, $seq_id:ident) => {
         $self.elim_sequence::<$variant, _, _>($ast, 
-            |it| { &mut into!(it, $variant).$seq_id }, 
+            into!($expr, $variant).$seq_id.len(),
+            |it, idx| { &mut into!(it, $variant).$seq_id[idx] }, 
             |it| { into!(it, $variant).$seq_id },
             $expr)
     }
@@ -34,16 +35,14 @@ impl<'db> DeadCodeElim<'db> {
 		}
 	}
 
-    fn elim_sequence<T, F, G>(&mut self, ast: &AstProxy, exprs: F, take_exprs: G, expr: &mut Expr) -> bool
-        where F: Fn(&mut Expr) -> &mut Vec<ExprId>,
+    fn elim_sequence<T, F, G>(&mut self, ast: &AstProxy, exprs_count: usize, idx_exprs: F, take_exprs: G, expr: &mut Expr) -> bool
+        where F: Fn(&mut Expr, usize) -> &mut ExprId,
         G: Fn(Expr) -> Vec<ExprId>
     {
         let mut last_needed_idx = None;
 
-        let exprs_check = exprs(expr);
-
-        for idx in 0..exprs_check.len() {
-            if self.elim_expr(ast, &mut exprs_check[idx]) {
+        for idx in 0..exprs_count {
+            if self.elim_expr(ast, idx_exprs(expr, idx)) {
                 last_needed_idx = Some(idx);
                 break;
             }
@@ -227,34 +226,14 @@ impl<'db> DeadCodeElim<'db> {
                     Str, exprs)
             },
             Expr::New(new) => {
-                // TODO: Deduplicate all this code.
-                let mut last_needed_idx = None;
-
-                for idx in 0..new.initializers.len() {
-                    if self.elim_expr(ast, &mut new.initializers[idx].value) {
-                        last_needed_idx = Some(idx);
-                        break;
-                    }
-                }
-
-                if let Some(last) = last_needed_idx {
-                    let old = std::mem::take(expr);
-                    let Expr::New(old) = old else { unreachable!() };
-
-                    let (mut args, location) = (old.initializers, old.location);
-                    
-                    let mut new_exprs = Vec::new();
-                    for arg in args.drain(0..=last) {
-                        new_exprs.push(Stmt::push_expression(ast, arg.value.location(ast).clone(), arg.value));
-                    }
-
-                    let new_block = Expr::mk_block(location, new_exprs, self.db.types.bottom);
-                    *expr = new_block;
-
-                    return true;
-                }
-
-                false
+                // Note: We don't really care about the performance impact of
+                // creating a new vector here in take_exprs because that code
+                // should almost never run.
+                self.elim_sequence::<New, _, _>(ast, 
+                    new.initializers.len(),
+                    |it, idx| { &mut into!(it, New).initializers[idx].value }, 
+                    |it| { into!(it, New).initializers.iter().map(|init| init.value).collect() },
+                    expr)
             },
             Expr::Get(get) => {
                 if self.elim_expr(ast, &mut get.lhs) {
