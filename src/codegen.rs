@@ -228,7 +228,7 @@ impl std::fmt::Display for Val {
 				true => write!(f, "((ps_bool)1)"),
 				false => write!(f, "((ps_bool)0)"),
 			}
-			Val::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
+			Val::Bottom => panic!("ICE: Tried to codegen Val::Bottom"),
 
 			// Void values have no representation.
 			Val::Void => Ok(())
@@ -242,7 +242,7 @@ impl std::fmt::Display for PromotedVal {
 		match self {
 			PromotedVal::Simple(inner) => write!(f, "{}", inner),
 			PromotedVal::Promoted(inner, promo_fn) => write!(f, "{promo_fn}({inner})"),
-			PromotedVal::Bottom => write!(f, "<pony:compiler-err:bottom-val>"),
+			PromotedVal::Bottom => panic!("ICE: Tried to codegen PromotedVal::Bottom"),
 		}
 	}
 }
@@ -442,11 +442,10 @@ impl<'a> Codegen<'a> {
 			Type::StrConst | Type::Str => inf_writeln!(into, "{indent}ps_print_str({val});"),
 			Type::StrBuf => inf_writeln!(into, "{indent}ps_print_str({val}->buffer);"),
 			Type::Bottom => { },
-			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:print-unassigned>"),
-
 			Type::Fun(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun\", (uintptr_t){val}.fun);"),
 			Type::FunRaw(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun*\", (uintptr_t){val});"),
 			Type::Class(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"object\", (uintptr_t){val});"),
+			
 			Type::ArrayOf(_) => todo!("print() for Array"),
 
 			// TODO: Consider simply making 10.0 a float and 10 an int..?
@@ -454,7 +453,8 @@ impl<'a> Codegen<'a> {
 			// The context system is getting increasingly awkward.
 			Type::AssumeFloat => panic!("ICE: Tried to codegen print(AssumeFloat)"),
 			Type::AssumeInt => panic!("ICE: Tried to codegen print(AssumeInt)"),
-			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:print-unbound-ident>"),
+			Type::UnboundIdent(_) => panic!("ICE: Tried to codegen print(Unassigned)"),
+			Type::Unassigned => panic!("ICE: Tried to codegen print(Unassigned)"),
 		}
 	}
 
@@ -475,14 +475,16 @@ impl<'a> Codegen<'a> {
 			Type::StrConst | Type::Str => inf_writeln!(into, "{indent}ps_strfmt_str({buf_val}, {val});"),
 			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_strbuf({buf_val}, {val});"),
 			Type::Bottom => { },
-			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unassigned>"),
+			
 			Type::Fun(_) => todo!("str() for Fun"),
 			Type::FunRaw(_) => todo!("str() for FunRaw"),
 			Type::Class(_) => todo!("str() for Class"),
 			Type::ArrayOf(_) => todo!("str() for Array"),
+
 			Type::AssumeFloat => panic!("ICE: Tried to codegen str(AssumeFloat)"),
 			Type::AssumeInt => panic!("ICE: Tried to codegen str(AssumeInt)"),
-			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unbound-ident>"),
+			Type::UnboundIdent(_) => panic!("ICE: Tried to codegen str(UnboundIdent)"),
+			Type::Unassigned => panic!("ICE: Tried to codegen str(Unassigned)"),
 		}
 	}
 
