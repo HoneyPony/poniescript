@@ -720,7 +720,7 @@ impl Db {
 
 		// Didn't get the type -- give a helpful panic message.
 		let ty_name = self.get(typ).to_string(self);
-		panic!("Tried to get invalid type in get_ctype: {} (TypId {})", ty_name, typ.to_index());
+		panic!("ICE: Tried to get invalid type in get_ctype: {} (TypId {})", ty_name, typ.to_index());
 
 		// Safety: AS LONG AS we don't call new_id outside of put_type,
 		// the index must be valid.

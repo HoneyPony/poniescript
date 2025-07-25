@@ -770,7 +770,7 @@ impl<'db> TypeChecker<'db> {
 				let sig = self.db.get(capt.identity).sig;
 
 				if sig == self.db.sig_unassigned {
-					panic!("FunCapture captured a function with unassigned sig. This will not work.");
+					panic!("ICE: Tried to typecheck FunCapture for a function with unassigned sig");
 				}
 
 				// Make sure we use this sig.
@@ -788,7 +788,7 @@ impl<'db> TypeChecker<'db> {
 
 				// This is basically the same idea as FunCapture.
 				if sig == self.db.sig_unassigned {
-					panic!("FunDeclare declared a function with unassigned sig. This will not work.");
+					panic!("ICE: Tried to typecheck FunDeclare for a function with unassigned sig");
 				}
 
 				// If we're capturing the value from the function, make sure
@@ -807,7 +807,7 @@ impl<'db> TypeChecker<'db> {
 
 			Expr::New(new) => {
 				if new.typ == self.db.types.unassigned {
-					panic!("New expression has unassigned type from Binder");
+					panic!("ICE: New expression has unassigned type from Binder");
 				}
 
 				for init in &mut new.initializers {
@@ -912,7 +912,7 @@ impl<'db> TypeChecker<'db> {
 			Expr::Unbound(unbound) => {
 				// In theory we will resolve all idents beforehand? But this might
 				// be different if we have function overloading.
-				panic!("Internal compiler error: Tried to typecheck an unbound identifier expression '{}' at {}",
+				panic!("ICE: Tried to typecheck an unbound identifier expression '{}' at {}",
 					self.db.get(unbound.identifier.lexeme),
 					unbound.location.offset);
 			},
@@ -957,8 +957,8 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(obj_ty),
 					self.db.get(capt.identifier.lexeme));
 			}
-			Expr::UnboundAssign(_) => panic!("Internal compiler error: Tried to typecheck an UnboundAssign"),
-			Expr::Undefined(_) => panic!("Internal compiler error: Tried to typecheck an Undefined"),
+			Expr::UnboundAssign(_) => panic!("ICE: Tried to typecheck an UnboundAssign"),
+			Expr::Undefined(_) => panic!("ICE: Tried to typecheck an Undefined"),
 		})
 	}
 
@@ -1165,7 +1165,7 @@ impl<'db> TypeChecker<'db> {
 		let globals = std::mem::take(&mut self.db.globals);
 		for global in &globals {
 			let Some(initializer) = self.db.get(*global).initializer else {
-				panic!("ICE: Trying to typecheck global without initializer");
+				panic!("ICE: Tried to typecheck global without initializer");
 			};
 			let _ = self.check_assign(ast, &self.db.get(*global).location.clone(), *global, initializer, true);
 		}

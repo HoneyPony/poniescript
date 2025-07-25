@@ -106,7 +106,7 @@ impl Expr {
 			Expr::New(new) => new.typ,
 			Expr::Get(get) => db.get_var_type(get.var),
 			Expr::Set(set) => db.get_var_type(set.var),
-			Expr::Undefined(_) => panic!("calling Expr::typ() on Undefined"),
+			Expr::Undefined(_) => panic!("ICE: Called Expr::typ() on Undefined"),
 			Expr::SelfVal(selfval) => selfval.typ,
 			Expr::Index(index) => index.typ,
 			Expr::SetIndex(set) => set.typ,
@@ -220,7 +220,7 @@ impl Expr {
 				false
 			},
 			Expr::Set(_) => { false }
-			Expr::Undefined(_) => panic!("calling Expr::promote() on Undefined")
+			Expr::Undefined(_) => panic!("ICE: Called Expr::promote() on Undefined")
 		}
 	}
 }

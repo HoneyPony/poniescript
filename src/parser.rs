@@ -200,13 +200,13 @@ impl<'a, 'b> Parser<'a, 'b> {
 					name.location.clone()
 				}
 				else {
-					todo!("how do we location_of() for functions without names..?")
+					todo!("location_of() for functions without names")
 				}
 			}
 			ScopeEntry::Class(class) => {
 				self.db.get(*class).name.location.clone()
 			}
-			ScopeEntry::None => todo!(),
+			ScopeEntry::None => todo!("location_of() for ScopeEntry::None"),
 		}
 	}
 
@@ -370,7 +370,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			ScopeEntry::Fun(identity) =>
 				Expr::mk_funcapture(ident.location.clone(), identity, self.db.types.unassigned, None),
 			ScopeEntry::Class(_) => {
-				todo!("What should happen when you reference a class without anything else? I guess a ClassCapture?");
+				todo!("what to do when a class is referenced directly. Perhaps a ClassCapture?");
 			}
 			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
 		};
@@ -393,7 +393,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 					return Expr::put_unboundassign_ok(self.ast, self.end(location), unbound.identifier, rhs)
 				}
 				Expr::Get(_) => {
-					panic!("omg!");
+					panic!("ICE: Tried to assign to Get. This should have generated a Set.");
 				}
 				_ => unreachable!()
 			}
@@ -1143,7 +1143,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 					declare_funs.push(fun);
 				},
 				Tok::Class => {
-					todo!("nested classes")
+					todo!("nested class support")
 				}
 				Tok::RightBrace => {
 					break;

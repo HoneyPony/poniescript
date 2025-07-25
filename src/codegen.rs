@@ -179,7 +179,7 @@ macro_rules! inf_write {
 		match write!($into, $($arg)*) {
 			Ok(_) => {},
 			Err(_) => {
-				panic!("codegen: 'infallible' write to buffer failed");
+				panic!("ICE: Codegen: 'infallible' write to buffer failed");
 			}
 		}
 	}
@@ -191,7 +191,7 @@ macro_rules! inf_writeln {
 		match writeln!($into, $($arg)*) {
 			Ok(_) => {},
 			Err(_) => {
-				panic!("codegen: 'infallible' write to buffer failed");
+				panic!("ICE: Codegen: 'infallible' write to buffer failed");
 			}
 		}
 	}
@@ -212,7 +212,7 @@ impl std::fmt::Display for Val {
 					write!(f, "this->")?;
 					let depth_loop = depth - 1;
 					while depth_loop > 0 {
-						panic!("todo: add nested class support, etc");
+						todo!("nested class support");
 						depth_loop -= 1;
 					}
 				}
@@ -366,7 +366,7 @@ impl<'a> Codegen<'a> {
 		// at some point creates code where we need a promotion. So we should
 		// generally get this panic if something is either missing in the typechecker,
 		// or if we're missing a promotion corresponding to a case in compute_assignable.
-		panic!("compiler err: unknown promotion {} -> {}", self.db.repr_type(val.typ), self.db.repr_type(to));
+		panic!("ICE: Bad promotion in codegen. Unknown promotion {} -> {}", self.db.repr_type(val.typ), self.db.repr_type(to));
 	}
 
 	fn compile_binary(&mut self, ast: &Ast, binary: &Binary, into: &mut String) -> TypedVal {
@@ -385,7 +385,7 @@ impl<'a> Codegen<'a> {
 			Tok::Plus => '+',
 			Tok::Minus => '-',
 			Tok::Slash => '/',
-			_ => unreachable!()
+			_ => panic!("ICE: Tried to codegen unknown binary operator")
 		};
 
 		let val = self.new_val();
@@ -409,7 +409,7 @@ impl<'a> Codegen<'a> {
 			Tok::LessEqual => "<=",
 			Tok::Greater => ">",
 			Tok::GreaterEqual => ">=",
-			_ => unreachable!(),
+			_ => panic!("ICE: Tried to codegen unknown comparison operator"),
 		};
 
 		let val = self.new_val();
@@ -452,8 +452,8 @@ impl<'a> Codegen<'a> {
 			// TODO: Consider simply making 10.0 a float and 10 an int..?
 			// at least, unless assigned differently..?
 			// The context system is getting increasingly awkward.
-			Type::AssumeFloat => todo!(),
-			Type::AssumeInt => todo!(),
+			Type::AssumeFloat => panic!("ICE: Tried to codegen print(AssumeFloat)"),
+			Type::AssumeInt => panic!("ICE: Tried to codegen print(AssumeInt)"),
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:print-unbound-ident>"),
 		}
 	}
@@ -476,12 +476,12 @@ impl<'a> Codegen<'a> {
 			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_strbuf({buf_val}, {val});"),
 			Type::Bottom => { },
 			Type::Unassigned => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unassigned>"),
-			Type::Fun(_) => todo!("str() for functions"),
-			Type::FunRaw(_) => todo!("str() for function pointers"),
-			Type::Class(_) => todo!("str() for classes"),
+			Type::Fun(_) => todo!("str() for Fun"),
+			Type::FunRaw(_) => todo!("str() for FunRaw"),
+			Type::Class(_) => todo!("str() for Class"),
 			Type::ArrayOf(_) => todo!("str() for Array"),
-			Type::AssumeFloat => todo!(),
-			Type::AssumeInt => todo!(),
+			Type::AssumeFloat => panic!("ICE: Tried to codegen str(AssumeFloat)"),
+			Type::AssumeInt => panic!("ICE: Tried to codegen str(AssumeInt)"),
 			Type::UnboundIdent(_) => inf_writeln!(into, "{indent}<pony:compiler-err:strfmt-unbound-ident>"),
 		}
 	}
@@ -545,7 +545,7 @@ impl<'a> Codegen<'a> {
 				let bang = match logical.op {
 					Tok::And => "",
 					Tok::Or => "!",
-					_ => unreachable!(),
+					_ => panic!("ICE: Tried to codegen unknown logical operator"),
 				};
 
 				// Safe because own_val is bool
@@ -770,16 +770,16 @@ impl<'a> Codegen<'a> {
 				buf_val.typed(self.db.types.str_buf)
 			}
 			Expr::Unbound(_) => {
-				panic!("compiler-err:tried-to-codegen-an-unbound-identifier-expression");
+				panic!("ICE: Tried to codegen an Unbound");
 			},
 			Expr::UnboundAssign(_) => {
-				panic!("compiler-err:tried-to-codegen-an-unbound-assign-expression");
+				panic!("ICE: Tried to codegen an UnboundAssign");
 			},
 			Expr::UnboundFunCapture(_) => {
-				panic!("compiler-err:tried-to-codegen-an-unbound-funcapture");
+				panic!("ICE: Tried to codegen an UnboundFunCapture");
 			},
 			Expr::Undefined(_) => {
-				panic!("Internal compiler error: Tried to codegen an 'Undefined' node");
+				panic!("ICE: Tried to codegen an Undefined");
 			}
 
 			Expr::FunCapture(capt) => {

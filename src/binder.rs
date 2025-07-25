@@ -98,7 +98,7 @@ impl<'db> Binder<'db> {
 				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location.clone(), fun, self.db.types.fun_sig_unassigned, 
 					self.get_selfval(ast, location))),
 				ScopeEntry::Class(_) => {
-					todo!("What to do when we resolve an Unbound into a Class");
+					todo!("what to do when we resolve an Unbound into a Class");
 				}
 				ScopeEntry::None => continue,
 			}

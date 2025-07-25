@@ -355,7 +355,7 @@ impl<Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCell<Ty, Key> {
         unsafe {
             let mut_borrows = self.borrowed_mut.get().as_mut().unwrap();
             if mut_borrows[idx] {
-                panic!("ArenaCell: double-borrow for {idx} (immutable borrow during mutable borrow)");
+                panic!("ICE: ArenaCell: double-borrow for {idx} (immutable borrow during mutable borrow)");
             }
 
             let counters = self.borrowed.get().as_mut().unwrap();
@@ -387,12 +387,12 @@ impl<Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCell<Ty, Key> {
         unsafe {
             let mut_borrows = self.borrowed_mut.get().as_mut().unwrap();
             if mut_borrows[idx] {
-                panic!("ArenaCell: double-borrow for {idx} (second mutable borrow)");
+                panic!("ICE: ArenaCell: double-borrow for {idx} (second mutable borrow)");
             }
 
             let counters = self.borrowed.get().as_mut().unwrap();
             if counters[idx] > 0 {
-                panic!("ArenaCell: attempt to mutably borrow {idx} while it is immutable borrowed ({} times)", counters[idx]);
+                panic!("ICE: ArenaCell: attempt to mutably borrow {idx} while it is immutable borrowed ({} times)", counters[idx]);
             }
 
             mut_borrows[idx] = true;
@@ -456,7 +456,7 @@ impl<'a, Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCellProxy<'a, Ty, Key> {
         unsafe {
             let mut_borrows = self.borrowed_mut.get().as_mut().unwrap();
             if mut_borrows[idx] {
-                panic!("ArenaCell: double-borrow for {idx} (immutable borrow during mutable borrow)");
+                panic!("ICE: ArenaCell: double-borrow for {idx} (immutable borrow during mutable borrow)");
             }
 
             let counters = self.borrowed.get().as_mut().unwrap();
@@ -494,12 +494,12 @@ impl<'a, Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCellProxy<'a, Ty, Key> {
         unsafe {
             let mut_borrows = self.borrowed_mut.get().as_mut().unwrap();
             if mut_borrows[idx] {
-                panic!("ArenaCell: double-borrow for {idx} (second mutable borrow)");
+                panic!("ICE: ArenaCell: double-borrow for {idx} (second mutable borrow)");
             }
 
             let counters = self.borrowed.get().as_mut().unwrap();
             if counters[idx] > 0 {
-                panic!("ArenaCell: attempt to mutably borrow {idx} while it is immutable borrowed ({} times)", counters[idx]);
+                panic!("ICE: ArenaCell: attempt to mutably borrow {idx} while it is immutable borrowed ({} times)", counters[idx]);
             }
 
             mut_borrows[idx] = true;
