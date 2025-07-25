@@ -227,7 +227,7 @@ impl std::fmt::Display for Val {
 					// clean way. We probably do want to change into synthesizing
 					// AST nodes of some sort.
 					write!(f, "this->")?;
-					let mut depth_loop = depth - 1;
+					let depth_loop = depth - 1;
 					while depth_loop > 0 {
 						panic!("todo: add nested class support, etc");
 						depth_loop -= 1;

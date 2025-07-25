@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell, marker::PhantomData, num::{NonZeroU32, NonZeroUsize}, ops::{Deref, DerefMut}, pin::Pin};
+use std::{cell::UnsafeCell, marker::PhantomData, num::{NonZeroU32, NonZeroUsize}, ops::{Deref, DerefMut}};
 
 pub trait ArenaKey: Copy {
     fn to_nonzero_usize(self) -> NonZeroUsize;

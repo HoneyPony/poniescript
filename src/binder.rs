@@ -2,7 +2,7 @@ use crate::db::*;
 use crate::error::Error;
 use crate::expr::*;
 use crate::module::Module;
-use crate::source::{Source, SourceLocation};
+use crate::source::SourceLocation;
 use crate::typ::Type;
 
 use crate::arena::IndexCell;

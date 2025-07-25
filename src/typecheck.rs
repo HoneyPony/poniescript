@@ -1,4 +1,3 @@
-use std::mem::MaybeUninit;
 
 use crate::db::*;
 use crate::module::Module;

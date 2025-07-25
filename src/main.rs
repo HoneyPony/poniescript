@@ -17,7 +17,7 @@ mod init_ordering;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{exit, Child, Command, ExitStatus, Stdio};
+use std::process::{exit, Child, Command, Stdio};
 use std::time::{Duration, SystemTime};
 
 use db::*;

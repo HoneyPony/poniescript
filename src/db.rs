@@ -17,7 +17,6 @@ use crate::arena::*;
 
 use crate::lexer::{Tok, Token};
 
-use clap::builder::Str;
 use rustc_hash::{FxHashMap};
 
 use crate::arena::IndexCell;
@@ -1009,7 +1008,7 @@ impl Db {
 	}
 
 	fn gen_array(&mut self, elem_ty: TypId) {
-		use crate::inf_write;
+		
 		use crate::inf_writeln;
 
 		inf_writeln!(self.arr_declare_code, "struct ps_arr_{};", elem_ty.0);

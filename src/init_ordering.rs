@@ -1,7 +1,6 @@
 use rustc_hash::FxHashMap;
 
-use crate::arena::ArenaKey;
-use crate::{db::*, error::Error, source::SourceLocation};
+use crate::{db::*, error::Error};
 use crate::expr::*;
 
 struct OrderVisitor<'a> {
@@ -87,7 +86,7 @@ impl<'a> VisitAst for OrderVisitor<'a> {
 }
 
 pub fn topological_sort(ord: &mut Vec<VarId>, ast: &Ast, db: &mut Db) {
-    let mut queue = std::mem::take(ord);
+    let queue = std::mem::take(ord);
 
     let mut map: FxHashMap<VarId, bool> = FxHashMap::default();
 
