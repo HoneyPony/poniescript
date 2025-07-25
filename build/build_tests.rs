@@ -129,6 +129,7 @@ pub fn generate(tests_file: &mut File) {
 		("comparison/", "compare_doubleblock"),
 
 		("lexer/", "err_unterminated_string"),
+		("lexer/", "string_lit_basic_escapes"),
 
 		("logical/", "basic_and"),
 		("logical/", "basic_or"),

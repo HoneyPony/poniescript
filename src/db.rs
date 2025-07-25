@@ -659,8 +659,56 @@ impl Db {
 			return *existing;
 		}
 
-		let id: StrConstId = IdFuncs::<StrConstId>::push(self, string.to_string().leak());
-		self.str_simple_const_map.insert(string.to_string(), id);
+		// Ad-hoc lex of the string literal. This isi for literals of the form
+		// "blah blah blah\n\r\t"
+		let mut buf = String::new();
+
+		// Skip the quotes on the input token.
+		let subrange = &string[1..string.len() - 1].as_bytes();
+
+		buf.push('"');
+
+		let mut idx = 0;
+		loop {
+			if idx >= subrange.len() { break; }
+
+			match subrange[idx] {
+				// For non-ASCII characters, always just represent them in
+				// hexadecimal for portability-ish.
+				//
+				// Also, note that this DOES mean we're allowed to have a literal
+				// '\n' inside a string.
+				0..31 | 128..=u8::MAX => {
+					write!(buf, "\\x{:x}", subrange[idx]).unwrap();
+				},
+				b'\\' => {
+					idx += 1;
+					if idx >= subrange.len() {
+						todo!("error message for broken string literal {}", string);
+					}
+					let escaped = subrange[idx];
+					match escaped {
+						b'n' => buf.push_str("\\n"),
+						b'r' => buf.push_str("\\r"),
+						b't' => buf.push_str("\\t"),
+						b'\\' => buf.push_str("\\\\"),
+						b'\"' => buf.push_str("\\\""),
+						b'x' => todo!("hexadecimal values in literal {}", string),
+						_ => { todo!("error message for broken string literal {}", string); }
+					}
+				},
+				_ => {
+					buf.push(subrange[idx] as char);
+				}
+			}
+
+			idx += 1;
+		}
+
+		buf.push('"');
+
+		let id: StrConstId = IdFuncs::<StrConstId>::push(self, buf.clone().leak());
+		self.str_simple_const_map.insert(buf, id);
 		id
 	}
 

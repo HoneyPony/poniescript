@@ -225,7 +225,17 @@ impl Lexer {
 	}
 
 	fn string(&mut self, db: &mut Db) -> std::io::Result<Token> {
-		while self.advance()? != '"' {
+		loop {
+			let next = self.advance()?;
+
+			if next == '\\' {
+				// Unconditionally advance, don't check quote
+				self.advance()?;
+			}
+			else if next == '\"' {
+				break;
+			}
+
 			// TODO: Implement string escapes, etc..
 			if self.at_eof {
 				self.error(db, "Unterminated string".into());
