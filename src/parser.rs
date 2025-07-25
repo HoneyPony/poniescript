@@ -108,7 +108,7 @@ macro_rules! consume {
 
 // Note: A somewhat helpful regex for finding places where we forgot the question
 // mark:
-//    expected!\([^\)]+\)[^?]
+//    expected(_after)?!\([^;]+\);
 macro_rules! expected {
 	($parser:ident, $ty:expr, $($arg:tt)*) => {
 		consume!($parser, $ty, "Expected {}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()))
@@ -520,12 +520,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let mut initializers = Vec::new();
 
-		expected!(self, Tok::LeftBrace, "'{{' in 'new' expression");
+		expected!(self, Tok::LeftBrace, "'{{' in 'new' expression")?;
 
 		while !self.at(Tok::RightBrace) && !self.is_at_end() {
 			let location = self.start();
 			let ident = expected!(self, Tok::Identifier, "identifier inside 'new' block")?;
-			expected_after!(self, Tok::Colon, name, "':' after member name");
+			expected_after!(self, Tok::Colon, name, "':' after member name")?;
 
 			let value = self.expression()?;
 			initializers.push(NewInitElem { var: self.db.var_unassigned, ident, value, location: self.end(location) });
@@ -533,7 +533,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			self.eat_comma(Tok::RightBrace)?;
 		}
 		// TODO: Parse inner arguments, etc.
-		expected!(self, Tok::RightBrace, "'}}' in 'new' expression");
+		expected!(self, Tok::RightBrace, "'}}' in 'new' expression")?;
 
 		Expr::put_new_ok(self.ast, self.end(location), name, 
 			self.db.class_unassigned,
@@ -553,7 +553,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			self.eat_comma(Tok::RightSquare)?;
 		}
 
-		expected!(self, Tok::RightSquare, "']' at end of array literal");
+		expected!(self, Tok::RightSquare, "']' at end of array literal")?;
 
 		Expr::put_arraylit_ok(self.ast, self.end(location), values, self.db.types.unassigned, self.db.types.unassigned)
 	}
@@ -830,7 +830,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 				// fun* means a "raw" function.
 				let raw = self.match_(Tok::Star)?.is_some();
 
-				expected!(self, Tok::LeftParen, "'(' after 'fun' in type name");
+				expected!(self, Tok::LeftParen, "'(' after 'fun' in type name")?;
 
 				while !self.at(Tok::RightParen) && !self.is_at_end() {
 					let next_ty = self.typ()?;
@@ -841,7 +841,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 					self.match_(Tok::Comma)?;
 				}
 
-				expected!(self, Tok::RightParen, "')' after parameter list for fun type");
+				expected!(self, Tok::RightParen, "')' after parameter list for fun type")?;
 
 				if self.match_(Tok::LeftArrow)?.is_some() {
 					sig.return_type = self.typ()?;

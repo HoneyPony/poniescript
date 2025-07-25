@@ -1,3 +1,4 @@
+use std::mem::MaybeUninit;
 
 use crate::db::*;
 use crate::module::Module;
@@ -1133,10 +1134,9 @@ impl<'db> TypeChecker<'db> {
 		// drive class type inference (i.e. type inference for the class members)
 		// when needed.
 		for class in &mut module.classes {
-			self.check_class(ast, class);
+			// Ignore errors at this point as there's no need to unwind the stack.
+			let _ = self.check_class(ast, class);
 		}
-
-		
 
 		for fun in &mut module.functions {
 			// Ignore errors at this point as there's no need to unwind the stack.
