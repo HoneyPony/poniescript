@@ -317,7 +317,6 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
         }
     }
 
-    // TODO:
     // Rust appears to get angry if we do the following:
     //
     //    let p = a.get_proxy();
@@ -326,9 +325,11 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
     //
     // In the case that commit_proxy takes an &mut self. This is because the
     // commit_proxy counts as a second borrow, even though the whole point
-    // is that we're consuming the old borrow. So for now, we just do it
-    // a stupid way where we take &self even though that is NOT safe.
-    pub fn commit_proxy(&self, proxy: ArenaCellProxy<Ty, Key>) {
+    // is that we're consuming the old borrow.
+    //
+    // So now, we make the proxy responsible for committing itself, and make
+    // it clear that this is unsafe.
+    unsafe fn commit_proxy(&self, proxy: ArenaCellProxy<Ty, Key>) {
         // TODO:
         // Do the items in the Proxy need to be Pinned? Maybe????
         let items: Vec<_> = proxy.added.into_inner();
@@ -427,7 +428,13 @@ impl <'ar, Ty, Key: ArenaKey> ArenaCellProxy<'ar, Ty, Key> {
     }
 
     pub fn commit(self) {
-        self.arena.commit_proxy(self);
+        // Safety: This consumes ourselves as the proxy, while our parent is
+        // currently mutably borrowed by us (get_proxy takes a &mut Arena).
+        //
+        // So, we are the only possible proxy, meaning it is safe for us to
+        // commit, and now that we are consumed, the parent arena can be
+        // borrowed again.
+        unsafe { self.arena.commit_proxy(self); }
     }
 
     pub fn push(&self, object: Ty) -> Key {
