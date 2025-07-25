@@ -1,5 +1,5 @@
 use crate::arena::ArenaKey;
-use crate::db::*;
+use crate::{db::*, Args};
 use crate::lexer::Tok;
 use crate::module::Module;
 use crate::typ::Type;
@@ -1241,7 +1241,7 @@ impl<'a> Codegen<'a> {
 		self.compile_string_constant_init(&mut out.string_const_define, &mut out.string_const_init);
 	}
 
-	fn codegen(&mut self, ast: &Ast, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
+	fn codegen(&mut self, args: &Args, ast: &Ast, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 		let mut outputs = CodegenOutputs::new();
 
 		// Generate global variables in one pass as their ordering is a global
@@ -1272,7 +1272,10 @@ impl<'a> Codegen<'a> {
 		}
 
 		writeln!(output, "#include \"poni/poni.h\"")?;
-		writeln!(output, "#include \"poni/poni_standalone.h\"")?;
+		// Engine code does not include poni_standalone.h.
+		if !args.engine {
+			writeln!(output, "#include \"poni/poni_standalone.h\"")?;
+		}
 
 		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
 		writeln!(output, "// --- struct declarations ---\n")?;
@@ -1303,8 +1306,8 @@ impl<'a> Codegen<'a> {
 	}
 }
 
-pub fn codegen(db: &mut Db, ast: &Ast, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
+pub fn codegen(args: &Args, db: &mut Db, ast: &Ast, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 	let mut codegen = Codegen::new(db);
 
-	codegen.codegen(ast, modules, output)
+	codegen.codegen(args, ast, modules, output)
 }

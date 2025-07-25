@@ -49,6 +49,11 @@ struct Args {
 	/// Whether to run the PonieScript in "test mode," a special mode used
 	/// for integration testing the compiler.
 	test_mode: bool,
+
+	#[arg(short = 'e', long = "engine")]
+	/// Compile this code for integration into the PonyGame engine. In particular,
+	/// don't include poni_standalone.h.
+	engine: bool
 }
 
 enum CompileMode {
@@ -314,7 +319,7 @@ fn main() {
 	let compile_mode = CompileMode::parse(&args.output_path);
 	let (mut output, cc) = compile_mode.get_output(&args);
 
-	if let Err(err) = codegen::codegen(&mut db, &mut ast, &modules, &mut output) {
+	if let Err(err) = codegen::codegen(&args, &mut db, &mut ast, &modules, &mut output) {
 		eprintln!("Unable to write output file: {err}");
 		exit(5);
 	}

@@ -1,0 +1,5 @@
+var a = 20;
+
+fun tick() {
+    print("b equals ", a);
+}
