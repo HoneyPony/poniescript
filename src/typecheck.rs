@@ -153,8 +153,13 @@ impl<'db> TypeChecker<'db> {
 
 		// Add other promotions as needed. Note that this should correspond
 		// in part to the match() in compute_assignable.
-
-		ty
+		match self.db.get(ty) {
+			Type::ArrayOf(inner) => {
+				let inner_promoted = self.promote_ty_from_unassigned(*inner);
+				self.db.put_type(Type::ArrayOf(inner_promoted))
+			}
+			_ => ty
+		}
 	}
 
 	// Returns what the new "from" type would be.
