@@ -339,7 +339,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			// makes it easier to generate reasonable code in the common cases.
 			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, location, fun, args),
 
-			ScopeEntry::Class(class) => {
+			ScopeEntry::Class(_) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), self.current.location.clone()));
 
 				// Just return an UnboundCall, as we have a semantic error rather than parse error.
@@ -543,7 +543,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 	fn array_literal(&mut self) -> Result<ExprId> {
 		let location = self.start();
-		let lbracket = self.advance()?;
+		let _lbracket = self.advance()?;
 
 		let mut values = Vec::new();
 		while !self.at(Tok::RightSquare) && !self.is_at_end() {
@@ -725,7 +725,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 			// TODO: Deduplicate this with the expr_prefix stuff..?
 			Tok::Dot => {
-				let op = self.advance()?;
+				let _op = self.advance()?;
 				let identifier = expected!(self, Tok::Identifier, "identifier after property name")?;
 
 				// TODO: Do we want to move this logic into expr_ident to go
@@ -993,7 +993,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 	fn fun_declaration(&mut self, require_name: bool) -> Result<FunDeclare> {
 		let location = self.start();
-		let key_fun = expected!(self, Tok::Fun, "'fun'")?;
+		let _key_fun = expected!(self, Tok::Fun, "'fun'")?;
 
 		let mut name = None;
 

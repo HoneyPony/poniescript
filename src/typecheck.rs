@@ -1,5 +1,3 @@
-use std::mem::MaybeUninit;
-
 use crate::db::*;
 use crate::module::Module;
 use crate::source::SourceLocation;

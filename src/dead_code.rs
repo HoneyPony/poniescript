@@ -70,7 +70,8 @@ impl<'db> DeadCodeElim<'db> {
                 //     *expr = left;
                 // }
             },
-            Expr::Variable(variable) => {
+            Expr::Variable(_) => {
+                // Nothing to eliminate.
                 false
             },
             Expr::Logical(logical) => {
@@ -158,7 +159,7 @@ impl<'db> DeadCodeElim<'db> {
                 }
                 false
             },
-            Expr::UnboundAssign(unbound_assign) => unreachable!("dead code UnboundAssign"),
+            Expr::UnboundAssign(_unbound_assign) => unreachable!("dead code UnboundAssign"),
             Expr::NumLiteral(num_literal) => false,
             Expr::StrLiteral(str_literal) => false,
             Expr::BoolLiteral(bool_literal) => false,
@@ -208,8 +209,8 @@ impl<'db> DeadCodeElim<'db> {
                     return is_bottom
                 }
             },
-            Expr::Unbound(unbound) => unreachable!("dead code Unbound"),
-            Expr::UnboundFunCapture(unbound_call) => unreachable!("dead code UnboundFunCapture"),
+            Expr::Unbound(_unbound) => unreachable!("dead code Unbound"),
+            Expr::UnboundFunCapture(_unbound_call) => unreachable!("dead code UnboundFunCapture"),
             Expr::Print(print) => {
                 let mut last_needed_idx = None;
 
@@ -338,7 +339,7 @@ impl<'db> DeadCodeElim<'db> {
                 // TODO eliminate
                 false
             }
-            Expr::Undefined(undefined) => unreachable!("dead code Undefined"),
+            Expr::Undefined(_undefined) => unreachable!("dead code Undefined"),
         }
     }
 

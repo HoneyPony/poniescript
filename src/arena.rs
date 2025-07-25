@@ -558,6 +558,7 @@ mod tests {
         }
     }
 
+    #[test]
     fn test_reader_writer() {
         let mut arena = ArenaCell::<i32, TestId>::new();
 
@@ -634,11 +635,11 @@ mod tests {
         let mut arena = ArenaCell::<i32, TestId>::new();
         let a = arena.push(5);
 
-        let b1 = arena.get(a);
-        let b2 = arena.get(a);
-        let b3 = arena.get(a);
+        let _b1 = arena.get(a);
+        let _b2 = arena.get(a);
+        let _b3 = arena.get(a);
 
         // Should panic
-        let mut_b = arena.get_mut(a);
+        let _mut_b = arena.get_mut(a);
     }
 }

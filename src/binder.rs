@@ -63,8 +63,8 @@ impl<'db> Binder<'db> {
 	fn resolve_class_name(&mut self, ident: StrId, location: &SourceLocation) -> Option<ClassId> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
-				ScopeEntry::Var(var) => break, // TODO: Figure out an ergonomic way to do this.
-				ScopeEntry::Fun(fun) => break,
+				ScopeEntry::Var(_) => break, // TODO: Figure out an ergonomic way to do this.
+				ScopeEntry::Fun(_) => break,
 				ScopeEntry::Class(class) => {
 					return Some(class)
 				}
@@ -117,7 +117,7 @@ impl<'db> Binder<'db> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_assign(location, var, expr)),
-				ScopeEntry::Fun(fun) => {
+				ScopeEntry::Fun(_) => {
 					self.db.report_error(Error::simple(
 						format!("Cannot assign to a function."),
 						location.clone()
@@ -261,7 +261,7 @@ impl<'db> Binder<'db> {
 			},
 
 			// Nothing to visit.
-			Expr::FunCapture(capt) => None,
+			Expr::FunCapture(_) => None,
 
 			Expr::UnboundFunCapture(unbound) => {
 				// If the UnboundFunCapture is on an object, we need to visit
@@ -387,8 +387,8 @@ impl<'db> Binder<'db> {
 	fn resolve_type(&mut self, name: StrId, location: &SourceLocation) -> Option<Type> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, name) {
-				ScopeEntry::Var(var) => break, // TODO: Figure out an ergonomic way to do this.
-				ScopeEntry::Fun(fun) => break,
+				ScopeEntry::Var(_) => break, // TODO: Figure out an ergonomic way to do this.
+				ScopeEntry::Fun(_) => break,
 				ScopeEntry::Class(class) => {
 					return Some(Type::Class(class))
 				}

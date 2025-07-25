@@ -1,7 +1,5 @@
 include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 
-use std::mem::MaybeUninit;
-
 use rustc_hash::FxHashMap;
 
 use crate::arena::ArenaKey;
@@ -20,7 +18,7 @@ pub struct NewInitElem {
 }
 
 impl Stmt {
-	pub fn val_location(&self, ast: &impl AstAbstract) -> SourceLocation {
+	pub fn val_location(&self, _ast: &impl AstAbstract) -> SourceLocation {
 		self.location().clone()
 	}
 }

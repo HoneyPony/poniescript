@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 use std::cell::RefCell;
 use std::{fs::File, path::PathBuf};
 use std::io::{self, Read};
