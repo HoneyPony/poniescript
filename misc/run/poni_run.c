@@ -11,6 +11,11 @@ static void tick_fn_null(void* closure) {}
 static void (*tick_fn)(void*) = tick_fn_null;
 
 static void
+rebuild() {
+    system("make -f hot.mk");
+}
+
+static void
 hot_event_trigger(struct poni_hot_context *ctx, enum poni_hot_event evt) {
     if(evt == PONI_HOT_DYNLIB_RELOADED) {
         puts("-- reloaded dynamic library --");
@@ -23,12 +28,18 @@ hot_event_trigger(struct poni_hot_context *ctx, enum poni_hot_event evt) {
 
     if(evt == PONI_HOT_FILE_CHANGED) {
         puts("-- source file changed --");
-        system("make -f hot.mk");
+        rebuild();
     }
 }
 
 int
 main(int argc, char **argv) {
+    // Perform initial rebuild
+    // Note that here you might want to do something like, build WITHOUT reading
+    // from a hot-reload database. Then every future reload WILL generate a hot-reload
+    // database.
+    rebuild();
+
     struct poni_hot_context hot;
     poni_hot_init(&hot);
 

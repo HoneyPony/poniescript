@@ -232,18 +232,20 @@ poni_hot_poll_dynlib(struct poni_hot_context *context) {
     // Run initialization oneshots.
     poni_hot_invoke_oneshot(context, "poni_init_strings");
     poni_hot_invoke_oneshot(context, "poni_init_globals");
-    if(context->call_poni_init) {
-        poni_hot_invoke_oneshot(context, "poni_init");
-        if(context->autodisable_poni_init) {
-            context->call_poni_init = false;
-        }
-    }
 
     // Now we are allowed to update the context stored values.
     context->stat_err = err;
     context->stat_buf = now_buf;
 
     if(context->event_trigger) context->event_trigger(context, PONI_HOT_DYNLIB_RELOADED);
+
+    // Call init after the trigger (?)
+    if(context->call_poni_init) {
+        poni_hot_invoke_oneshot(context, "poni_init");
+        if(context->autodisable_poni_init) {
+            context->call_poni_init = false;
+        }
+    }
 }
 
 void
