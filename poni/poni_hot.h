@@ -201,8 +201,13 @@ poni_hot_poll_dynlib(struct poni_hot_context *context) {
 
     const char *tmp_path = context->tmp_paths[context->tmp_path_idx];
     if(link(context->dynlib_path, tmp_path) < 0) {
-        printf("can't link :(\n");
         // Couldn't link; try again later.
+        
+        // TODO: First of all, is there any reason to think that by the time
+        // we call dlopen() the link() will have actually occurred? Second,
+        // it seems really annoying that we have to manually clean up the links
+        // in case something breaks. Maybe we should have an option to unconditionally
+        // unlink the hot-reload targets.
         return;
     }
 
