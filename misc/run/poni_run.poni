@@ -1,22 +1,26 @@
-class Horse {
-    var hooves = 10;
+var global = 15; // this will not be re-called. globals keep their value.
 
-    fun jump() {
-        hooves = hooves - 1;
-    }
+class Horse {
+    var hooves = 4;
 
     fun neigh() {
-        print("chonk");
+        print("neigh! i have ", hooves, " hooves");
+    }
+
+    fun walk() {
+        hooves = hooves + 1;
     }
 }
 
 var the_horse = new Horse{};
 
-var a = 20;
-var b = 100;
+fun init() {
+    print("this will only ever be called once");
+}
 
 fun tick() {
-    print("hooves = ", the_horse.hooves);
-    the_horse.jump();
+    //print("hooves = ", the_horse.hooves);
     the_horse.neigh();
+    print("global = ", global);
+    //the_horse.walk();
 }
