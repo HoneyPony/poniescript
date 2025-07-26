@@ -13,6 +13,7 @@ static void (*tick_fn)(void*) = tick_fn_null;
 static void
 hot_event_trigger(struct poni_hot_context *ctx, enum poni_hot_event evt) {
     if(evt == PONI_HOT_DYNLIB_RELOADED) {
+        puts("-- reloaded dynamic library --");
         // Look up the tick function whenever we're reloaded.
         tick_fn = poni_hot_lookup_fn(ctx, "f_tick");
         if(!tick_fn) {

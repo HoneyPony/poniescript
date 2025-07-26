@@ -114,6 +114,12 @@ struct poni_hot_context {
     /** Path to read for the main dynamic library to reload. */
     const char *dynlib_path;
 
+    /** Temporary paths to use for the library name. */
+    const char *tmp_paths[2];
+
+    /** Which temporary path is currently being used. */
+    int tmp_path_idx;
+
     /** Whether to call poni_init when the library is loaded. */
     bool call_poni_init;
 
@@ -186,19 +192,36 @@ poni_hot_poll_dynlib(struct poni_hot_context *context) {
         return;
     }
 
-    // Close old library.
+    // We can't just directly load from the dynlib_path, because the previous
+    // library handle could still be open, in which case it will just return
+    // the same one.
+    //
+    // Instead, we link the file to a temporary path, load it from that one,
+    // and then unlink that path.
+
+    const char *tmp_path = context->tmp_paths[context->tmp_path_idx];
+    if(link(context->dynlib_path, tmp_path) < 0) {
+        printf("can't link :(\n");
+        // Couldn't link; try again later.
+        return;
+    }
+
+    void *new_lib = dlopen(tmp_path, RTLD_NOW | RTLD_LOCAL);
+    if(!new_lib) {
+        unlink(tmp_path);
+        if(context->event_trigger) context->event_trigger(context, PONI_HOT_DYNLIB_FAILED_LOAD);
+        return;
+    }
+
+    // Okay, we loaded the library, close the old one.
     if(context->dl_handle) {
         dlclose(context->dl_handle);
         context->dl_handle = NULL;
     }
 
-    // TODO: Will this work?
-    void *new_lib = dlopen(context->dynlib_path, RTLD_NOW | RTLD_LOCAL);
-    if(!new_lib) {
-        if(context->event_trigger) context->event_trigger(context, PONI_HOT_DYNLIB_FAILED_LOAD);
-        return;
-    }
-
+    // Update temporary paths and unlink the previous one.
+    unlink(tmp_path);
+    context->tmp_path_idx = (context->tmp_path_idx + 1) % 2;
 
     context->dl_handle = new_lib;
 
@@ -235,6 +258,10 @@ poni_hot_init(struct poni_hot_context *context) {
     context->event_trigger = NULL;
     context->dl_handle = NULL;
     context->inotify_fd = fd;
+
+    context->tmp_paths[0] = "./__tmp_module_000001.so";
+    context->tmp_paths[1] = "./__tmp_module_000002.so";
+    context->tmp_path_idx = 0;
 
     // Perform initial library load.
     context->stat_err = -1;
