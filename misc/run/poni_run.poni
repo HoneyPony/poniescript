@@ -2,7 +2,7 @@ class Horse {
     var hooves = 10;
 
     fun jump() {
-        hooves = hooves + 1;
+        //hooves = hooves - 1;
     }
 
     fun neigh() {
@@ -16,7 +16,7 @@ var the_horse = new Horse{};
 //var b = 100;
 
 fun tick() {
-    print(the_horse.hooves);
+    print("ves = ", the_horse.hooves);
     the_horse.jump();
     the_horse.neigh();
     //print("a = ", a);
