@@ -2,11 +2,11 @@ class Horse {
     var hooves = 10;
 
     fun jump() {
-        hooves = hooves + 1;
+        hooves = hooves - 1;
     }
 
     fun neigh() {
-        print("neigh!!!");
+        print("chonk");
     }
 }
 

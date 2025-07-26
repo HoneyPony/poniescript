@@ -104,6 +104,8 @@ poni_hot_lookup(const char *cdecl, size_t expected_bytes, bool *existed) {
 enum poni_hot_event {
     PONI_HOT_DYNLIB_FAILED_LOAD,
     PONI_HOT_DYNLIB_RELOADED,
+
+    PONI_HOT_FILE_CHANGED,
 };
 
 /**
@@ -125,9 +127,6 @@ struct poni_hot_context {
 
     /** Whether to disable the call to poni_init when it is called. */
     bool autodisable_poni_init;
-
-    /** Function to call when files relevant to the context have changed. */
-    void (*rebuild_trigger)(struct poni_hot_context *ctx);
 
     /** Function to call when something interesting happens. */
     void (*event_trigger)(struct poni_hot_context *ctx, enum poni_hot_event);
@@ -247,6 +246,22 @@ poni_hot_poll_dynlib(struct poni_hot_context *context) {
     if(context->event_trigger) context->event_trigger(context, PONI_HOT_DYNLIB_RELOADED);
 }
 
+void
+poni_hot_poll_watched(struct poni_hot_context *context) {
+    if(!context) return;
+    if(context->inotify_fd < 0) return;
+
+    char buf[4096];
+    ssize_t bytes = read(context->inotify_fd, buf, 4096);
+
+    if(bytes > 0) {
+        // We read some inotify events. We actually really don't care what
+        // they are. Just run the trigger.
+        
+        if(context->event_trigger) context->event_trigger(context, PONI_HOT_FILE_CHANGED);
+    }
+}
+
 bool
 poni_hot_init(struct poni_hot_context *context) {
     if(!context) return false;
@@ -259,7 +274,6 @@ poni_hot_init(struct poni_hot_context *context) {
     context->dynlib_path = NULL;
     context->call_poni_init = true;
     context->autodisable_poni_init = true;
-    context->rebuild_trigger = NULL;
     context->event_trigger = NULL;
     context->dl_handle = NULL;
     context->inotify_fd = fd;
@@ -283,6 +297,7 @@ poni_hot_init(struct poni_hot_context *context) {
 void
 poni_hot_poll(struct poni_hot_context *context) {
     poni_hot_poll_dynlib(context);
+    poni_hot_poll_watched(context);
 }
 
 /**

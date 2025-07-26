@@ -20,6 +20,11 @@ hot_event_trigger(struct poni_hot_context *ctx, enum poni_hot_event evt) {
             tick_fn = tick_fn_null;
         }
     }
+
+    if(evt == PONI_HOT_FILE_CHANGED) {
+        puts("-- source file changed --");
+        system("make -f hot.mk");
+    }
 }
 
 int
@@ -29,6 +34,8 @@ main(int argc, char **argv) {
 
     hot.dynlib_path = "./game.so";
     hot.event_trigger = hot_event_trigger;
+
+    printf("-- watch: %d --\n", poni_hot_watch(&hot, "./misc/run/poni_run.poni"));
 
     // Only reload occasionally. (This is especially funny here...)
     int reload_countdown = 0;
