@@ -619,7 +619,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 						inner = Expr::put_index(self.ast, self.end(location.clone()), inner, index, self.db.types.unassigned);
 					}
 					while self.match_(Tok::Dot)?.is_some() {
-						let identifier = expected!(self, Tok::Identifier, "identifier after property name")?;
+						// For get expressions, we can have '.0' and so forth
+						// for tuples.
+						if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
+							got!(self, "Expected identifier after '.'");
+						}
+						let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
 
 						// TODO: Do we want to move this logic into expr_ident to go
 						// with the other ones?
@@ -744,7 +749,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 			// TODO: Deduplicate this with the expr_prefix stuff..?
 			Tok::Dot => {
 				let _op = self.advance()?;
-				let identifier = expected!(self, Tok::Identifier, "identifier after property name")?;
+				// TODO: Check number tokens for being simple, e.g. not something
+				// like 0xff or 1234i32 (if we have postfixes at some point)
+				if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
+					got!(self, "Expected identifier after '.'");
+				}
+				let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
 
 				// TODO: Do we want to move this logic into expr_ident to go
 				// with the other ones?

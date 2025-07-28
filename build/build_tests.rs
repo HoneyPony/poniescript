@@ -100,6 +100,10 @@ pub fn generate(tests_file: &mut File) {
 
 		("tuple/", "create_tuple"),
 		("tuple/", "print_tuple"),
+		("tuple/", "index_tuple"),
+
+		("tuple/", "err_big_index"),
+		("tuple/", "err_string_index"),
 	
 		("functions/", "parse_params"),
 		("functions/", "param_trailing_comma"),

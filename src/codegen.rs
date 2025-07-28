@@ -937,11 +937,12 @@ impl<'a> Codegen<'a> {
 				let val = self.new_val_typed(typ);
 			
 				let lhs = self.expr(ast, get.lhs, into);
+				let arrow = self.db.get_c_member_lookup(lhs.typ);
 				
 				let varname = self.db.get_cname(get.var);
 
 				// TODO: Should lhs be promoted...??
-				define_val!(self, into, val, " = {}->{};\n", lhs.val, varname);
+				define_val!(self, into, val, " = {}{arrow}{};\n", lhs.val, varname);
 
 				val
 			}
@@ -957,12 +958,13 @@ impl<'a> Codegen<'a> {
 				let lhs = self.expr(ast, set.lhs, into);
 				// TODO: What happens if lhs is Bottom?
 				let rhs = self.promote(rhs, typ);
+				let arrow = self.db.get_c_member_lookup(lhs.typ);
 				
 				let varname = self.db.get_cname(set.var);
 
 				// TODO: Should lhs be promoted...??
 				// This is a bit hacky (the double assign), but I think it is overall fine.
-				define_val!(self, into, val, " = {}->{} = {};\n", lhs.val, varname, rhs);
+				define_val!(self, into, val, " = {}{arrow}{} = {};\n", lhs.val, varname, rhs);
 
 				val
 			}

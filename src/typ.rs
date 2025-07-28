@@ -103,10 +103,17 @@ impl Type {
 
 			Type::Tuple(typs) => {
 				let mut result = "(".to_string();
+				let mut comma = false;
 				for typ in typs {
+					if comma { result.push_str(", "); }
+					comma = true;
+
 					let ty = db.get(*typ);
 					result.push_str(&ty.to_string(db));
-					result.push_str(", ");
+				}
+				if typs.len() == 0 {
+					// Single-element tuple must be indicated
+					result.push_str(",");
 				}
 				result.push_str(")");
 

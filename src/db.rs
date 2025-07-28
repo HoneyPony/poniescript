@@ -259,6 +259,14 @@ pub struct Db {
 	/// Maps tuple TypIds to their cname.
 	pub tuple_cname_cache: FxHashMap<TypId, &'static str>,
 
+	/// Maps StrIds representing '0', '1', etc into indexes into a tuple.
+	/// These are generated when a tuple type is created.
+	tuple_idxs: FxHashMap<StrId, u32>,
+
+	/// Maps indices with particular types to the associated variables
+	/// synthesized for that tuple.
+	tuple_vars: FxHashMap<(u32, TypId), VarId>,
+
 	/// TODO: Maybe have only one declare/define code?
 
 	/// Some C code to declare each Array type.
@@ -310,6 +318,9 @@ impl Db {
 			class_preparer_cache: Vec::new(),
 
 			tuple_cname_cache: FxHashMap::default(),
+
+			tuple_vars: FxHashMap::default(),
+			tuple_idxs: FxHashMap::default(),
 
 			errors: Vec::new(),
 
@@ -422,7 +433,7 @@ impl Db {
 		}
 	}
 
-	pub fn synthesize_property(&mut self, str: &'static str, cname: &'static str, typ: TypId) -> (StrId, VarId) {
+	pub fn synthesize_property(&mut self, str: &str, cname: &'static str, typ: TypId) -> (StrId, VarId) {
 		let key = self.put_str(str);
 		let var = Var {
 			name: self.synthetic_id(key),
@@ -539,13 +550,15 @@ impl Db {
 		// IMPORTANT: The pushes() here must line up with new_id() -> TypId
 		//self.ctype_cache.push(ctype.leak());
 
-		match typ {
+		let id = self.push(typ.clone());
+
+		match &typ {
 			// For array types, use any type we generate.
-			Type::ArrayOf(elem_ty) => self.use_array(elem_ty),
+			Type::ArrayOf(elem_ty) => self.use_array(*elem_ty),
+			Type::Tuple(inner) => self.use_tuple(&inner, id),
 			_ => { }
 		}
 
-		let id = self.push(typ.clone());
 		self.type_side_map.insert(typ, id);
 
 		return id;
@@ -654,6 +667,37 @@ impl Db {
 		// a problem.
 		if self.is_cgen_safe(elem_ty) {
 			self.array_used.push(elem_ty);
+		}
+	}
+
+	fn use_tuple(&mut self, inner: &Vec<TypId>, tuple_ty: TypId) {
+		if !self.is_cgen_safe(tuple_ty) { return; }
+
+		for (idx, ty) in inner.iter().enumerate() {
+			// Generate the StrId for each field index.
+			//
+			// TODO: OPTIMIZATION: Only do this once for each field index, by keeping
+			// track of the max fields converted this way.
+
+			let key = self.put_str(&format!("{idx}"));
+			// Use put_str for this so that we don't end up re-leaking the
+			// same str over and over.
+			let cname = self.put_str(&format!("v_{idx}"));
+
+			// This will end up being re-done many times. Oh well.
+			self.tuple_idxs.insert(key, idx as u32);
+
+			let var_key = (idx as u32, *ty);
+
+			// Skip synthesizing the property if it's already been done by
+			// another tuple.
+			if self.tuple_vars.contains_key(&var_key) { continue; }
+
+			// Now synthesize the property based on our idx, ty pair and
+			// add it to the map.
+			let (_, var) = self.synthesize_property(self.get(key), self.get(cname), *ty);
+
+			self.tuple_vars.insert(var_key, var);
 		}
 	}
 
@@ -935,9 +979,39 @@ impl Db {
 				let result = class.var_map.get(&propname).copied();
 				result
 			},
+			Type::Tuple(typs) => {
+				// Look up the property index based on name ('0' => 0)
+				let Some(which_prop) = self.tuple_idxs.get(&propname) else { return None; };
+
+				// Now look up the variable based on index-type pair. This should
+				// have been generated the first time we used the type.
+				self.tuple_vars.get(&(*which_prop, typs[*which_prop as usize])).copied()
+			}
 
 			_ => None
 		}
+	}
+
+	pub fn is_value_type(&self, typ: TypId) -> bool {
+		match self.get(typ) {
+			Type::Int | Type::Float | Type::Bool | Type::Void => true,
+			Type::Tuple(_) => true,
+			_ => false
+		}
+	}
+
+	// TODO: This is not going to cut it.
+	// Things like nested set expressions need to be able to actually hit the
+	// value that they are referring to.
+	//
+	// What we might want to do is treat value types as essentially always being
+	// references (e.g. we could create struct ps_tuple *var), and then allocating
+	// them separately-ish.
+	//
+	// Then, we would explicitly add a copy operation whenever a value type
+	// is assigned somewhere (i.e. assigned or passed in a function).
+	pub fn get_c_member_lookup(&self, typ: TypId) -> &'static str {
+		if self.is_value_type(typ) { "." } else { "-> "}
 	}
 
 	pub fn lookup_member_fn(&self, typ: TypId, propname: StrId) -> Option<FunId> {
