@@ -481,10 +481,28 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::LeftBrace => self.block(),
 
 			Tok::LeftParen => {
+				let begin = self.start();
 				// Eat left paren
 				self.advance()?;
 				// Inner expression
 				let inner = self.expression()?;
+
+				// Tuple
+				if self.at(Tok::Comma) {
+					let mut inner = vec![inner];
+
+					self.advance()?;
+
+					while !self.at(Tok::RightParen) && !self.is_at_end() {
+						inner.push(self.expression()?);
+						self.eat_comma(Tok::RightParen)?;
+					}
+
+					expected!(self, Tok::RightParen, "')' after tuple items")?;
+
+					return Expr::put_maketuple_ok(self.ast, self.end(begin), inner, self.db.types.unassigned);
+				}
+
 				// Expect right paren after expression
 				expected!(self, Tok::RightParen, "')' after parenthesized expression")?;
 				Ok(inner)

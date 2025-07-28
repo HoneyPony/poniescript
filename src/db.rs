@@ -13,7 +13,7 @@ use crate::expr::Class;
 use crate::expr::Var;
 use crate::typ::Type;
 use crate::source::{Source, SourceLocation};
-use crate::{arena::*, Args};
+use crate::{arena::*, inf_writeln, Args};
 
 use crate::lexer::{Tok, Token};
 
@@ -251,6 +251,16 @@ pub struct Db {
 	/// Defines each array struct type.
 	pub arr_define_code: String,
 
+	/// Declares each tuple struct type.
+	pub tuple_declare_code: String,
+	/// Defines each tuple struct type.
+	pub tuple_define_code: String,
+
+	/// Maps tuple TypIds to their cname.
+	pub tuple_cname_cache: FxHashMap<TypId, &'static str>,
+
+	/// TODO: Maybe have only one declare/define code?
+
 	/// Some C code to declare each Array type.
 	/// TODO: This doesn't quite work, we really need to do a topological
 	/// sort on this stuff.
@@ -299,6 +309,8 @@ impl Db {
 			class_cname_cache: Vec::new(),
 			class_preparer_cache: Vec::new(),
 
+			tuple_cname_cache: FxHashMap::default(),
+
 			errors: Vec::new(),
 
 			fun_init: None,
@@ -337,6 +349,9 @@ impl Db {
 
 			arr_declare_code: String::new(),
 			arr_define_code: String::new(),
+
+			tuple_declare_code: String::new(),
+			tuple_define_code: String::new(),
 
 			str_anonymous: StrId::invalid(),
 			str_lambda: StrId::invalid(),
@@ -451,6 +466,12 @@ impl Db {
 			Type::Unassigned => true,
 
 			Type::ArrayOf(elem) => self.is_not_concrete(*elem),
+			Type::Tuple(inner) => {
+				for ty in inner {
+					if self.is_not_concrete(*ty) { return true; }
+				}
+				return false;
+			}
 
 			_ => false
 		}
@@ -470,6 +491,12 @@ impl Db {
 
 			Type::UnboundIdent(_) => false,
 			Type::ArrayOf(ty) => self.is_cgen_safe(*ty),
+			Type::Tuple(inner) => {
+				for ty in inner {
+					if !self.is_cgen_safe(*ty) { return false; }
+				}
+				true
+			}
 
 			_ => true
 		}
@@ -934,16 +961,59 @@ impl Db {
 		self.generate_fun_cparams_cache();
 		self.generate_sigs_cache();
 		self.generate_arrays_cache();
+		self.generate_tuples_cache();
+	}
+
+	fn generate_tuples_cache(&mut self) {
+		for (k, v) in &self.tuple_cname_cache {
+			if !self.is_cgen_safe(*k) {
+				// For debugging purposes, do put a note of the type in 
+				// the file.
+				inf_writeln!(self.tuple_declare_code, "// {}; -- not cgen safe", v);
+				continue;
+			}
+
+			// Go through the arena to avoid borrow checker error.
+			let Type::Tuple(members) = self.arenas.arena_typ.get(*k) else { unreachable!() };
+
+			inf_writeln!(self.tuple_declare_code, "{};", v);
+
+			// TODO: We must sort all value types by the way that they are 
+			// used. This will also let us detect cycles in value types.
+			inf_writeln!(self.tuple_define_code, "{} {{", v);
+
+			let mut idx = 0;
+
+			for member in members {
+				inf_writeln!(self.tuple_define_code, "\t{} v_{};",
+					self.get_ctype(*member), idx);
+				idx += 1;
+			}
+
+			inf_writeln!(self.tuple_define_code, "}};");
+		}
 	}
 
 	fn generate_ctypes_cache(&mut self) {
-		let range = self.arenas.arena_typ.len() as IdType;
-
-		for id in 0..range {
-			let id = unsafe { TypId::from_index(id as usize) };
-			// It's OK to clone here because types are lightweight
+		for id in self.iter_typ() {
+			// It's OK to clone here because types are *somewhat* lightweight
 			// (specifically because we're doing all this TypId stuff).
 			let ty = self.get(id).clone();
+
+			if let Type::Tuple(_) = &ty {
+				// For tuples, first generate the tuple type.
+				let ctype = format!("struct ps_tuple_{}", id.to_nonzero_usize()).leak();
+
+				// TODO: Maybe Db should just handle all the logic here instead
+				// of having the gen_ctype() function on Type?
+				self.tuple_cname_cache.insert(id, ctype);
+				self.ctype_cache.push(ctype);
+
+				// TODO: Right now we have to skip tuple gen_ctype this way.
+				// This really seems ugly.
+				continue;
+			}
+
 			let ctype = ty.gen_ctype(self);
 			self.ctype_cache.push(ctype.leak());
 		}

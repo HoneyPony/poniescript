@@ -41,6 +41,8 @@ pub enum Type {
 	//ListOf(TypId),
 
 	ArrayOf(TypId),
+
+	Tuple(Vec<TypId>),
 	
 	Unassigned,
 	AssumeInt,
@@ -99,6 +101,18 @@ impl Type {
 				result
 			},
 
+			Type::Tuple(typs) => {
+				let mut result = "(".to_string();
+				for typ in typs {
+					let ty = db.get(*typ);
+					result.push_str(&ty.to_string(db));
+					result.push_str(", ");
+				}
+				result.push_str(")");
+
+				result
+			}
+
 			Type::Class(class) => {
 				db.get(db.get(*class).name.lexeme).to_string()
 			}
@@ -123,6 +137,8 @@ impl Type {
 			Type::StrConst => "const ps_str*".into(),
 			Type::Str => "ps_str*".into(),
 			Type::StrBuf => "ps_strbuf*".into(),
+
+			Type::Tuple(_) => { todo!("probably should move this whole thing into db?") }
 
 			// TODO: MAybe take &mut db, and then we can use format! and such
 			Type::FunRaw(sig) => String::from(db.gen_sig_raw_ctype(*sig)),

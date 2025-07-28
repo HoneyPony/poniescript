@@ -110,6 +110,7 @@ impl Expr {
 			Expr::SelfVal(selfval) => selfval.typ,
 			Expr::Index(index) => index.typ,
 			Expr::SetIndex(set) => set.typ,
+			Expr::MakeTuple(make_tuple) => make_tuple.typ,
 		}
 	}
 
@@ -220,7 +221,40 @@ impl Expr {
 				false
 			},
 			Expr::Set(_) => { false }
-			Expr::Undefined(_) => panic!("ICE: Called Expr::promote() on Undefined")
+			Expr::Undefined(_) => panic!("ICE: Called Expr::promote() on Undefined"),
+			Expr::MakeTuple(make_tuple) => {
+				// Only promote if the incoming type is actually a Tuple with
+				// the same values.
+				let incoming_elem_typs = match db.get(typ) {
+					Type::Tuple(vec) => vec,
+					_ => return false
+				};
+
+				if incoming_elem_typs.len() != make_tuple.values.len() {
+					return false;
+				}
+
+				if db.is_not_concrete(make_tuple.typ) && db.is_concrete(typ) {
+					// Recursively promote to any concrete element type
+					//
+					// NOTE that this is still O(n) in the number of AST nodes,
+					// because once a type is promoted to concrete once, it cannot
+					// have to do it again.
+					//
+					// Also note that the concrete_ check is a bit slow, but
+					// hopefully that's OK. (TODO: speed it up..?)
+
+					for (expr, typ) in make_tuple.values.iter_mut().zip(incoming_elem_typs.iter()) {
+						if !expr.promote(*typ, ast, db) { return false; }
+					}
+				}
+
+				// Because we promoted to the incoming type, our type is now
+				// that type.
+				make_tuple.typ = typ;
+
+				true
+			}
 		}
 	}
 }

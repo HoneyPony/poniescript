@@ -348,6 +348,13 @@ impl<'db> Binder<'db> {
 				self.visit_expr(ast, set.rhs);
 				return None;
 			}
+
+			Expr::MakeTuple(make_tuple) => {
+				for expr in &make_tuple.values {
+					self.visit_expr(ast, *expr);
+				}
+				return None;
+			}
 		}
 	}
 

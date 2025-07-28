@@ -276,6 +276,10 @@ impl<'db> DeadCodeElim<'db> {
                 false
             }
             Expr::Undefined(_) => panic!("ICE: Tried to DCE Undefined"),
+            Expr::MakeTuple(_) => {
+                elim_sequence!(self, ast, expr,
+                    MakeTuple, values)
+            }
         }
     }
 

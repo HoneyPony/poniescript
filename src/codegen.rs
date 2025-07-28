@@ -449,6 +449,7 @@ impl<'a> Codegen<'a> {
 			Type::Class(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"object\", (uintptr_t){val});"),
 			
 			Type::ArrayOf(_) => todo!("print() for Array"),
+			Type::Tuple(_) => todo!("print() for Tuple"),
 
 			// TODO: Consider simply making 10.0 a float and 10 an int..?
 			// at least, unless assigned differently..?
@@ -482,6 +483,7 @@ impl<'a> Codegen<'a> {
 			Type::FunRaw(_) => todo!("str() for FunRaw"),
 			Type::Class(_) => todo!("str() for Class"),
 			Type::ArrayOf(_) => todo!("str() for Array"),
+			Type::Tuple(_) => todo!("str() for Tuple"),
 
 			Type::AssumeFloat => panic!("ICE: Tried to codegen str(AssumeFloat)"),
 			Type::AssumeInt => panic!("ICE: Tried to codegen str(AssumeInt)"),
@@ -1007,6 +1009,25 @@ impl<'a> Codegen<'a> {
 
 				val
 			}
+
+			Expr::MakeTuple(tuple) => {
+				let val = self.new_val_typed(tuple.typ);
+				let Type::Tuple(subtypes) = self.db.get(tuple.typ) else { unreachable!() };
+
+				define_val!(self, into, val, ";\n");
+				if val.needs_storage() {
+					for (idx, expr) in tuple.values.iter().enumerate() {
+						// TODO: Do we need to do all the exprs() first then
+						// collect them after like for fun calls? I don't think so.
+						let inner = self.expr(ast, *expr, into);
+
+						let inner_val = self.promote(inner, subtypes[idx]);
+						inf_writeln!(into, "{indent}{}.v_{idx} = {inner_val};", val.val);
+					}
+				}
+
+				val
+			}
 		}
 	}
 
@@ -1323,12 +1344,14 @@ impl<'a> Codegen<'a> {
 			writeln!(output, "{}", struc_declare)?;
 		}
 		writeln!(output, "// --- struct declarations (ps_array) ---\n{}", self.db.arr_declare_code)?;
+		writeln!(output, "// --- struct declarations (ps_tuple) ---\n{}", self.db.tuple_declare_code)?;
 		writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
 		writeln!(output, "// --- struct definitions ---")?;
 		for struc in &self.structs {
 			writeln!(output, "{}", struc)?;
 		}
 		writeln!(output, "// --- struct definitions (ps_array) ---\n{}", self.db.arr_define_code)?;
+		writeln!(output, "// --- struct definitions (ps_tuple) ---\n{}", self.db.tuple_define_code)?;
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
 		for dec in &self.fun_declares {

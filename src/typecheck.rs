@@ -157,6 +157,17 @@ impl<'db> TypeChecker<'db> {
 			Type::ArrayOf(inner) => {
 				let inner_promoted = self.promote_ty_from_unassigned(*inner);
 				self.db.put_type(Type::ArrayOf(inner_promoted))
+			},
+			Type::Tuple(inner) => {
+				// TODO: Allocate needed size from start
+				let mut inner_promoted = Vec::new();
+
+				// Big TODO: Fix this nonsense. Grr.
+				let inner = inner.clone();
+				for ty in &inner {
+					inner_promoted.push(self.promote_ty_from_unassigned(*ty));
+				}
+				self.db.put_type(Type::Tuple(inner_promoted))
 			}
 			_ => ty
 		}
@@ -190,6 +201,8 @@ impl<'db> TypeChecker<'db> {
 
 			// Assigning an ArrayOf something to Unassigned also means that array
 			// gets to promote using the same rules recursively.
+			//
+			// TODO: Isn't this basically a duplication of promote_from_unassigned...?
 			(Type::Unassigned, Type::ArrayOf(inner)) => {
 				let elem_typ = self.compute_assignable(to, *inner)?;
 				return Ok(self.db.put_type(Type::ArrayOf(elem_typ)))
@@ -198,6 +211,26 @@ impl<'db> TypeChecker<'db> {
 			(Type::ArrayOf(lhs), Type::ArrayOf(rhs)) => {
 				let elem_typ = self.compute_assignable(*lhs, *rhs)?;
 				return Ok(self.db.put_type(Type::ArrayOf(elem_typ)));
+			}
+
+			(Type::Tuple(lhs), Type::Tuple(rhs)) => {
+				// TODO: Let us assign a bigger tuple to a smaller tuple..?
+				// maybe not.
+				if lhs.len() != rhs.len() {
+					return Err(TypeComputeErr);
+				}
+
+				let mut new_from = Vec::new();
+
+				// Big TODO: Fix this nonsense. Grr.
+				let lhs = lhs.clone();
+				let rhs = rhs.clone();
+
+				for (l, r) in lhs.iter().zip(rhs.iter()) {
+					new_from.push(self.compute_assignable(*l, *r)?);
+				}
+
+				return Ok(self.db.put_type(Type::Tuple(new_from)))
 			}
 
 			(Type::Fun(sig), Type::Fun(sig2)) => {
@@ -220,7 +253,10 @@ impl<'db> TypeChecker<'db> {
 			(Type::Unassigned, Type::Unassigned) => return Err(TypeComputeErr),
 
 			// If the 'to' is unassigned, then anything is assignable to it.
-			(Type::Unassigned, _) => return Ok(from),
+			(Type::Unassigned, _) => {
+				// Promote from unassigned.
+				Ok(self.promote_ty_from_unassigned(from))
+			},
 
 			// Just the RHS unassigned is fine.
 			(_, Type::Unassigned) => return Ok(to),
@@ -276,6 +312,26 @@ impl<'db> TypeChecker<'db> {
 				let inner = self.compute_intersect(bottom_eats, lhs, rhs)?;
 				if inner == lhs { return Ok(lhs); }
 				return Ok(rhs);
+			}
+
+			(Type::Tuple(lhs), Type::Tuple(rhs)) => {
+				// TODO: Let us assign a bigger tuple to a smaller tuple..?
+				// maybe not.
+				if lhs.len() != rhs.len() {
+					return Err(TypeComputeErr);
+				}
+
+				let mut inner = Vec::new();
+
+				// Big TODO: Fix this nonsense. Grr.
+				let lhs = lhs.clone();
+				let rhs = rhs.clone();
+
+				for (l, r) in lhs.iter().zip(rhs.iter()) {
+					inner.push(self.compute_intersect(bottom_eats, *l, *r)?);
+				}
+
+				return Ok(self.db.put_type(Type::Tuple(inner)))
 			}
 
 			_ => return Err(TypeComputeErr)
@@ -964,6 +1020,18 @@ impl<'db> TypeChecker<'db> {
 			}
 			Expr::UnboundAssign(_) => panic!("ICE: Tried to typecheck an UnboundAssign"),
 			Expr::Undefined(_) => panic!("ICE: Tried to typecheck an Undefined"),
+
+			Expr::MakeTuple(tuple) => {
+				let mut inner = Vec::new();
+				for expr in &tuple.values {
+					inner.push(self.check_expr(ast, *expr, value_used)?);
+				}
+
+				let typ = self.db.put_type(Type::Tuple(inner));
+				tuple.typ = typ;
+
+				typ
+			}
 		})
 	}
 
