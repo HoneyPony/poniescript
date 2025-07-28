@@ -36,6 +36,7 @@ pub fn generate(tests_file: &mut File) {
 		("cyclic/", "class_members_and_fun_thru_param"),
 		("cyclic/", "class_members_expr"),
 		("cyclic/", "class_members_same"),
+		("cyclic/", "class_members_same2"),
 		("cyclic/", "globals_and_class_thru_access_2"),
 		("cyclic/", "globals_and_class_thru_access"),
 		("cyclic/", "globals_and_fun_thru_access_2"),
