@@ -98,10 +98,15 @@ pub fn generate(tests_file: &mut File) {
 		("string/", "str_of_strbuf"),
 		("string/", "very_simple_str"),
 
+		("tuple/", "assign"),
 		("tuple/", "create_tuple"),
 		("tuple/", "print_tuple"),
 		("tuple/", "index_tuple"),
+		("tuple/", "mixed"),
 
+		("tuple/", "err_assign_big"),
+		("tuple/", "err_assign_inner"),
+		("tuple/", "err_assign_small"),
 		("tuple/", "err_big_index"),
 		("tuple/", "err_string_index"),
 	
