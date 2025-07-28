@@ -95,6 +95,8 @@ pub struct Lexer {
 	// Buffer holding the currently-scanned token
 	buffer: String,
 
+	next_byte: u8,
+
 	next_char: char,
 
 	at_eof: bool,
@@ -130,6 +132,7 @@ impl Lexer {
 			buffer: String::new(),
 
 			next_char: ' ',
+			next_byte: b' ',
 
 			at_eof: false,
 
@@ -162,24 +165,77 @@ impl Lexer {
 		Ok(self.mk_token(db, ty))
 	}
 
-	fn advance(&mut self) -> std::io::Result<char> {
+	fn advance_byte(&mut self) -> std::io::Result<u8> {
+		let result = self.next_byte;
+
+		let mut buf = [0u8];
+		match self.input.read(&mut buf)? {
+			0 => { self.next_byte = b'\0'; return Ok(result); }
+			1 => {
+				self.next_byte = buf[0];
+			}
+			_ => unreachable!()
+		}
+
+		Ok(result)
+	}
+
+	fn advance(&mut self, db: &mut Db) -> std::io::Result<char> {
 		let result = self.next_char;
 		self.current += 1;
 		self.buffer.push(self.next_char);
 		
-		let mut buf = [0u8];
-		match self.input.read(&mut buf)? {
-			0 => { self.next_char = '\0'; self.at_eof = true; },
-			1 => {
-				
+		let mut full_buf = [0u8, 0u8, 0u8, 0u8, 0u8, 0u8];
+		let mut idx = 0;
+		loop {
+			let c= self.next_byte;
 
-				// TODO: Consider reading utf-8 data better. For now, because Rust
-				// doesn't support it, we will just read ASCII -- we can easily support
-				// utf8 later by changing this function.
-				self.next_char = buf[0] as char;
-			},
-			_ => unreachable!()
+			if c == 0 {
+				self.next_char = '\0';
+				self.at_eof = true;
+				return Ok(result);
+			}
+
+			// Common case: Not utf-8.
+			if idx == 0 && c <= 127 {
+				self.next_char = c as char;
+
+				// Consume the byte.
+				self.advance_byte()?;
+				return Ok(result);
+			}
+
+			// In this case, we actually overshot the buf. Store that
+			// byte for next time, so don't advance.
+			if idx != 0 && c <= 127 {
+				break;
+			}
+
+			// Otherwise, keep filling up the buf, and consume that byte
+			// from the input.
+			full_buf[idx] = c;
+			idx += 1;
+
+			self.advance_byte()?;
+
+			// The maximum number of bytes that can be in a single codepoint,
+			// encoded in UTF-8, is 6 bytes.
+			if idx >= 6 {
+				break;
+			}
 		}
+
+		let full_buf = &full_buf[0..idx];
+
+		// Here, we must convert the full_buf into utf8.
+		let Ok(str) = std::str::from_utf8(&full_buf) else {
+			self.error(db, format!("Invalid UTF-8 byte sequence: {:?}", full_buf));
+			self.next_char = '?';
+			return Ok(result);
+		};
+
+		//assert!(str.len() == 1, "Byte sequence was not one character: {:?}", full_buf);
+		self.next_char = str.chars().next().unwrap();
 
 		return Ok(result);
 	}
@@ -189,28 +245,28 @@ impl Lexer {
 	}
 
 	/// Advances past all the whitespace, THEN advances 1 character.
-	fn advance_past_whitespace(&mut self) -> std::io::Result<char> {
+	fn advance_past_whitespace(&mut self, db: &mut Db) -> std::io::Result<char> {
 		while is_whitespace(self.peek()) {
-			self.advance()?;
+			self.advance(db)?;
 		}
 
 		// Reset the start and buffer
 		self.start = self.current;
 		self.buffer.clear();
 
-		return self.advance();
+		return self.advance(db);
 	}
 
-	fn advance_if(&mut self, at: char) -> std::io::Result<bool> {
+	fn advance_if(&mut self, at: char, db: &mut Db) -> std::io::Result<bool> {
 		if self.peek() == at {
-			self.advance()?;
+			self.advance(db)?;
 			return Ok(true);
 		}
 		return Ok(false);
 	}
 
-	fn tok_eq(&mut self, non_equal: Tok, with_equal: Tok) -> std::io::Result<Tok> {
-		Ok(match self.advance_if('=')? {
+	fn tok_eq(&mut self, non_equal: Tok, with_equal: Tok, db: &mut Db) -> std::io::Result<Tok> {
+		Ok(match self.advance_if('=', db)? {
 			true => with_equal,
 			false => non_equal
 		})
@@ -226,11 +282,11 @@ impl Lexer {
 
 	fn string(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		loop {
-			let next = self.advance()?;
+			let next = self.advance(db)?;
 
 			if next == '\\' {
 				// Unconditionally advance, don't check quote
-				self.advance()?;
+				self.advance(db)?;
 			}
 			else if next == '\"' {
 				break;
@@ -247,7 +303,7 @@ impl Lexer {
 
 	fn ident(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		// The dummy next char at eof will terminate this automatically.
-		while is_ident(self.peek()) { self.advance()?; }
+		while is_ident(self.peek()) { self.advance(db)?; }
 
 		let mut token = self.mk_token(db, Tok::Identifier);
 
@@ -260,13 +316,13 @@ impl Lexer {
 	}
 
 	fn number(&mut self, db: &mut Db) -> std::io::Result<Token> {
-		while is_num(self.peek()) { self.advance()?; }
+		while is_num(self.peek()) { self.advance(db)?; }
 
 		let ty = if self.peek() == '.' {
 			// Eat the dot
-			self.advance()?;
+			self.advance(db)?;
 
-			while is_num(self.peek()) { self.advance()?; }
+			while is_num(self.peek()) { self.advance(db)?; }
 
 			Tok::DecimalNumber
 		} else { Tok::WholeNumber };
@@ -284,20 +340,20 @@ impl Lexer {
 		let mut kind = CommentKind::None;
 
 		if db.test_mode {
-			if self.advance_if('!')? {
+			if self.advance_if('!', db)? {
 				kind = CommentKind::TestLine;
 
 				// Start the buffer at the beginning of the line.
 				self.buffer.clear();
 			}
-			if self.advance_if('?')? {
+			if self.advance_if('?', db)? {
 				kind = CommentKind::TestErr;
 				self.buffer.clear();
 			}
 		}
 
 		while !self.at_eof {
-			if self.advance()? == '\n' {
+			if self.advance(db)? == '\n' {
 				break;
 			}
 		}
@@ -336,7 +392,7 @@ impl Lexer {
 			return self.mk_eof(db);
 		}
 
-		let c = self.advance_past_whitespace()?;
+		let c = self.advance_past_whitespace(db)?;
 
 		// In terms of code structure, we check the identifier and numerical
 		// case first, so that we can have a big match at the end.
@@ -359,33 +415,33 @@ impl Lexer {
 			'|' => Tok::VerticalBar,
 
 			'-' => {
-				if self.advance_if('=')? {
+				if self.advance_if('=', db)? {
 					Tok::MinusEqual
 				}
-				else if self.advance_if('>')? {
+				else if self.advance_if('>', db)? {
 					Tok::LeftArrow
 				}
 				else {
 					Tok::Minus
 				}
 			},
-			'+' => self.tok_eq(Tok::Plus, Tok::PlusEqual)?,
+			'+' => self.tok_eq(Tok::Plus, Tok::PlusEqual, db)?,
 			'/' => {
-				if self.advance_if('/')? {
+				if self.advance_if('/', db)? {
 					self.line_comment(db)?;
 					// TODO: Speed this up in the case of multiline comments...
 					// we really don't want to recurse here...
 					return self.next_token(db);
 				}
 
-				self.tok_eq(Tok::Slash, Tok::SlashEqual)?
+				self.tok_eq(Tok::Slash, Tok::SlashEqual, db)?
 			},
-			'*' => self.tok_eq(Tok::Star, Tok::StarEqual)?,
+			'*' => self.tok_eq(Tok::Star, Tok::StarEqual, db)?,
 
-			'!' => self.tok_eq(Tok::Bang, Tok::BangEqual)?,
-			'=' => self.tok_eq(Tok::Equal, Tok::EqualEqual)?,
-			'>' => self.tok_eq(Tok::Greater, Tok::GreaterEqual)?,
-			'<' => self.tok_eq(Tok::Less, Tok::LessEqual)?,
+			'!' => self.tok_eq(Tok::Bang, Tok::BangEqual, db)?,
+			'=' => self.tok_eq(Tok::Equal, Tok::EqualEqual, db)?,
+			'>' => self.tok_eq(Tok::Greater, Tok::GreaterEqual, db)?,
+			'<' => self.tok_eq(Tok::Less, Tok::LessEqual, db)?,
 
 			'"' => {
 				return self.string(db);

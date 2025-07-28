@@ -1,0 +1,9 @@
+fun init() {
+	// Note: Text editors can be annoying about constructing these tests.
+	// Try using printf from the command line:
+	//  printf "\tprint(\"\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\");\n}\n" >> tests/lexer/err_invalid_utf8_long.poni 
+
+	//? Parse error: Invalid UTF-8 byte sequence: [255, 255, 255, 255, 255, 255]
+	//? Parse error: Invalid UTF-8 byte sequence: [255, 255]
+	print("ÿÿÿÿÿÿÿÿ");
+}

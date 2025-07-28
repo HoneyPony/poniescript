@@ -130,6 +130,9 @@ pub fn generate(tests_file: &mut File) {
 
 		("lexer/", "err_unterminated_string"),
 		("lexer/", "string_lit_basic_escapes"),
+		("lexer/", "utf8"),
+		("lexer/", "err_invalid_utf8_short"),
+		("lexer/", "err_invalid_utf8_long"),
 
 		("logical/", "basic_and"),
 		("logical/", "basic_or"),
