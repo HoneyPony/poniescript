@@ -449,7 +449,29 @@ impl<'a> Codegen<'a> {
 			Type::Class(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"object\", (uintptr_t){val});"),
 			
 			Type::ArrayOf(_) => todo!("print() for Array"),
-			Type::Tuple(_) => todo!("print() for Tuple"),
+			Type::Tuple(tup) => {
+				inf_writeln!(into, "{indent}ps_print_const(\"(\");");
+				for (idx, ty) in tup.iter().enumerate() {
+					if idx > 0 {
+						inf_writeln!(into, "{indent}ps_print_const(\", \");");
+					}
+					// TODO: We can probably optimize the niceness of the code
+					// generated here by splitting compile_partial_print into 
+					// another helper function that just prints *any* value
+					// of a given type.
+					let new_val = self.new_val().typed(*ty);
+					define_val!(self, into, new_val, " = {val}.v_{idx};\n");
+					self.compile_partial_print(&new_val, into);
+				}
+				if tup.len() == 1 {
+					// Place a comma after the last element for 1-element
+					// tuple.
+					inf_writeln!(into, "{indent}ps_print_const(\",)\");");
+				}
+				else {
+					inf_writeln!(into, "{indent}ps_print_const(\")\");");
+				}
+			},
 
 			// TODO: Consider simply making 10.0 a float and 10 an int..?
 			// at least, unless assigned differently..?

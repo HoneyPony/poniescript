@@ -307,6 +307,12 @@ ps_print_str(const ps_str *str) {
 
 static inline
 void
+ps_print_const(const char *what) {
+	printf("%s", what);
+}
+
+static inline
+void
 ps_println(void) {
 	putc('\n', stdout);
 }

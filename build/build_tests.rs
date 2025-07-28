@@ -99,6 +99,7 @@ pub fn generate(tests_file: &mut File) {
 		("string/", "very_simple_str"),
 
 		("tuple/", "create_tuple"),
+		("tuple/", "print_tuple"),
 	
 		("functions/", "parse_params"),
 		("functions/", "param_trailing_comma"),
