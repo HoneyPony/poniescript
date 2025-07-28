@@ -245,7 +245,9 @@ impl Expr {
 					// hopefully that's OK. (TODO: speed it up..?)
 
 					for (expr, typ) in make_tuple.values.iter_mut().zip(incoming_elem_typs.iter()) {
-						if !expr.promote(*typ, ast, db) { return false; }
+						// Note: Do not check this and return false, sometimes
+						// things can't be promoted.
+						expr.promote(*typ, ast, db);
 					}
 				}
 
