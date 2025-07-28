@@ -194,20 +194,6 @@ impl<'db> TypeChecker<'db> {
 			// StrConst and Str both promote to StrBuf.
 			(Type::StrBuf, Type::StrConst | Type::Str) => return Ok(to),
 
-			// An unassigned clashing with an Assume resolves the Assume to its
-			// assumed value.
-			(Type::Unassigned, Type::AssumeInt) => return Ok(self.db.types.int),
-			(Type::Unassigned, Type::AssumeFloat) => return Ok(self.db.types.float),
-
-			// Assigning an ArrayOf something to Unassigned also means that array
-			// gets to promote using the same rules recursively.
-			//
-			// TODO: Isn't this basically a duplication of promote_from_unassigned...?
-			(Type::Unassigned, Type::ArrayOf(inner)) => {
-				let elem_typ = self.compute_assignable(to, *inner)?;
-				return Ok(self.db.put_type(Type::ArrayOf(elem_typ)))
-			}
-
 			(Type::ArrayOf(lhs), Type::ArrayOf(rhs)) => {
 				let elem_typ = self.compute_assignable(*lhs, *rhs)?;
 				return Ok(self.db.put_type(Type::ArrayOf(elem_typ)));
@@ -252,7 +238,8 @@ impl<'db> TypeChecker<'db> {
 			// Both unassigned is an error.
 			(Type::Unassigned, Type::Unassigned) => return Err(TypeComputeErr),
 
-			// If the 'to' is unassigned, then anything is assignable to it.
+			// Anything being assigned to Unassigned is just the same thing
+			// as a promote_ty_from_unassigned.
 			(Type::Unassigned, _) => {
 				// Promote from unassigned.
 				Ok(self.promote_ty_from_unassigned(from))
