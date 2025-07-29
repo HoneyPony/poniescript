@@ -102,6 +102,7 @@ pub fn generate(tests_file: &mut File) {
 		("tuple/", "big_tuple"),
 		("tuple/", "create_tuple"),
 		("tuple/", "print_tuple"),
+		("tuple/", "fun_tuple"),
 		("tuple/", "index_tuple"),
 		("tuple/", "mixed"),
 

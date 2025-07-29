@@ -472,6 +472,14 @@ impl<'db> Binder<'db> {
 				}
 				return typ;
 			}
+			Type::Tuple(inner) => {
+				// TODO: Any way to optimize this?
+				let mut resolved = Vec::new();
+				for typ in inner {
+					resolved.push(self.visit_type(typ, location));
+				}
+				return self.db.put_type(Type::Tuple(resolved));
+			}
 			_ => { return typ; }
 		}
 	}

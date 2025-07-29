@@ -882,6 +882,24 @@ impl<'a, 'b> Parser<'a, 'b> {
 				if raw { self.db.put_type(Type::FunRaw(sig)) } else { self.db.put_type(Type::Fun(sig)) }
 			}
 
+			Tok::LeftParen => {
+				let mut inner = Vec::new();
+
+				while !self.at(Tok::RightParen) && !self.is_at_end() {
+					let next_ty = self.typ()?;
+
+					inner.push(next_ty);
+
+					self.eat_comma(Tok::RightParen)?;
+				}
+
+				// Unlike for MakeTuple, we don't care about whether a tuple
+				// has a (,) because it's unambiguous.
+				expected!(self, Tok::RightParen, "')' after tuple type name")?;
+
+				self.db.put_type(Type::Tuple(inner))
+			}
+
 			// More type syntax to come...
 
 			_ => {

@@ -1,0 +1,17 @@
+fun takes_tuple(a: (int, Str)) {
+    print(a.0, " ", a.1);
+}
+
+fun returns_tuple(a: Str, b: int) -> (int, Str) {
+    (b, a)
+}
+
+fun unit(a: (int)) -> (int) {
+    return (a.0 + 10 - 10,);
+}
+
+fun init() {
+    takes_tuple(returns_tuple("pony", 1));      //! 1 pony
+    takes_tuple(returns_tuple("ponies", 5));    //! 5 ponies
+    takes_tuple(returns_tuple("equines", 400)); //! 400 equines
+}
