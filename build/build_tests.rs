@@ -99,6 +99,7 @@ pub fn generate(tests_file: &mut File) {
 		("string/", "very_simple_str"),
 
 		("tuple/", "assign"),
+		("tuple/", "big_tuple"),
 		("tuple/", "create_tuple"),
 		("tuple/", "print_tuple"),
 		("tuple/", "index_tuple"),
