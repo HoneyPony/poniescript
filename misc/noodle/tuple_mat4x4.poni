@@ -1,0 +1,23 @@
+// I definitely think I want something like (1, 2, 3, 4)f to be equivalent to
+// a vec4. 
+//
+// The question is should something similar be done for matrices.
+//
+// They could be considered tuples of 16 values, or maybe a tuple of 4 other
+// tuples (either way should be equivalent when laid out in memory).
+
+fun make_mat() -> 
+    ((float, float, float, float),
+     (float, float, float, float),
+     (float, float, float, float),
+     (float, float, float, float))
+{
+    var mat = (
+        (1, 0, 0, 0),
+        (0, 1, 0, 0),
+        (0, 0, 1, 0),
+        (0, 0, 0, 1),
+    );
+
+    mat
+}

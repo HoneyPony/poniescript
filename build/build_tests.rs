@@ -105,6 +105,9 @@ pub fn generate(tests_file: &mut File) {
 		("tuple/", "fun_tuple"),
 		("tuple/", "index_tuple"),
 		("tuple/", "mixed"),
+		("tuple/", "nested_promote_assign"),
+		("tuple/", "nested_promote_existing"),
+		("tuple/", "nested_promote_return"),
 		("tuple/", "nested_silly_syntax"),
 
 		("tuple/", "err_assign_big"),
