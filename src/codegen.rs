@@ -1367,15 +1367,15 @@ impl<'a> Codegen<'a> {
 		for struc_declare in &self.struct_declares {
 			writeln!(output, "{}", struc_declare)?;
 		}
+		writeln!(output, "// --- struct declarations (ps_tuple) ---\n{}", self.db.valty_declare_code)?;
 		writeln!(output, "// --- struct declarations (ps_array) ---\n{}", self.db.arr_declare_code)?;
-		writeln!(output, "// --- struct declarations (ps_tuple) ---\n{}", self.db.tuple_declare_code)?;
 		writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
 		writeln!(output, "// --- struct definitions ---")?;
 		for struc in &self.structs {
 			writeln!(output, "{}", struc)?;
 		}
+		writeln!(output, "// --- struct definitions (ps_tuple) ---\n{}", self.db.valty_define_code)?;
 		writeln!(output, "// --- struct definitions (ps_array) ---\n{}", self.db.arr_define_code)?;
-		writeln!(output, "// --- struct definitions (ps_tuple) ---\n{}", self.db.tuple_define_code)?;
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
 		for dec in &self.fun_declares {

@@ -17,7 +17,7 @@ use crate::{arena::*, inf_writeln, Args};
 
 use crate::lexer::{Tok, Token};
 
-use rustc_hash::{FxHashMap};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::arena::IndexCell;
 
@@ -251,10 +251,17 @@ pub struct Db {
 	/// Defines each array struct type.
 	pub arr_define_code: String,
 
-	/// Declares each tuple struct type.
-	pub tuple_declare_code: String,
-	/// Defines each tuple struct type.
-	pub tuple_define_code: String,
+	/// Declares each value-typed struct type.
+	pub valty_declare_code: String,
+	/// Defines each value-typed struct type.
+	pub valty_define_code: String,
+
+	/// A list of all value types. Needed for sorting them in order.
+	/// TODO: This may change a bit when class initializers become a thing.
+	///       Those will also essentially be treating things as value types.
+	///       It's really mostly a question of which types include which others
+	///       as a value.
+	pub value_types: Vec<TypId>,
 
 	/// Maps tuple TypIds to their cname.
 	pub tuple_cname_cache: FxHashMap<TypId, &'static str>,
@@ -322,6 +329,8 @@ impl Db {
 			tuple_vars: FxHashMap::default(),
 			tuple_idxs: FxHashMap::default(),
 
+			value_types: Vec::new(),
+
 			errors: Vec::new(),
 
 			fun_init: None,
@@ -361,8 +370,8 @@ impl Db {
 			arr_declare_code: String::new(),
 			arr_define_code: String::new(),
 
-			tuple_declare_code: String::new(),
-			tuple_define_code: String::new(),
+			valty_declare_code: String::new(),
+			valty_define_code: String::new(),
 
 			str_anonymous: StrId::invalid(),
 			str_lambda: StrId::invalid(),
@@ -672,6 +681,8 @@ impl Db {
 
 	fn use_tuple(&mut self, inner: &Vec<TypId>, tuple_ty: TypId) {
 		if !self.is_cgen_safe(tuple_ty) { return; }
+
+		self.value_types.push(tuple_ty);
 
 		for (idx, ty) in inner.iter().enumerate() {
 			// Generate the StrId for each field index.
@@ -1025,7 +1036,70 @@ impl Db {
 			_ => None
 		}
 	}
+
+	fn visit_value_types(&mut self, todo: &mut FxHashSet<TypId>, visited: &mut FxHashSet<TypId>, ordering: &mut Vec<TypId>, typ: TypId) -> Result<(), ()> {
+		// Only visit types that still need to be visited.
+		if !todo.contains(&typ) {
+			return Ok(());
+		}
+
+		// If this type was already in the visisted set, that means we have
+		// a cycle.
+		if !visited.insert(typ) {
+			// TODO: Figure out how to get source information
+			self.report_error(Error::simple("Cycle in value types".into(), self.synthetic()));
+			return Err(());
+		}
+
+		// Visit child types.
+		match self.get(typ) {
+			Type::Tuple(typ_ids) => {
+				// TODO: Why. Please. Help
+				let typ_ids_clone = typ_ids.clone();
+
+				for inner in typ_ids_clone {
+					self.visit_value_types(todo, visited, ordering, inner)?;
+				}
+			},
+			// Nothing to visit. Yet.
+			_ => {}
+		}
+
+		// We are now no longer in the todo set, and we shouldn't be in the
+		// visisted set anymore as other types are allowed to see us.
+		todo.remove(&typ);
+		visited.remove(&typ);
+
+		// Push ourselves to the ordering now, because our children should all
+		// be there before us.
+		ordering.push(typ);
+
+		Ok(())
+	}
 	
+	pub fn sort_value_types(&mut self) -> Result<(), ()> {
+		let mut visited: FxHashSet<TypId> = FxHashSet::default();
+		let mut todo: FxHashSet<TypId> = FxHashSet::default();
+		let mut ordering: Vec<TypId> = Vec::new();
+
+		for ty in &self.value_types {
+			todo.insert(*ty);
+		}
+
+		// Take value types so we can iterate over them without the borrow
+		// checker complaining.
+		let old = std::mem::take(&mut self.value_types);
+
+		for ty in old {
+			self.visit_value_types(&mut todo, &mut visited, &mut ordering, ty)?;
+		}
+
+		// Now they are in a safe order.
+		self.value_types = ordering;
+
+		Ok(())
+	}
+
 	pub fn generate_codegen_caches(&mut self, args: &Args) {
 		// The order matters, as e.g. var cnames are used for fun cparams.
 		self.generate_class_cnames_cache();
@@ -1035,36 +1109,41 @@ impl Db {
 		self.generate_fun_cparams_cache();
 		self.generate_sigs_cache();
 		self.generate_arrays_cache();
-		self.generate_tuples_cache();
+		self.generate_valtypes_cache();
 	}
 
-	fn generate_tuples_cache(&mut self) {
-		for (k, v) in &self.tuple_cname_cache {
-			if !self.is_cgen_safe(*k) {
-				// For debugging purposes, do put a note of the type in 
-				// the file.
-				inf_writeln!(self.tuple_declare_code, "// {}; -- not cgen safe", v);
-				continue;
+	fn generate_valtypes_cache(&mut self) {
+		for ty in &self.value_types {
+			if !self.is_cgen_safe(*ty) {
+				// We should not have pushed any cgen-unsafe types to value_types.
+				panic!("ICE: Db.value_types contained non-cgen-safe type");
 			}
 
 			// Go through the arena to avoid borrow checker error.
-			let Type::Tuple(members) = self.arenas.arena_typ.get(*k) else { unreachable!() };
+			match self.arenas.arena_typ.get(*ty) {
+				Type::Tuple(members) => {
+					// We should have had the cname in the cache.
+					let cname = self.tuple_cname_cache.get(ty).unwrap();
 
-			inf_writeln!(self.tuple_declare_code, "{};", v);
+					inf_writeln!(self.valty_declare_code, "{};", cname);
 
-			// TODO: We must sort all value types by the way that they are 
-			// used. This will also let us detect cycles in value types.
-			inf_writeln!(self.tuple_define_code, "{} {{", v);
+					// TODO: We must sort all value types by the way that they are 
+					// used. This will also let us detect cycles in value types.
+					inf_writeln!(self.valty_define_code, "{} {{", cname);
 
-			let mut idx = 0;
+					let mut idx = 0;
 
-			for member in members {
-				inf_writeln!(self.tuple_define_code, "\t{} v_{};",
-					self.get_ctype(*member), idx);
-				idx += 1;
+					for member in members {
+						inf_writeln!(self.valty_define_code, "\t{} v_{};",
+							self.get_ctype(*member), idx);
+						idx += 1;
+					}
+
+					inf_writeln!(self.valty_define_code, "}};");
+				},
+				// No other value types that need to be struct'd yet.
+				_ => {}
 			}
-
-			inf_writeln!(self.tuple_define_code, "}};");
 		}
 	}
 

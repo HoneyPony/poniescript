@@ -9,7 +9,7 @@ fun init() {
     print(c); //! (5,)
 
     // Needs value type sorting to work properly.
-    // print((a, b, c)); //! ((1, 2, 3, 4), (90, 80, 70), (5,))
+    print((a, b, c)); //! ((1, 2, 3, 4), (90, 80, 70), (5,))
 
     // TODO: Should tuples quote strings when they contain strings?
     print(("a", "b", "c")); //! (a, b, c)

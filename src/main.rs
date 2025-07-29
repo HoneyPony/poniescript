@@ -317,6 +317,12 @@ fn main() {
 
 	let timer = duration(timer, "dead code", &mut duration_set);
 
+	// Sort value types.
+	if db.sort_value_types().is_err() {
+		report_errors(&db);
+		exit(5);
+	}
+
 	// Pass 5: Codegen
 	// Generate any caches that require type checking info.
 	db.generate_codegen_caches(&args);
@@ -326,7 +332,7 @@ fn main() {
 
 	if let Err(err) = codegen::codegen(&args, &mut db, &mut ast, &modules, &mut output) {
 		eprintln!("Unable to write output file: {err}");
-		exit(5);
+		exit(6);
 	}
 
 	// Wait for the C compiler and exit with an error if it failed.
