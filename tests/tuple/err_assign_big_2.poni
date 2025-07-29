@@ -1,0 +1,9 @@
+fun init() {
+    // Putting here makes sure we actually generate the '8' StrId, so that
+    // the other one has a chance to look it up.
+    var big = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+
+    var abc = (1, 2, 3, 4);
+    //? Invalid assignment to 'abc': need (int, int, int, int), but value is (a number, a number, a number, a number, a number)
+    abc = (1, 2, 3, 4, 5);
+}

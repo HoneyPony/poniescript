@@ -1,0 +1,32 @@
+// This test case was written because we did not have support for e.g.
+// tuple.0.1.2 due to it being ambiguous with numerical parsing.
+//
+// This test just tests that nested tuples basically work, without needing
+// that to also work. It does this by simply putting a space in front of each
+// index operation.
+
+fun init() {
+    var stuff = (
+        (1, 2, ("hello", "nested", "tuples")),
+        true, false,
+        (
+            ("the", "best", "pony", "is",
+                ("rainbow", "dash"),
+                ("fluttershy",),
+                ("rarity"), // note: not a tuple
+                ("twilight", "sparkle"),
+                ("and", "more"),
+            )
+        )
+    );
+
+    print(stuff .0 .0); //! 1
+    print(stuff .0 .2 .0); //! hello
+    print(stuff .1); //! true
+    print(stuff .3 .0); //! the
+    print(stuff .3 .4 .1); //! dash
+
+    print(stuff .3 .4); //! (rainbow, dash)
+    
+    print(stuff .3); //! (the, best, pony, is, (rainbow, dash), (fluttershy,), rarity, (twilight, sparkle), (and, more))
+}

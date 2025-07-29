@@ -994,6 +994,12 @@ impl Db {
 				// Look up the property index based on name ('0' => 0)
 				let Some(which_prop) = self.tuple_idxs.get(&propname) else { return None; };
 
+				// We have to manually check the index, this is how we know
+				// whether properties are available.
+				if (*which_prop as usize) >= typs.len() {
+					return None;
+				}
+
 				// Now look up the variable based on index-type pair. This should
 				// have been generated the first time we used the type.
 				self.tuple_vars.get(&(*which_prop, typs[*which_prop as usize])).copied()
