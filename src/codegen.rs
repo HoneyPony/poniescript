@@ -322,6 +322,10 @@ impl<'a> Codegen<'a> {
 	}
 
 	fn promote(&self, val: TypedVal, to: TypId) -> PromotedVal {
+		// Due to the thing, we no longer need PromotedVal system. For now,
+		// just always do Simple.
+		return PromotedVal::Simple(val.val);
+
 		if val.typ == to {
 			return PromotedVal::Simple(val.val);
 		}
