@@ -14,6 +14,10 @@ mod binder;
 mod dead_code;
 mod init_ordering;
 
+use mimalloc::MiMalloc;
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
