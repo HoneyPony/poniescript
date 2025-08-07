@@ -1128,11 +1128,12 @@ impl<'a> Codegen<'a> {
 						let needed_type = *self.return_types.last().unwrap();
 						let val = self.expr(ast, *value, into);
 
-						assert!(val.typ == needed_type);
-
 						// If the inner value is also a bottom type,
 						// then we can't really generate a return here.
 						if !val.is_bottom() {
+							// If it's not bottom, check the typechecker's work.
+							assert!(val.typ == needed_type);
+
 							inf_writeln!(into, "{indent}return {val};");
 						}
 					},
