@@ -1319,8 +1319,11 @@ impl<'db> TypeChecker<'db> {
 				self.db.repr_type(inner),
 				self.db.repr_type(self.db.get_fun_return_typid(fun.identity)));
 		
-			//self.promote(ast, fun.value, computed);
-			fun.typ = computed; // TODO: Does this need promote()???
+			self.do_promote_expr(ast, &mut fun.value, computed);
+		}
+		else {
+			// Otherwise, promote from unassigned.
+			self.promote_from_unassigned(ast, &mut fun.value);
 		}
 
 		Ok(())
