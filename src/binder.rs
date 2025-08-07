@@ -355,6 +355,8 @@ impl<'db> Binder<'db> {
 				}
 				return None;
 			}
+
+			Expr::Promote(_) => panic!("ICE: Tried to bind Expr::Promote"),
 		}
 	}
 

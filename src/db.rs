@@ -40,9 +40,9 @@ impl ExprId {
 		ast.get_expr(self).typ(ast, db)
 	}
 
-	pub fn promote(self, typ: TypId, ast: &Ast, db: &Db) -> bool {
-		ast.exprs.get_mut(self).promote(typ, ast, db)
-	}
+	//pub fn promote(self, typ: TypId, ast: &Ast, db: &Db) -> bool {
+	//	ast.exprs.get_mut(self).promote(typ, ast, db)
+	//}
 
 	// TODO: Less clones
 	pub fn val_location<'a>(self, ast: &'a impl AstAbstract) -> SourceLocation {
@@ -70,9 +70,9 @@ impl StmtId {
 		ast.get_stmt(self).val_location(ast)
 	}
 
-	pub fn promote(self, typ: TypId, ast: &Ast, db: &Db) -> bool {
-		ast.stmts.get_mut(self).promote(typ, ast, db)
-	}
+	// pub fn promote(self, typ: TypId, ast: &Ast, db: &Db) -> bool {
+	// 	ast.stmts.get_mut(self).promote(typ, ast, db)
+	// }
 }
 
 pub struct Ast {

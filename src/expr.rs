@@ -39,6 +39,26 @@ impl std::default::Default for Expr {
 	}
 }
 
+impl Stmt {
+	pub fn typ(&self, ast: &impl AstAbstract, db: &Db) -> TypId {
+		match self {
+			Stmt::Declare(declare) => {
+				db.get(declare.identity).typ
+			},
+			Stmt::Expression(expression) => {
+				ast.get_expr(expression.expression).typ(ast, db)
+			},
+			Stmt::Return(_) => {
+				db.types.bottom
+			},
+			Stmt::ClassDeclare(class_declare) => {
+				// TODO: Different typing for ClassDeclare?
+				db.types.void
+			},
+		}
+	}
+}
+
 impl Expr {
 	
 
@@ -111,10 +131,15 @@ impl Expr {
 			Expr::Index(index) => index.typ,
 			Expr::SetIndex(set) => set.typ,
 			Expr::MakeTuple(make_tuple) => make_tuple.typ,
+			Expr::Promote(promote) => promote.promote_to,
 		}
 	}
 
-	pub fn promote(&mut self, typ: TypId, ast: &Ast, db: &Db) -> bool {
+	// Returns whether this AST node is happy to take on the asked promoted
+	// type.
+	//
+	// If not, then we will have to synthesize an Expr::Promote.
+	/*pub fn promote(&mut self, typ: TypId, ast: &Ast, db: &Db) -> bool {
 		// Cannot promote to Bottom.
 		if typ == db.types.bottom {
 			return false;
@@ -258,22 +283,22 @@ impl Expr {
 				true
 			}
 		}
-	}
+	}*/
 }
 
-impl Stmt {
-	pub fn promote(&mut self, typ: TypId, ast: &Ast, db: &Db) -> bool {
-		match self {
-			Stmt::Declare(_) => return false,
-			Stmt::Expression(expr) => expr.expression.promote(typ, ast, db),
+// impl Stmt {
+// 	pub fn promote(&mut self, typ: TypId, ast: &Ast, db: &Db) -> bool {
+// 		match self {
+// 			Stmt::Declare(_) => return false,
+// 			Stmt::Expression(expr) => expr.expression.promote(typ, ast, db),
 
-			// The value of a Return is always Bottom, and so it cannot be
-			// affected by promote().
-			Stmt::Return(_) => return false,
-			Stmt::ClassDeclare(_) => return false,
-		}
-	}
-}
+// 			// The value of a Return is always Bottom, and so it cannot be
+// 			// affected by promote().
+// 			Stmt::Return(_) => return false,
+// 			Stmt::ClassDeclare(_) => return false,
+// 		}
+// 	}
+// }
 
 /// Information for a variable.
 pub struct Var {

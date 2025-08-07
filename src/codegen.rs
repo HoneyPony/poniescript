@@ -1052,6 +1052,66 @@ impl<'a> Codegen<'a> {
 
 				val
 			}
+
+			Expr::Promote(promote) => {
+				let val = self.new_val_typed(promote.promote_to);
+
+				let inner = self.expr(ast, promote.inner, into);
+				define_val!(self, into, val, ";\n");
+				if val.needs_storage() {
+					self.compile_partial_promote(&val.val, &inner.val,
+						val.typ, inner.typ,
+						&"".to_string(), &"".to_string(),
+						into);
+				}
+
+				val
+			}
+		}
+	}
+
+	fn compile_partial_promote(&mut self, to: &Val, from: &Val, to_typ_id: TypId, from_typ_id: TypId, to_post: &String, from_post: &String, into: &mut String, ) {
+		let to_typ = self.db.get(to_typ_id);
+		let from_typ = self.db.get(from_typ_id);
+
+		let indent = self.indent();
+
+		// Helper function for doing the promotions
+		let mut do_promote = |the_fn: &'static str| {
+			inf_writeln!(into, "{indent}{to}{to_post} = {the_fn}({from}{from_post});");
+		};
+
+		// This match statement should line up with the one in Expr::compute_assignable.
+		match (to_typ, from_typ) {
+			(Type::Float, Type::Int) => do_promote("ps_promote_int_to_float"),
+			(Type::StrBuf, Type::StrConst) => do_promote("ps_promote_str_to_buf"),
+			(Type::StrBuf, Type::Str) => do_promote("ps_promote_str_to_buf"),
+			(Type::Str, Type::StrConst) => do_promote("ps_promote_str_const_to_str"),
+
+			// Tuples are where things get interesting. We have to recursively promote
+			// every part of each tuple.
+			(Type::Tuple(a), Type::Tuple(b)) => {
+				if a.len() != b.len() {
+					panic!("ICE: promotion between differently-sized tuples");
+				}
+				
+				// Iterate over each tuple member and promote.
+				for i in 0..a.len() {
+					let to_post = format!("{to_post}.v_{i}");
+					let from_post = format!("{from_post}.v_{i}");
+					let to_typ = a[i];
+					let from_typ = b[i];
+					self.compile_partial_promote(to, from,
+						to_typ, from_typ,
+						&to_post, &from_post,
+						into);
+				}
+			}
+
+			_ => {
+				panic!("ICE: Bad promotion in codegen. Unknown promotion {} -> {}",
+					self.db.repr_type(from_typ_id), self.db.repr_type(to_typ_id));
+			}
 		}
 	}
 

@@ -304,7 +304,7 @@ fn main() {
 	let timer = duration(timer, "initializer sort", &mut duration_set);
 
 	// Pass 4: Type check and infer
-	let had_error = typecheck::typecheck(&mut db, &ast, &mut modules);
+	let had_error = typecheck::typecheck(&mut db, &mut ast, &mut modules);
 
 	if had_error {
 		report_errors(&db);

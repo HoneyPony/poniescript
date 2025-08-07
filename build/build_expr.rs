@@ -317,6 +317,7 @@ pub fn generate(file: &mut File) {
 	Index         : Expr value, Expr index, TypId typ
 	SetIndex      : Expr value, Expr index, TypId typ, Expr rhs
 	MakeTuple     : Vec<Expr> values, TypId typ
+	Promote       : Expr inner, TypId promote_to
 	Undefined     : 
 
 	"#;

@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::db::*;
 use crate::module::Module;
 use crate::source::SourceLocation;
@@ -104,12 +106,12 @@ impl<'db> TypeChecker<'db> {
 	// includes:
 	// - arguments to print()
 	// - statement expressions whose value is not used
-	fn promote_from_unassigned(&mut self, ast: &Ast, expr: ExprId) -> TypId {
+	fn promote_from_unassigned(&mut self, ast: &AstProxy, expr: &mut ExprId) -> TypId {
 		let ty = expr.typ(ast, self.db);
 		let promoted = self.promote_ty_from_unassigned(ty);
 
 		if promoted != ty {
-			self.promote(ast, expr, promoted);
+			self.do_promote_expr(ast, expr, promoted);
 		}
 
 		promoted
@@ -124,23 +126,6 @@ impl<'db> TypeChecker<'db> {
 	// Instead, we have to manually promote that case.
 	//
 	// TODO: Is this correct? More testing is needed. It would also be nice to
-	// further simplify the bottom logic somehow.
-	fn promote(&mut self, ast: &Ast, expr: ExprId, ty: TypId) {
-		if ty == self.db.types.bottom {
-			// Special case: If we're promoting to bottom, then our expression
-			// is unused. So, instead promote to unassigned.
-			self.promote_from_unassigned(ast, expr);
-			return;
-		}
-		expr.promote(ty, ast, self.db);
-	}
-
-	fn promote_stmt(&mut self, ast: &Ast, stmt_id: StmtId, ty: TypId) {
-		match ast.stmts.get_mut(stmt_id).as_mut() {
-			Stmt::Expression(expr) => self.promote(ast, expr.expression, ty),
-			_ => {}
-		}
-	}
 
 	fn promote_ty_from_unassigned(&mut self, ty: TypId) -> TypId {
 		if ty == self.db.types.assume_float {
@@ -325,8 +310,174 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
-	fn check_assign(&mut self, ast: &Ast, at: &SourceLocation, var: VarId, expr_id: ExprId, assign_ty: bool) -> Result<TypId> {
-		let value = self.check_expr(ast, expr_id, true)?;
+	/// Promotion in the new system works as follows.
+	/// 
+	/// We ONLY need to promote when a value is actually assigned to something.
+	/// If a value is not assigned, it is not actually used, and so it does
+	/// not need to be promoted. That said, these values are still assigned to
+	/// an "unassigned" type so that they get a valid type.
+	/// 
+	/// We walk down the tree of this value and recursively try to promote to
+	/// the target type. If a particular node can't be promoted to the target type,
+	/// then it must be promoted at run-time, so we synthesize an Expr::Promote
+	/// node.
+	fn do_promote_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId, promote_to: TypId) {
+		// First, we visit the child expr with promote_expr.
+		self.promote_expr(ast, *expr_id, promote_to);
+		// If the child node's type does NOT equal the promoted type, we synthesize
+		// a runtime promotion.
+		let id = ast.exprs.push(Expr::Promote(Promote {
+			location: ast.get_expr(*expr_id).location().clone(),
+			inner: *expr_id,
+			promote_to
+		}));
+
+		*expr_id = id;
+	}
+
+	fn do_promote_stmt(&mut self, ast: &AstProxy, stmt_id: StmtId, promote_to: TypId) {
+		let mut binding = ast.stmts.get_mut(stmt_id);
+		let stmt = binding.as_mut();
+
+		match stmt {
+			Stmt::Declare(declare) => {
+				// Should have already promoted.
+			},
+			Stmt::Expression(expression) => {
+				self.do_promote_expr(ast, &mut expression.expression, promote_to);
+			},
+			Stmt::Return(_) => {
+				// Should have already promoted.
+			},
+			Stmt::ClassDeclare(class_declare) => {
+				// Should have already promoted.
+			},
+		}
+	}
+	
+	fn promote_expr(&mut self, ast: &AstProxy, expr_id: ExprId, promote_to: TypId) {
+		let mut binding = ast.exprs.get_mut(expr_id);
+		let expr = binding.as_mut();
+
+		match expr {
+			Expr::Binary(binary) => {
+				// Promote children to own type if we already have a concrete type,
+				// otherwise to the incoming type (in which case that becomes our
+				// type).
+				if self.db.is_not_concrete(binary.typ) {
+					binary.typ = promote_to;
+				}
+
+				self.do_promote_expr(ast, &mut binary.left, binary.typ);
+				self.do_promote_expr(ast, &mut binary.right, binary.typ);
+			},
+			Expr::Comparison(_) => {
+				// We can't promote to any type, so we should have already
+				// promoted our children.
+			},
+			Expr::Variable(_) => { /* Can't promote. */ },
+			Expr::Logical(_) => { /* Can't promote. */ },
+			Expr::FunCall(_) => { /* Can't promote. */ },
+			Expr::FunDeclare(fun_declare) => {},
+			Expr::ValCall(val_call) => {},
+			Expr::FunCapture(fun_capture) => {},
+			Expr::Assign(assign) => {},
+			Expr::UnboundAssign(unbound_assign) => panic!("ICE: promote_expr UnboundAssign"),
+			Expr::NumLiteral(num_literal) => {
+				// Promote to the incoming type.
+				num_literal.typ = promote_to;
+			},
+			Expr::StrLiteral(str_literal) => {
+				// For now: Don't promote, promote in codegen stage.
+				// OPT: Promote here, let the codegen make better use of information?
+			},
+			Expr::BoolLiteral(bool_literal) => {},
+			Expr::Block(block) => {
+				// Promote the last statement.
+				if let Some(last) = block.stmts.last() {
+					self.do_promote_stmt(ast, *last, promote_to);
+					// Our type now reflects that statement's type (so, we could
+					// promote if it could).
+					block.typ = ast.get_stmt(*last).typ(ast, &self.db);
+				}
+			},
+			Expr::If(if_) => {
+				if self.db.is_not_concrete(if_.typ) {
+					if_.typ = promote_to;
+				}
+
+				// Promote if branches here.
+				self.do_promote_expr(ast, &mut if_.then_branch, if_.typ);
+				if let Some(else_) = if_.else_branch.as_mut() {
+					self.do_promote_expr(ast, else_, if_.typ);
+				}
+			},
+			Expr::Unbound(_) => panic!("ICE: promote_expr(Unbound)"),
+			Expr::UnboundFunCapture(_) => panic!("ICE: promote_expr(UnboundFunCapture)"),
+			Expr::Print(_) => {},
+			Expr::Str(_) => { /* TODO: Possibly promote here, to improve stuff in backend? */ },
+			Expr::New(_) => {},
+			Expr::Get(get) => {},
+			Expr::Set(set) => {},
+			Expr::SelfVal(self_val) => {},
+			Expr::ArrayLit(array_lit) => {
+				let incoming_elem_typ = match self.db.get(promote_to) {
+					Type::ArrayOf(elem) => *elem,
+					_ => panic!("ICE: promote_expr(ArrayLit) to non-array type")
+				};
+
+				// The ArrayLit should be kind of like a big binary expression.
+				// If we already have a concrete type, e.g. because we are an
+				// array of float variables, then we can't promote to e.g. an
+				// array of int, and we should actually eventually get an 
+				// error.
+				if self.db.is_not_concrete(array_lit.elem_typ) {
+					array_lit.elem_typ = incoming_elem_typ;
+					array_lit.arr_typ = promote_to;
+				}
+
+				// Promote all child nodes to our final elem type.
+				for expr in &mut array_lit.values {
+					self.do_promote_expr(ast, expr, array_lit.elem_typ);
+				}
+			},
+			Expr::Index(index) => {},
+			Expr::SetIndex(set_index) => {},
+			Expr::MakeTuple(make_tuple) => {
+				// This is also kind of like a big binary expression.
+				if self.db.is_not_concrete(make_tuple.typ) {
+					make_tuple.typ = promote_to;
+				}
+
+				let elem_typs = match self.db.get(make_tuple.typ) {
+					Type::Tuple(vec) => vec.clone(), // TODO: Don't clone
+					_ => panic!("ICE: promote_expr(MakeTuple) to non-tuple type"),
+				};
+
+				if elem_typs.len() != make_tuple.values.len() {
+					panic!("ICE: promote_expr(MakeTuple) to wrong tuple size");
+				}
+
+				// Promote child nodes to fit into the final type.
+				for (expr, typ) in make_tuple.values.iter_mut().zip(elem_typs.iter()) {
+					self.do_promote_expr(ast, expr, *typ);
+				}
+			},
+			Expr::Promote(_) => {
+				// If we hit this, it means we're re-writing an earlier promote
+				// with a different one.
+				//
+				// I'm actually not sure if that is a valid thing to do.
+				//
+				// Let's try panicing and see what happens.
+				panic!("ICE: promote_expr(Promote)")
+			},
+			Expr::Undefined(_) => panic!("ICE: promote_expr(Undefined)"),
+		}
+	}
+
+	fn check_assign(&mut self, ast: &AstProxy, at: &SourceLocation, var: VarId, expr_id: &mut ExprId, assign_ty: bool) -> Result<TypId> {
+		let value = self.check_expr(ast, *expr_id, true)?;
 
 		if self.db.get_var_type(var) == self.db.types.unassigned && value == self.db.types.unassigned {
 			type_error!(self, at, "Invalid assignment: Type annotations needed.");
@@ -360,7 +511,7 @@ impl<'db> TypeChecker<'db> {
 			}
 			self.db.get_mut(var).typ = computed;
 		}
-		self.promote(ast, expr_id, computed);
+		self.do_promote_expr(ast, expr_id, computed);
 
 		Ok(computed)
 	}
@@ -369,7 +520,7 @@ impl<'db> TypeChecker<'db> {
 	// TODO: We could, inside this function, just directly call
 	// promote_from_unassigned on any expr that has value_used = false -- we
 	// should consider if that would make sense.
-	fn check_expr(&mut self, ast: &Ast, expr_id: ExprId, value_used: bool) -> Result<TypId> {
+	fn check_expr(&mut self, ast: &AstProxy, expr_id: ExprId, value_used: bool) -> Result<TypId> {
 		let mut binding = ast.exprs.get_mut(expr_id);
 		let expr = binding.as_mut();
 		Ok(match expr {
@@ -387,9 +538,9 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(right)
 				);
 
+				// PROMOTION: occurs in promote_expr
+
 				binary.typ = computed;
-				self.promote(ast, binary.left, computed);
-				self.promote(ast, binary.right, computed);
 				
 				computed
 			},
@@ -413,9 +564,7 @@ impl<'db> TypeChecker<'db> {
 					}
 				}
 
-				for value in &mut lit.values {
-					self.promote(ast, *value, final_ty);
-				}
+				// PROMOTION: occurs in promote_expr
 
 				lit.elem_typ = final_ty;
 				if lit.elem_typ != self.db.types.unassigned {
@@ -446,8 +595,8 @@ impl<'db> TypeChecker<'db> {
 				// Keep track of the type that we're "doing the comparison as."
 				compare.compare_as = computed;
 
-				self.promote(ast, compare.left, computed);
-				self.promote(ast, compare.right, computed);
+				self.do_promote_expr(ast, &mut compare.left, computed);
+				self.do_promote_expr(ast, &mut compare.right, computed);
 
 				// Comparisons always return bool.
 				self.db.types.bool
@@ -472,8 +621,8 @@ impl<'db> TypeChecker<'db> {
 					"Invalid conditional expression in RHS to logical operator: Expression has type '{}'",
 					self.db.repr_type(right));
 
-				self.promote(ast, logical.left, left_check);
-				self.promote(ast, logical.right, right_check);
+				self.do_promote_expr(ast, &mut logical.left, left_check);
+				self.do_promote_expr(ast, &mut logical.right, right_check);
 
 				// Logical operators always return bool.
 				self.db.types.bool
@@ -490,7 +639,7 @@ impl<'db> TypeChecker<'db> {
 					"Invalid conditional expression: Expression has type '{}'",
 					self.db.repr_type(condition_ty));
 
-				self.promote(ast, if_.condition, cond_computed);
+				self.do_promote_expr(ast, &mut if_.condition, cond_computed);
 
 				let then_ty = self.check_expr(ast, if_.then_branch, value_used)?;
 
@@ -537,8 +686,7 @@ impl<'db> TypeChecker<'db> {
 					error
 				});
 
-				self.promote(ast, if_.then_branch, computed);
-				self.promote(ast, *else_branch, computed);
+				// PROMOTION: then-branch and else-branch promotion occurs in promote_expr
 
 				if_.typ = computed;
 
@@ -562,7 +710,7 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(index_ty)
 				);
 
-				self.promote(ast, index.index, index_computed);
+				self.do_promote_expr(ast, &mut index.index, index_computed);
 
 				index.typ = elem_ty;
 
@@ -597,7 +745,7 @@ impl<'db> TypeChecker<'db> {
 				);
 
 				// Promote the RHS based on the computed type.
-				self.promote(ast, set.rhs, computed);
+				self.do_promote_expr(ast, &mut set.rhs, computed);
 
 
 				// Handle the index just like in Index.
@@ -611,7 +759,7 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(index_ty)
 				);
 
-				self.promote(ast, set.index, index_computed);
+				self.do_promote_expr(ast, &mut set.index, index_computed);
 
 				set.typ = elem_ty;
 
@@ -619,7 +767,7 @@ impl<'db> TypeChecker<'db> {
 			}
 			Expr::Variable(var) => self.db.get(var.identity).typ,
 			Expr::Assign(assign) => {
-				self.check_assign(ast, &assign.location, assign.identity, assign.value, false)?
+				self.check_assign(ast, &assign.location, assign.identity, &mut assign.value, false)?
 			},
 			Expr::NumLiteral(lit) => {
 				lit.typ
@@ -668,7 +816,8 @@ impl<'db> TypeChecker<'db> {
 				// Return the computed TypId.
 				block.typ = val;
 
-				self.promote_stmt(ast, *stmt, val);
+				// PROMOTION: Occurs in promote_expr
+				//self.promote_stmt(ast, *stmt, val);
 
 				val
 			},
@@ -686,11 +835,11 @@ impl<'db> TypeChecker<'db> {
 					// This logic is the same as unused statement expressions and the like,
 					// so it gets its own helper function.
 					self.check_expr(ast, *expr, true)?;
-					self.promote_from_unassigned(ast, *expr);
+					self.promote_from_unassigned(ast, expr);
 				}
 
 				self.check_expr(ast, print.exprs[0], true)?;
-				let computed = self.promote_from_unassigned(ast, print.exprs[0]);
+				let computed = self.promote_from_unassigned(ast, &mut print.exprs[0]);
 
 				// TODO: We could store this type directly on the print() if we
 				// wanted to -- that's what other ast nodes do...
@@ -701,7 +850,7 @@ impl<'db> TypeChecker<'db> {
 				// of its first argument.
 				for expr in &mut str.exprs {
 					self.check_expr(ast, *expr, true)?;
-					self.promote_from_unassigned(ast, *expr);
+					self.promote_from_unassigned(ast, expr);
 				}
 
 				self.db.types.str_buf
@@ -746,7 +895,7 @@ impl<'db> TypeChecker<'db> {
 						self.db.repr_type(arg)
 					);
 
-					self.promote(ast, call.args[i], computed);
+					self.do_promote_expr(ast, &mut call.args[i], computed);
 				}
 
 				self.db.get_fun_ret_type(call.identity)
@@ -764,7 +913,9 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(value));
 
 				// TODO: Also support FunRaw calling..?
-				self.promote(ast, call.value, computed);
+				// TODO: This is probably slightly wrong, or maybe not. Maybe FunCapture
+				// will have to promote itself...?
+				self.do_promote_expr(ast, &mut call.value, computed);
 
 				let correct_sig = match self.db.get(computed) {
 					Type::Fun(sig) => *sig,
@@ -805,7 +956,7 @@ impl<'db> TypeChecker<'db> {
 						self.db.repr_type(arg)
 					);
 
-					self.promote(ast, call.args[i], computed);
+					self.do_promote_expr(ast, &mut call.args[i], computed);
 				}
 
 				// TODO: Should ValCall's use_sig their sig?
@@ -859,7 +1010,7 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				for init in &mut new.initializers {
-					self.check_assign(ast, &init.location, init.var, init.value, false)?;
+					self.check_assign(ast, &init.location, init.var, &mut init.value, false)?;
 				}
 
 				new.typ
@@ -939,7 +1090,7 @@ impl<'db> TypeChecker<'db> {
 				);
 
 				// Promote the RHS based on the computed type.
-				self.promote(ast, set.rhs, computed);
+				self.do_promote_expr(ast, &mut set.rhs, computed);
 
 				self.db.get_var_type(property)
 			}
@@ -1018,11 +1169,14 @@ impl<'db> TypeChecker<'db> {
 				tuple.typ = typ;
 
 				typ
-			}
+			},
+
+			// Promote should not be generated until we get to the TypeCheck stage.
+			Expr::Promote(_) => panic!("ICE: Tried to typecheck Promote"),
 		})
 	}
 
-	fn check_class(&mut self, ast: &Ast, class_declare: &mut ClassDeclare) -> Result<()> {
+	fn check_class(&mut self, ast: &AstProxy, class_declare: &mut ClassDeclare) -> Result<()> {
 		let enclosing_class = self.current_class;
 		self.current_class = Some(self.db.put_type(Type::Class(class_declare.identity)));
 
@@ -1030,7 +1184,10 @@ impl<'db> TypeChecker<'db> {
 		let vars = std::mem::take(&mut self.db.get_mut(class_declare.identity).vars);
 		for var in &vars {
 			if let Some(initializer) = self.db.get(*var).initializer {
-				self.check_assign(ast, &self.db.get(*var).location.clone(), *var, initializer, true)?;
+				let mut init = initializer;
+				self.check_assign(ast, &self.db.get(*var).location.clone(), *var, &mut init, true)?;
+				// Be sure to manually copy the expr back
+				self.db.get_mut(*var).initializer = Some(init);
 			}
 		}
 		self.db.get_mut(class_declare.identity).vars = vars;
@@ -1044,7 +1201,7 @@ impl<'db> TypeChecker<'db> {
 		Ok(())
 	}
 
-	fn check_stmt(&mut self, ast: &Ast, stmt_id: StmtId, value_used: bool) -> Result<Option<TypId>> {
+	fn check_stmt(&mut self, ast: &AstProxy, stmt_id: StmtId, value_used: bool) -> Result<Option<TypId>> {
 		match ast.stmts.get_mut(stmt_id).as_mut() {
 			Stmt::Declare(declare) => {
 				let typ = self.check_declare(ast, declare)?;
@@ -1065,7 +1222,7 @@ impl<'db> TypeChecker<'db> {
 					// Non-value-used exprs should be promoted from unassigned.
 					// If their value is used, the value-user will be responsible
 					// for calling promote() with the proper type.
-					typ = self.promote_from_unassigned(ast, expr.expression);
+					typ = self.promote_from_unassigned(ast, &mut expr.expression);
 				}
 				Ok(Some(typ))
 			},
@@ -1110,18 +1267,18 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(typ),
 					self.db.repr_type(return_type));
 
-				self.promote(ast, *inner, computed);
+				self.do_promote_expr(ast, inner, computed);
 
 				Ok(Some(self.db.types.bottom))
 			}
 		}
 	}
 
-	fn check_declare(&mut self, ast: &Ast, declare: &mut Declare) -> Result<TypId> {
-		self.check_assign(ast, &declare.location, declare.identity, declare.value, true)
+	fn check_declare(&mut self, ast: &AstProxy, declare: &mut Declare) -> Result<TypId> {
+		self.check_assign(ast, &declare.location, declare.identity, &mut declare.value, true)
 	}
 
-	fn check_fun_declare(&mut self, ast: &Ast, fun: &mut FunDeclare) -> Result<()> {
+	fn check_fun_declare(&mut self, ast: &AstProxy, fun: &mut FunDeclare) -> Result<()> {
 		// The idea with whether we need the value to be used is somewhat tricky.
 		// Basically, in the simplest case, if we DO need a return value, then
 		// either we need:
@@ -1160,7 +1317,8 @@ impl<'db> TypeChecker<'db> {
 				self.db.repr_type(inner),
 				self.db.repr_type(self.db.get_fun_return_typid(fun.identity)));
 		
-			self.promote(ast, fun.value, computed);
+			//self.promote(ast, fun.value, computed);
+			fun.typ = computed; // TODO: Does this need promote()???
 		}
 
 		Ok(())
@@ -1186,7 +1344,7 @@ impl<'db> TypeChecker<'db> {
 		self.db.get_mut(fun).sig = sig;
 	}
 
-	fn check_module(&mut self, ast: &Ast, module: &mut Module) {
+	fn check_module(&mut self, ast: &AstProxy, module: &mut Module) {
 		// HACK: Visit classes first so that type inference for properites works.
 		// We really should get this working so that type inferences can directly
 		// drive class type inference (i.e. type inference for the class members)
@@ -1208,7 +1366,7 @@ impl<'db> TypeChecker<'db> {
 		
 	}
 
-	fn check_modules(&mut self, ast: &Ast, modules: &mut Vec<Module>) {
+	fn check_modules(&mut self, ast: &AstProxy, modules: &mut Vec<Module>) {
 		self.global_scope = true;
 
 		// Before anything else, fix all function signatures.
@@ -1224,10 +1382,12 @@ impl<'db> TypeChecker<'db> {
 		// Check globals based on the ordering in db.
 		let globals = std::mem::take(&mut self.db.globals);
 		for global in &globals {
-			let Some(initializer) = self.db.get(*global).initializer else {
+			let Some(mut initializer) = self.db.get(*global).initializer else {
 				panic!("ICE: Tried to typecheck global without initializer");
 			};
-			let _ = self.check_assign(ast, &self.db.get(*global).location.clone(), *global, initializer, true);
+			let _ = self.check_assign(ast, &self.db.get(*global).location.clone(), *global, &mut initializer, true);
+			// Be sure to re-set the initializer
+			self.db.get_mut(*global).initializer = Some(initializer);
 		}
 		self.db.globals = globals;
 
@@ -1237,10 +1397,12 @@ impl<'db> TypeChecker<'db> {
 	}
 }
 
-pub fn typecheck(db: &mut Db, ast: &Ast, modules: &mut Vec<Module>) -> bool {
+pub fn typecheck(db: &mut Db, ast: &mut Ast, modules: &mut Vec<Module>) -> bool {
 	let mut checker = TypeChecker::new(db);
 
-	checker.check_modules(ast, modules);
+	let proxy = ast.get_proxy();
+	checker.check_modules(&proxy, modules);
+	proxy.commit();
 
 	checker.had_error
 }
