@@ -239,6 +239,7 @@ pub fn generate(tests_file: &mut File) {
 		("set/", "set_bottom_etc"),
 		("set/", "set_chain"),
 
+		("promote/", "array_assign"),
 		("promote/", "blocks_float_print"),
 		("promote/", "blocks_float_var"),
 		("promote/", "blocks_int_print"),
