@@ -238,13 +238,11 @@ impl std::fmt::Display for Val {
 	}
 }
 
-impl std::fmt::Display for PromotedVal {
+// Now that we no longer have promote() in the compiler, we can directly
+// write TypedVals into the output stream.
+impl std::fmt::Display for TypedVal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			PromotedVal::Simple(inner) => write!(f, "{}", inner),
-			PromotedVal::Promoted(inner, promo_fn) => write!(f, "{promo_fn}({inner})"),
-			PromotedVal::Bottom => panic!("ICE: Tried to codegen PromotedVal::Bottom"),
-		}
+		 write!(f, "{}", self.val)
 	}
 }
 
@@ -321,70 +319,12 @@ impl<'a> Codegen<'a> {
 		self.new_val().typed(typ)
 	}
 
-	fn promote(&self, val: TypedVal, to: TypId) -> PromotedVal {
-		// Due to the thing, we no longer need PromotedVal system. For now,
-		// just always do Simple.
-		return PromotedVal::Simple(val.val);
-
-		if val.typ == to {
-			return PromotedVal::Simple(val.val);
-		}
-
-		if val.is_bottom() || val.typ == self.db.types.bottom {
-			return PromotedVal::Bottom;
-		}
-
-		// TODO: Does Any type automatically promote to Bottom?
-		// It's not clear if this is correct, but it is seemingly necessary
-		// for test cases such as variable/assign_to_bottom_binop_var
-		// and set/set_bottom_etc.
-		//
-		// The justification seems to be that if we're trying to promote
-		// something to bottom, it's because we already have a bottom somewhere
-		// in the expression.
-		if to == self.db.types.bottom {
-			return PromotedVal::Bottom;
-		}
-
-		if val.typ == self.db.types.int && to == self.db.types.float {
-			return PromotedVal::Promoted(val.val, "ps_promote_int_to_float")
-		}
-
-		if val.typ == self.db.types.str_const &&
-		        to == self.db.types.str_buf
-		{
-			return PromotedVal::Promoted(val.val, "ps_promote_str_to_buf")	
-		}
-
-		if val.typ == self.db.types.str &&
-		        to == self.db.types.str_buf
-		{
-			return PromotedVal::Promoted(val.val, "ps_promote_str_to_buf")	
-		}
-
-		if val.typ == self.db.types.str_const &&
-		        to == self.db.types.str
-		{
-			return PromotedVal::Promoted(val.val, "ps_promote_str_const_to_str")	
-		}
-
-		// Note: We will only actually try to promote() if the type check stage
-		// at some point creates code where we need a promotion. So we should
-		// generally get this panic if something is either missing in the typechecker,
-		// or if we're missing a promotion corresponding to a case in compute_assignable.
-		panic!("ICE: Bad promotion in codegen. Unknown promotion {} -> {}", self.db.repr_type(val.typ), self.db.repr_type(to));
-	}
-
 	fn compile_binary(&mut self, ast: &Ast, binary: &Binary, into: &mut String) -> TypedVal {
 		let left = self.expr(ast, binary.left, into);
 		if left.is_bottom() { return left; /* Val::Bottom */ }
-		// TODO: Maybe we should have each function return a (Val, TypId) tuple,
-		// so that we can save time here..?
-		let left = self.promote(left, binary.typ);
 
 		let right = self.expr(ast, binary.right, into);
 		if right.is_bottom() { return right; /* Val::Bottom */ }
-		let right = self.promote(right, binary.typ);
 
 		let op = match binary.op {
 			Tok::Star => '*',
@@ -420,8 +360,6 @@ impl<'a> Codegen<'a> {
 
 		let val = self.new_val();
 
-		let left = self.promote(left, compare.compare_as);
-		let right = self.promote(right, compare.compare_as);
 		let indent = self.indent();
 
 		inf_writeln!(into, "{indent}const ps_bool {val} = (ps_bool)({left} {op} {right});");
@@ -522,7 +460,6 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 
 		let cond = self.expr(ast, if_.condition, into);
-		let cond = self.promote(cond, self.db.types.bool);
 
 		// Generate storage for the value of the expression, if relevant.
 		let own_val = self.new_val_typed(if_.typ);
@@ -534,7 +471,7 @@ impl<'a> Codegen<'a> {
 		
 		// Save the value, if relevant.
 		// IMPORTANT: set_val will only call promote() if the value is needed.
-		set_val!(self, into, own_val, " = {};\n", self.promote(then_val, if_.typ));
+		set_val!(self, into, own_val, " = {};\n", then_val);
 		self.indent_level -= 1;
 		inf_writeln!(into, "{indent}}}");
 
@@ -545,7 +482,7 @@ impl<'a> Codegen<'a> {
 
 			let else_val = self.expr(ast, *else_branch, into);
 			// Save the value, if relevant.
-			set_val!(self, into, own_val, " = {};\n", self.promote(else_val, if_.typ));
+			set_val!(self, into, own_val, " = {};\n", else_val);
 			self.indent_level -= 1;
 			inf_writeln!(into, "{indent}}}");
 		}
@@ -566,7 +503,7 @@ impl<'a> Codegen<'a> {
 				let left = self.expr(ast, logical.left, into);
 				if left.is_bottom() { return left; }
 
-				let left = self.promote(left, self.db.types.bool);
+				assert!(left.typ == self.db.types.bool);
 
 				let own_val = self.new_val_typed(self.db.types.bool);
 				define_val!(self, into, own_val, " = {left};\n");
@@ -589,7 +526,7 @@ impl<'a> Codegen<'a> {
 
 				// Only store the value if not Bottom.
 				if !right.is_bottom() {
-					let right = self.promote(right, self.db.types.bool);
+					assert!(right.typ == self.db.types.bool);
 
 					// Our value now evalutes to this other one.
 					set_val!(self, into, own_val, " = {right};\n");
@@ -644,7 +581,6 @@ impl<'a> Codegen<'a> {
 						return val;
 					}
 
-					let val = self.promote(val, self.db.get_fun_param_type(call.identity, idx));
 					vals.push(val);
 				}
 
@@ -732,7 +668,6 @@ impl<'a> Codegen<'a> {
 						let last = self.compile_stmt(ast, *last.unwrap(), into);
 						let last = last.unwrap();
 						if last.needs_storage() && val.needs_storage() {
-							let last = self.promote(last, block.typ);
 							// Add one to indent because we're in the block
 							inf_writeln!(into, "{indent}\t{val} = {last};");
 						}
@@ -852,7 +787,7 @@ impl<'a> Codegen<'a> {
 					return fun_val;
 				}
 				// TODO: Support FunRaw, etc
-				let fun_val = self.promote(fun_val, self.db.must_get_type(Type::Fun(call.sig)));
+				assert!(fun_val.typ == self.db.must_get_type(Type::Fun(call.sig)));
 
 				let ret_type = self.db.get(call.sig).return_type;
 				let val = self.new_val_typed(ret_type);
@@ -866,7 +801,7 @@ impl<'a> Codegen<'a> {
 						return val;
 					}
 
-					let val = self.promote(val, self.db.get_sig_param_type(call.sig, idx));
+					assert!(val.typ == self.db.get_sig_param_type(call.sig, idx));
 					vals.push(val);
 				}
 
@@ -926,7 +861,7 @@ impl<'a> Codegen<'a> {
 
 					for init in &new.initializers {
 						let rhs = self.expr(ast, init.value, into);
-						let rhs = self.promote(rhs, self.db.get_var_type(init.var));
+						assert!(rhs.typ == self.db.get_var_type(init.var));
 						let varname = self.db.get_cname(init.var);
 
 						inf_writeln!(into, "{indent}{}->{varname} = {rhs};", val.val);
@@ -960,8 +895,7 @@ impl<'a> Codegen<'a> {
 					return rhs;
 				}
 				let lhs = self.expr(ast, set.lhs, into);
-				// TODO: What happens if lhs is Bottom?
-				let rhs = self.promote(rhs, typ);
+				// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
 				let arrow = self.db.get_c_member_lookup(lhs.typ);
 				
 				let varname = self.db.get_cname(set.var);
@@ -986,7 +920,7 @@ impl<'a> Codegen<'a> {
 					let mut idx = 0;
 					for value in &lit.values {
 						let nth = self.expr(ast, *value, into);
-						let nth = self.promote(nth, lit.elem_typ);
+						assert!(nth.typ == lit.elem_typ);
 						inf_writeln!(into, "{indent}{}->contents[{idx}] = {nth};", val.val);
 
 						idx += 1;
@@ -1003,13 +937,9 @@ impl<'a> Codegen<'a> {
 			Expr::Index(index) => {
 				let val = self.new_val_typed(index.typ);
 				let arr_val = self.expr(ast, index.value, into);
-				// TODO: Should we store the arr_type on the Index as well so
-				// we can promote to it..?
-				let arr_val_typ = arr_val.typ;
-				let arr_val = self.promote(arr_val, arr_val_typ);
 
 				let idx_val = self.expr(ast, index.index, into);
-				let idx_val = self.promote(idx_val, self.db.types.int);
+				assert!(idx_val.typ == self.db.types.int);
 
 				// TODO: Generate bounds checks
 				define_val!(self, into, val, " = {arr_val}->contents[{idx_val}];\n");
@@ -1020,17 +950,11 @@ impl<'a> Codegen<'a> {
 			Expr::SetIndex(set) => {
 				let val = self.new_val_typed(set.typ);
 				let arr_val = self.expr(ast, set.value, into);
-				// TODO: Should we store the arr_type on the SetIndex as well so
-				// we can promote to it..?
-				let arr_val_typ = arr_val.typ;
-				let arr_val = self.promote(arr_val, arr_val_typ);
 
 				let idx_val = self.expr(ast, set.index, into);
-				let idx_val = self.promote(idx_val, self.db.types.int);
+				assert!(idx_val.typ == self.db.types.int);
 
-				// Promote RHS to the element type of the array (i.e. set.typ)
 				let rhs_val = self.expr(ast, set.rhs, into);
-				let rhs_val = self.promote(rhs_val, set.typ);
 
 				// TODO: Generate bounds checks
 				define_val!(self, into, val, " = {arr_val}->contents[{idx_val}] = {rhs_val};\n");
@@ -1049,8 +973,8 @@ impl<'a> Codegen<'a> {
 						// collect them after like for fun calls? I don't think so.
 						let inner = self.expr(ast, *expr, into);
 
-						let inner_val = self.promote(inner, subtypes[idx]);
-						inf_writeln!(into, "{indent}{}.v_{idx} = {inner_val};", val.val);
+						assert!(inner.typ == subtypes[idx]);
+						inf_writeln!(into, "{indent}{}.v_{idx} = {inner};", val.val);
 					}
 				}
 
@@ -1204,8 +1128,8 @@ impl<'a> Codegen<'a> {
 						let needed_type = *self.return_types.last().unwrap();
 						let val = self.expr(ast, *value, into);
 
-						// Promote to the needed return type
-						let val = self.promote(val, needed_type);
+						assert!(val.typ == needed_type);
+
 						// If the inner value is also a bottom type,
 						// then we can't really generate a return here.
 						if !val.is_bottom() {
@@ -1252,7 +1176,7 @@ impl<'a> Codegen<'a> {
 			return value;
 		}
 
-		let value: PromotedVal = self.promote(value, needed_type);
+		assert!(value.typ == needed_type);
 
 		let (declaration, space) = if is_declaration {
 			(self.db.get_var_ctype(var), " ")
@@ -1296,7 +1220,7 @@ impl<'a> Codegen<'a> {
 
 		let val = self.expr(ast, body, &mut own_buffer);
 		if val.needs_storage() {
-			let val = self.promote(val, own_return_type);
+			assert!(val.typ == own_return_type);
 			// If it does have a value, then we write it as a default
 			// return value.
 			inf_writeln!(own_buffer, "{indent}return {val};");
