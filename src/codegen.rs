@@ -1087,6 +1087,13 @@ impl<'a> Codegen<'a> {
 
 		// This match statement should line up with the one in Expr::compute_assignable.
 		match (to_typ, from_typ) {
+			(_, Type::Bottom) => {
+				/* Don't do any promotion, but don't panic? */
+			}
+			(Type::Bottom, _) => {
+				/* Don't do any promotion, but don't panic? */
+			}
+
 			(Type::Float, Type::Int) => do_promote("ps_promote_int_to_float"),
 			(Type::StrBuf, Type::StrConst) => do_promote("ps_promote_str_to_buf"),
 			(Type::StrBuf, Type::Str) => do_promote("ps_promote_str_to_buf"),
