@@ -323,6 +323,17 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	/// Promotion in the new system works as follows.
+	/// 
+	/// We ONLY need to promote when a value is actually assigned to something.
+	/// If a value is not assigned, it is not actually used, and so it does
+	/// not need to be promoted. That said, these values are still assigned to
+	/// an "unassigned" type so that they get a valid type.
+	/// 
+	/// We walk down the tree of this value and recursively try to promote to
+	/// the target type. If a particular node can't be promoted to the target type,
+	/// then it must be promoted at run-time, so we synthesize an Expr::Promote
+	/// node.
 	fn do_promote_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId, promote_to: TypId) {
 		if promote_to == self.db.types.bottom {
 			// Special case: If promoting to bottom, promote to unassigned instead
@@ -335,22 +346,18 @@ impl<'db> TypeChecker<'db> {
 		self.really_do_promote_expr(ast, expr_id, promote_to);
 	}
 
-	/// Promotion in the new system works as follows.
+	
+	/// DO NOT CALL THIS FUNCTION UNLESS YOU ARE do_promote_expr OR promote_from_unassigned.
 	/// 
-	/// We ONLY need to promote when a value is actually assigned to something.
-	/// If a value is not assigned, it is not actually used, and so it does
-	/// not need to be promoted. That said, these values are still assigned to
-	/// an "unassigned" type so that they get a valid type.
+	/// This function will promote either to a Bottom type (i.e. promote_from_unassigned)
+	/// or from no type, on the child nodes. It is mainly use to implement pushing
+	/// Bottom types down the tree properly in promote_from_unassigned.
 	/// 
-	/// We walk down the tree of this value and recursively try to promote to
-	/// the target type. If a particular node can't be promoted to the target type,
-	/// then it must be promoted at run-time, so we synthesize an Expr::Promote
-	/// node.
+	/// Note that it does contain the main "meat" of the do_promote_expr function.
 	fn really_do_promote_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId, promote_to: TypId) {
-
-
 		// First, we visit the child expr with promote_expr.
 		self.promote_expr(ast, *expr_id, promote_to);
+
 		// If the child node's type does NOT equal the promoted type, we synthesize
 		// a runtime promotion.
 		if ast.get_expr(*expr_id).typ(ast, &self.db) != promote_to {
