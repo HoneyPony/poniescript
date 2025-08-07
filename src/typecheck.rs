@@ -114,6 +114,11 @@ impl<'db> TypeChecker<'db> {
 			// If we are promoting to the Bottom type, that means the expression
 			// value does not actually get created. What should we do in this
 			// case? Is it safe to skip the promotion?
+
+			// At this point, we really do want to promote to Bottom. But,
+			// it should then recursively call do_promote, which will instead
+			// promote_from_unassigned for inner expressions.
+			self.really_do_promote_expr(ast, expr, promoted);
 			return promoted;
 		}
 
@@ -318,6 +323,18 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	fn do_promote_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId, promote_to: TypId) {
+		if promote_to == self.db.types.bottom {
+			// Special case: If promoting to bottom, promote to unassigned instead
+			// This will then push further promotions to really_
+			self.promote_from_unassigned(ast, expr_id);
+			return;
+		}
+
+		// Otherwise, just jump straight into really_
+		self.really_do_promote_expr(ast, expr_id, promote_to);
+	}
+
 	/// Promotion in the new system works as follows.
 	/// 
 	/// We ONLY need to promote when a value is actually assigned to something.
@@ -329,12 +346,8 @@ impl<'db> TypeChecker<'db> {
 	/// the target type. If a particular node can't be promoted to the target type,
 	/// then it must be promoted at run-time, so we synthesize an Expr::Promote
 	/// node.
-	fn do_promote_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId, promote_to: TypId) {
-		if promote_to == self.db.types.bottom {
-			// Special case: If promoting to bottom, promote to unassigned instead
-			self.promote_from_unassigned(ast, expr_id);
-			return;
-		}
+	fn really_do_promote_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId, promote_to: TypId) {
+
 
 		// First, we visit the child expr with promote_expr.
 		self.promote_expr(ast, *expr_id, promote_to);
