@@ -168,6 +168,7 @@ pub fn generate(tests_file: &mut File) {
 		("misc/", "err_return_in_binop"),
 		("misc/", "err_top_level_return"),
 		("misc/", "noerr_return_in_binop"),
+		("misc/", "noerr_return_in_binop_sidefx"),
 		("misc/", "simple_var_exprs_and_infer"),
 		("misc/", "test_init"),
 		("misc/", "unused_expr"),

@@ -1,0 +1,30 @@
+// The purpose of this test is to make sure that the binary operation
+// nonsense with Bottom makes sense even when there are side effects.
+//
+// That is, something like { 3 + 4 } * { return }, the 3 + 4 is actually dead
+// code and it is correct to eliminate it.
+//
+// But if it's something like { effect(3 + 4) } * { return }, it's not safe
+// to eliminate effect().
+
+fun effect(x: int) {
+	print(x);
+}
+
+fun effect2(x: float) {
+	print(x);
+}
+
+fun example() -> int {
+	{ effect2(5.0); } + 
+	{ effect(3 + 4 + 10); } *
+	{ return 20; } +
+	{ effect(1 * 2 * 3); };
+}
+
+fun init() {
+	//! 5.000000
+	//! 17
+	//! 20
+	print(example());
+}
