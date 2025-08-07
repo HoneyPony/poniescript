@@ -326,13 +326,15 @@ impl<'db> TypeChecker<'db> {
 		self.promote_expr(ast, *expr_id, promote_to);
 		// If the child node's type does NOT equal the promoted type, we synthesize
 		// a runtime promotion.
-		let id = ast.exprs.push(Expr::Promote(Promote {
-			location: ast.get_expr(*expr_id).location().clone(),
-			inner: *expr_id,
-			promote_to
-		}));
+		if ast.get_expr(*expr_id).typ(ast, &self.db) != promote_to {
+			let id = ast.exprs.push(Expr::Promote(Promote {
+				location: ast.get_expr(*expr_id).location().clone(),
+				inner: *expr_id,
+				promote_to
+			}));
 
-		*expr_id = id;
+			*expr_id = id;
+		}
 	}
 
 	fn do_promote_stmt(&mut self, ast: &AstProxy, stmt_id: StmtId, promote_to: TypId) {
