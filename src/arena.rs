@@ -443,6 +443,8 @@ impl <'ar, Ty, Key: ArenaKey> ArenaCellProxy<'ar, Ty, Key> {
         
             #[cfg(debug_assertions)]
             (*self.borrowed_mut.get()).push(false);
+            #[cfg(debug_assertions)]
+            (*self.borrowed.get()).push(0);
 
             Key::from_index(self.parent_len() + (*self.added.get()).len() - 1)
         }
