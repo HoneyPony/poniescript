@@ -110,9 +110,17 @@ impl<'db> TypeChecker<'db> {
 		let ty = expr.typ(ast, self.db);
 		let promoted = self.promote_ty_from_unassigned(ty);
 
-		if promoted != ty {
-			self.do_promote_expr(ast, expr, promoted);
+		if promoted == self.db.types.bottom {
+			// If we are promoting to the Bottom type, that means the expression
+			// value does not actually get created. What should we do in this
+			// case? Is it safe to skip the promotion?
+			return promoted;
 		}
+
+		// Here we must now unconditionally promote. This is because we are
+		// expecting do_promote to be called on every expression exactly once,
+		// and this is done through promote_from_unassigned sometimes.
+		self.do_promote_expr(ast, expr, promoted);
 
 		promoted
 	}
@@ -431,7 +439,7 @@ impl<'db> TypeChecker<'db> {
 			Expr::ArrayLit(array_lit) => {
 				let incoming_elem_typ = match self.db.get(promote_to) {
 					Type::ArrayOf(elem) => *elem,
-					_ => panic!("ICE: promote_expr(ArrayLit) to non-array type")
+					_ => panic!("ICE: promote_expr(ArrayLit) to non-array type {}", self.db.repr_type(promote_to))
 				};
 
 				// The ArrayLit should be kind of like a big binary expression.
@@ -1328,8 +1336,9 @@ impl<'db> TypeChecker<'db> {
 			self.do_promote_expr(ast, &mut fun.value, computed);
 		}
 		else {
-			// Otherwise, promote from unassigned.
-			self.promote_from_unassigned(ast, &mut fun.value);
+			// In this case, the block should have already promoted its own
+			// last value. TODO: Is this jank???
+			// self.promote_from_unassigned(ast, &mut fun.value);
 		}
 
 		Ok(())
