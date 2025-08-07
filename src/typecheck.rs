@@ -322,6 +322,12 @@ impl<'db> TypeChecker<'db> {
 	/// then it must be promoted at run-time, so we synthesize an Expr::Promote
 	/// node.
 	fn do_promote_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId, promote_to: TypId) {
+		if promote_to == self.db.types.bottom {
+			// Special case: If promoting to bottom, promote to unassigned instead
+			self.promote_from_unassigned(ast, expr_id);
+			return;
+		}
+
 		// First, we visit the child expr with promote_expr.
 		self.promote_expr(ast, *expr_id, promote_to);
 		// If the child node's type does NOT equal the promoted type, we synthesize
