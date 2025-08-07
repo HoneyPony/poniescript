@@ -1,0 +1,4 @@
+fun init() {
+    var x = { { { { 4 } } } };
+    print(x); //! 4
+}

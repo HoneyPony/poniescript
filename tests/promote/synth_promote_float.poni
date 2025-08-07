@@ -1,0 +1,12 @@
+fun init() {
+    var x = 10;
+    var y = 20.0;
+
+    print(x); //! 10
+    print(y); //! 20.000000
+
+    // Because both y and x have concrete types, this should force the compiler
+    // to synthesize a promotion.
+    y = x;
+    print(y); //! 10.000000
+}
