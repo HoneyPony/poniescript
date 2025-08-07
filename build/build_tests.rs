@@ -244,6 +244,8 @@ pub fn generate(tests_file: &mut File) {
 		("promote/", "blocks_int_print"),
 		("promote/", "blocks_int_var"),
 		("promote/", "synth_promote_float"),
+		("promote/", "tuples"),
+		("promote/", "tuple_matrix"),
 	
 		("variable/", "assign_numbers"),
 		("variable/", "assign_to_bottom_binop"),

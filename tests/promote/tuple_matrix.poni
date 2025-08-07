@@ -1,0 +1,20 @@
+// Originally noodle/tuple_mat4x4
+fun make_mat() -> 
+    ((float, float, float, float),
+     (float, float, float, float),
+     (float, float, float, float),
+     (float, float, float, float))
+{
+    var mat = (
+        (1, 0, 0, 0),
+        (0, 1, 0, 0),
+        (0, 0, 1, 0),
+        (0, 0, 0, 1),
+    );
+
+    mat
+}
+
+fun init() {
+    print(make_mat()); //! ((1.000000, 0.000000, 0.000000, 0.000000), (0.000000, 1.000000, 0.000000, 0.000000), (0.000000, 0.000000, 1.000000, 0.000000), (0.000000, 0.000000, 0.000000, 1.000000))
+}
