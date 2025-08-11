@@ -1,0 +1,6 @@
+// Must import 'import_fun.h'
+
+fun init() {
+    print(add(20, 30)); //! 50
+    print(sub(50, 15)); //! 35
+}

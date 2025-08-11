@@ -13,6 +13,7 @@ mod error;
 mod binder;
 mod dead_code;
 mod init_ordering;
+mod glue;
 
 use mimalloc::MiMalloc;
 #[global_allocator]
@@ -58,6 +59,12 @@ struct Args {
 	/// Compile this code for integration into the PonyGame engine. In particular,
 	/// don't include poni_standalone.h.
 	engine: bool,
+
+	#[arg(short = 'i', long = "import")]
+	/// List of C header files to read PonieScript declarations from. These
+	/// header files will also be #include'd in the final PonieScript C code
+	/// generated.
+	imports: Vec<PathBuf>,
 
 	#[arg(long = "hot")]
 	/// Compile this code for hot reload (integration with poni_hot). Not recommended

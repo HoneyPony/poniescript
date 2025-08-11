@@ -20,6 +20,54 @@ struct ps_object;
 struct ps_str;
 struct ps_strbuf;
 
+typedef struct ps_vec2 {
+	union {
+		struct {
+			ps_float x;
+			ps_float y;
+		};
+		struct {
+			ps_float v_0;
+			ps_float v_1;
+		};
+		ps_float at[2];
+	};
+} ps_vec2;
+
+typedef struct ps_vec3 {
+	union {
+		struct {
+			ps_float x;
+			ps_float y;
+			ps_float z;
+		};
+		struct {
+			ps_float v_0;
+			ps_float v_1;
+			ps_float v_2;
+		};
+		ps_float at[3];
+	};
+} ps_vec3;
+
+typedef struct ps_vec4 {
+	union {
+		struct {
+			ps_float x;
+			ps_float y;
+			ps_float z;
+			ps_float w;
+		};
+		struct {
+			ps_float v_0;
+			ps_float v_1;
+			ps_float v_2;
+			ps_float v_3;
+		};
+		ps_float at[4];
+	};
+} ps_vec4;
+
 typedef struct ps_object {
 	uint64_t todo;
 } ps_object;
