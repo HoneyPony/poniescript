@@ -908,8 +908,8 @@ impl<'db> TypeChecker<'db> {
 						&call.location,
 						"Incorrect arguments to function '{}'. Function expects {} arguments but {} were given",
 						self.db.get_fun_name(call.identity),
-						call.args.len(),
-						fun_arity);
+						fun_arity,
+						call.args.len());
 				}
 
 				for i in 0..fun_arity {
