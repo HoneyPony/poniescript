@@ -31,7 +31,7 @@ draw_sprite(PS_ABI(struct pg_sprite *sprite, ps_vec2 where)) {
     
 }
 
-PS_METHOD("Sprite.get_dimensions",)
+PS_METHOD("Sprite","get_dimensions")
 ps_vec2
 Sprite_get_dimensions(PS_ABI()) {
     PS_GET_THIS(struct pg_sprite);

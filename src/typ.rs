@@ -54,6 +54,9 @@ pub enum Type {
 
 	// A type that only exists before the name-binding pass.
 	UnboundIdent(StrId),
+
+	// A type that comes from imported C code.
+	UnboundCStructPtr(StrId),
 }
 
 impl Type {
@@ -131,6 +134,7 @@ impl Type {
 			Type::AssumeFloat => "a decimal number".to_string(),
 
 			Type::UnboundIdent(_) => "<unknown named>".to_string(),
+			Type::UnboundCStructPtr(id) => format!("imported struct {}*", db.get(*id))
 		}
 	}
 
@@ -163,6 +167,8 @@ impl Type {
 			Type::AssumeFloat => "<pony:compiler-err:unassigned-float-type>".into(),
 			Type::UnboundIdent(name) =>
 				format!("<pony:compiler-err:unassigned-named-type[{}]>", db.get(*name)),
+			Type::UnboundCStructPtr(name) =>
+				format!("[compiler error: unbound struct {}*]", db.get(*name))
 		}
 	}
 }

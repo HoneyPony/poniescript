@@ -420,8 +420,9 @@ impl<'a> Codegen<'a> {
 			// The context system is getting increasingly awkward.
 			Type::AssumeFloat => panic!("ICE: Tried to codegen print(AssumeFloat)"),
 			Type::AssumeInt => panic!("ICE: Tried to codegen print(AssumeInt)"),
-			Type::UnboundIdent(_) => panic!("ICE: Tried to codegen print(Unassigned)"),
+			Type::UnboundIdent(_) => panic!("ICE: Tried to codegen print(UnboundIdent)"),
 			Type::Unassigned => panic!("ICE: Tried to codegen print(Unassigned)"),
+			Type::UnboundCStructPtr(_) => panic!("ICE: Tried to codegen print(UnboundCStructPtr)"),
 		}
 	}
 
@@ -453,6 +454,7 @@ impl<'a> Codegen<'a> {
 			Type::AssumeInt => panic!("ICE: Tried to codegen str(AssumeInt)"),
 			Type::UnboundIdent(_) => panic!("ICE: Tried to codegen str(UnboundIdent)"),
 			Type::Unassigned => panic!("ICE: Tried to codegen str(Unassigned)"),
+			Type::UnboundCStructPtr(_) => panic!("ICE: Tried to codegen str(UnboundCStructPtr)"),
 		}
 	}
 

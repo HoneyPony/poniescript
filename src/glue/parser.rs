@@ -1,6 +1,6 @@
 use std::{fs::File, path::Path};
 
-use crate::{db::*, expr::{Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation};
+use crate::{db::*, expr::{Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
 use crate::error::Error;
 
 pub struct Parser<'b> {
@@ -269,6 +269,12 @@ impl<'b> Parser<'b> {
     // TODO: This won't be able to return TypId forever, it will have to actually
     // resolve types. But this works for now...?
     fn c_type(&mut self) -> Result<TypId> {
+        if self.match_(GlueTok::Struct)?.is_some() {
+            let struct_name = expected!(self, GlueTok::Identifier, "Identifier after 'struct'")?;
+            expected!(self, GlueTok::Star, "'*' after struct name")?;
+            self.db.put_type(Type::UnboundCStructPtr(struct_name.lexeme));
+        }
+
         let id = expected!(self, GlueTok::Identifier, "C type expression")?;
 
         if id.lexeme == self.db.put_str("ps_int") {
