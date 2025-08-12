@@ -209,6 +209,7 @@ pub struct Db {
 
 	known_var_cnames: FxHashMap<VarId, &'static str>,
 	known_fun_cnames: FxHashMap<FunId, &'static str>,
+	known_class_cnames: FxHashMap<ClassId, &'static str>,
 
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
@@ -321,6 +322,7 @@ impl Db {
 
 			known_var_cnames: FxHashMap::default(),
 			known_fun_cnames: FxHashMap::default(),
+			known_class_cnames: FxHashMap::default(),
 
 			type_repr_cache: RefCell::new(FxHashMap::default()),
 			fun_cparams_cache: Vec::new(),
@@ -472,6 +474,10 @@ impl Db {
 
 	pub fn know_fun_cname(&mut self, fun: FunId, cname: &'static str) {
 		self.known_fun_cnames.insert(fun, cname);
+	}
+
+	pub fn know_class_cname(&mut self, class: ClassId, struct_cname: &'static str) {
+		self.known_class_cnames.insert(class, struct_cname);
 	}
 
 	pub fn put_sig(&mut self, sig: &Sig) -> SigId {
@@ -941,16 +947,16 @@ impl Db {
 		unsafe { self.class_cname_cache.get_unchecked(class.to_index()) }
 	}
 
-	pub fn get_class_preparer_cname(&self, class: ClassId) -> &'static str {
-		unsafe { self.class_preparer_cache.get_unchecked(class.to_index()) }
-	}
+	// pub fn get_class_preparer_cname(&self, class: ClassId) -> &'static str {
+	// 	unsafe { self.class_preparer_cache.get_unchecked(class.to_index()) }
+	// }
 
 	pub fn repr_var(&self, var: VarId) -> &str {
 		self.get(self.get(var).name)
 	}
 
 	pub fn repr_class(&self, class: ClassId) -> &str {
-		self.get(self.get(class).name.lexeme)
+		self.get(self.get(class).name)
 	}
 
 	pub fn repr_var_type(&self, var: VarId) -> &'static str {
@@ -1242,7 +1248,12 @@ impl Db {
 		let mut used_set = FxHashMap::<StrId, u64>::default();
 
 		for class in self.arenas.arena_class.iter() {
-			let str_id = self.get(class).name.lexeme;
+			if let Some(desired) = self.known_class_cnames.get(&class) {
+				self.class_cname_cache.push(desired);
+				continue;
+			}
+
+			let str_id = self.get(class).name;
 			let cname = match used_set.entry(str_id) {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
 					let result = *val.get();
@@ -1258,7 +1269,7 @@ impl Db {
 			let preparer = format!("i{}", cname).leak();
 
 			self.class_cname_cache.push(cname);
-			self.class_preparer_cache.push(preparer);
+			//self.class_preparer_cache.push(preparer);
 		}
 	}
 

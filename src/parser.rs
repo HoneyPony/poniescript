@@ -200,7 +200,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 				todo!("location_of() for functions now that 'name' is StrId")
 			}
 			ScopeEntry::Class(class) => {
-				self.db.get(*class).name.location.clone()
+				todo!("location_of() for classes now that 'name' is StrId")
+				//self.db.get(*class).name.location.clone()
 			}
 			ScopeEntry::None => todo!("location_of() for ScopeEntry::None"),
 		}
@@ -1202,7 +1203,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let name_str = name.lexeme;
 
 		let identity = self.db.push(Class {
-			name,
+			name: name_str,
 			vars,
 			funs,
 			var_map,

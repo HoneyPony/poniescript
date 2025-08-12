@@ -124,7 +124,7 @@ impl Type {
 			}
 
 			Type::Class(class) => {
-				db.get(db.get(*class).name.lexeme).to_string()
+				db.get(db.get(*class).name).to_string()
 			}
 			Type::ArrayOf(typ) => {
 				format!("Array[{}]", db.get(*typ).to_string(db))

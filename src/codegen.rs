@@ -1,3 +1,5 @@
+use rustc_hash::FxHashSet;
+
 use crate::arena::ArenaKey;
 use crate::{db::*, Args};
 use crate::lexer::Tok;
@@ -857,16 +859,33 @@ impl<'a> Codegen<'a> {
 					// Note: The value is a pointer-to-struct cl_Thing, so
 					// we want to pass the direct value to the preparer.
 					// e.g. struct cl_Thing *thing = malloc(); icl_Thing(thing);
-					inf_writeln!(into, "{indent}{}({});",
-						self.db.get_class_preparer_cname(new.class),
-						val.val);
+					//inf_writeln!(into, "{indent}{}({});",
+					//	self.db.get_class_preparer_cname(new.class),
+					//	val.val);
 
+					// TODO: Reuse this somehow?
+					let mut dont_initialize = FxHashSet::default();
+
+					// Run all the initializers from the new{} first.
 					for init in &new.initializers {
 						let rhs = self.expr(ast, init.value, into);
 						assert!(rhs.typ == self.db.get_var_type(init.var));
 						let varname = self.db.get_cname(init.var);
 
 						inf_writeln!(into, "{indent}{}->{varname} = {rhs};", val.val);
+
+						dont_initialize.insert(init.var);
+					}
+
+					// Run all the initializers from the class second.
+					for var in &self.db.get(new.class).vars {
+						// Skip any variables from the new{} expression.
+						if dont_initialize.contains(var) { continue; }
+
+						// Compile the assignment.
+						if let Some(initializer) = self.db.get(*var).initializer {
+							self.compile_assign(ast, *var, initializer, into, false);
+						}
 					}
 				}
 
@@ -1077,27 +1096,14 @@ impl<'a> Codegen<'a> {
 		// Simultaneously write the variable generator. 
 		let enclosing_indent = self.indent_level;
 		self.indent_level = 1;
-		let mut preparer = String::new();
 
-		inf_writeln!(preparer, "void {}(struct {} *this) {{",
-				self.db.get_class_preparer_cname(class_declare.identity),
-				self.db.get_class_cname(class_declare.identity));
-		
 		for var in &self.db.get(class_declare.identity).vars {
-			// Compile the assignment into the 'preparer' function. This is where
-			// the variable value will be initialized.
-			if let Some(initializer) = self.db.get(*var).initializer {
-				self.compile_assign(ast, *var, initializer, &mut preparer, false);
-			}
 			// Compile the variable declaration into the struct.
 			inf_writeln!(struc, "\t{} {};", self.db.get_var_ctype(*var), self.db.get_cname(*var));
 		}
 
 		inf_writeln!(struc, "}};");
 		self.structs.push(struc);
-
-		inf_writeln!(preparer, "}}");
-		self.functions.push(preparer);
 
 		self.indent_level = enclosing_indent;
 
@@ -1276,12 +1282,6 @@ impl<'a> Codegen<'a> {
 
 		for class in &module.classes {
 			self.compile_class(ast, class);
-
-			// For now: Write the forward declarations for these icl's here.
-			// We might need to change how this works when we have nested classes.
-			inf_writeln!(out.fun_declare, "void {}(struct {} *this);",
-				self.db.get_class_preparer_cname(class.identity),
-				self.db.get_class_cname(class.identity));
 		}
 
 		self.compile_string_constant_init(&mut out.string_const_define, &mut out.string_const_init);

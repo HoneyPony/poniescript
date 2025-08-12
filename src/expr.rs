@@ -176,7 +176,7 @@ pub struct Sig {
 }
 
 pub struct Class {
-	pub name: Token,
+	pub name: StrId,
 	pub vars: Vec<VarId>,
 	pub funs: Vec<FunId>,
 

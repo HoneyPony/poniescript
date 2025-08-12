@@ -374,7 +374,7 @@ impl<'db> Binder<'db> {
 		self.in_class = true;
 
 		let class = self.db.get(class_declare.identity);
-		let name = self.db.get(class.name.lexeme);
+		let name = self.db.get(class.name);
 		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name);
 		self.checkers.push(new_scope);
 

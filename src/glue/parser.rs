@@ -1,6 +1,8 @@
 use std::{fs::File, path::Path};
 
-use crate::{db::*, expr::{Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
+use rustc_hash::FxHashMap;
+
+use crate::{db::*, expr::{Class, Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
 use crate::error::Error;
 
 pub struct Parser<'b> {
@@ -187,6 +189,77 @@ impl<'b> Parser<'b> {
         todo!()
     }
 
+    fn class(&mut self) -> Result<()> {
+        let location = self.start();
+        expected!(self, GlueTok::AnnotateClass, "PS_CLASS")?;
+
+        expected!(self, GlueTok::LeftParen, "'(' after PS_CLASS")?;
+        let name_override = self.match_(GlueTok::String)?;
+        expected!(self, GlueTok::RightParen, "')' after PS_CLASS")?;
+
+        expected!(self, GlueTok::Struct, "'struct' after PS_CLASS")?;
+        let c_name = expected!(self, GlueTok::Identifier, "Identifier after 'struct'")?;
+
+		let mut funs = Vec::<FunId>::new();
+		let mut vars = Vec::<VarId>::new();
+
+		let mut var_map = FxHashMap::default();
+		let mut fun_map = FxHashMap::default();
+
+        // If there's a semicolon, this is a completely opaque class (which is
+        // fine). Otherwise, we can look for member variables in the struct
+        // definition.
+        if self.match_(GlueTok::Semicolon)?.is_some() {
+
+        }
+        else {
+            expected!(self, GlueTok::LeftBrace, "';' or '{{' after struct name")?;
+
+            // TODO: Make sure it has a struct ps_object object field.
+
+            // Keep reading tokens, if we see a PS_VAR it's a member variable.
+            while !self.at(GlueTok::RightBrace) && !self.is_at_end() {
+                if self.at(GlueTok::AnnotateVar) {
+                    let var = self.var()?;
+                    vars.push(var);
+                    var_map.insert(self.db.get(var).name, var);
+                }
+                else {
+                    self.advance()?;
+                }
+            }
+
+            expected!(self, GlueTok::RightBrace, "'}}' after struct definition")?;
+        }
+
+        let class_name = match name_override {
+            Some(name) => {
+                // Chop off the quotes around the name
+                let str = self.db.get(name.lexeme);
+                let str = &str[1..str.len() - 1];
+                self.db.put_str(str)
+            },
+            None => c_name.lexeme
+        };
+
+        let class: ClassId = self.db.push(Class {
+            name: class_name,
+            vars: vars.clone(),
+            funs,
+            var_map,
+            fun_map,
+        });
+
+        for var in vars {
+            self.db.get_mut(var).class = Some(class);
+        }
+
+        self.db.add_full_name(self.db.get(class_name), ScopeEntry::Class(class));
+        self.db.know_class_cname(class, self.db.get(c_name.lexeme));
+
+        Ok(())
+    }
+
     fn fun(&mut self) -> Result<()> {
         let location = self.start();
         expected!(self, GlueTok::AnnotateFun, "PS_FUN")?;
@@ -291,7 +364,7 @@ impl<'b> Parser<'b> {
         Err(ParseErr::SyntaxErr)
     }
 
-    fn var(&mut self) -> Result<()> {
+    fn var(&mut self) -> Result<VarId> {
         let location = self.start();
         expected!(self, GlueTok::AnnotateVar, "PS_VAR")?;
 
@@ -321,7 +394,7 @@ impl<'b> Parser<'b> {
         self.db.add_full_name(self.db.get(var_name), ScopeEntry::Var(var));
         
 
-        Ok(())
+        Ok(var)
     }
 
     fn eat_until(&mut self, tok: GlueTok) -> Result<()> {
@@ -383,9 +456,10 @@ impl<'b> Parser<'b> {
         loop {
             match self.peek_typ() {    
                 GlueTok::Eof => return Ok(()),
-                GlueTok::AnnotateVar => self.var()?,    
+                GlueTok::AnnotateVar => { self.var()?; }    
                 GlueTok::AnnotateFun => self.fun()?,
                 GlueTok::AnnotateMember => self.member()?,
+                GlueTok::AnnotateClass => self.class()?,
                 _ => {
                     // Ignore all other tokens.
                     let next = self.advance()?;
