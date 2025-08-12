@@ -208,6 +208,7 @@ pub struct Db {
 	ctype_cache: Vec<&'static str>,
 
 	known_var_cnames: FxHashMap<VarId, &'static str>,
+	known_fun_cnames: FxHashMap<FunId, &'static str>,
 
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
@@ -319,6 +320,7 @@ impl Db {
 			ctype_cache: Vec::new(),
 
 			known_var_cnames: FxHashMap::default(),
+			known_fun_cnames: FxHashMap::default(),
 
 			type_repr_cache: RefCell::new(FxHashMap::default()),
 			fun_cparams_cache: Vec::new(),
@@ -466,6 +468,10 @@ impl Db {
 
 	pub fn know_var_cname(&mut self, var: VarId, cname: &'static str) {
 		self.known_var_cnames.insert(var, cname);
+	}
+
+	pub fn know_fun_cname(&mut self, fun: FunId, cname: &'static str) {
+		self.known_fun_cnames.insert(fun, cname);
 	}
 
 	pub fn put_sig(&mut self, sig: &Sig) -> SigId {
@@ -901,7 +907,7 @@ impl Db {
 
 	pub fn get_fun_name(&self, fun: FunId) -> &str {
 		if let Some(name) = &self.get(fun).name {
-			self.get(name.lexeme)
+			self.get(*name)
 		}
 		else {
 			"<anonymous>"
@@ -1261,9 +1267,16 @@ impl Db {
 		let mut used_set = FxHashMap::<StrId, u64>::default();
 
 		for fun in self.arenas.arena_fun.iter() {
+			// TODO: Also put these into the used set? We will probably have to
+			// make the known_ dictionaries use StrIds instead of &str
+			if let Some(desired) = self.known_fun_cnames.get(&fun) {
+				self.fun_cname_cache.push(desired);
+				continue;
+			}
+
 			// TODO: Actual name mangling and such
 			let cname_id = if let Some(name) = &self.get(fun).name {
-				name.lexeme
+				*name
 			} else { self.str_lambda };
 
 			let cname = match used_set.entry(cname_id) {

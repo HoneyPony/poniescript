@@ -152,7 +152,7 @@ pub struct Var {
 }
 
 pub struct Fun {
-	pub name: Option<Token>,
+	pub name: Option<StrId>,
 	pub sig: SigId,
 
 	/// Parameters are the values when the function is defined, arguments
@@ -162,7 +162,9 @@ pub struct Fun {
 
 	pub class: Option<ClassId>,
 
-	pub expression: ExprId,
+	/// Should be Some() if this is a function we are compiling, or None if
+	/// this is an imported function from a C module.
+	pub expression: Option<ExprId>,
 }
 
 /// Represents a function signature. Includes the types of all parameters

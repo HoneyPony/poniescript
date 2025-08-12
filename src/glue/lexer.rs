@@ -42,7 +42,9 @@ pub enum GlueTok {
 
 	AnnotateVar,
     AnnotateFun,
+	AnnotateClass,
     AnnotateMember,
+	AnnotateAbi,
 
     Struct, Void, 
 
@@ -66,9 +68,12 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, GlueTok> {
 		map.insert(key, value);
 	};
 
-    add("PS_FUN",    GlueTok::AnnotateFun);
-    add("PS_VAR",    GlueTok::AnnotateVar);
+    add("PS_FUN"   , GlueTok::AnnotateFun);
+    add("PS_VAR"   , GlueTok::AnnotateVar);
+	add("PS_CLASS" , GlueTok::AnnotateClass);
     add("PS_MEMBER", GlueTok::AnnotateMember);
+	add("PS_ABI"   , GlueTok::AnnotateAbi);
+	add("struct"   , GlueTok::Struct);
 
 	return map;
 }

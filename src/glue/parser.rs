@@ -1,6 +1,6 @@
 use std::{fs::File, path::Path};
 
-use crate::{db::*, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation};
+use crate::{db::*, expr::{Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation};
 use crate::error::Error;
 
 pub struct Parser<'b> {
@@ -188,7 +188,82 @@ impl<'b> Parser<'b> {
     }
 
     fn fun(&mut self) -> Result<()> {
-        todo!()
+        let location = self.start();
+        expected!(self, GlueTok::AnnotateFun, "PS_FUN")?;
+
+        expected!(self, GlueTok::LeftParen, "'(' after PS_FUN")?;
+        let name_override = self.match_(GlueTok::String)?;
+        expected!(self, GlueTok::RightParen, "')' after PS_FUN")?;
+
+        let c_ret_type = self.c_type()?;
+        let c_name = expected!(self, GlueTok::Identifier, "Function name")?;
+
+        expected!(self, GlueTok::LeftParen, "'(' after function name")?;
+        expected!(self, GlueTok::AnnotateAbi, "PS_ABI in function signature")?;
+        expected!(self, GlueTok::LeftParen, "'(' after PS_ABI")?;
+
+        let mut sig = Sig { parameters: vec![], return_type: c_ret_type };
+        let mut params: Vec<VarId> = vec![];
+        while !self.at(GlueTok::RightParen) && !self.is_at_end() {
+            let c_type = self.c_type()?;
+            
+            sig.parameters.push(c_type);
+
+            // We could possibly skip variable names, but for now it's easy
+            // enough to require them.
+            let var_cname = expected!(self, GlueTok::Identifier, "Parameter name")?;
+            let identity = self.db.new_var(var_cname.lexeme, c_type, None, false, None,
+			    self.last_location.clone());
+
+            params.push(identity);
+
+            if !self.at(GlueTok::RightParen) {
+                expected!(self, GlueTok::Comma, "',' or ')' after parameter name")?;
+            }
+        }
+
+        expected!(self, GlueTok::RightParen, "')' after PS_ABI")?;
+        expected!(self, GlueTok::RightParen, "')' after parameter list")?;
+
+        let fun_name = match name_override {
+            Some(name) => {
+                // Chop off the quotes around the name
+                let str = self.db.get(name.lexeme);
+                let str = &str[1..str.len() - 1];
+                self.db.put_str(str)
+            },
+            None => c_name.lexeme
+        };
+
+        // TODO: Put Location in Fun
+        let location = self.end(location);
+
+        let sig_id = self.db.put_sig(&sig);
+        let fun: FunId = self.db.push(Fun {
+            name: Some(fun_name),
+            sig: sig_id,
+            // TODO: Is there a way to skip the parameters array given that
+            // funs all have a sig?
+            parameters: params,
+            return_type: c_ret_type,
+            class: None,
+            expression: None,
+        });
+
+        // TODO: Handle name collisions here as well?
+        self.db.add_full_name(self.db.get(fun_name), ScopeEntry::Fun(fun));
+        self.db.know_fun_cname(fun, self.db.get(c_name.lexeme));
+
+        if self.match_(GlueTok::Semicolon)?.is_some() {
+            // Ok, function declaration, we're good
+        }
+        else {
+            // Expect { then eat until closing 
+            expected!(self, GlueTok::LeftBrace, "';' or '{{' after function")?;
+            self.ignore_until_rbrace()?;
+        }
+
+        Ok(())
     }
 
     // TODO: This won't be able to return TypId forever, it will have to actually

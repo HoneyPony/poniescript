@@ -196,12 +196,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 		match entry {
 			ScopeEntry::Var(var) => self.db.get(*var).location.clone(),
 			ScopeEntry::Fun(fun) => {
-				if let Some(name) = &self.db.get(*fun).name {
-					name.location.clone()
-				}
-				else {
-					todo!("location_of() for functions without names")
-				}
+				// We really should just store a SourceLocation on the function.
+				todo!("location_of() for functions now that 'name' is StrId")
 			}
 			ScopeEntry::Class(class) => {
 				self.db.get(*class).name.location.clone()
@@ -1099,12 +1095,12 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		// TODO: Maybe make this also take a non-ref for speed?
 		let identity = self.db.push(Fun {
-			name,
+			name: name_str,
 			parameters,
 			return_type,
 			sig: self.db.sig_unassigned,
 			class: None, // Class is not assigned for now, the class parser will assign it later.
-			expression: value,
+			expression: Some(value),
 		});
 
 		// We must pop our pushed_name before we put the function name in the scope.
@@ -1185,7 +1181,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 					let fun = self.fun_declaration(true)?;
 					funs.push(fun.identity);
 					// We require name so this must have a name.
-					fun_map.insert(self.db.get(fun.identity).name.as_ref().unwrap().lexeme, fun.identity);
+					fun_map.insert(*self.db.get(fun.identity).name.as_ref().unwrap(), fun.identity);
 					declare_funs.push(fun);
 				},
 				Tok::Class => {

@@ -64,7 +64,9 @@ impl<'a> VisitAst for OrderVisitor<'a> {
 
         // Additionally visit function body
         // TODO: Cache dependencies of a function body..?
-        self.visit_expr(ast, db, db.get(call.identity).expression);
+        if let Some(expression) = db.get(call.identity).expression {
+            self.visit_expr(ast, db, expression);
+        }
     }
 
     fn visit_funcapture(&mut self,ast: &Ast, db: &mut Db, id:ExprId) {
@@ -81,7 +83,14 @@ impl<'a> VisitAst for OrderVisitor<'a> {
         // fun a_fun() { print(a); }
         //
         // But I think that's OK.
-        self.visit_expr(ast, db, db.get(capt.identity).expression);
+        if let Some(expression) = db.get(capt.identity).expression {
+            // Only visit functions that we have the source code to.
+            //
+            // Perhaps imported functions could be banned from being used in
+            // variable initialization? On the other hand, imported functions
+            // should simply not actually read from those variables...
+            self.visit_expr(ast, db, expression);
+        }
     }
 }
 
