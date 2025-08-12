@@ -136,7 +136,7 @@ impl Expr {
 
 /// Information for a variable.
 pub struct Var {
-	pub name: Token,
+	pub name: StrId,
 	pub typ: TypId,
 
 	/// If this variable is a member of a class, this stores the class id.

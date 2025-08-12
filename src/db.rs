@@ -15,6 +15,8 @@ use crate::typ::Type;
 use crate::source::{Source, SourceLocation};
 use crate::{arena::*, inf_writeln, Args};
 
+use crate::glue::lexer::GlueTok;
+
 use crate::lexer::{Tok, Token};
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -200,6 +202,7 @@ pub struct Db {
 	str_simple_const_map: FxHashMap<String, StrConstId>,
 
 	key_lookup_map: FxHashMap<StrId, Tok>,
+	glue_key_lookup_map: FxHashMap<StrId, GlueTok>,
 
 	/// Keep a cache of all generated ctypes so that we can quickly re-use them.
 	ctype_cache: Vec<&'static str>,
@@ -311,6 +314,7 @@ impl Db {
 			str_simple_const_map: FxHashMap::default(),
 
 			key_lookup_map: FxHashMap::default(),
+			glue_key_lookup_map: FxHashMap::default(),
 
 			ctype_cache: Vec::new(),
 
@@ -418,6 +422,7 @@ impl Db {
 		// HashMap, but the db is created once per whole program run,
 		// so it's not a huge inefficiency.
 		db.key_lookup_map = crate::lexer::build_key_lookup_map(&mut db);
+		db.glue_key_lookup_map = crate::glue::lexer::build_key_lookup_map(&mut db);
 
 		(db.prop_str.length_key, db.prop_str.length) = db.synthesize_property("length", "length", db.types.int);
 
@@ -445,7 +450,7 @@ impl Db {
 	pub fn synthesize_property(&mut self, str: &str, cname: &'static str, typ: TypId) -> (StrId, VarId) {
 		let key = self.put_str(str);
 		let var = Var {
-			name: self.synthetic_id(key),
+			name: key,
 			typ,
 			class: None,
 			init: false,
@@ -457,6 +462,10 @@ impl Db {
 		self.known_var_cnames.insert(var, cname);
 
 		(key, var)
+	}
+
+	pub fn know_var_cname(&mut self, var: VarId, cname: &'static str) {
+		self.known_var_cnames.insert(var, cname);
 	}
 
 	pub fn put_sig(&mut self, sig: &Sig) -> SigId {
@@ -802,6 +811,10 @@ impl Db {
 		self.key_lookup_map.get(&id).map(|tok| *tok)
 	}
 
+	pub fn lookup_glue_key(&self, id: StrId) -> Option<GlueTok> {
+		self.glue_key_lookup_map.get(&id).map(|tok| *tok)
+	}
+
 	/// Performs an efficient lookup by not generating new StrIds for names
 	/// that do not exist.
 	pub fn lookup_full_name(&self, name: &str) -> ScopeEntry {
@@ -823,7 +836,7 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: Token, typ: TypId, class: Option<ClassId>, init: bool, initializer: Option<ExprId>, location: SourceLocation) -> VarId {
+	pub fn new_var(&mut self, name: StrId, typ: TypId, class: Option<ClassId>, init: bool, initializer: Option<ExprId>, location: SourceLocation) -> VarId {
 		let var = Var {
 			name,
 			typ,
@@ -927,7 +940,7 @@ impl Db {
 	}
 
 	pub fn repr_var(&self, var: VarId) -> &str {
-		self.get(self.get(var).name.lexeme)
+		self.get(self.get(var).name)
 	}
 
 	pub fn repr_class(&self, class: ClassId) -> &str {
@@ -1187,7 +1200,7 @@ impl Db {
 				continue;
 			}
 
-			let str_id = self.get(var).name.lexeme;
+			let str_id = self.get(var).name;
 			let mut cname = match used_set.entry(str_id) {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
 					let result = *val.get();

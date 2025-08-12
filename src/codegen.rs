@@ -1295,6 +1295,14 @@ impl<'a> Codegen<'a> {
 		self.indent_level = 1;
 		for global in &self.db.globals {
 			let global = *global;
+
+			let Some(initializer) = self.db.get(global).initializer else {
+				// If there is no initializer, this must be an extern variable,
+				// so we don't codegen its initializer.
+				continue;
+				//panic!("ICE: Codegen of global variable without initializer");
+			};
+
 			// Just dierectly encode the indentation..
 			let mut global_name = self.db.get_cname(global);
 			if args.hot {
@@ -1307,9 +1315,7 @@ impl<'a> Codegen<'a> {
 			inf_writeln!(outputs.global_define, "{} {};",
 				self.db.get_var_ctype(global), global_name);
 
-			let Some(initializer) = self.db.get(global).initializer else {
-				panic!("ICE: Codegen of global variable without initializer");
-			};
+			
 
 			// In hot-code reloading, we need to do two things:
 			// 1. Allocate the variable based on a pointer.
@@ -1356,6 +1362,11 @@ impl<'a> Codegen<'a> {
 		}
 		if args.hot {
 			writeln!(output, "#include \"poni/poni_hot.h\"")?;
+		}
+
+		writeln!(output, "// --- imports ---\n")?;
+		for path in &args.imports {
+			writeln!(output, "#include \"{}\"", path.display())?;
 		}
 
 		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;

@@ -6,13 +6,15 @@
 
 static inline
 PS_FUN()
-ps_int add(ps_int x, ps_int y) {
+ps_int
+add(ps_int x, ps_int y) {
     return x + y;
 }
 
 static inline
 PS_FUN("sub")
-ps_int sub(ps_int x, ps_int y) {
+ps_int
+subtract(ps_int x, ps_int y) {
     return x - y;
 }
 

@@ -184,6 +184,22 @@ fn parse_all_modules(ast: &mut Ast, db: &mut db::Db, args: &Args) -> (Vec<Module
 	(modules, had_error)
 }
 
+fn do_c_modules(db: &mut db::Db, args: &Args) -> bool {
+	for path in &args.imports {
+		match glue::parser::parse_import(db, path) {
+			Ok(false) => return false,
+			Ok(true) => return true,
+			Err(err) => {
+				eprintln!("Unable to parse imported file {}: {err}", path.display());
+				return true;
+			}
+		}
+	}
+
+	// If there were no imports, there is no error.
+	return false;
+}
+
 struct TimeHelper {
 	duration: Duration
 }
@@ -264,6 +280,16 @@ fn main() {
 	let mut db = db::Db::new();
 	let mut ast = db::Ast::new();
 	db.test_mode = args.test_mode;
+
+	// Pass 0: Handle C modules?
+	let had_error = do_c_modules(&mut db, &args);
+
+	if had_error {
+		report_errors(&db);
+		exit(7);
+	}
+
+	let timer = duration(timer, "imports", &mut duration_set);
 
 	// Pass 1: Parse
 	let (mut modules, had_error) = parse_all_modules(&mut ast, &mut db, &args);

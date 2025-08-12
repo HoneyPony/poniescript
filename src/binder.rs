@@ -491,7 +491,7 @@ impl<'db> Binder<'db> {
 	/// FunDeclare.
 	fn visit_var_type(&mut self, var: VarId) {
 		// TODO: Avoid this clone.
-		let var_type = self.visit_type(self.db.get_var_type(var), &self.db.get(var).name.location.clone());
+		let var_type = self.visit_type(self.db.get_var_type(var), &self.db.get(var).location.clone());
 		self.db.get_mut(var).typ = var_type;
 	}
 

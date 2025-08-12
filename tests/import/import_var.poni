@@ -1,0 +1,12 @@
+// requires import_var.h
+
+fun init() {
+    print(horses);      //! 20
+    print(water_level); //! 10.000000
+
+    horses      = horses      + 10;
+    water_level = water_level - 5;
+
+    print(horses);      //! 30
+    print(water_level); //! 5.000000
+}
