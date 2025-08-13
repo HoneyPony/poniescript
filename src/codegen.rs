@@ -884,7 +884,11 @@ impl<'a> Codegen<'a> {
 
 						// Compile the assignment.
 						if let Some(initializer) = self.db.get(*var).initializer {
-							self.compile_assign(ast, *var, initializer, into, false);
+							// TODO: Some way to re-use compiled exprs?
+							let rhs = self.expr(ast, initializer, into); 
+							let varname = self.db.get_cname(*var);
+							inf_writeln!(into, "{indent}{}->{varname} = {rhs};", val.val);
+							//self.compile_assign(ast, *var, initializer, into, false);
 						}
 					}
 				}
