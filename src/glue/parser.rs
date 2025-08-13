@@ -196,6 +196,7 @@ impl<'b> Parser<'b> {
         expected!(self, GlueTok::LeftParen, "'(' after PS_CLASS")?;
         let name_override = self.match_(GlueTok::String)?;
         expected!(self, GlueTok::RightParen, "')' after PS_CLASS")?;
+        let location = self.end(location);
 
         expected!(self, GlueTok::Struct, "'struct' after PS_CLASS")?;
         let c_name = expected!(self, GlueTok::Identifier, "Identifier after 'struct'")?;
@@ -248,6 +249,7 @@ impl<'b> Parser<'b> {
             funs,
             var_map,
             fun_map,
+            location
         });
 
         for var in vars {
@@ -321,6 +323,7 @@ impl<'b> Parser<'b> {
             return_type: c_ret_type,
             class: None,
             expression: None,
+            location,
         });
 
         // TODO: Handle name collisions here as well?

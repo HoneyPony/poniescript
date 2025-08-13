@@ -197,11 +197,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 			ScopeEntry::Var(var) => self.db.get(*var).location.clone(),
 			ScopeEntry::Fun(fun) => {
 				// We really should just store a SourceLocation on the function.
-				todo!("location_of() for functions now that 'name' is StrId")
+				self.db.get(*fun).location.clone()
 			}
 			ScopeEntry::Class(class) => {
-				todo!("location_of() for classes now that 'name' is StrId")
-				//self.db.get(*class).name.location.clone()
+				self.db.get(*class).location.clone()
 			}
 			ScopeEntry::None => todo!("location_of() for ScopeEntry::None"),
 		}
@@ -1075,6 +1074,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		expected!(self, Tok::RightParen, "')' after function parameter list")?;
 
+		let fun_location = self.end(location.clone());
+
 		let mut return_type = self.db.types.void;
 
 		if self.match_(Tok::LeftArrow)?.is_some() {
@@ -1102,6 +1103,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			sig: self.db.sig_unassigned,
 			class: None, // Class is not assigned for now, the class parser will assign it later.
 			expression: Some(value),
+			location: fun_location, // We always have a location even if we don't have a name
 		});
 
 		// We must pop our pushed_name before we put the function name in the scope.
@@ -1207,7 +1209,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 			vars,
 			funs,
 			var_map,
-			fun_map
+			fun_map,
+			location: name.location
 		});
 
 		for var in &declare_vars {

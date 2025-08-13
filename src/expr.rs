@@ -165,6 +165,9 @@ pub struct Fun {
 	/// Should be Some() if this is a function we are compiling, or None if
 	/// this is an imported function from a C module.
 	pub expression: Option<ExprId>,
+
+	/// Location pointing to where the function is declared/defined.
+	pub location: SourceLocation,
 }
 
 /// Represents a function signature. Includes the types of all parameters
@@ -182,4 +185,7 @@ pub struct Class {
 
 	pub var_map: FxHashMap<StrId, VarId>,
 	pub fun_map: FxHashMap<StrId, FunId>,
+
+	/// Location pointing to where the class is declared/defined.
+	pub location: SourceLocation,
 }
