@@ -31,6 +31,11 @@ struct Codegen<'a> {
 
 	fun_init_buffer: String,
 
+	/// For now, when we are generated values that are referencing 'this', and
+	/// we need the this_val to be something other than what it is, we can
+	/// store a Tmp(usize) here.
+	this_val: Option<usize>,
+
 	db: &'a Db
 }
 
@@ -84,6 +89,7 @@ enum Val {
 		lit: &'static str
 	},
 	DirectVar {
+		this_val: Option<usize>,
 		name: &'static str,
 		// The number of class accesses we have to walk to get to the variable.
 		//
@@ -191,13 +197,19 @@ impl std::fmt::Display for Val {
 		match self {
 			Val::Tmp(idx) => write!(f, "tmp{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
-			Val::DirectVar { name, depth } => {
+			Val::DirectVar { this_val, name, depth } => {
 				if *depth > 0 {
-					// TODO: The problem with this system is it doesn't seem
-					// like it can meaningfully support static variables in a
-					// clean way. We probably do want to change into synthesizing
-					// AST nodes of some sort.
-					write!(f, "this->")?;
+					if let Some(idx) = this_val {
+						let val = Val::Tmp(*idx);
+						write!(f, "{val}->")?;
+					}
+					else {
+						// TODO: The problem with this system is it doesn't seem
+						// like it can meaningfully support static variables in a
+						// clean way. We probably do want to change into synthesizing
+						// AST nodes of some sort.
+						write!(f, "this->")?;
+					}
 					let depth_loop = depth - 1;
 					while depth_loop > 0 {
 						todo!("nested class support");
@@ -283,6 +295,8 @@ impl<'a> Codegen<'a> {
 			indent_level: 0,
 
 			db,
+
+			this_val: None,
 
 			fun_init_buffer: String::new(),
 
@@ -551,7 +565,7 @@ impl<'a> Codegen<'a> {
 					// right one.
 				}
 
-				Val::DirectVar { name: self.db.get_cname(variable.identity), depth }
+				Val::DirectVar { this_val: self.this_val, name: self.db.get_cname(variable.identity), depth }
 					.typed(self.db.get_var_type(variable.identity))
 			},
 			Expr::Assign(assign) => {
@@ -851,6 +865,14 @@ impl<'a> Codegen<'a> {
 					// TODO: Reuse this somehow?
 					let mut dont_initialize = FxHashSet::default();
 
+					let Val::Tmp(idx) = val.val else {
+						panic!("ICE: New class val wasn't a Tmp");
+					};
+
+					let enclosing_this_val = self.this_val;
+					self.this_val = Some(idx);
+					self.inside_class.push(new.class);
+
 					// Run all the initializers from the new{} first.
 					for init in &new.initializers {
 						let rhs = self.expr(ast, init.value, into);
@@ -876,6 +898,9 @@ impl<'a> Codegen<'a> {
 							//self.compile_assign(ast, *var, initializer, into, false);
 						}
 					}
+
+					self.inside_class.pop();
+					self.this_val = enclosing_this_val;
 				}
 
 				val
@@ -1161,7 +1186,7 @@ impl<'a> Codegen<'a> {
 			// right one.
 		}
 
-		Val::DirectVar { name: self.db.get_cname(var), depth }
+		Val::DirectVar { this_val: self.this_val, name: self.db.get_cname(var), depth }
 			.typed(self.db.get_var_type(var))
 	}
 
