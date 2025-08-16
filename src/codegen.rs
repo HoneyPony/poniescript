@@ -138,21 +138,6 @@ impl TypedVal {
 	}
 }
 
-enum PromotedVal {
-	Simple(Val),
-	Promoted(Val, &'static str),
-	Bottom,
-}
-
-impl PromotedVal {
-	pub fn is_bottom(&self) -> bool {
-		match self {
-			PromotedVal::Bottom => true,
-			PromotedVal::Simple(v) | PromotedVal::Promoted(v, _) => v.is_bottom(),
-		}
-	}
-}
-
 impl Val {
 	pub fn is_bottom(&self) -> bool {
 		match self {
