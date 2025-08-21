@@ -195,7 +195,7 @@ macro_rules! inf_writeln {
 impl std::fmt::Display for Val {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Val::Tmp(idx) => write!(f, "tmp{}", idx),
+			Val::Tmp(idx) => write!(f, "t{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
 			Val::DirectVar { this_val, name, depth } => {
 				if *depth > 0 {
@@ -1219,6 +1219,9 @@ impl<'a> Codegen<'a> {
 	fn compile_function(&mut self, ast: &Ast, fun: FunId, body: ExprId) {
 		let is_init = Some(fun) == self.db.fun_init;
 
+		let enclosing_val = self.val_idx;
+		// Reset vals for each function.
+		self.val_idx = 0;
 		let enclosing_indent = self.indent_level;
 		self.indent_level = 1;
 		let indent = self.indent();
@@ -1253,6 +1256,7 @@ impl<'a> Codegen<'a> {
 		self.return_types.pop();
 
 		self.indent_level = enclosing_indent;
+		self.val_idx = enclosing_val;
 
 		// init() fun has no surrounding scope
 		if !is_init { inf_writeln!(own_buffer, "}}"); }
