@@ -32,6 +32,8 @@ pub fn generate(tests_file: &mut File) {
 		("binary/", "binary_doubleblock"),
 		("binary/", "binary_bottom"),
 		("binary/", "binary_parens"),
+		("binary/", "tuple"),
+		("binary/", "err_class"),
 
 		("cyclic/", "class_members_and_fun_thru_param"),
 		("cyclic/", "class_members_expr"),
