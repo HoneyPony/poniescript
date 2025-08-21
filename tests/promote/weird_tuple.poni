@@ -1,0 +1,13 @@
+// This test causes something like a partial_promote from a 
+// float to a float, due to the tuple types partially matching.
+fun init() {
+    var a = (1,   2.0);
+    var b = (2.0, 4  );
+
+    var c = (3.0, 3.0);
+    
+    c = a;
+    print(c); //! (1.000000, 2.000000)
+    c = b;
+    print(c); //! (2.000000, 4.000000)
+}

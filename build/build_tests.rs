@@ -150,7 +150,9 @@ pub fn generate(tests_file: &mut File) {
 
 		("lerp/", "basic_including_bools"),
 		("lerp/", "class"),
+		("lerp/", "promote"),
 		("lerp/", "tuple"),
+		("lerp/", "tuple_nest"),
 
 		("lexer/", "err_unterminated_string"),
 		("lexer/", "string_lit_basic_escapes"),
@@ -251,6 +253,7 @@ pub fn generate(tests_file: &mut File) {
 		("promote/", "synth_promote_float"),
 		("promote/", "tuples"),
 		("promote/", "tuple_matrix"),
+		("promote/", "weird_tuple"),
 	
 		("variable/", "assign_numbers"),
 		("variable/", "assign_to_bottom_binop"),

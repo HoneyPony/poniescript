@@ -1,0 +1,7 @@
+fun init() {
+    var a = (1,   2.0);
+    var b = (2.0, 4  );
+
+    // This should essentially promote to (float, float)
+    print(lerp(a, b, 0.5)); //! (1.500000, 3.000000)
+}

@@ -1145,6 +1145,13 @@ impl<'a> Codegen<'a> {
 			inf_writeln!(into, "{indent}{to}{to_post} = {the_fn}({from}{from_post});");
 		};
 
+		// If we end up promoting a type to itself, that is just a no-op.
+		// May happen with certain tuple values.
+		if to_typ == from_typ {
+			inf_writeln!(into, "{indent}{to}{to_post} = {from}{from_post};");
+			return;
+		}
+
 		// This match statement should line up with the one in Expr::compute_assignable.
 		match (to_typ, from_typ) {
 			(_, Type::Bottom) => {
