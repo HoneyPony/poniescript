@@ -344,17 +344,21 @@ impl<'a> Codegen<'a> {
 		val.typed(binary.typ)
 	}
 
-	fn compile_partial_lerp(&mut self, bool_val: &TypedVal, float_val: &TypedVal, one_minus_val: &TypedVal, from_val: &TypedVal, to_val: &TypedVal, target_val: &TypedVal, postfix: &String, into: &mut String) {
+	fn compile_partial_lerp(&mut self, bool_val: &TypedVal, float_val: &TypedVal, one_minus_val: &TypedVal, from_val: &TypedVal, to_val: &TypedVal, target_val: &TypedVal, cur_typ: TypId, postfix: &String, into: &mut String) {
 		let indent = self.indent();
 		
-		match self.db.get(target_val.typ) {
+		// IMPORTANT:
+		// To walk down the tree of tuple types, we must start at the root
+		// result TypId, but then walk through different TypIds, so that
+		// we make progress (no stack overflow).
+		match self.db.get(cur_typ) {
 			Type::Int => {
 				// TODO: What is the best way to lerp ints based on a float?
-				inf_writeln!(into, "{indent}{target_val}{postfix} = (ps_int)({from_val}{postfix} * {float_val} + {to_val}{postfix} * {one_minus_val});")
+				inf_writeln!(into, "{indent}{target_val}{postfix} = (ps_int)({from_val}{postfix} * {one_minus_val} + {to_val}{postfix} * {float_val});")
 			},
 			Type::Float => {
 				// TODO: What is the best way to lerp ints based on a float?
-				inf_writeln!(into, "{indent}{target_val}{postfix} = {from_val}{postfix} * {float_val} + {to_val}{postfix} * {one_minus_val};")
+				inf_writeln!(into, "{indent}{target_val}{postfix} = {from_val}{postfix} * {one_minus_val} + {to_val}{postfix} * {float_val};")
 			},
 			Type::Tuple(typ_ids) => {
 				// Iterate over each tuple member and lerp.
@@ -362,6 +366,7 @@ impl<'a> Codegen<'a> {
 					let postfix = format!("{postfix}.v_{i}");
 					self.compile_partial_lerp(bool_val, float_val, one_minus_val,
 						from_val, to_val, target_val,
+							typ_ids[i],
 						&postfix,
 						into);
 				}
@@ -399,7 +404,12 @@ impl<'a> Codegen<'a> {
 		// Decide the bool_val and float_val based on amount_val
 		let (bool_val, float_val) = if amount_val.typ == self.db.types.float {
 			let bool_val = self.new_val_typed(self.db.types.bool);
-			define_val!(self, into, bool_val, " = {amount_val} > 0.5;\n");
+			// EXTREMELY IMPORTANT SEMANTIC DECISION:
+			// What exactly counts as true?
+			//
+			// For now, we're saying >= 0.5. But it could be > 0.5. Or anything
+			// else.
+			define_val!(self, into, bool_val, " = {amount_val} >= 0.5;\n");
 
 			(bool_val, amount_val)
 		}
@@ -421,13 +431,14 @@ impl<'a> Codegen<'a> {
 		// The result val will be defined through compile_partial_lerp.
 		//
 		// Again, maybe we can simplify in some cases. (TODO)
-		define_val!(self, into, result, ";");
+		define_val!(self, into, result, ";\n");
 
 		// TODO: Consider having postfix be a re-used variable or something so
 		// we don't have to allocate a new string every time.
 		let postfix = "".to_string();
 		self.compile_partial_lerp(&bool_val, &float_val, &one_minus_val,
 			&from_val, &to_val, &result,
+			result.typ,
 			&postfix, into);
 
 		result
