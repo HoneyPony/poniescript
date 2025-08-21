@@ -561,6 +561,27 @@ impl<'db> TypeChecker<'db> {
 		Ok(computed)
 	}
 
+	fn is_numeric_or_vec(&mut self, typ: TypId) -> bool {
+		match self.db.get(typ) {
+			// TODO:
+			// We allow bottom here, but I'm not sure that's actually necessary.
+			// In particular, it is useful to be able to do e.g. 1 + if(cond) {
+			// thing } else { return; } but in that case the type is int, not
+			// bottom. I'm not sure.
+			Type::Bottom => true,
+
+			Type::Int | Type::Float => true,
+			Type::AssumeInt | Type::AssumeFloat => true,
+			Type::Tuple(inner) => {
+				let sad = inner.clone();
+				for typ in sad {
+					if !self.is_numeric_or_vec(typ) { return false; }
+				}
+				true
+			},
+			_ => false
+		}
+	}
 
 	// TODO: We could, inside this function, just directly call
 	// promote_from_unassigned on any expr that has value_used = false -- we
@@ -582,6 +603,13 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(left),
 					self.db.repr_type(right)
 				);
+
+				if !self.is_numeric_or_vec(computed) {
+					type_error!(self,
+						binary.location,
+						"Invalid operands to binary operator: Type is not numerical"
+					);
+				}
 
 				// PROMOTION: occurs in promote_expr
 

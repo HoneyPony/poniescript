@@ -6,5 +6,5 @@ fun init() {
     var a = new Horse{};
     var b = new Horse{};
 
-    print(a + b); //? Some error about not being able to add these
+    print(a + b); //? Invalid operands to binary operator: Type is not numerical
 }

@@ -320,6 +320,29 @@ impl<'a> Codegen<'a> {
 		self.new_val().typed(typ)
 	}
 
+	fn compile_partial_binary(&mut self, result_val: &TypedVal, lhs_val: &TypedVal, rhs_val: &TypedVal, op: char, cur_typ: TypId, postfix: &String, into: &mut String) {
+		let indent = self.indent();
+		match self.db.get(cur_typ) {
+			Type::Int | Type::Float => {
+				inf_writeln!(into, "{indent}{result_val}{postfix} = {lhs_val}{postfix} {op} {rhs_val}{postfix};");
+			}
+			Type::Tuple(typ_ids) => {
+				// Iterate over each tuple member and perform the operator.
+				for i in 0..typ_ids.len() {
+					let postfix = format!("{postfix}.v_{i}");
+					self.compile_partial_binary(result_val, lhs_val, rhs_val,
+						op,
+							typ_ids[i],
+						&postfix,
+						into);
+				}
+			},
+			_ => {
+				panic!("ICE: Trying to codegen binary operator for invalid types")
+			}
+		}
+	}
+
 	fn compile_binary(&mut self, ast: &Ast, binary: &Binary, into: &mut String) -> TypedVal {
 		let left = self.expr(ast, binary.left, into);
 		if left.is_bottom() { return left; /* Val::Bottom */ }
@@ -335,13 +358,26 @@ impl<'a> Codegen<'a> {
 			_ => panic!("ICE: Tried to codegen unknown binary operator")
 		};
 
-		let val = self.new_val();
+		let val = self.new_val_typed(binary.typ);
 		let ctype = self.db.get_ctype(binary.typ);
 		let indent = self.indent();
-		// TODO: Indentation system
-		inf_writeln!(into, "{indent}const {ctype} {val} = {left} {op} {right};");
 
-		val.typed(binary.typ)
+		// For simple binary expressions, write them out as one line & make them
+		// a constant value
+		if binary.typ == self.db.types.int || binary.typ == self.db.types.float {
+			inf_writeln!(into, "{indent}const {ctype} {val} = {left} {op} {right};");
+		}
+		else {
+			// Otherwise, we have to generate them through a tree, so we can't
+			// make them const. But that's OK
+			define_val!(self, into, val, ";\n");
+
+			let postfix = "".to_string();
+			self.compile_partial_binary(&val, &left, &right, 
+				op, val.typ, &postfix, into);
+		}
+
+		val
 	}
 
 	fn compile_partial_lerp(&mut self, bool_val: &TypedVal, float_val: &TypedVal, one_minus_val: &TypedVal, from_val: &TypedVal, to_val: &TypedVal, target_val: &TypedVal, cur_typ: TypId, postfix: &String, into: &mut String) {
