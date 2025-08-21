@@ -186,6 +186,14 @@ impl<'db> Binder<'db> {
 				return None;
 			},
 
+			Expr::Lerp(lerp) => {
+				// TODO: Is there some way to make this less tedious?
+				self.visit_expr(ast, lerp.from);
+				self.visit_expr(ast, lerp.to);
+				self.visit_expr(ast, lerp.amount);
+				return None;
+			}
+
 			Expr::Comparison(compare) => {
 				self.visit_expr(ast, compare.left);
 				self.visit_expr(ast, compare.right);

@@ -407,6 +407,15 @@ impl<'db> TypeChecker<'db> {
 				self.do_promote_expr(ast, &mut binary.left, binary.typ);
 				self.do_promote_expr(ast, &mut binary.right, binary.typ);
 			},
+			Expr::Lerp(lerp) => {
+				if self.db.is_not_concrete(lerp.typ) {
+					lerp.typ = promote_to;
+				}
+
+				self.do_promote_expr(ast, &mut lerp.from, lerp.typ);
+				self.do_promote_expr(ast, &mut lerp.to, lerp.typ);
+				// amount already rpomoted
+			}
 			Expr::Comparison(_) => {
 				// We can't promote to any type, so we should have already
 				// promoted our children.
@@ -580,6 +589,31 @@ impl<'db> TypeChecker<'db> {
 				
 				computed
 			},
+			Expr::Lerp(lerp) => {
+				let left = self.check_expr(ast, lerp.from, true)?;
+				let right = self.check_expr(ast, lerp.to, true)?;
+
+				let computed = maybe_type_error!(
+					self,
+					self.compute_intersect(true, left, right),
+
+					&lerp.location,
+					"Invalid operands to lerp: 'from' is {}, 'to' is {}",
+					self.db.repr_type(left),
+					self.db.repr_type(right)
+				);
+
+				let amount = self.check_expr(ast, lerp.amount, true)?;
+				if amount != self.db.types.bool {
+					// If amount is not a bool, promote to float. (We could also
+					// potentially promote to int in some cases...)
+					self.do_promote_expr(ast, &mut lerp.amount, self.db.types.float);
+				}
+
+				lerp.typ = computed;
+
+				computed
+			}
 			Expr::ArrayLit(lit) => {
 				let mut final_ty: TypId = self.db.types.unassigned;
 

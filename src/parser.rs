@@ -344,6 +344,19 @@ impl<'a, 'b> Parser<'a, 'b> {
 			}
 
 			ScopeEntry::None => {
+				// Special cased functions can be looked up here.
+				if ident.lexeme == self.db.str_lerp {
+					if args.len() != 3 {
+						semantic_error_with!(self, Error::simple("lerp() expects 3 arguments".to_string(), self.current.location.clone()));
+						// In this case, just fall through to the unboundfuncapture.
+					}
+					else {
+						return Expr::put_lerp_ok(self.ast, location,
+							args[0], args[1], args[2], self.db.types.unassigned);
+					}
+					
+				}
+
 				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
 				Expr::put_valcall_ok(self.ast, location, call, args, self.db.sig_unassigned)
 			}

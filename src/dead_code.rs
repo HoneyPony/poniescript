@@ -106,6 +106,10 @@ impl<'db> DeadCodeElim<'db> {
                 //     *expr = left;
                 // }
             },
+            Expr::Lerp(lerp) => {
+                // TODO
+                false
+            }
             Expr::Comparison(comparison) => {
                 if self.elim_expr(ast, &mut comparison.left) {
                     *expr_id = comparison.left;
