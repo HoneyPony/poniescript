@@ -344,6 +344,95 @@ impl<'a> Codegen<'a> {
 		val.typed(binary.typ)
 	}
 
+	fn compile_partial_lerp(&mut self, bool_val: &TypedVal, float_val: &TypedVal, one_minus_val: &TypedVal, from_val: &TypedVal, to_val: &TypedVal, target_val: &TypedVal, postfix: &String, into: &mut String) {
+		let indent = self.indent();
+		
+		match self.db.get(target_val.typ) {
+			Type::Int => {
+				// TODO: What is the best way to lerp ints based on a float?
+				inf_writeln!(into, "{indent}{target_val}{postfix} = (ps_int)({from_val}{postfix} * {float_val} + {to_val}{postfix} * {one_minus_val});")
+			},
+			Type::Float => {
+				// TODO: What is the best way to lerp ints based on a float?
+				inf_writeln!(into, "{indent}{target_val}{postfix} = {from_val}{postfix} * {float_val} + {to_val}{postfix} * {one_minus_val};")
+			},
+			Type::Tuple(typ_ids) => {
+				// Iterate over each tuple member and lerp.
+				for i in 0..typ_ids.len() {
+					let postfix = format!("{postfix}.v_{i}");
+					self.compile_partial_lerp(bool_val, float_val, one_minus_val,
+						from_val, to_val, target_val,
+						&postfix,
+						into);
+				}
+			}
+
+			// Everything else does bool-based lerp.
+			_ => {
+				// To do a bool-based lerp, 
+				//    lerp("a", "b", false) gives "a", and true gives "b".
+				inf_writeln!(into, "{indent}if({bool_val}) {{ {target_val}{postfix} = {to_val}{postfix}; }}");
+				inf_writeln!(into, "{indent}\telse {{ {target_val}{postfix} = {from_val}{postfix}; }}");
+			}
+		}
+	}
+
+	fn compile_lerp(&mut self, ast: &Ast, lerp: &Lerp, into: &mut String) -> TypedVal {
+		// We need the boolean value of the lerp value if we have anything other
+		// than ints, floats, or vectors of such. For now, we just generate it
+		// even if it isn't needed. TODO: optimize that.
+		// let needs_bool_val = match self.db.get(lerp.typ) {
+		// 	Type::Int => false,
+		// 	Type::Float => false,
+		// 	_ => true
+		// };
+
+		// Always generate a float value too. At least for now.
+
+		let from_val = self.expr(ast, lerp.from, into);
+		let to_val = self.expr(ast, lerp.to, into);
+
+		// The type of this tells us whether it is bool or float.
+		let amount_val = self.expr(ast, lerp.amount, into);
+		assert!(amount_val.typ == self.db.types.float || amount_val.typ == self.db.types.bool);
+
+		// Decide the bool_val and float_val based on amount_val
+		let (bool_val, float_val) = if amount_val.typ == self.db.types.float {
+			let bool_val = self.new_val_typed(self.db.types.bool);
+			define_val!(self, into, bool_val, " = {amount_val} > 0.5;\n");
+
+			(bool_val, amount_val)
+		}
+		else {
+			let float_val = self.new_val_typed(self.db.types.float);
+			// Casting should give the desired behavior.
+			define_val!(self, into, float_val, " = (ps_float){amount_val};\n");
+
+			(amount_val, float_val)
+		};
+
+		// For big lerps, it is more efficient to generate one val and re-use it.
+		// TODO: Don't do that for smaller lerps? Maybe also consider using specialized
+		// methods for vectors...?
+		let one_minus_val = self.new_val_typed(self.db.types.float);
+		define_val!(self, into, one_minus_val, " = 1.0 - {float_val};\n");
+
+		let result = self.new_val_typed(lerp.typ);
+		// The result val will be defined through compile_partial_lerp.
+		//
+		// Again, maybe we can simplify in some cases. (TODO)
+		define_val!(self, into, result, ";");
+
+		// TODO: Consider having postfix be a re-used variable or something so
+		// we don't have to allocate a new string every time.
+		let postfix = "".to_string();
+		self.compile_partial_lerp(&bool_val, &float_val, &one_minus_val,
+			&from_val, &to_val, &result,
+			&postfix, into);
+
+		result
+	}
+
 	fn compile_comparison(&mut self, ast: &Ast, compare: &Comparison, into: &mut String) -> TypedVal {
 		let left = self.expr(ast, compare.left, into);
 		if left.is_bottom() { return left; }
@@ -497,6 +586,7 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 		match ast.exprs.get(expr).as_ref() {
 			Expr::Binary(binary) => self.compile_binary(ast, binary, into),
+			Expr::Lerp(lerp) => self.compile_lerp(ast, lerp, into),
 			Expr::Comparison(compare) => self.compile_comparison(ast, compare, into),
 			Expr::If(if_) => self.compile_if(ast, if_, into),
 

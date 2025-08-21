@@ -288,6 +288,7 @@ pub struct Db {
 
 	pub str_anonymous: StrId,
 	pub str_lambda: StrId,
+	pub str_lerp: StrId,
 
 	/// The list of globals. The initializer ordering pass will sort them.
 	pub globals: Vec<VarId>,
@@ -383,6 +384,7 @@ impl Db {
 
 			str_anonymous: StrId::invalid(),
 			str_lambda: StrId::invalid(),
+			str_lerp: StrId::invalid(),
 
 			prop_str: StrProperties {
 				length: VarId::invalid(),
@@ -421,6 +423,7 @@ impl Db {
 
 		db.str_anonymous = db.put_str("<anonymous>");
 		db.str_lambda = db.put_str("lambda");
+		db.str_lerp = db.put_str("lerp");	
 
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,

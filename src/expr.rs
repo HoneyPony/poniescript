@@ -130,6 +130,7 @@ impl Expr {
 			Expr::SetIndex(set) => set.typ,
 			Expr::MakeTuple(make_tuple) => make_tuple.typ,
 			Expr::Promote(promote) => promote.promote_to,
+			Expr::Lerp(lerp) => lerp.typ,
 		}
 	}
 }
