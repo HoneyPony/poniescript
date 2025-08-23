@@ -1,5 +1,7 @@
 use std::{cell::UnsafeCell, marker::PhantomData, num::{NonZeroU32, NonZeroUsize}, ops::{Deref, DerefMut}};
 
+const DEFAULT_CAPACITY: usize = 256;
+
 pub trait ArenaKey: Copy {
     fn to_nonzero_usize(self) -> NonZeroUsize;
     unsafe fn from_nonzero_u32(id: NonZeroU32) -> Self;
@@ -83,7 +85,7 @@ impl<Ty, Key: ArenaKey> std::iter::Iterator for ArenaIterator<Ty, Key> {
 impl<Ty, Key: ArenaKey> Arena<Ty, Key> {
     pub fn new() -> Self {
         Arena {
-            objects: Vec::new(),
+            objects: Vec::with_capacity(DEFAULT_CAPACITY),
             phantom: PhantomData{}
         }
     }
@@ -281,15 +283,15 @@ impl<'a, Ty, Key: ArenaKey> Drop for ArenaBorrow<'a, Ty, Key> {
 impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
     pub fn new() -> Self {
         ArenaCell {
-            objects: UnsafeCell::new(Vec::new()),
+            objects: UnsafeCell::new(Vec::with_capacity(DEFAULT_CAPACITY)),
 
             phantom: PhantomData{},
 
             #[cfg(debug_assertions)]
-            borrowed_mut: UnsafeCell::new(Vec::new()),
+            borrowed_mut: UnsafeCell::new(Vec::with_capacity(DEFAULT_CAPACITY)),
 
             #[cfg(debug_assertions)]
-            borrowed: UnsafeCell::new(Vec::new()),
+            borrowed: UnsafeCell::new(Vec::with_capacity(DEFAULT_CAPACITY)),
         }
     }
 

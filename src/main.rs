@@ -281,6 +281,8 @@ fn main() {
 	let mut ast = db::Ast::new();
 	db.test_mode = args.test_mode;
 
+	let timer = duration(timer, "init compiler", &mut duration_set);
+
 	// Pass 0: Handle C modules?
 	let had_error = do_c_modules(&mut db, &args);
 
