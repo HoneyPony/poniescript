@@ -1,11 +1,15 @@
 # PonieScript
 PonieScript is the scripting language for [PonyGame](https://github.com/HoneyPony/ponygame). It is statically typed, AOT compiled (to C), and designed to be usable for game scripting.
 
-The fundamental philosophy of PonieScript is that C itself--with some well tuned macros and APIs--is "almost good enough" for game scripting, but not quite. PonieScript is therefore intended to be semantically dependent on C,
-at least for the foreseeable future -- that is, it is philosophically a C preprocessor that is just "a little complicated."
+The original philosophy of PonieScript is that C itself--with some well tuned macros and APIs--is "almost good enough" for game scripting, but not quite. PonieScript is therefore intended to be semantically dependent on C,
+at least for the foreseeable future--that is, it is philosophically a C preprocessor that is just "a little complicated." PonieScript has diverged a bit from this philosophy by now but it is still somewhat relevant.
 
-That said, although it is semantically dependent on C, a core goal is to make the semantics of PonieScript quite precise. That is,
+Although PonieScript is semantically dependent on C, a core goal is to make the semantics of PonieScript quite precise. That is,
 correctness (of the compiler implementation) is more important than speed (of the compiled code).
+
+## WORK IN PROGRESS
+
+PonieScript is currently a heavy work in progress. There are many compiler bugs and limitations at this time. It is slowly converging on a working product.
 
 ## Build process
 
@@ -49,19 +53,21 @@ fun init() {
 }
 ```
 
-And a closure example:
+Here is an example showing a little bit about classes:
 ```c
-fun make_printer(message: StrConst) -> fun() {
-    return fun() {
-        print(message);
+class Pony {
+    var greeting = "neigh";
+
+    fun greet() {
+        print(greeting);
     }
 }
 
 fun init() {
-    var hello = make_printer("hello");
-    var world = make_printer("world");
+    var pony0 = new Pony{};
+    var pony1 = new Pony { greeting: "good afternoon" };
 
-    hello();
-    world();
+    pony0.greet();
+    pony1.greet();
 }
 ```
