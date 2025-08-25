@@ -459,6 +459,7 @@ impl Db {
 		let var = Var {
 			name: key,
 			typ,
+			fun: None,
 			class: None,
 			init: false,
 			initializer: None,
@@ -851,10 +852,11 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: StrId, typ: TypId, class: Option<ClassId>, init: bool, initializer: Option<ExprId>, location: SourceLocation) -> VarId {
+	pub fn new_var(&mut self, name: StrId, typ: TypId, fun: Option<FunId>, class: Option<ClassId>, init: bool, initializer: Option<ExprId>, location: SourceLocation) -> VarId {
 		let var = Var {
 			name,
 			typ,
+			fun,
 			class,
 			init,
 			initializer,

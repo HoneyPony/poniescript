@@ -287,7 +287,7 @@ impl<'b> Parser<'b> {
             // We could possibly skip variable names, but for now it's easy
             // enough to require them.
             let var_cname = expected!(self, GlueTok::Identifier, "Parameter name")?;
-            let identity = self.db.new_var(var_cname.lexeme, c_type, None, false, None,
+            let identity = self.db.new_var(var_cname.lexeme, c_type, None, None, false, None,
 			    self.last_location.clone());
 
             params.push(identity);
@@ -313,6 +313,8 @@ impl<'b> Parser<'b> {
         // TODO: Put Location in Fun
         let location = self.end(location);
 
+        let params_for_fun = params.clone();
+
         let sig_id = self.db.put_sig(&sig);
         let fun: FunId = self.db.push(Fun {
             name: Some(fun_name),
@@ -325,6 +327,10 @@ impl<'b> Parser<'b> {
             expression: None,
             location,
         });
+
+        for param in params_for_fun {
+            self.db.get_mut(param).fun = Some(fun);
+        }
 
         // TODO: Handle name collisions here as well?
         self.db.add_full_name(self.db.get(fun_name), ScopeEntry::Fun(fun));
@@ -390,7 +396,7 @@ impl<'b> Parser<'b> {
             None => c_name.lexeme
         };
 
-        let var = self.db.new_var(var_name, c_type, None, false, None, self.end(location));
+        let var = self.db.new_var(var_name, c_type, None, None, false, None, self.end(location));
         self.db.know_var_cname(var, self.db.get(c_name.lexeme));
 
         // TODO: Handle name collisions here as well?

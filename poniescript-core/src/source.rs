@@ -245,4 +245,12 @@ impl Source {
 
 		source_map.borrow().show_underlined_location(location, path);
 	}
+
+	pub fn get_line_column(&self, location: &SourceLocation) -> (u64, u64) {
+		let Source::Real { path, source_map } = self else { return (0, 0); };
+
+		Self::cache_map(path, source_map);
+
+		source_map.borrow().get_line_column(location.offset)
+	}
 }

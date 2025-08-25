@@ -27,7 +27,7 @@ use clap::Parser as _;
 
 use crate::db::Ast;
 
-#[derive(clap::Parser)]
+#[derive(clap::Parser, std::default::Default)]
 pub struct Args {
 	#[arg(short = 'o', long = "output")]
 	/// Where the output file should be written.

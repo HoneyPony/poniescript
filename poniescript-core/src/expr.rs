@@ -142,6 +142,8 @@ pub struct Var {
 
 	/// If this variable is a member of a class, this stores the class id.
 	pub class: Option<ClassId>,
+	/// If this variable is a function parameter, this stores the function id.
+	pub fun: Option<FunId>,
 	/// For class members, stores whether this variable was initialized.
 	/// (TODO: Is there a way to not have this field on non-class variables?)
 	pub init: bool,

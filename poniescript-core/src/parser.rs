@@ -944,7 +944,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// class.
 		//
 		// TODO: For classes, support variables that don't have an initializer?
-		let identity = self.db.new_var(name.lexeme, typ, None, true, Some(initializer),self.end(location.clone()));
+		let identity = self.db.new_var(name.lexeme, typ, None, None, true, Some(initializer),self.end(location.clone()));
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -1039,7 +1039,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name.lexeme, typ, None, false, None,
+		let identity = self.db.new_var(name.lexeme, typ, None, None, false, None,
 			self.last_location.clone());
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
@@ -1108,6 +1108,9 @@ impl<'a, 'b> Parser<'a, 'b> {
 
 		let name_str = name.as_ref().map(|t| t.lexeme);
 
+		// TODO: Avoid this clone? Also this is entirely for the LSP at the moment.
+		let parameters_for_set = parameters.clone();
+
 		// TODO: Maybe make this also take a non-ref for speed?
 		let identity = self.db.push(Fun {
 			name: name_str,
@@ -1118,6 +1121,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 			expression: Some(value),
 			location: fun_location, // We always have a location even if we don't have a name
 		});
+
+		for param in parameters_for_set {
+			self.db.get_mut(param).fun = Some(identity);
+		}
 
 		// We must pop our pushed_name before we put the function name in the scope.
 		self.pop_name(pushed_name);

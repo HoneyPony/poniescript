@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.47.1", features = ["full"] }
 tower-lsp = "0.20.0"
+poniescript-core = { path = "../poniescript-core" }
