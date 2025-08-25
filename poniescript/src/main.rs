@@ -1,19 +1,16 @@
-#[macro_use]
-mod arena;
-mod db;
-mod expr;
-mod typ;
-mod source;
-mod lexer;
-mod module;
-mod parser;
-mod typecheck;
-mod codegen;
-mod error;
-mod binder;
-mod dead_code;
-mod init_ordering;
-mod glue;
+use poniescript_core::{
+    db::*,
+    db,
+    module,
+    module::Module,
+    glue,
+    binder,
+    init_ordering,
+    typecheck,
+    dead_code,
+    codegen,
+    Args
+};
 
 use mimalloc::MiMalloc;
 #[global_allocator]
@@ -25,52 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::{exit, Child, Command, Stdio};
 use std::time::{Duration, SystemTime};
 
-use db::*;
-use module::Module;
 use clap::Parser as _;
-
-use crate::db::Ast;
-
-#[derive(clap::Parser)]
-struct Args {
-	#[arg(short = 'o', long = "output")]
-	/// Where the output file should be written.
-	output_path: PathBuf,
-
-	#[arg(long = "no-timing")]
-	/// Whether to hide the timing information.
-	no_timing: bool,
-
-	#[arg(short = 'c', long = "compiler")]
-	/// The C compiler to use (if generating an executable or object file).
-	/// Expects gcc-style arguments.
-	c_compiler: Option<String>,
-
-	#[arg(required = true)]
-	/// The list of input files to compile into one .C file or executable.
-	input_paths: Vec<PathBuf>,
-
-	#[arg(long = "test")]
-	/// Whether to run the PonieScript in "test mode," a special mode used
-	/// for integration testing the compiler.
-	test_mode: bool,
-
-	#[arg(short = 'e', long = "engine")]
-	/// Compile this code for integration into the PonyGame engine. In particular,
-	/// don't include poni_standalone.h.
-	engine: bool,
-
-	#[arg(short = 'i', long = "import")]
-	/// List of C header files to read PonieScript declarations from. These
-	/// header files will also be #include'd in the final PonieScript C code
-	/// generated.
-	imports: Vec<PathBuf>,
-
-	#[arg(long = "hot")]
-	/// Compile this code for hot reload (integration with poni_hot). Not recommended
-	/// for release builds.
-	hot: bool,
-}
 
 enum CompileMode {
 	ToCFile,
@@ -265,7 +217,7 @@ fn report_errors(db: &Db) {
 		exit(0);
 	}
 	for error in &db.errors {
-		crate::error::show_error(&error, db);
+		poniescript_core::error::show_error(&error, db);
 	}
 }
 

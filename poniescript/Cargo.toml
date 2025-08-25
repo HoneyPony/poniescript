@@ -1,0 +1,10 @@
+[package]
+name = "poniescript"
+version = "0.1.0"
+edition = "2021"
+build = "build/main.rs"
+
+[dependencies]
+poniescript-core = { path = "../poniescript-core" }
+mimalloc = "0.1.47"
+clap = { workspace = true }
