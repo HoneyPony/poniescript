@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [ "poniescript","poniescript-core"]
+members = [ "poniescript","poniescript-core", "poniescript-lsp"]
 
 [workspace.dependencies]
 clap = { version = "4.5.8", features = ["derive"] }
