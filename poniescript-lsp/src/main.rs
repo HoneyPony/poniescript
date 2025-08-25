@@ -170,6 +170,21 @@ struct Backend {
     client: Client,
 }
 
+fn build_hover(title: &str, contents: &str) -> Hover {
+    Hover {
+        contents: HoverContents::Array(
+            vec![
+                MarkedString::LanguageString(LanguageString {
+                    language: "poniescript".to_string(),
+                    value: title.to_string()
+                }),
+                MarkedString::String(contents.to_string())
+            ]
+        ),
+        range: None
+    }
+}
+
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
@@ -221,12 +236,7 @@ impl LanguageServer for Backend {
     }
 
     async fn hover(&self, _: HoverParams) -> Result<Option<Hover>> {
-        Ok(Some(Hover {
-            contents: HoverContents::Scalar(
-                MarkedString::String("Hover example code".to_string())
-            ),
-            range: None
-        }))
+        Ok(Some(build_hover("print(args: ...)", "Prints any series of expressions.")))
     }
 
     async fn semantic_tokens_full(
