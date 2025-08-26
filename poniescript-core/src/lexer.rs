@@ -154,6 +154,8 @@ impl Lexer {
 	fn mk_token(&self, db: &mut Db, ty: Tok) -> Token {
 		let location = self.get_current_location();
 
+		// eprintln!("-- trace lexer: {}:[{}] {:?}", location.offset, location.length, ty);
+
 		return Token {
 			typ: ty,
 			lexeme: db.put_str(&self.buffer),

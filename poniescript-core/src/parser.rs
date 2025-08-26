@@ -937,6 +937,8 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let initializer = self.expression()?;
 
 		expected!(self, Tok::Semicolon, "';' after initializer expression")?;
+
+		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
 		
 		let name_str = name.lexeme;
 		// When we create variables, don't set the class yet, as we don't
@@ -944,7 +946,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// class.
 		//
 		// TODO: For classes, support variables that don't have an initializer?
-		let identity = self.db.new_var(name.lexeme, typ, None, None, true, Some(initializer),self.end(location.clone()));
+		let identity = self.db.new_var(name.lexeme, typ, None, None, true, Some(initializer), name.location);
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -1040,7 +1042,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let name_str = name.lexeme;
 
 		let identity = self.db.new_var(name.lexeme, typ, None, None, false, None,
-			self.last_location.clone());
+			name.location);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		Ok(identity)

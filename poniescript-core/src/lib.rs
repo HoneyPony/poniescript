@@ -67,3 +67,41 @@ pub struct Args {
 	/// for release builds.
 	pub hot: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+	#[test]
+	fn test_line_column() {
+		use crate::{db::*, db::Db, db::Ast, module};
+
+		let mut db = Db::new();
+		let mut ast = Ast::new();
+
+		let path = Path::new("tests/test_line_column.poni");
+		module::parse_module(&mut ast, &mut db, &path).unwrap();
+
+		for var in db.iter_var() {
+			if db.put_str("hello") == db.get(var).name {
+				let loc = db.get(var).location.clone();
+				assert_eq!(loc.length, 5);
+				assert_eq!(loc.offset, 10);
+
+				let (line, col) = db.get(loc.source).get_line_column(&loc);
+				assert_eq!(line, 3);
+				assert_eq!(col, 8);
+			}
+
+			if db.put_str("ponies") == db.get(var).name {
+				let loc = db.get(var).location.clone();
+				assert_eq!(loc.length, 6);
+				assert_eq!(loc.offset, 30);
+
+				let (line, col) = db.get(loc.source).get_line_column(&loc);
+				assert_eq!(line, 7);
+				assert_eq!(col, 6);
+			}
+		}
+	}
+}

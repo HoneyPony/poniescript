@@ -113,6 +113,7 @@ struct SemanticTokenVisitor {
 impl SemanticTokenVisitor {
     fn push_token(&mut self, db: &Db, location: &SourceLocation, token_type: u32, token_modifiers_bitset: u32) {
         let (line, col) = db.get(location.source).get_line_column(location);
+        let (line, col) = (line - 1, col - 1);
 
         let mut delta_line: u32 = 0;
         let delta_start: u32;
@@ -128,7 +129,9 @@ impl SemanticTokenVisitor {
         self.cursor_line = line;
         self.cursor_start = col;
 
-        self.tokens.push(SemanticToken { delta_line, delta_start, length: location.length as u32, token_type, token_modifiers_bitset });
+        eprintln!("{}:{}: length: {}", self.cursor_line, self.cursor_start, location.length);
+
+        self.tokens.push(SemanticToken { delta_line, delta_start, length: (location.length + 1) as u32, token_type, token_modifiers_bitset });
     }
 
     fn push_var(&mut self, db: &Db, location: &SourceLocation, id: VarId) {

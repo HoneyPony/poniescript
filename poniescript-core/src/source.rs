@@ -74,7 +74,7 @@ impl SourceMap {
 		for c in &self.contents_chars {
 			offset += 1;
 			if *c == '\n' {
-				self.lines.push(offset);
+				self.lines.push(offset + 1);
 			}
 		}
 
