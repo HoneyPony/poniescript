@@ -1,6 +1,7 @@
+use std::borrow::Cow;
 use std::path::PathBuf;
 
-use tower_lsp::jsonrpc::Result;
+use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
@@ -185,11 +186,51 @@ fn build_hover(title: &str, contents: &str) -> Hover {
     }
 }
 
+fn supports_utf8_encoding(params: InitializeParams) -> bool {
+    if let Some(general) = params.capabilities.general {
+        if let Some(encodings) = general.position_encodings {
+            for e in encodings {
+                if e.as_str() == "utf-8" {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// Note to self:
+// To log a thing that can be deserialized with serde, we can do:
+// serde_json::to_string_pretty(<thing>).unwrap()
+
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        let mut encoding = PositionEncodingKind::UTF8;
+
+        if !supports_utf8_encoding(params) {
+            // In the case that the server does not support utf-8 position encodings:
+            //
+            // We just lie and say we support utf16, even though we don't. I really
+            // do not care about actually supporting these clients correctly, even
+            // though I have used VSCode a lot. I don't really respect the choice for
+            // utf-16 here and I would rather simply have broken programs than implement
+            // it myself.
+            encoding = PositionEncodingKind::UTF16;
+            self.client.log_message(
+                MessageType::WARNING, 
+                "Client doesn't support UTF-8 position encodings. Unicode projects will not work correctly.").await;
+            // return Err(Error {
+            //     code: ErrorCode::ServerError(0),
+            //     message: Cow::from("PonieScript only supports utf-8 encoding"),
+            //     data: None
+            // });
+        }
+
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
+                // We only support UTF-8 position encoding.
+                position_encoding: Some(encoding),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions::default()),
                 semantic_tokens_provider: Some(

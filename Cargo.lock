@@ -632,6 +632,7 @@ name = "poniescript-lsp"
 version = "0.1.0"
 dependencies = [
  "poniescript-core",
+ "serde_json",
  "tokio",
  "tower-lsp",
 ]

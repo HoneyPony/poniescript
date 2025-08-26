@@ -7,3 +7,4 @@ edition = "2021"
 tokio = { version = "1.47.1", features = ["full"] }
 tower-lsp = "0.20.0"
 poniescript-core = { path = "../poniescript-core" }
+serde_json = "1.0.143"
