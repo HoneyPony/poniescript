@@ -131,7 +131,7 @@ impl SemanticTokenVisitor {
 
         eprintln!("{}:{}: length: {}", self.cursor_line, self.cursor_start, location.length);
 
-        self.tokens.push(SemanticToken { delta_line, delta_start, length: (location.length + 1) as u32, token_type, token_modifiers_bitset });
+        self.tokens.push(SemanticToken { delta_line, delta_start, length: location.length as u32, token_type, token_modifiers_bitset });
     }
 
     fn push_var(&mut self, db: &Db, location: &SourceLocation, id: VarId) {
