@@ -95,7 +95,7 @@ impl<'db> Binder<'db> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
-				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location.clone(), fun, self.db.types.fun_sig_unassigned, 
+				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location.clone(), location.clone(), fun, self.db.types.fun_sig_unassigned, 
 					self.get_selfval(ast, location))),
 				ScopeEntry::Class(_) => {
 					todo!("what to do when we resolve an Unbound into a Class");
@@ -155,7 +155,7 @@ impl<'db> Binder<'db> {
 					return Some(Expr::mk_variable(unbound.location.clone(), v));
 				}
 				ScopeEntry::Fun(fun) => {
-					return Some(Expr::mk_funcapture(unbound.location.clone(), fun, self.db.types.unassigned, 
+					return Some(Expr::mk_funcapture(unbound.location.clone(), unbound.identifier.location.clone(), fun, self.db.types.unassigned, 
 						self.get_selfval(ast, unbound.location.clone())))
 				}
 				ScopeEntry::Class(_) => {

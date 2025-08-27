@@ -139,6 +139,11 @@ impl SemanticTokenVisitor {
 
         self.push_token(db, location, if is_param { 1 } else { 0 }, 0);
     }
+
+    fn push_fun(&mut self, db: &Db, location: &SourceLocation) {
+        eprintln!("push fun: {}", location.length);
+        self.push_token(db, location, 2, 0);
+    }
 }
 
 // TODO: Deduplicate this
@@ -159,6 +164,7 @@ impl poniescript_core::expr::VisitAst for SemanticTokenVisitor {
         let assign = into!(binding.as_ref(), Assign);
 
         self.push_var(db, &assign.location, assign.identity);
+        self.visit_expr(ast, db, assign.value);
     }
 
     fn visit_variable(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
@@ -166,6 +172,24 @@ impl poniescript_core::expr::VisitAst for SemanticTokenVisitor {
         let var = into!(binding.as_ref(), Variable);
 
         self.push_var(db, &var.location, var.identity);
+    }
+
+    fn visit_funcapture(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
+        let binding = ast.get_expr(id);
+        let capt = into!(binding.as_ref(), FunCapture);
+
+        self.push_fun(db, &capt.fn_name);
+    }
+
+    fn visit_funcall(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
+        let binding = ast.get_expr(id);
+        let call = into!(binding.as_ref(), FunCall);
+
+        self.push_fun(db, &call.fn_name);
+
+        for arg in &call.args {
+            self.visit_expr(ast, db, *arg);
+        }
     }
 }
 
@@ -243,6 +267,7 @@ impl LanguageServer for Backend {
                                 token_types: vec![
                                     SemanticTokenType::VARIABLE,
                                     SemanticTokenType::PARAMETER,
+                                    SemanticTokenType::FUNCTION,
                                 ],
                                 token_modifiers: vec![],
                             },

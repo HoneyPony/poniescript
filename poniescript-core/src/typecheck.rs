@@ -1130,6 +1130,7 @@ impl<'db> TypeChecker<'db> {
 				if let Some(fun) = self.db.lookup_member_fn(lhs, get.identifier.lexeme) {
 					let as_funcapture = FunCapture {
 						location: get.location.clone(),
+						fn_name: get.identifier.location.clone(),
 						identity: fun,
 						typ: self.db.types.unassigned,
 						object: Some(get.lhs),
@@ -1227,6 +1228,7 @@ impl<'db> TypeChecker<'db> {
 				if let Some(fun) = self.db.lookup_member_fn(obj_ty, capt.identifier.lexeme) {
 					let as_funcapture = FunCapture {
 						location: capt.location.clone(),
+						fn_name: capt.identifier.location.clone(),
 						identity: fun,
 						typ: self.db.types.unassigned,
 						object: capt.object

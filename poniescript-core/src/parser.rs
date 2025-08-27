@@ -333,8 +333,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			// It may seem in poor taste to have a specific Expr for function
 			// calls all throughout the syntax tree. But, the hope is that this
 			// makes it easier to generate reasonable code in the common cases.
-			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, location, fun, args),
-
+			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, location, ident.location, fun, args),
 			ScopeEntry::Class(_) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), self.current.location.clone()));
 
@@ -377,7 +376,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let expr = match self.scope_lookup(ident.lexeme) {
 			ScopeEntry::Var(identity) => Expr::mk_variable(ident.location.clone(), identity),
 			ScopeEntry::Fun(identity) =>
-				Expr::mk_funcapture(ident.location.clone(), identity, self.db.types.unassigned, None),
+				Expr::mk_funcapture(ident.location.clone(), ident.location.clone(), identity, self.db.types.unassigned, None),
 			ScopeEntry::Class(_) => {
 				todo!("what to do when a class is referenced directly. Perhaps a ClassCapture?");
 			}
