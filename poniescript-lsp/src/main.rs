@@ -1,6 +1,8 @@
-use std::borrow::Cow;
+mod document;
+
 use std::path::PathBuf;
 
+use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -19,6 +21,8 @@ use poniescript_core::{
 
     Args
 };
+
+use crate::document::*;
 
 fn parse_all_modules(ast: &mut Ast, db: &mut Db, args: &Args) -> (Vec<Module>, bool) {
 	let mut modules = vec![];
@@ -193,9 +197,9 @@ impl poniescript_core::expr::VisitAst for SemanticTokenVisitor {
     }
 }
 
-#[derive(Debug)]
 struct Backend {
     client: Client,
+    store: RwLock<DocumentStore>,
 }
 
 fn build_hover(title: &str, contents: &str) -> Hover {
@@ -277,6 +281,9 @@ impl LanguageServer for Backend {
                         },
                     )
                 ),
+
+                text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)) ,
+
                 ..Default::default()
             },
             ..Default::default()
@@ -334,6 +341,22 @@ impl LanguageServer for Backend {
         self.client.log_message(MessageType::INFO, format!("Found {} semantic tokens", tokens.data.len())).await;
         Ok(Some(SemanticTokensResult::Tokens(tokens)))
     }
+
+    async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        let uri = params.text_document.uri;
+        let text = params.text_document.text;
+
+        self.store.write().await.update(uri, text);
+    }
+
+    async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        let uri = params.text_document.uri;
+        if let Some(change) = params.content_changes.into_iter().next() {
+            let text = change.text;
+
+            self.store.write().await.update(uri, text);
+        }
+    }
 }
 
 #[tokio::main]
@@ -341,6 +364,9 @@ async fn main() {
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
-    let (service, socket) = LspService::new(|client| Backend { client });
+    let (service, socket) = LspService::new(|client| Backend {
+        client,
+        store: RwLock::new(DocumentStore::new())
+    });
     Server::new(stdin, stdout, socket).serve(service).await;
 }
