@@ -326,7 +326,7 @@ pub fn generate(file: &mut File) {
 	// 	FunDeclare : FunId identity, Vec<VarId> args, 
 	let stmt_spec = r#"
 	
-	Declare      : VarId identity, Expr value
+	Declare      : SourceLocation ident, VarId identity, Expr value, bool has_explicit_type
 	Expression   : Expr expression
 	Return       : Option<Expr> expression
 	ClassDeclare : ClassId identity, Vec<FunDeclare> funs, Vec<Declare> vars

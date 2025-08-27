@@ -925,9 +925,11 @@ impl<'a, 'b> Parser<'a, 'b> {
 			"variable name")?;
 
 		let mut typ = self.db.types.unassigned;
+		let mut has_explicit_type = false;
 
 		if self.match_(Tok::Colon)?.is_some() {
 			typ = self.typ()?;
+			has_explicit_type = true;
 		}
 
 		// TODO: This should be after the typ if we see a type declaration...
@@ -940,6 +942,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
 		
 		let name_str = name.lexeme;
+		let name_loc = name.location.clone();
 		// When we create variables, don't set the class yet, as we don't
 		// know what it is -- we wire it back in once we're done parsing a 
 		// class.
@@ -951,7 +954,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 		// by nature can't refer to itself.
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
-		return Stmt::new_declare_ok(self.end(location), identity, initializer);
+		return Stmt::new_declare_ok(self.end(location), name_loc, identity, initializer, has_explicit_type);
 	}
 
 	fn block(&mut self) -> Result<ExprId> {

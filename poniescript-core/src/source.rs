@@ -43,6 +43,16 @@ impl SourceLocation {
 			length: 1
 		};
 	}
+
+	/// Returns a new SourceLocation pointing just to the end of the current
+	/// SourceLocation.
+	pub fn end(&self) -> SourceLocation {
+		return SourceLocation {
+			source: self.source,
+			offset: self.offset + self.length,
+			length: 1
+		}
+	}
 }
 
 pub struct SourceMap {

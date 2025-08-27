@@ -1,4 +1,5 @@
 mod document;
+mod inlay_hint;
 
 use std::path::PathBuf;
 
@@ -230,6 +231,18 @@ fn supports_utf8_encoding(params: InitializeParams) -> bool {
     return false;
 }
 
+
+
+fn in_range(position: &Position, range: &Range) -> bool {
+    if position.line < range.start.line { return false; }
+    if position.line > range.end.line { return false; }
+
+    if position.line == range.start.line && position.character < range.start.character { return false; }
+    if position.line == range.end.line && position.character > range.end.character { return false; }
+
+    return true;
+}
+
 // Note to self:
 // To log a thing that can be deserialized with serde, we can do:
 // serde_json::to_string_pretty(<thing>).unwrap()
@@ -282,6 +295,8 @@ impl LanguageServer for Backend {
                     )
                 ),
 
+                inlay_hint_provider: Some(OneOf::Left(true)),
+
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)) ,
 
                 ..Default::default()
@@ -313,6 +328,20 @@ impl LanguageServer for Backend {
 
     async fn hover(&self, _: HoverParams) -> Result<Option<Hover>> {
         Ok(Some(build_hover("print(args: ...)", "Prints any series of expressions.")))
+    }
+
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
+        let range = params.range;
+        let cache = inlay_hint::compute_inlay_hint_cache(params);
+
+        let mut overlay = vec![];
+        for hint in cache.hints {
+            if in_range(&hint.position, &range) {
+                overlay.push(hint.clone())
+            }
+        }
+
+        Ok(Some(overlay))
     }
 
     async fn semantic_tokens_full(
