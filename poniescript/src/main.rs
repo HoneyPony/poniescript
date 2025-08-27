@@ -121,7 +121,8 @@ fn parse_all_modules(ast: &mut Ast, db: &mut db::Db, args: &Args) -> (Vec<Module
 	let mut had_error = false;
 
 	for path in &args.input_paths {
-		match module::parse_module(ast, db, &path) {
+		let source_id = db.put_source_path(path);
+		match module::parse_module(ast, db, source_id) {
 			Ok((module, false)) => { modules.push(module) },
 			Ok((_, true)) => {
 				had_error = true;

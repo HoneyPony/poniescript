@@ -25,89 +25,7 @@ use poniescript_core::{
 
 use crate::document::*;
 
-fn parse_all_modules(ast: &mut Ast, db: &mut Db, args: &Args) -> (Vec<Module>, bool) {
-	let mut modules = vec![];
 
-	let mut had_error = false;
-
-	for path in &args.input_paths {
-		match module::parse_module(ast, db, &path) {
-			Ok((module, false)) => { modules.push(module) },
-			Ok((_, true)) => {
-				had_error = true;
-			}
-			Err(err) => {
-				eprintln!("Unable to parse source file {}: {err}", path.display());
-				had_error = true;
-			}
-		}
-	}
-
-	(modules, had_error)
-}
-
-fn report_errors(db: &Db) {
-    eprintln!("Errors discovered in source code");
-}
-
-fn do_handle_files(path: PathBuf) -> (Db, Ast, Vec<Module>) {
-    let mut args = Args::default();
-    args.input_paths.push(path);
-
-    let mut db = Db::new();
-    let mut ast = Ast::new();
-
-    let (mut modules, had_error) = parse_all_modules(&mut ast, &mut db, &args);
-
-	if had_error {
-		report_errors(&db);
-        return (db, ast, modules);
-	}
-
-	// Pass 2: Binding
-	let had_error = binder::bind(&mut db, &mut ast, &mut modules);
-
-	if had_error {
-		report_errors(&db);
-		return (db, ast, modules);
-	}
-
-	// Pass 3: Initialization orders. Fix initialization order of various things,
-	// including globals.
-	//
-	// This must come before type check, otherwise the type checker won't be
-	// able to figure out the types of certain global patterns (e.g. cyclic/globals_same)
-	//
-	// It is also valid for it to come after binding, as after that, all the variables
-	// are essentially lexically bound, and we don't actually care about type
-	// information during the sorting stage.
-	// TODO: Is there a way to make this pattern cleaner..?
-	let mut globals = std::mem::take(&mut db.globals);
-	init_ordering::topological_sort(&mut globals, &ast, &mut db);
-
-	for class in db.iter_class() {
-		let mut vars = std::mem::take(&mut db.get_mut(class).vars);
-
-		init_ordering::topological_sort(&mut vars, &ast, &mut db);
-
-		db.get_mut(class).vars = vars;
-	}
-	db.globals = globals;
-
-	if !db.errors.is_empty() {
-		report_errors(&db);
-		return (db, ast, modules);
-	}
-
-	// Pass 4: Type check and infer
-	let had_error = typecheck::typecheck(&mut db, &mut ast, &mut modules);
-
-	if had_error {
-		report_errors(&db);
-	}
-
-    return (db, ast, modules);
-}
 
 struct SemanticTokenVisitor {
     tokens: Vec<SemanticToken>,
@@ -332,7 +250,8 @@ impl LanguageServer for Backend {
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let range = params.range;
-        let cache = inlay_hint::compute_inlay_hint_cache(params);
+        let mut lock = self.store.write().await;
+        let cache = inlay_hint::compute_inlay_hint_cache(params, &mut lock);
 
         let mut overlay = vec![];
         for hint in cache.hints {
@@ -355,13 +274,15 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
 
-        let (mut db, ast, modules) = do_handle_files(path);
+        let mut lock = self.store.write().await;
+        
+        let (db, ast, modules) = lock.get_cached_stuff();
 
         let mut visitor = SemanticTokenVisitor { tokens: vec![], cursor_line: 0, cursor_start: 0 };
 
-        for module in &modules {
+        for module in modules {
             for fun in &module.functions {
-                visitor.visit_expr(&ast, &mut db, fun.value);
+                visitor.visit_expr(&ast, db, fun.value);
             }
         }
 

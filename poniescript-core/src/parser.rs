@@ -135,7 +135,7 @@ macro_rules! expected_after {
 }
 
 impl<'a, 'b> Parser<'a, 'b> {
-	pub fn new(input: File, source_id: SourceId, db: &'b mut Db, ast: &'b mut Ast, module: &'a mut Module) -> std::io::Result<Self> {
+	pub fn new(input: Box<dyn std::io::Read>, source_id: SourceId, db: &'b mut Db, ast: &'b mut Ast, module: &'a mut Module) -> std::io::Result<Self> {
 		let mut lexer = Lexer::new(input, source_id);
 
 		// TODO: Move File initialization to Lexer

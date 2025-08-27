@@ -15,6 +15,8 @@ use poniescript_core::{
     Args
 };
 
+use crate::document::DocumentStore;
+
 struct InlayHintVisitor {
     cache: InlayHintCache
 }
@@ -77,7 +79,7 @@ pub struct InlayHintCache {
     pub hints: Vec<InlayHint>,
 }
 
-pub fn compute_inlay_hint_cache(params: InlayHintParams) -> InlayHintCache {
+pub fn compute_inlay_hint_cache(params: InlayHintParams, store: &mut DocumentStore) -> InlayHintCache {
     let cache = InlayHintCache { hints: vec![] };
 
     //self.client.log_message(MessageType::INFO, format!("Semantic tokens requested for {}", params.text_document.uri)).await;
@@ -88,13 +90,13 @@ pub fn compute_inlay_hint_cache(params: InlayHintParams) -> InlayHintCache {
     };
 
     // TODO: Yep, this is horrible.
-    let (mut db, ast, modules) = crate::do_handle_files(path);
+    let (db, ast, modules) = store.get_cached_stuff();
 
     let mut visitor = InlayHintVisitor { cache };
 
-    for module in &modules {
+    for module in modules {
         for fun in &module.functions {
-            visitor.visit_expr(&ast, &mut db, fun.value);
+            visitor.visit_expr(&ast, db, fun.value);
         }
     }
 

@@ -111,7 +111,7 @@ macro_rules! expected_after {
 }
 
 impl<'b> Parser<'b> {
-	pub fn new(input: File, source_id: SourceId, db: &'b mut Db) -> std::io::Result<Self> {
+	pub fn new(input: Box<dyn std::io::Read>, source_id: SourceId, db: &'b mut Db) -> std::io::Result<Self> {
 		let mut lexer = Lexer::new(input, source_id);
 
 		// TODO: Move File initialization to Lexer
@@ -492,7 +492,7 @@ impl<'b> Parser<'b> {
 pub fn parse_import(db: &mut Db, path: &Path) -> std::io::Result<bool> {
 	let source_id = db.put_source_path(path);
 
-	let file = db.get(source_id).to_file()?;
+	let file = db.get(source_id).to_reader()?;
 
 	let mut parser = Parser::new(file, source_id, db)?;
 	parser.parse()?;

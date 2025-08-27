@@ -2,6 +2,7 @@ use std::fmt::Write;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::cell::RefCell;
+use std::sync::RwLock;
 
 use crate::error::Error;
 // Import relevant things.
@@ -12,7 +13,7 @@ use crate::expr::Sig;
 use crate::expr::Class;
 use crate::expr::Var;
 use crate::typ::Type;
-use crate::source::{Source, SourceLocation};
+use crate::source::{PathBufFileSource, Source, SourceLocation, SourceProvider};
 use crate::{arena::*, inf_writeln, Args};
 
 use crate::glue::lexer::GlueTok;
@@ -181,6 +182,11 @@ pub struct DbTypes {
 	pub fun_sig_unassigned: TypId,
 }
 
+// Safety:
+// Probably isn't safe. I don't care. I am never writing to the database
+// in the LSP ffs.
+unsafe impl Sync for Db { }
+
 /// The Db stores all of the arena-allocated objects that can be referenced
 /// with Ids. Basically all of these objects live for the entire program.
 pub struct Db {
@@ -217,7 +223,10 @@ pub struct Db {
 	class_preparer_cache: Vec<&'static str>,
 
 	/// Keep a cache of generated type reprs also for re-using them.
-	type_repr_cache: RefCell<FxHashMap<TypId, &'static str>>,
+	/// 
+	/// TODO: Supposedly RwLock is needed for LSP stuff. Do we really need it
+	/// here?
+	type_repr_cache: RwLock<FxHashMap<TypId, &'static str>>,
 
 	fun_cparams_cache: Vec<&'static str>,
 
@@ -325,7 +334,7 @@ impl Db {
 			known_fun_cnames: FxHashMap::default(),
 			known_class_cnames: FxHashMap::default(),
 
-			type_repr_cache: RefCell::new(FxHashMap::default()),
+			type_repr_cache: RwLock::new(FxHashMap::default()),
 			fun_cparams_cache: Vec::new(),
 
 			var_cname_cache: Vec::new(),
@@ -566,10 +575,19 @@ impl Db {
 		}
 
 		let buf = path.to_path_buf();
-		let source = Source::new(buf.clone());
+		let source = Source::new(PathBufFileSource::new(buf.clone()));
 
 		let id = self.push(source);
 		self.source_side_map.insert(buf, id);
+
+		return id;
+	}
+
+	// TODO: Somehow put all of these into a side map...?
+	pub fn put_source_provider(&mut self, provider: Box<dyn SourceProvider + Send>) -> SourceId {
+		let source = Source::new(provider);
+
+		let id = self.push(source);
 
 		return id;
 	}
@@ -969,7 +987,8 @@ impl Db {
 	}
 
 	pub fn repr_type(&self, typ: TypId) -> &'static str {
-		if let Some(&cached) = self.type_repr_cache.borrow().get(&typ) {
+		let mut lock = self.type_repr_cache.write().unwrap();
+		if let Some(&cached) = lock.get(&typ) {
 			return cached;
 		}
 
@@ -980,7 +999,7 @@ impl Db {
 		// for ctypes -- although, those the overhead from RefCell is more
 		// relevant because we have to generate a LOT of those in the compiled
 		// code.
-		self.type_repr_cache.borrow_mut().insert(typ, value);
+		lock.insert(typ, value);
 
 		value
 	}

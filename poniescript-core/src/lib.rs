@@ -80,7 +80,8 @@ mod tests {
 		let mut ast = Ast::new();
 
 		let path = Path::new("tests/test_line_column.poni");
-		module::parse_module(&mut ast, &mut db, &path).unwrap();
+		let source_id = db.put_source_path(&path);
+		module::parse_module(&mut ast, &mut db, source_id).unwrap();
 
 		for var in db.iter_var() {
 			if db.put_str("hello") == db.get(var).name {

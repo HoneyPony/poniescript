@@ -539,6 +539,10 @@ impl<'a, Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCellProxy<'a, Ty, Key> {
     }
 }
 
+unsafe impl<Ty, Key: ArenaKey> Sync for ArenaCell<Ty, Key> {
+
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

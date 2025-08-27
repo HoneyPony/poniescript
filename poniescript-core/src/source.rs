@@ -71,11 +71,11 @@ impl SourceMap {
 		}
 	}
 
-	pub fn generate(&mut self, mut file: File) -> std::io::Result<()> {
+	pub fn generate(&mut self, reader: &mut dyn Read) -> std::io::Result<()> {
 		self.lines.push(0);
 
 		let mut buf = String::new();
-		file.read_to_string(&mut buf)?;
+		reader.read_to_string(&mut buf)?;
 
 		let mut offset = 0;
 
@@ -128,14 +128,15 @@ impl SourceMap {
 		(line as u64 + 1, column as u64 + 1)
 	}
 
-	fn show_underlined_location(&self, location: &SourceLocation, path: &PathBuf) {
+	fn show_underlined_location(&self, location: &SourceLocation, provider: &dyn SourceProvider) {
 		let mut start = self.get_line_column(location.offset);
 		let end_offset = location.offset + location.length;
 		let mut end = self.get_line_column(end_offset);
 		
 		// Generate the "name" info
-		eprintln!("{STYLE_LINE_NUM}    --- {STYLE_LINE_NUM:#}{}:{}:{}:", path.display(), start.0, start.1);
-		eprintln!("{STYLE_LINE_NUM}     | {STYLE_LINE_NUM:#}");
+		// TODO: SourceProvider should show its path?
+		//eprintln!("{STYLE_LINE_NUM}    --- {STYLE_LINE_NUM:#}{}:{}:{}:", path.display(), start.0, start.1);
+		//eprintln!("{STYLE_LINE_NUM}     | {STYLE_LINE_NUM:#}");
 
 		// Convert back to indices
 		start.0 -= 1;
@@ -216,50 +217,71 @@ impl SourceMap {
 	}
 }
 
+pub trait SourceProvider {
+	fn to_reader(&self) -> io::Result<Box<dyn Read>>;
+
+	
+}
+
+pub struct PathBufFileSource { path: PathBuf }
+
+impl SourceProvider for PathBufFileSource {
+	fn to_reader(&self) -> io::Result<Box<dyn Read>> {
+		let file = File::open(&self.path)?;
+		Ok(Box::new(file))
+	}
+}
+
+impl PathBufFileSource {
+	pub fn new(path: PathBuf) -> Box<dyn SourceProvider + Send> {
+		Box::new(PathBufFileSource { path })
+	}
+}
+
 pub enum Source {
 	Real {
-		path: PathBuf,
+		provider: Box<dyn SourceProvider + Send>,
 		source_map: RefCell<SourceMap>,
 	},
 	Synthetic,
 }
 
 impl Source {
-	pub fn new(path: PathBuf) -> Source {
-		return Source::Real { path, source_map: RefCell::new(SourceMap::empty()) }
+	pub fn new(provider: Box<dyn SourceProvider + Send>) -> Source {
+		return Source::Real { provider, source_map: RefCell::new(SourceMap::empty()) }
 	}
 
-	pub fn to_file(&self) -> io::Result<File> {
-		let Source::Real { path, .. } = self else {
+	pub fn to_reader(&self) -> io::Result<Box<dyn Read>> {
+		let Source::Real { provider, .. } = self else {
 			panic!("trying to open synthetic source");
 		};
-		File::open(path)
+		provider.to_reader()
 	}
 
-	fn cache_map(path: &PathBuf, source_map: &RefCell<SourceMap>) -> bool {
+	fn cache_map(provider: &dyn SourceProvider, source_map: &RefCell<SourceMap>) -> bool {
 		if source_map.borrow().created { return true; }
 
-		let file = File::open(path);
+		let reader = provider.to_reader();
 
-		if let Ok(file) = file {
-			return source_map.borrow_mut().generate(file).is_ok();
+		if let Ok(mut reader) = reader {
+			return source_map.borrow_mut().generate(&mut reader).is_ok();
 		}
 
 		false
 	}
 
 	pub fn show_underlined_location(&self, location: &SourceLocation) {
-		let Source::Real { path, source_map } = self else { return; };
+		let Source::Real { provider, source_map } = self else { return; };
 
-		Self::cache_map(path, source_map);
+		Self::cache_map(provider.as_ref(), source_map);
 
-		source_map.borrow().show_underlined_location(location, path);
+		source_map.borrow().show_underlined_location(location, provider.as_ref());
 	}
 
 	pub fn get_line_column(&self, location: &SourceLocation) -> (u64, u64) {
-		let Source::Real { path, source_map } = self else { return (0, 0); };
+		let Source::Real { provider, source_map } = self else { return (0, 0); };
 
-		Self::cache_map(path, source_map);
+		Self::cache_map(provider.as_ref(), source_map);
 
 		source_map.borrow().get_line_column(location.offset)
 	}

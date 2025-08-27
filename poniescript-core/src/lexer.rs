@@ -84,7 +84,7 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {
 }
 
 pub struct Lexer {
-	input: BufReader<File>,
+	input: BufReader<Box<dyn Read>>,
 	source_id: SourceId,
 
 	// Current offset in the source file.
@@ -121,7 +121,7 @@ fn is_ident(c: char) -> bool {
 }
 
 impl Lexer {
-	pub fn new(input: File, source_id: SourceId) -> Self {
+	pub fn new(input: Box<dyn Read>, source_id: SourceId) -> Self {
 		return Lexer {
 			input: BufReader::new(input),
 			source_id,
