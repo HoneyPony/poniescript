@@ -33,11 +33,9 @@ fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId,
         doc_map.insert(source_id, doc.clone());
 
 		match module::parse_module(ast, db, source_id) {
-			Ok((module, false)) => { modules.push(module) },
-			Ok((_, true)) => {
-				had_error = true;
-			}
+			Ok((module, _)) => { modules.push(module) },
 			Err(err) => {
+                todo!("Report I/O errors to LSP?");
 				//eprintln!("Unable to parse source file {}: {err}", path.display());
 				had_error = true;
 			}

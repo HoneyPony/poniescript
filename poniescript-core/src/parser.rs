@@ -966,7 +966,15 @@ impl<'a, 'b> Parser<'a, 'b> {
 		self.push_scope();
 
 		while !self.at(Tok::RightBrace) && !self.is_at_end() {
-			stmts.push(self.stmt()?);
+			let err = self.stmt();
+			match err {
+				Ok(stmt) => stmts.push(stmt),
+				Err(ParseErr::IoErr(err)) => return Err(ParseErr::IoErr(err)),
+				Err(ParseErr::SyntaxErr) => {
+					// Inside a block is essentially a synchronization point.
+					// Keep going until we see a '}'.
+				}
+			}
 		}
 
 		self.pop_scope();
