@@ -84,6 +84,8 @@ macro_rules! type_error {
     };
 }
 
+const PANIC_ON_BAD_NODE: bool = false;
+
 impl<'db> TypeChecker<'db> {
 	fn new(db: &'db mut Db) -> Self {
 		TypeChecker {
@@ -427,7 +429,7 @@ impl<'db> TypeChecker<'db> {
 			Expr::ValCall(val_call) => {},
 			Expr::FunCapture(fun_capture) => {},
 			Expr::Assign(assign) => {},
-			Expr::UnboundAssign(unbound_assign) => panic!("ICE: promote_expr UnboundAssign"),
+			Expr::UnboundAssign(unbound_assign) => { if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr UnboundAssign") } },
 			Expr::NumLiteral(num_literal) => {
 				// Promote to the incoming type.
 				num_literal.typ = promote_to;
@@ -457,8 +459,8 @@ impl<'db> TypeChecker<'db> {
 					self.do_promote_expr(ast, else_, if_.typ);
 				}
 			},
-			Expr::Unbound(_) => panic!("ICE: promote_expr(Unbound)"),
-			Expr::UnboundFunCapture(_) => panic!("ICE: promote_expr(UnboundFunCapture)"),
+			Expr::Unbound(_) => if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr(Unbound)") },
+			Expr::UnboundFunCapture(_) => if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr(UnboundFunCapture)") },
 			Expr::Print(_) => {},
 			Expr::Str(_) => { /* TODO: Possibly promote here, to improve stuff in backend? */ },
 			Expr::New(_) => {},
@@ -1104,7 +1106,13 @@ impl<'db> TypeChecker<'db> {
 
 			Expr::New(new) => {
 				if new.typ == self.db.types.unassigned {
-					panic!("ICE: New expression has unassigned type from Binder");
+					if PANIC_ON_BAD_NODE {
+						panic!("ICE: New expression has unassigned type from Binder");
+					}
+					else {
+						// No way to check the initializers.
+						return Ok(new.typ)
+					}
 				}
 
 				for init in &mut new.initializers {
@@ -1208,11 +1216,17 @@ impl<'db> TypeChecker<'db> {
 			}
 
 			Expr::Unbound(unbound) => {
-				// In theory we will resolve all idents beforehand? But this might
-				// be different if we have function overloading.
-				panic!("ICE: Tried to typecheck an unbound identifier expression '{}' at {}",
-					self.db.get(unbound.identifier.lexeme),
-					unbound.location.offset);
+				if PANIC_ON_BAD_NODE {
+					// In theory we will resolve all idents beforehand? But this might
+					// be different if we have function overloading.
+					panic!("ICE: Tried to typecheck an unbound identifier expression '{}' at {}",
+						self.db.get(unbound.identifier.lexeme),
+						unbound.location.offset);
+				}
+				else {
+					// Use unknown type (?)
+					self.db.types.unassigned
+				}
 			},
 			Expr::UnboundFunCapture(capt) => {
 				// Here we will have to replace this UnboundFunCapture with
@@ -1256,8 +1270,23 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(obj_ty),
 					self.db.get(capt.identifier.lexeme));
 			}
-			Expr::UnboundAssign(_) => panic!("ICE: Tried to typecheck an UnboundAssign"),
-			Expr::Undefined(_) => panic!("ICE: Tried to typecheck an Undefined"),
+			Expr::UnboundAssign(assign) => {
+				if PANIC_ON_BAD_NODE {
+					panic!("ICE: Tried to typecheck an UnboundAssign")
+				}
+				else {
+					let typ = self.check_expr(ast, assign.value, value_used)?;
+					self.promote_from_unassigned(ast, &mut assign.value)
+				}
+			}
+			Expr::Undefined(_) => {
+				if PANIC_ON_BAD_NODE {
+					panic!("ICE: Tried to typecheck an Undefined")
+				}
+				else {
+					self.db.types.unassigned
+				}
+			}
 
 			Expr::MakeTuple(tuple) => {
 				let mut inner = Vec::new();
@@ -1487,7 +1516,15 @@ impl<'db> TypeChecker<'db> {
 		let globals = std::mem::take(&mut self.db.globals);
 		for global in &globals {
 			let Some(mut initializer) = self.db.get(*global).initializer else {
-				panic!("ICE: Tried to typecheck global without initializer");
+				if PANIC_ON_BAD_NODE {
+					panic!("ICE: Tried to typecheck global without initializer");
+				}
+				else {
+					// Skip globals without initializers. In theory we might
+					// let the language server have global variables without
+					// initializers.
+					continue;
+				}
 			};
 			let _ = self.check_assign(ast, &self.db.get(*global).location.clone(), *global, &mut initializer, true);
 			// Be sure to re-set the initializer

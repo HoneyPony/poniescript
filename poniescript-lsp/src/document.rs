@@ -126,18 +126,18 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Vec<Module>, Diagnostics)
 
     let (mut modules, had_error) = parse_all_modules(&mut ast, &mut db, &mut doc_map, store);
 
-	if had_error {
-        let err = report_errors(&db, &doc_map);
-        return (db, ast, modules, err);
-	}
+	// if had_error {
+    //     let err = report_errors(&db, &doc_map);
+    //     return (db, ast, modules, err);
+	// }
 
 	// Pass 2: Binding
 	let had_error = binder::bind(&mut db, &mut ast, &mut modules);
 
-	if had_error {
-		let err = report_errors(&db, &doc_map);
-        return (db, ast, modules, err);
-	}
+	// if had_error {
+	// 	let err = report_errors(&db, &doc_map);
+    //     return (db, ast, modules, err);
+	// }
 
 	// Pass 3: Initialization orders. Fix initialization order of various things,
 	// including globals.
@@ -161,10 +161,10 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Vec<Module>, Diagnostics)
 	}
 	db.globals = globals;
 
-	if !db.errors.is_empty() {
-	    let err = report_errors(&db, &doc_map);
-        return (db, ast, modules, err);
-	}
+	// if !db.errors.is_empty() {
+	//     let err = report_errors(&db, &doc_map);
+    //     return (db, ast, modules, err);
+	// }
 
 	// Pass 4: Type check and infer
 	let had_error = typecheck::typecheck(&mut db, &mut ast, &mut modules);

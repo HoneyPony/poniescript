@@ -114,9 +114,9 @@ impl Expr {
 			Expr::Block(block) => {
 				block.typ
 			},
-			Expr::Unbound(_) => panic!("calling Expr::typ() on Unbound"),
-			Expr::UnboundFunCapture(_) => panic!("calling Expr::typ() on UnboundFunCapture"),
-			Expr::UnboundAssign(_) => panic!("calling Expr::typ() on UnboundAssign"),
+			Expr::Unbound(_) => db.types.unassigned, // panic!("calling Expr::typ() on Unbound"),
+			Expr::UnboundFunCapture(_) => db.types.unassigned, //panic!("calling Expr::typ() on UnboundFunCapture"),
+			Expr::UnboundAssign(_) => db.types.unassigned, //panic!("calling Expr::typ() on UnboundAssign"),
 			Expr::Print(print) => {
 				print.exprs[0].typ(ast, db)
 			},
@@ -124,7 +124,7 @@ impl Expr {
 			Expr::New(new) => new.typ,
 			Expr::Get(get) => db.get_var_type(get.var),
 			Expr::Set(set) => db.get_var_type(set.var),
-			Expr::Undefined(_) => panic!("ICE: Called Expr::typ() on Undefined"),
+			Expr::Undefined(_) => db.types.unassigned, //panic!("ICE: Called Expr::typ() on Undefined"),
 			Expr::SelfVal(selfval) => selfval.typ,
 			Expr::Index(index) => index.typ,
 			Expr::SetIndex(set) => set.typ,
