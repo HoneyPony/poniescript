@@ -28,9 +28,9 @@ struct Note {
 
 pub struct Error {
 	pub main_message: String,
-	main_location: SourceLocation,
+	pub main_location: SourceLocation,
 
-	is_warning: bool,
+	pub is_warning: bool,
 
 	notes: Vec<Note>
 }

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, sync::Arc};
 
-use tower_lsp::lsp_types::Url;
+use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 use poniescript_core::{
     db::*,
@@ -17,7 +17,11 @@ use poniescript_core::{
     Args
 };
 
-fn parse_all_modules(ast: &mut Ast, db: &mut Db, store: &DocumentStore) -> (Vec<Module>, bool) {
+pub struct Diagnostics {
+    pub all: Vec<(Url, Vec<Diagnostic>)>
+}
+
+fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId, Arc<Document>>, store: &DocumentStore) -> (Vec<Module>, bool) {
 	let mut modules = vec![];
 
 	let mut had_error = false;
@@ -25,6 +29,9 @@ fn parse_all_modules(ast: &mut Ast, db: &mut Db, store: &DocumentStore) -> (Vec<
 	for doc in store.documents.values() {
         let source = LSPSource::new(doc.clone());
         let source_id = db.put_source_provider(source);
+
+        doc_map.insert(source_id, doc.clone());
+
 		match module::parse_module(ast, db, source_id) {
 			Ok((module, false)) => { modules.push(module) },
 			Ok((_, true)) => {
@@ -40,8 +47,52 @@ fn parse_all_modules(ast: &mut Ast, db: &mut Db, store: &DocumentStore) -> (Vec<
 	(modules, had_error)
 }
 
-fn report_errors(db: &Db) {
-    eprintln!("Errors discovered in source code");
+// TODO: Respect utf-16, utf-8, etc
+fn convert_position(db: &Db, location: &SourceLocation) -> Position {
+    let (line, col) = db.get(location.source).get_line_column(location);
+    let (line, col) = (line - 1, col - 1);
+
+    Position { line: line as u32, character: col as u32 }
+}
+
+fn convert_range(db: &Db, location: &SourceLocation) -> Range {
+    let end = location.end();
+    let start = convert_position(db, location);
+    let end = convert_position(db, &end);
+
+    Range { start, end }
+}
+
+fn report_errors(db: &Db, doc_map: &HashMap<SourceId, Arc<Document>>) -> Diagnostics {
+    let mut diags = Diagnostics { all: vec![] };
+
+    let mut idx_map: HashMap<SourceId, usize> = HashMap::new();
+
+    for error in &db.errors {
+        let idx = if let Some(idx) = idx_map.get(&error.main_location.source) {
+            *idx
+        }
+        else {
+            diags.all.push((doc_map.get(&error.main_location.source).unwrap().url.clone(), vec![]));
+            diags.all.len() - 1
+        };
+
+        let diag = Diagnostic {
+            range: convert_range(db, &error.main_location),
+            severity: Some(if error.is_warning { DiagnosticSeverity::WARNING } else { DiagnosticSeverity::ERROR }),
+            code: None,
+            code_description: None,
+            source: Some("poniescript".into()),
+            message: error.main_message.clone(),
+            related_information: None,
+            tags: None,
+            data: None,
+        };
+
+        diags.all[idx].1.push(diag);
+	}
+
+    return diags;
 }
 
 struct LSPSource {
@@ -63,26 +114,28 @@ impl SourceProvider for LSPSource {
     }
 }
 
-fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Vec<Module>) {
+fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Vec<Module>, Diagnostics) {
     let mut args = Args::default();
     //args.input_paths.push(path);
 
     let mut db = Db::new();
     let mut ast = Ast::new();
 
-    let (mut modules, had_error) = parse_all_modules(&mut ast, &mut db, store);
+    let mut doc_map: HashMap<SourceId, Arc<Document>> = HashMap::new();
+
+    let (mut modules, had_error) = parse_all_modules(&mut ast, &mut db, &mut doc_map, store);
 
 	if had_error {
-		report_errors(&db);
-        return (db, ast, modules);
+        let err = report_errors(&db, &doc_map);
+        return (db, ast, modules, err);
 	}
 
 	// Pass 2: Binding
 	let had_error = binder::bind(&mut db, &mut ast, &mut modules);
 
 	if had_error {
-		report_errors(&db);
-		return (db, ast, modules);
+		let err = report_errors(&db, &doc_map);
+        return (db, ast, modules, err);
 	}
 
 	// Pass 3: Initialization orders. Fix initialization order of various things,
@@ -108,18 +161,15 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Vec<Module>) {
 	db.globals = globals;
 
 	if !db.errors.is_empty() {
-		report_errors(&db);
-		return (db, ast, modules);
+	    let err = report_errors(&db, &doc_map);
+        return (db, ast, modules, err);
 	}
 
 	// Pass 4: Type check and infer
 	let had_error = typecheck::typecheck(&mut db, &mut ast, &mut modules);
 
-	if had_error {
-		report_errors(&db);
-	}
-
-    return (db, ast, modules);
+    let err = report_errors(&db, &doc_map);
+    return (db, ast, modules, err);
 }
 
 pub struct Document {
@@ -130,7 +180,7 @@ pub struct Document {
 pub struct DocumentStore {
     documents: HashMap<Url, Arc<Document>>,
 
-    cached_stuff: Option<(Db, Ast, Vec<Module>)>
+    cached_stuff: Option<(Db, Ast, Vec<Module>, Diagnostics)>
 }
 
 impl DocumentStore {
@@ -149,11 +199,17 @@ impl DocumentStore {
         self.cached_stuff = None;
     }
 
-    pub fn get_cached_stuff(&mut self) -> &mut (Db, Ast, Vec<Module>) {
+    pub fn get_cached_stuff(&mut self) -> &mut (Db, Ast, Vec<Module>, Diagnostics) {
         if self.cached_stuff.is_none() {
             self.cached_stuff = Some(do_handle_files(&self));
         }
 
         return self.cached_stuff.as_mut().unwrap()
+    }
+
+    pub fn steal_diagnostics(&mut self) -> Diagnostics {
+        self.get_cached_stuff();
+        let diagnostics = std::mem::replace(&mut self.cached_stuff.as_mut().unwrap().3, Diagnostics { all: vec![] });
+        diagnostics
     }
 }

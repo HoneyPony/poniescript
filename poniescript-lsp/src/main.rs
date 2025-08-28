@@ -276,7 +276,7 @@ impl LanguageServer for Backend {
 
         let mut lock = self.store.lock().await;
         
-        let (db, ast, modules) = lock.get_cached_stuff();
+        let (db, ast, modules, _) = lock.get_cached_stuff();
 
         let mut visitor = SemanticTokenVisitor { tokens: vec![], cursor_line: 0, cursor_start: 0 };
 
@@ -304,7 +304,14 @@ impl LanguageServer for Backend {
         if let Some(change) = params.content_changes.into_iter().next() {
             let text = change.text;
 
-            self.store.lock().await.update(uri, text);
+            let mut lock = self.store.lock().await;
+            lock.update(uri, text);
+
+            let diag = lock.steal_diagnostics();
+
+            for diag in diag.all {
+                self.client.publish_diagnostics(diag.0, diag.1, None).await;
+            }   
         }
     }
 }

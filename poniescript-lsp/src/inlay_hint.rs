@@ -90,7 +90,7 @@ pub fn compute_inlay_hint_cache(params: InlayHintParams, store: &mut DocumentSto
     };
 
     // TODO: Yep, this is horrible.
-    let (db, ast, modules) = store.get_cached_stuff();
+    let (db, ast, modules, _) = store.get_cached_stuff();
 
     let mut visitor = InlayHintVisitor { cache };
 
