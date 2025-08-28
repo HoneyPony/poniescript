@@ -3,7 +3,7 @@ mod inlay_hint;
 
 use std::path::PathBuf;
 
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -118,7 +118,7 @@ impl poniescript_core::expr::VisitAst for SemanticTokenVisitor {
 
 struct Backend {
     client: Client,
-    store: RwLock<DocumentStore>,
+    store: Mutex<DocumentStore>,
 }
 
 fn build_hover(title: &str, contents: &str) -> Hover {
@@ -250,7 +250,7 @@ impl LanguageServer for Backend {
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let range = params.range;
-        let mut lock = self.store.write().await;
+        let mut lock = self.store.lock().await;
         let cache = inlay_hint::compute_inlay_hint_cache(params, &mut lock);
 
         let mut overlay = vec![];
@@ -274,7 +274,7 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
 
-        let mut lock = self.store.write().await;
+        let mut lock = self.store.lock().await;
         
         let (db, ast, modules) = lock.get_cached_stuff();
 
@@ -296,7 +296,7 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri;
         let text = params.text_document.text;
 
-        self.store.write().await.update(uri, text);
+        self.store.lock().await.update(uri, text);
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -304,7 +304,7 @@ impl LanguageServer for Backend {
         if let Some(change) = params.content_changes.into_iter().next() {
             let text = change.text;
 
-            self.store.write().await.update(uri, text);
+            self.store.lock().await.update(uri, text);
         }
     }
 }
@@ -316,7 +316,7 @@ async fn main() {
 
     let (service, socket) = LspService::new(|client| Backend {
         client,
-        store: RwLock::new(DocumentStore::new())
+        store: Mutex::new(DocumentStore::new())
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

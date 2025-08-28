@@ -182,11 +182,6 @@ pub struct DbTypes {
 	pub fun_sig_unassigned: TypId,
 }
 
-// Safety:
-// Probably isn't safe. I don't care. I am never writing to the database
-// in the LSP ffs.
-unsafe impl Sync for Db { }
-
 /// The Db stores all of the arena-allocated objects that can be referenced
 /// with Ids. Basically all of these objects live for the entire program.
 pub struct Db {
