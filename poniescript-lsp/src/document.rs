@@ -67,16 +67,15 @@ fn report_errors(db: &Db, doc_map: &HashMap<SourceId, Arc<Document>>) -> Diagnos
     let mut diags = Diagnostics { all: vec![] };
 
     let mut idx_map: HashMap<SourceId, usize> = HashMap::new();
+    for (k, v) in doc_map {
+        // We must create an empty set of diagnostics for each source, in the
+        // case that there are no more errors.
+        diags.all.push((v.url.clone(), vec![]));
+        
+        idx_map.insert(*k, diags.all.len() - 1);
+    }
 
     for error in &db.errors {
-        let idx = if let Some(idx) = idx_map.get(&error.main_location.source) {
-            *idx
-        }
-        else {
-            diags.all.push((doc_map.get(&error.main_location.source).unwrap().url.clone(), vec![]));
-            diags.all.len() - 1
-        };
-
         let diag = Diagnostic {
             range: convert_range(db, &error.main_location),
             severity: Some(if error.is_warning { DiagnosticSeverity::WARNING } else { DiagnosticSeverity::ERROR }),
@@ -89,6 +88,8 @@ fn report_errors(db: &Db, doc_map: &HashMap<SourceId, Arc<Document>>) -> Diagnos
             data: None,
         };
 
+        // Safety: We should have pushed an idx for every SourceId.
+        let idx = *idx_map.get(&error.main_location.source).unwrap();
         diags.all[idx].1.push(diag);
 	}
 
