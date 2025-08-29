@@ -93,7 +93,7 @@ impl poniescript_core::expr::VisitAst for SemanticTokenVisitor {
         let binding = ast.get_expr(id);
         let assign = into!(binding.as_ref(), Assign);
 
-        self.push_var(db, &assign.location, assign.identity);
+        self.push_var(db, &assign.var_name, assign.identity);
         self.visit_expr(ast, db, assign.value);
     }
 
