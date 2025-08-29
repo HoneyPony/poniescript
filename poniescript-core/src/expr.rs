@@ -118,7 +118,9 @@ impl Expr {
 			Expr::UnboundFunCapture(_) => db.types.unassigned, //panic!("calling Expr::typ() on UnboundFunCapture"),
 			Expr::UnboundAssign(_) => db.types.unassigned, //panic!("calling Expr::typ() on UnboundAssign"),
 			Expr::Print(print) => {
-				print.exprs[0].typ(ast, db)
+				// Note: This must be kept up-to-date with the typechecker
+				if let Some(first) = print.exprs.get(0) { first.typ(ast, db) }
+				else { db.types.void }
 			},
 			Expr::Str(_) => db.types.str_buf,
 			Expr::New(new) => new.typ,

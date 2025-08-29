@@ -214,6 +214,7 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 		writeln!(locate_trait, "\t\tlet binding = ast.{lname}s.get(id);")?;
 		writeln!(locate_trait, "\t\tlet {name}::{ty_name}(_{lname}) = binding.as_ref() else {{ return false; }};")?;
 		writeln!(locate_trait, "\t\tlet own_loc = &_{lname}.location;")?;
+		writeln!(locate_trait, "\t\teprintln!(\"visit {ty_name}: {{}} ? {{}} ? {{}}\", own_loc.offset, loc.offset, own_loc.offset + own_loc.length);")?;
 		writeln!(locate_trait, "\t\tif loc.offset < own_loc.offset {{ return false; }}")?;
 		writeln!(locate_trait, "\t\tif loc.offset >= own_loc.offset + own_loc.length {{ return false; }}")?;
 		for field in &fields {

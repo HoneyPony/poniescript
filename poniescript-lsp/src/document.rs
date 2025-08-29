@@ -3,18 +3,7 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 use poniescript_core::{
-    db::*,
-    expr::*,
-
-    binder,
-    module,
-    module::Module,
-    init_ordering,
-    typecheck,
-
-    source::*,
-
-    Args
+    arena::ArenaKey, binder, db::*, expr::*, init_ordering, module::{self, Module}, source::*, typecheck, Args
 };
 
 pub struct Diagnostics {
@@ -46,14 +35,24 @@ fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId,
 }
 
 // TODO: Respect utf-16, utf-8, etc
-fn convert_position(db: &Db, location: &SourceLocation) -> Position {
+pub fn convert_position(db: &Db, location: &SourceLocation) -> Position {
     let (line, col) = db.get(location.source).get_line_column(location);
     let (line, col) = (line - 1, col - 1);
 
     Position { line: line as u32, character: col as u32 }
 }
 
-fn convert_range(db: &Db, location: &SourceLocation) -> Range {
+pub fn inverse_convert_position(db: &Db, source_id: SourceId, position: &Position) -> SourceLocation {
+    let offset = db.get(source_id).get_offset(position.line as u64, position.character as u64);
+
+    SourceLocation {
+        source: source_id,
+        offset,
+        length: 1,
+    }
+}
+
+pub fn convert_range(db: &Db, location: &SourceLocation) -> Range {
     let end = location.end();
     let start = convert_position(db, location);
     let end = convert_position(db, &end);

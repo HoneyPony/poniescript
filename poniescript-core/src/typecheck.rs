@@ -922,10 +922,15 @@ impl<'db> TypeChecker<'db> {
 				val
 			},
 			Expr::Print(print) => {
+				if print.exprs.len() <= 0 {
+					// For print, default to void type as it is usually used
+					// as a statement.
+					return Ok(self.db.types.void);
+				}
+
 				// At least for now, all possible types are allowed inside the
 				// print. So, simply type check each one. Then, the print is
 				// supposed to return its first argument.
-
 				for expr in &mut print.exprs[1..] {
 					// The idea here is that each argument to the print is essentially
 					// an assignment to an Unassigned variable. As such, the arguments

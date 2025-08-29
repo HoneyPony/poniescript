@@ -1,5 +1,6 @@
 mod document;
 mod inlay_hint;
+mod goto;
 
 use std::path::PathBuf;
 
@@ -45,6 +46,12 @@ impl SemanticTokenVisitor {
             delta_start = (col - self.cursor_start) as u32;
         }
         else {
+            if line < self.cursor_line {
+                // TODO: Apparently our visit is not necessarily in-order.
+                // We need to do stuff to fix that (probably sort all the tokens)
+                eprintln!("bad semantic token");
+                return;
+            }
             delta_line = (line - self.cursor_line) as u32;
             delta_start = col as u32;
         }
@@ -215,7 +222,9 @@ impl LanguageServer for Backend {
 
                 inlay_hint_provider: Some(OneOf::Left(true)),
 
-                text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)) ,
+                text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
+
+                definition_provider: Some(OneOf::Left(true)),
 
                 ..Default::default()
             },
@@ -313,6 +322,14 @@ impl LanguageServer for Backend {
                 self.client.publish_diagnostics(diag.0, diag.1, None).await;
             }   
         }
+    }
+
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let mut lock = self.store.lock().await;
+        Ok(goto::goto_definition(&mut lock, params))
     }
 }
 

@@ -128,6 +128,14 @@ impl SourceMap {
 		(line as u64 + 1, column as u64 + 1)
 	}
 
+	/// Weirdly, this is 0-based in all things. We should probably change
+	/// get_line_column to also be 0-based.
+	pub fn get_offset(&self, line: u64, column: u64) -> u64 {
+		let line = if line >= self.lines.len() as u64 { (self.lines.len() - 1) as u64 } else { line };
+
+		return self.lines[line as usize] + column;
+	}
+
 	fn show_underlined_location(&self, location: &SourceLocation, provider: &dyn SourceProvider) {
 		let mut start = self.get_line_column(location.offset);
 		let end_offset = location.offset + location.length;
@@ -284,5 +292,13 @@ impl Source {
 		Self::cache_map(provider.as_ref(), source_map);
 
 		source_map.borrow().get_line_column(location.offset)
+	}
+
+	pub fn get_offset(&self, line: u64, column: u64) -> u64 {
+		let Source::Real { provider, source_map } = self else { return 0; };
+
+		Self::cache_map(provider.as_ref(), source_map);
+
+		source_map.borrow().get_offset(line, column)
 	}
 }
