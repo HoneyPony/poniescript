@@ -389,7 +389,7 @@ impl<'a, 'b> Parser<'a, 'b> {
 			// Assignment
 			match expr {
 				Expr::Variable(variable) => 
-					return Expr::put_assign_ok(self.ast, self.end(location), variable.identity, rhs),
+					return Expr::put_assign_ok(self.ast, self.end(location), variable.location, variable.identity, rhs),
 				Expr::FunCapture(_) => {
 					let error = Error::simple(format!("Cannot assign to a function"), self.end(location));
 					semantic_error_with!(self, error);
