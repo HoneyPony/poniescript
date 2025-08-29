@@ -255,6 +255,7 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 		}
 		// For the locate trait, we always unconditionally locate ourself if none
 		// of our inner nodes returned true.
+		writeln!(locate_trait, "\t\teprintln!(\"-> found @ {ty_name}\");")?;
 		writeln!(locate_trait, "\t\tself.locate_{}(ast, _db, loc, &_{lname});", ty_name.to_ascii_lowercase())?;
 		writeln!(locate_trait, "\t\treturn true;")?;
 		writeln!(locate_trait, "\t}}")?;
