@@ -3,6 +3,8 @@ use std::io;
 
 use rustc_hash::FxHashMap;
 
+use crate::arena::ArenaBorrow;
+use crate::arena::ArenaBorrowMut;
 use crate::db::*;
 
 use crate::lexer::*;
@@ -10,6 +12,7 @@ use crate::module::Module;
 
 use crate::expr::*;
 use crate::error::Error;
+use crate::source::Source;
 use crate::source::SourceLocation;
 use crate::typ::Type;
 
@@ -27,11 +30,12 @@ impl Scope {
 	}
 }
 
-pub struct Parser<'a, 'b> {
+pub struct Parser<'b> {
 	lexer: Lexer,
-	module: &'a mut Module,
 	db: &'b mut Db,
 	ast: &'b mut Ast,
+
+	source_id: SourceId,
 
 	current: Token,
 	last_location: SourceLocation,
@@ -134,8 +138,8 @@ macro_rules! expected_after {
 	}
 }
 
-impl<'a, 'b> Parser<'a, 'b> {
-	pub fn new(input: Box<dyn std::io::Read>, source_id: SourceId, db: &'b mut Db, ast: &'b mut Ast, module: &'a mut Module) -> std::io::Result<Self> {
+impl<'b> Parser<'b> {
+	pub fn new(input: Box<dyn std::io::Read>, source_id: SourceId, db: &'b mut Db, ast: &'b mut Ast) -> std::io::Result<Self> {
 		let mut lexer = Lexer::new(input, source_id);
 
 		// TODO: Move File initialization to Lexer
@@ -146,9 +150,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 		let parser = Parser {
 			lexer,
 
-			module,
 			db,
 			ast,
+
+			source_id,
 
 			scopes: Vec::new(),
 			// TODO: Push and pop things from this name
@@ -1260,6 +1265,10 @@ impl<'a, 'b> Parser<'a, 'b> {
 		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars)
 	}
 
+	fn get_source(&self) -> ArenaBorrowMut<'_, Source, SourceId> {
+		self.ast.sources.get_mut(self.source_id)
+	}
+
 	fn parse_top_level(&mut self) -> Result<()> {
 		match self.peek_typ() {
 			Tok::Eof => { },
@@ -1267,19 +1276,19 @@ impl<'a, 'b> Parser<'a, 'b> {
 			Tok::Var => {
 				let global = self.var_declaration()?;
 				self.db.globals.push(global.identity);
-				self.module.globals.push(global);
+				self.get_source().module.globals.push(global);
 			},
 
 			Tok::Fun => {
 				// At the top level, unless preceded by a var .. = , a function
 				// must have a name.
 				let fun = self.fun_declaration(true)?;
-				self.module.functions.push(fun);
+				self.get_source().module.functions.push(fun);
 			}
 
 			Tok::Class => {
 				let class = self.class_declaration()?;
-				self.module.classes.push(class);
+				self.get_source().module.classes.push(class);
 			}
 
 			_ => {

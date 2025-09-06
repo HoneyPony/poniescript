@@ -1504,7 +1504,7 @@ impl<'db> TypeChecker<'db> {
 		
 	}
 
-	fn check_modules(&mut self, ast: &AstProxy, modules: &mut Vec<Module>) {
+	fn check_modules(&mut self, ast: &AstProxy) {
 		self.global_scope = true;
 
 		// Before anything else, fix all function signatures.
@@ -1537,17 +1537,19 @@ impl<'db> TypeChecker<'db> {
 		}
 		self.db.globals = globals;
 
-		for module in modules {
+		for source in ast.sources.iter() {
+            let mut source = ast.sources.get_mut(source);
+            let module = &mut source.module;
 			self.check_module(ast, module);
 		}
 	}
 }
 
-pub fn typecheck(db: &mut Db, ast: &mut Ast, modules: &mut Vec<Module>) -> bool {
+pub fn typecheck(db: &mut Db, ast: &mut Ast) -> bool {
 	let mut checker = TypeChecker::new(db);
 
 	let proxy = ast.get_proxy();
-	checker.check_modules(&proxy, modules);
+	checker.check_modules(&proxy);
 	proxy.commit();
 
 	checker.had_error

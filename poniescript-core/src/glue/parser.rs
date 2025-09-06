@@ -2,7 +2,7 @@ use std::{fs::File, path::Path};
 
 use rustc_hash::FxHashMap;
 
-use crate::{db::*, expr::{Class, Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
+use crate::{arena::IndexCell, db::*, expr::{Class, Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
 use crate::error::Error;
 
 pub struct Parser<'b> {
@@ -489,10 +489,10 @@ impl<'b> Parser<'b> {
 	}
 }
 
-pub fn parse_import(db: &mut Db, path: &Path) -> std::io::Result<bool> {
-	let source_id = db.put_source_path(path);
+pub fn parse_import(ast: &mut Ast, db: &mut Db, path: &Path) -> std::io::Result<bool> {
+	let source_id = ast.new_source(path.to_path_buf());
 
-	let file = db.get(source_id).to_reader()?;
+	let file = ast.sources.get(source_id).to_reader()?;
 
 	let mut parser = Parser::new(file, source_id, db)?;
 	parser.parse()?;

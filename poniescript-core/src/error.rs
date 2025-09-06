@@ -2,6 +2,7 @@
 // gives us a warning, which isn't very helpful.
 #![allow(unexpected_cfgs)]
 
+use crate::arena::IndexCell;
 use crate::source::SourceLocation;
 use crate::db::*;
 
@@ -54,8 +55,8 @@ impl Error {
 	}
 }
 
-pub fn show_error(error: &Error, db: &Db) {
-	let source = db.get(error.main_location.source);
+pub fn show_error(error: &Error, ast: &Ast) {
+	let source = ast.sources.get(error.main_location.source);
 
 	match error.is_warning {
 		true => eprint!("{STYLE_WARNING}warning: {STYLE_WARNING:#}"),
@@ -69,7 +70,7 @@ pub fn show_error(error: &Error, db: &Db) {
 	for note in &error.notes {
 		eprintln!("{STYLE_NOTE}note: {STYLE_NOTE:#}{}", note.note);
 		if let Some(location) = &note.location {
-			db.get(location.source)
+			ast.sources.get(location.source)
 				.show_underlined_location(&location);
 		}
 	}

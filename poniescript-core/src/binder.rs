@@ -560,15 +560,16 @@ impl<'db> Binder<'db> {
 	}
 }
 
-pub fn bind(db: &mut Db, ast: &mut Ast, modules: &mut Vec<Module>) -> bool {
+pub fn bind(db: &mut Db, ast: &mut Ast) -> bool {
 	let mut had_error = false;
 
 	let proxy = ast.get_proxy();
 
-	for module in modules {
+	for module in proxy.sources.iter() {
 		// TODO: Run one binder per thread.
 		let mut binder = Binder::new(db);
-		binder.visit_module(&proxy, module);
+		let mut source = proxy.sources.get_mut(module);
+		binder.visit_module(&proxy, &mut source.module);
 
 		if binder.had_error { had_error = true; }
 	}

@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::{fs::File, path::PathBuf};
 use std::io::{self, Read};
 use crate::db::*;
+use crate::module::Module;
 
 //pub enum SourceLocation {
 	// TODO: Consider reducing these things to u32 to keep this smaller, as
@@ -232,11 +233,18 @@ pub trait SourceProvider {
 }
 
 pub struct PathBufFileSource { path: PathBuf }
+pub struct SyntheticSource {}
 
 impl SourceProvider for PathBufFileSource {
 	fn to_reader(&self) -> io::Result<Box<dyn Read>> {
 		let file = File::open(&self.path)?;
 		Ok(Box::new(file))
+	}
+}
+
+impl SourceProvider for SyntheticSource {
+	fn to_reader(&self) -> io::Result<Box<dyn Read>> {
+		panic!("ICE: Trying to read from SyntheticSource")
 	}
 }
 
@@ -246,24 +254,27 @@ impl PathBufFileSource {
 	}
 }
 
-pub enum Source {
-	Real {
-		provider: Box<dyn SourceProvider + Send>,
-		source_map: RefCell<SourceMap>,
-	},
-	Synthetic,
+impl SyntheticSource {
+	pub fn new() -> Box<dyn SourceProvider + Send> {
+		Box::new(SyntheticSource {})
+	}
+}
+
+pub struct Source {
+	provider: Box<dyn SourceProvider + Send>,
+	source_map: RefCell<SourceMap>,
+
+	// TODO: Consider moving everything out of Module into Source directly.
+	pub module: Module,
 }
 
 impl Source {
 	pub fn new(provider: Box<dyn SourceProvider + Send>) -> Source {
-		return Source::Real { provider, source_map: RefCell::new(SourceMap::empty()) }
+		Source { provider, source_map: RefCell::new(SourceMap::empty()), module: Module::new_empty() }
 	}
 
 	pub fn to_reader(&self) -> io::Result<Box<dyn Read>> {
-		let Source::Real { provider, .. } = self else {
-			panic!("trying to open synthetic source");
-		};
-		provider.to_reader()
+		self.provider.to_reader()
 	}
 
 	fn cache_map(provider: &dyn SourceProvider, source_map: &RefCell<SourceMap>) -> bool {
@@ -279,26 +290,20 @@ impl Source {
 	}
 
 	pub fn show_underlined_location(&self, location: &SourceLocation) {
-		let Source::Real { provider, source_map } = self else { return; };
+		Self::cache_map(self.provider.as_ref(), &self.source_map);
 
-		Self::cache_map(provider.as_ref(), source_map);
-
-		source_map.borrow().show_underlined_location(location, provider.as_ref());
+		self.source_map.borrow().show_underlined_location(location, self.provider.as_ref());
 	}
 
 	pub fn get_line_column(&self, location: &SourceLocation) -> (u64, u64) {
-		let Source::Real { provider, source_map } = self else { return (0, 0); };
+		Self::cache_map(self.provider.as_ref(), &self.source_map);
 
-		Self::cache_map(provider.as_ref(), source_map);
-
-		source_map.borrow().get_line_column(location.offset)
+		self.source_map.borrow().get_line_column(location.offset)
 	}
 
 	pub fn get_offset(&self, line: u64, column: u64) -> u64 {
-		let Source::Real { provider, source_map } = self else { return 0; };
+		Self::cache_map(self.provider.as_ref(), &self.source_map);
 
-		Self::cache_map(provider.as_ref(), source_map);
-
-		source_map.borrow().get_offset(line, column)
+		self.source_map.borrow().get_offset(line, column)
 	}
 }

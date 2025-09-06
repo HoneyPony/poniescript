@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::arena::IndexCell;
 use crate::db::*;
 use crate::expr::{Declare, FunDeclare, ClassDeclare};
 use crate::parser::Parser;
@@ -22,17 +23,13 @@ impl Module {
 	}
 }
 
-pub fn parse_module(ast: &mut Ast, db: &mut Db, source_id: SourceId) -> std::io::Result<(Module, bool)> {
-	
+pub fn parse_module(ast: &mut Ast, db: &mut Db, source_id: SourceId) -> std::io::Result<bool> {
+	let reader = ast.sources.get(source_id).to_reader()?;
 
-	let reader = db.get(source_id).to_reader()?;
-	
-	let mut module = Module::new_empty();
-
-	let mut parser = Parser::new(reader, source_id, db, ast, &mut module)?;
+	let mut parser = Parser::new(reader, source_id, db, ast)?;
 	parser.parse()?;
 
 	let had_error = parser.had_error;
 
-	Ok((module, had_error))
+	Ok(had_error)
 }

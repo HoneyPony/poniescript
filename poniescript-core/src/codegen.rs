@@ -1446,10 +1446,10 @@ impl<'a> Codegen<'a> {
 			self.compile_class(ast, class);
 		}
 
-		self.compile_string_constant_init(&mut out.string_const_define, &mut out.string_const_init);
+		
 	}
 
-	fn codegen(&mut self, args: &Args, ast: &Ast, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
+	fn codegen(&mut self, args: &Args, ast: &Ast, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 		let mut outputs = CodegenOutputs::new();
 
 		// Generate global variables in one pass as their ordering is a global
@@ -1515,9 +1515,12 @@ impl<'a> Codegen<'a> {
 			}
 		}
 
-		for module in modules {
+		for source in ast.sources.iter() {
+            let mut source = ast.sources.get_mut(source);
+            let module = &mut source.module;
 			self.codegen_to_buffers(ast, module, &mut outputs);
 		}
+		self.compile_string_constant_init(&mut outputs.string_const_define, &mut outputs.string_const_init);
 
 		writeln!(output, "#include \"poni/poni.h\"")?;
 		// Engine code does not include poni_standalone.h.
@@ -1577,8 +1580,8 @@ impl<'a> Codegen<'a> {
 	}
 }
 
-pub fn codegen(args: &Args, db: &mut Db, ast: &Ast, modules: &Vec<Module>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
+pub fn codegen(args: &Args, db: &mut Db, ast: &Ast, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 	let mut codegen = Codegen::new(db);
 
-	codegen.codegen(args, ast, modules, output)
+	codegen.codegen(args, ast, output)
 }

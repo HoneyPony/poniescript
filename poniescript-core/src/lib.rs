@@ -72,15 +72,18 @@ pub struct Args {
 mod tests {
     use std::path::Path;
 
+    use crate::arena::IndexCell;
+
 	#[test]
 	fn test_line_column() {
 		use crate::{db::*, db::Db, db::Ast, module};
 
-		let mut db = Db::new();
 		let mut ast = Ast::new();
+		let mut db = Db::new(&mut ast);
+		
 
 		let path = Path::new("tests/test_line_column.poni");
-		let source_id = db.put_source_path(&path);
+		let source_id = ast.new_source(path.to_path_buf());
 		module::parse_module(&mut ast, &mut db, source_id).unwrap();
 
 		for var in db.iter_var() {
@@ -89,7 +92,7 @@ mod tests {
 				assert_eq!(loc.length, 5);
 				assert_eq!(loc.offset, 10);
 
-				let (line, col) = db.get(loc.source).get_line_column(&loc);
+				let (line, col) = ast.sources.get(loc.source).get_line_column(&loc);
 				assert_eq!(line, 3);
 				assert_eq!(col, 8);
 			}
@@ -99,7 +102,7 @@ mod tests {
 				assert_eq!(loc.length, 6);
 				assert_eq!(loc.offset, 30);
 
-				let (line, col) = db.get(loc.source).get_line_column(&loc);
+				let (line, col) = ast.sources.get(loc.source).get_line_column(&loc);
 				assert_eq!(line, 7);
 				assert_eq!(col, 6);
 			}

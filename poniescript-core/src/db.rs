@@ -13,7 +13,7 @@ use crate::expr::Sig;
 use crate::expr::Class;
 use crate::expr::Var;
 use crate::typ::Type;
-use crate::source::{PathBufFileSource, Source, SourceLocation, SourceProvider};
+use crate::source::{PathBufFileSource, Source, SourceLocation, SourceProvider, SyntheticSource};
 use crate::{arena::*, inf_writeln, Args};
 
 use crate::glue::lexer::GlueTok;
@@ -29,6 +29,7 @@ include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 
 define_arena_key!(ExprId);
 define_arena_key!(StmtId);
+define_arena_key!(SourceId);
 
 impl ExprId {
 	// TODO: Get this back to returning a &SourceLocation, or at least some kind
@@ -81,11 +82,13 @@ impl StmtId {
 pub struct Ast {
 	pub exprs: ArenaCell<Expr, ExprId>,
 	pub stmts: ArenaCell<Stmt, StmtId>,
+	pub sources: ArenaCell<Source, SourceId>,
 }
 
 pub struct AstProxy<'ar> {
 	pub exprs: ArenaCellProxy<'ar, Expr, ExprId>,
 	pub stmts: ArenaCellProxy<'ar, Stmt, StmtId>,
+	pub sources: ArenaCellProxy<'ar, Source, SourceId>,
 }
 
 pub trait AstAbstract {
@@ -96,9 +99,10 @@ pub trait AstAbstract {
 
 impl<'ar> AstProxy<'ar> {
 	pub fn commit(self) {
-		let (exprs, stmts) = (self.exprs, self.stmts);
+		let (exprs, stmts, sources) = (self.exprs, self.stmts, self.sources);
 		exprs.commit();
 		stmts.commit();
+		sources.commit();
 	}
 }
 
@@ -106,15 +110,21 @@ impl Ast {
 	pub fn new() -> Ast {
 		Ast {
 			exprs: ArenaCell::new(),
-			stmts: ArenaCell::new()
+			stmts: ArenaCell::new(),
+			sources: ArenaCell::new(),
 		}
 	}
 
 	pub fn get_proxy(&mut self) -> AstProxy {
 		return AstProxy {
 			exprs: self.exprs.get_proxy(),
-			stmts: self.stmts.get_proxy()
+			stmts: self.stmts.get_proxy(),
+			sources: self.sources.get_proxy()
 		}
+	}
+
+	pub fn new_source(&mut self, path: PathBuf) -> SourceId {
+		self.sources.push(Source::new(PathBufFileSource::new(path)))
 	}
 }
 
@@ -302,7 +312,7 @@ pub struct Db {
 }
 
 impl Db {
-	pub fn new() -> Self {
+	pub fn new(ast: &mut Ast) -> Self {
 		let mut db = unsafe { Db {
 			arenas: DbArenas::new(),
 
@@ -413,7 +423,7 @@ impl Db {
 		db.types.assume_float = db.put_type(Type::AssumeFloat);
 		db.types.assume_int = db.put_type(Type::AssumeInt);
 
-		db.synthetic = db.push(Source::Synthetic);
+		db.synthetic = ast.sources.push(Source::new(SyntheticSource::new()));
 
 		db.sig_unassigned = db.put_sig(&Sig {
 			parameters: vec![],
@@ -560,29 +570,6 @@ impl Db {
 
 		let id = IdFuncs::<StrId>::push(self, leaked);
 		self.str_side_map.insert(leaked.to_string(), id);
-
-		return id;
-	}
-
-	pub fn put_source_path(&mut self, path: &Path) -> SourceId {
-		if let Some(existing) = self.source_side_map.get(path) {
-			return *existing;
-		}
-
-		let buf = path.to_path_buf();
-		let source = Source::new(PathBufFileSource::new(buf.clone()));
-
-		let id = self.push(source);
-		self.source_side_map.insert(buf, id);
-
-		return id;
-	}
-
-	// TODO: Somehow put all of these into a side map...?
-	pub fn put_source_provider(&mut self, provider: Box<dyn SourceProvider + Send>) -> SourceId {
-		let source = Source::new(provider);
-
-		let id = self.push(source);
 
 		return id;
 	}

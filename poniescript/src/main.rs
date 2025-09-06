@@ -115,16 +115,14 @@ impl CompileMode {
 	}
 }
 
-fn parse_all_modules(ast: &mut Ast, db: &mut db::Db, args: &Args) -> (Vec<Module>, bool) {
-	let mut modules = vec![];
-
+fn parse_all_modules(ast: &mut Ast, db: &mut db::Db, args: &Args) -> bool {
 	let mut had_error = false;
 
 	for path in &args.input_paths {
-		let source_id = db.put_source_path(path);
+		let source_id = ast.new_source(path.clone());
 		match module::parse_module(ast, db, source_id) {
-			Ok((module, false)) => { modules.push(module) },
-			Ok((_, true)) => {
+			Ok(false) => { },
+			Ok(true) => {
 				had_error = true;
 			}
 			Err(err) => {
@@ -134,12 +132,12 @@ fn parse_all_modules(ast: &mut Ast, db: &mut db::Db, args: &Args) -> (Vec<Module
 		}
 	}
 
-	(modules, had_error)
+	had_error
 }
 
-fn do_c_modules(db: &mut db::Db, args: &Args) -> bool {
+fn do_c_modules(ast: &mut Ast, db: &mut db::Db, args: &Args) -> bool {
 	for path in &args.imports {
-		match glue::parser::parse_import(db, path) {
+		match glue::parser::parse_import(ast, db, path) {
 			Ok(false) => return false,
 			Ok(true) => return true,
 			Err(err) => {
@@ -181,7 +179,7 @@ fn duration(prev: SystemTime, message: &str, duration_set: &mut Vec<&'static str
 	now
 }
 
-fn report_errors(db: &Db) {
+fn report_errors(ast: &Ast, db: &Db) {
 	if db.test_mode && !db.test_errors.is_empty() {
 		if db.errors.len() != db.test_errors.len() {
 			eprintln!("Test failure: Wrong number of errors.");
@@ -218,7 +216,7 @@ fn report_errors(db: &Db) {
 		exit(0);
 	}
 	for error in &db.errors {
-		poniescript_core::error::show_error(&error, db);
+		poniescript_core::error::show_error(&error, ast);
 	}
 }
 
@@ -230,37 +228,37 @@ fn main() {
 	// Use Clap to parse arguments
 	let args = Args::parse();
 
-	let mut db = db::Db::new();
 	let mut ast = db::Ast::new();
+	let mut db = db::Db::new(&mut ast);
 	db.test_mode = args.test_mode;
 
 	let timer = duration(timer, "init compiler", &mut duration_set);
 
 	// Pass 0: Handle C modules?
-	let had_error = do_c_modules(&mut db, &args);
+	let had_error = do_c_modules(&mut ast, &mut db, &args);
 
 	if had_error {
-		report_errors(&db);
+		report_errors(&ast, &db);
 		exit(7);
 	}
 
 	let timer = duration(timer, "imports", &mut duration_set);
 
 	// Pass 1: Parse
-	let (mut modules, had_error) = parse_all_modules(&mut ast, &mut db, &args);
+	let had_error = parse_all_modules(&mut ast, &mut db, &args);
 
 	if had_error {
-		report_errors(&db);
+		report_errors(&ast, &db);
 		exit(1);
 	}
 
 	let timer = duration(timer, "parsing", &mut duration_set);
 
 	// Pass 2: Binding
-	let had_error = binder::bind(&mut db, &mut ast, &mut modules);
+	let had_error = binder::bind(&mut db, &mut ast);
 
 	if had_error {
-		report_errors(&db);
+		report_errors(&ast, &db);
 		exit(2);
 	}
 
@@ -289,29 +287,29 @@ fn main() {
 	db.globals = globals;
 
 	if !db.errors.is_empty() {
-		report_errors(&db);
+		report_errors(&ast, &db);
 		exit(3);
 	}
 
 	let timer = duration(timer, "initializer sort", &mut duration_set);
 
 	// Pass 4: Type check and infer
-	let had_error = typecheck::typecheck(&mut db, &mut ast, &mut modules);
+	let had_error = typecheck::typecheck(&mut db, &mut ast);
 
 	if had_error {
-		report_errors(&db);
+		report_errors(&ast, &db);
 		exit(4);
 	}
 
 	let timer = duration(timer, "type check", &mut duration_set);
 
-	dead_code::eliminate_dead_code(&mut db, &mut ast, &mut modules);
+	dead_code::eliminate_dead_code(&mut db, &mut ast);
 
 	let timer = duration(timer, "dead code", &mut duration_set);
 
 	// Sort value types.
 	if db.sort_value_types().is_err() {
-		report_errors(&db);
+		report_errors(&ast, &db);
 		exit(5);
 	}
 
@@ -322,7 +320,7 @@ fn main() {
 	let compile_mode = CompileMode::parse(&args.output_path);
 	let (mut output, cc) = compile_mode.get_output(&args);
 
-	if let Err(err) = codegen::codegen(&args, &mut db, &mut ast, &modules, &mut output) {
+	if let Err(err) = codegen::codegen(&args, &mut db, &mut ast, &mut output) {
 		eprintln!("Unable to write output file: {err}");
 		exit(6);
 	}

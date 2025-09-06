@@ -366,20 +366,22 @@ impl<'db> DeadCodeElim<'db> {
         }
     }
 
-    fn elim_modules(&mut self, ast: &AstProxy, modules: &mut Vec<Module>) {
-        for module in modules {
+    fn elim_modules(&mut self, ast: &AstProxy) {
+        for source in ast.sources.iter() {
+            let mut source = ast.sources.get_mut(source);
+            let module = &mut source.module;
             self.elim_module(ast, module);
         }
     }
 }
 
 
-pub fn eliminate_dead_code(db: &mut Db, ast: &mut Ast, modules: &mut Vec<Module>) {
+pub fn eliminate_dead_code(db: &mut Db, ast: &mut Ast) {
 	let mut dc = DeadCodeElim::new(db);
 
     let proxy = ast.get_proxy();
 
-	dc.elim_modules(&proxy, modules);
+	dc.elim_modules(&proxy);
 
     proxy.commit();
 }
