@@ -1,18 +1,7 @@
 use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
-    db::*,
-    expr::*,
-
-    binder,
-    module,
-    module::Module,
-    init_ordering,
-    typecheck,
-
-    source::*,
-
-    Args
+    arena::IndexCell, binder, db::*, expr::*, init_ordering, module::{self, Module}, source::*, typecheck, Args
 };
 
 use crate::document::DocumentStore;
@@ -48,7 +37,7 @@ impl poniescript_core::expr::VisitAst for InlayHintVisitor {
 
         if !declare.has_explicit_type {
             let position = declare.ident.end();
-            let (line, col) = db.get(position.source).get_line_column(&position);
+            let (line, col) = ast.sources.get(position.source).get_line_column(&position);
             let (line, col) = ((line - 1) as u32, (col - 1) as u32);
             let position = Position { line, character: col };
 
@@ -90,11 +79,15 @@ pub fn compute_inlay_hint_cache(params: InlayHintParams, store: &mut DocumentSto
     };
 
     // TODO: Yep, this is horrible.
-    let (db, ast, modules, _) = store.get_cached_stuff();
+    let (db, ast, _) = store.get_cached_stuff();
 
     let mut visitor = InlayHintVisitor { cache };
 
-    for module in modules {
+    // TODO: Implement another Visitor that lets us iterate over everything
+    // in a module.
+    for source in ast.sources.iter() {
+        let source = ast.sources.get(source);
+        let module = &source.module;
         for fun in &module.functions {
             visitor.visit_expr(&ast, db, fun.value);
         }

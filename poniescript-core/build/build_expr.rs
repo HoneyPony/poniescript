@@ -210,9 +210,7 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 		writeln!(locate_trait, "\tfn locate_{}(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &{ty_name}) {{", ty_name.to_ascii_lowercase())?;
 		writeln!(locate_trait, "\t}}")?;
 
-		writeln!(locate_trait, "\tfn visit_{}(&mut self, ast: &Ast, _db: &Db, loc: &SourceLocation, id: {id_name}) -> bool {{", ty_name.to_ascii_lowercase())?;
-		writeln!(locate_trait, "\t\tlet binding = ast.{lname}s.get(id);")?;
-		writeln!(locate_trait, "\t\tlet {name}::{ty_name}(_{lname}) = binding.as_ref() else {{ return false; }};")?;
+		writeln!(locate_trait, "\tfn visit_{}(&mut self, ast: &Ast, _db: &Db, loc: &SourceLocation, _{lname}: &{ty_name}) -> bool {{", ty_name.to_ascii_lowercase())?;
 		writeln!(locate_trait, "\t\tlet own_loc = &_{lname}.location;")?;
 		writeln!(locate_trait, "\t\teprintln!(\"visit {ty_name}: {{}} ? {{}} ? {{}}\", own_loc.offset, loc.offset, own_loc.offset + own_loc.length);")?;
 		writeln!(locate_trait, "\t\tif loc.offset < own_loc.offset {{ return false; }}")?;
@@ -268,8 +266,7 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 		writeln!(visit_trait_visit_fn, "\t\t\t}}")?;
 
 		writeln!(locate_trait_visit_fn, "\t\t\t{name}::{ty_name}(_inner) => {{")?;
-		writeln!(locate_trait_visit_fn, "\t\t\t\tdrop(binding);")?;
-		writeln!(locate_trait_visit_fn, "\t\t\t\tself.visit_{}(ast, db, loc, id)", ty_name.to_ascii_lowercase())?;
+		writeln!(locate_trait_visit_fn, "\t\t\t\tself.visit_{}(ast, db, loc, _inner)", ty_name.to_ascii_lowercase())?;
 		writeln!(locate_trait_visit_fn, "\t\t\t}}")?;
 
 		generate_constructor(false, &id_name, ast_field, name,
@@ -403,6 +400,25 @@ pub fn generate(file: &mut File) {
 
 	generate_spec("Expr", "exprs", expr_spec, expr_opt, file, &mut visit_trait, &mut locate_trait).unwrap();
 	generate_spec("Stmt", "stmts", stmt_spec, stmt_opt, file, &mut visit_trait, &mut locate_trait).unwrap();
+
+	writeln!(locate_trait, "	fn visit_ast(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation) {{
+		// Locate the value into the relevant source itself.
+		// Unlike other kinds of visitors, we only have to visit one Source.
+		let source = ast.sources.get(loc.source);
+		let module = &source.module;
+
+		for it in &module.globals {{
+			self.visit_declare(ast, db, loc, it);
+		}}
+
+		for it in &module.functions {{
+			self.visit_fundeclare(ast, db, loc, it);
+		}}
+
+		for it in &module.classes {{
+			self.visit_classdeclare(ast, db, loc, it);
+		}}
+	}}").unwrap();
 
 	writeln!(locate_trait, "}}").unwrap();
 	writeln!(visit_trait, "}}").unwrap();

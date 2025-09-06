@@ -4,6 +4,7 @@ mod goto;
 
 use std::path::PathBuf;
 
+use poniescript_core::arena::IndexCell;
 use tokio::sync::{Mutex, RwLock};
 use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
 use tower_lsp::lsp_types::*;
@@ -35,8 +36,8 @@ struct SemanticTokenVisitor {
 }
 
 impl SemanticTokenVisitor {
-    fn push_token(&mut self, db: &Db, location: &SourceLocation, token_type: u32, token_modifiers_bitset: u32) {
-        let (line, col) = db.get(location.source).get_line_column(location);
+    fn push_token(&mut self, ast: &Ast, db: &Db, location: &SourceLocation, token_type: u32, token_modifiers_bitset: u32) {
+        let (line, col) = ast.sources.get(location.source).get_line_column(location);
         let (line, col) = (line - 1, col - 1);
 
         let mut delta_line: u32 = 0;
@@ -64,15 +65,15 @@ impl SemanticTokenVisitor {
         self.tokens.push(SemanticToken { delta_line, delta_start, length: location.length as u32, token_type, token_modifiers_bitset });
     }
 
-    fn push_var(&mut self, db: &Db, location: &SourceLocation, id: VarId) {
+    fn push_var(&mut self, ast: &Ast, db: &Db, location: &SourceLocation, id: VarId) {
         let is_param = db.get(id).fun.is_some();
 
-        self.push_token(db, location, if is_param { 1 } else { 0 }, 0);
+        self.push_token(ast, db, location, if is_param { 1 } else { 0 }, 0);
     }
 
-    fn push_fun(&mut self, db: &Db, location: &SourceLocation) {
+    fn push_fun(&mut self, ast: &Ast, db: &Db, location: &SourceLocation) {
         eprintln!("push fun: {}", location.length);
-        self.push_token(db, location, 2, 0);
+        self.push_token(ast, db, location, 2, 0);
     }
 }
 
@@ -93,7 +94,7 @@ impl poniescript_core::expr::VisitAst for SemanticTokenVisitor {
         let binding = ast.get_expr(id);
         let assign = into!(binding.as_ref(), Assign);
 
-        self.push_var(db, &assign.var_name, assign.identity);
+        self.push_var(ast, db, &assign.var_name, assign.identity);
         self.visit_expr(ast, db, assign.value);
     }
 
@@ -101,21 +102,21 @@ impl poniescript_core::expr::VisitAst for SemanticTokenVisitor {
         let binding = ast.get_expr(id);
         let var = into!(binding.as_ref(), Variable);
 
-        self.push_var(db, &var.location, var.identity);
+        self.push_var(ast, db, &var.location, var.identity);
     }
 
     fn visit_funcapture(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
         let binding = ast.get_expr(id);
         let capt = into!(binding.as_ref(), FunCapture);
 
-        self.push_fun(db, &capt.fn_name);
+        self.push_fun(ast, db, &capt.fn_name);
     }
 
     fn visit_funcall(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
         let binding = ast.get_expr(id);
         let call = into!(binding.as_ref(), FunCall);
 
-        self.push_fun(db, &call.fn_name);
+        self.push_fun(ast, db, &call.fn_name);
 
         for arg in &call.args {
             self.visit_expr(ast, db, *arg);
@@ -285,11 +286,13 @@ impl LanguageServer for Backend {
 
         let mut lock = self.store.lock().await;
         
-        let (db, ast, modules, _) = lock.get_cached_stuff();
+        let (db, ast, _) = lock.get_cached_stuff();
 
         let mut visitor = SemanticTokenVisitor { tokens: vec![], cursor_line: 0, cursor_start: 0 };
 
-        for module in modules {
+        for source in ast.sources.iter() {
+            let source = ast.sources.get(source);
+            let module = &source.module;
             for fun in &module.functions {
                 visitor.visit_expr(&ast, db, fun.value);
             }

@@ -17,10 +17,10 @@ struct GotoDefinitionVisitor {
 }
 
 impl GotoDefinitionVisitor {
-    fn set_link(&mut self, db: &Db, origin_selection_range: Option<&SourceLocation>, target_range: &SourceLocation, target_selection_range: &SourceLocation) {
-        let origin_selection_range = origin_selection_range.map(|r| convert_range(db, r));
-        let target_range = convert_range(db, target_range);
-        let target_selection_range = convert_range(db, target_selection_range);
+    fn set_link(&mut self, ast: &Ast, origin_selection_range: Option<&SourceLocation>, target_range: &SourceLocation, target_selection_range: &SourceLocation) {
+        let origin_selection_range = origin_selection_range.map(|r| convert_range(ast, r));
+        let target_range = convert_range(ast, target_range);
+        let target_selection_range = convert_range(ast, target_selection_range);
 
         let link = LocationLink {
             origin_selection_range,
@@ -33,7 +33,7 @@ impl GotoDefinitionVisitor {
         self.response = Some(response);
     }
 
-    fn goto_class(&mut self, db: &Db, class: ClassId, origin_selection_range: Option<&SourceLocation>) {
+    fn goto_class(&mut self, ast: &Ast, db: &Db, class: ClassId, origin_selection_range: Option<&SourceLocation>) {
         if class == db.class_unassigned {
             eprintln!("no class :(");
             return;
@@ -43,12 +43,12 @@ impl GotoDefinitionVisitor {
 
         // Target selection range TODO.
 
-        self.set_link(db, origin_selection_range,
+        self.set_link(ast, origin_selection_range,
             &class.location,
             &class.location);
     }
 
-    fn goto_var(&mut self, db: &Db, var: VarId, origin_selection_range: Option<&SourceLocation>) {
+    fn goto_var(&mut self, ast: &Ast, db: &Db, var: VarId, origin_selection_range: Option<&SourceLocation>) {
         if var == db.var_unassigned {
             return;
         }
@@ -61,7 +61,7 @@ impl GotoDefinitionVisitor {
 
         let var = db.get(var);
 
-        self.set_link(db, origin_selection_range,
+        self.set_link(ast, origin_selection_range,
             &var.location,
             &var.location);
     }
@@ -77,19 +77,19 @@ impl LocateAst for GotoDefinitionVisitor {
     fn locate_assign(&mut self,ast: &Ast,db: &Db,loc: &SourceLocation,it: &Assign) {
         // TODO: We could just not even do an origin_selection_range here as the
         // default should be correct...?
-        self.goto_var(db, it.identity,  Some(&it.var_name));
+        self.goto_var(ast, db, it.identity,  Some(&it.var_name));
     }
 
     fn locate_variable(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &Variable) {
-        self.goto_var(db, it.identity, Some(&it.location));
+        self.goto_var(ast, db, it.identity, Some(&it.location));
     }
 
     fn locate_get(&mut self,ast: &Ast,db: &Db,loc: &SourceLocation,it: &Get) {
-        self.goto_var(db, it.var, Some(&it.identifier.location));
+        self.goto_var(ast, db, it.var, Some(&it.identifier.location));
     }
 
     fn locate_set(&mut self,ast: &Ast,db: &Db,loc: &SourceLocation,it: &Set) {
-        self.goto_var(db, it.var, Some(&it.identifier.location));
+        self.goto_var(ast, db, it.var, Some(&it.identifier.location));
     }
 
     fn locate_new(&mut self,ast: &Ast,db: &Db,loc: &SourceLocation,it: &New) {
@@ -98,7 +98,7 @@ impl LocateAst for GotoDefinitionVisitor {
             loc.offset,
             it.identifier.location.offset + it.identifier.location.length);
         if cursor_on(loc, &it.identifier.location) {
-            self.goto_class(db, it.class, Some(&it.identifier.location));
+            self.goto_class(ast, db, it.class, Some(&it.identifier.location));
         }
     }
 }
@@ -107,7 +107,7 @@ impl LocateAst for GotoDefinitionVisitor {
 // We need a good mapping of Url -> SourceId -> Module or something.
 
 pub fn goto_definition(store: &mut DocumentStore, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
-    let (db, ast, modules, _) = store.get_cached_stuff();
+    let (db, ast, _) = store.get_cached_stuff();
 
     let mut visitor = GotoDefinitionVisitor {
         response: None,
@@ -117,14 +117,9 @@ pub fn goto_definition(store: &mut DocumentStore, params: GotoDefinitionParams) 
     };
 
     let todo_source_id_remove_this = unsafe { SourceId::from_nonzero_u32(std::num::NonZeroU32::new_unchecked(2)) };
-    let loc = inverse_convert_position(db, todo_source_id_remove_this, &params.text_document_position_params.position);
+    let loc = inverse_convert_position(ast, todo_source_id_remove_this, &params.text_document_position_params.position);
 
-    // Also for now we just assume the thing is in Module 0
-    if let Some(m) = modules.get(0) {
-        for fun in &m.functions {
-            visitor.visit_expr(ast, db, &loc, fun.value);
-        }
-    }
+    visitor.visit_ast(ast, db, &loc);
 
     visitor.response
 }

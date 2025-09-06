@@ -3,26 +3,24 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 use poniescript_core::{
-    arena::ArenaKey, binder, db::*, expr::*, init_ordering, module::{self, Module}, source::*, typecheck, Args
+    arena::{ArenaKey, IndexCell}, binder, db::*, expr::*, init_ordering, module::{self, Module}, source::*, typecheck, Args
 };
 
 pub struct Diagnostics {
     pub all: Vec<(Url, Vec<Diagnostic>)>
 }
 
-fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId, Arc<Document>>, store: &DocumentStore) -> (Vec<Module>, bool) {
-	let mut modules = vec![];
-
+fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId, Arc<Document>>, store: &DocumentStore) -> bool {
 	let mut had_error = false;
 
 	for doc in store.documents.values() {
         let source = LSPSource::new(doc.clone());
-        let source_id = db.put_source_provider(source);
+        let source_id = ast.sources.push(Source::new(source));
 
         doc_map.insert(source_id, doc.clone());
 
 		match module::parse_module(ast, db, source_id) {
-			Ok((module, _)) => { modules.push(module) },
+			Ok(_) => { },
 			Err(err) => {
                 todo!("Report I/O errors to LSP?");
 				//eprintln!("Unable to parse source file {}: {err}", path.display());
@@ -31,19 +29,19 @@ fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId,
 		}
 	}
 
-	(modules, had_error)
+	had_error
 }
 
 // TODO: Respect utf-16, utf-8, etc
-pub fn convert_position(db: &Db, location: &SourceLocation) -> Position {
-    let (line, col) = db.get(location.source).get_line_column(location);
+pub fn convert_position(ast: &Ast, location: &SourceLocation) -> Position {
+    let (line, col) = ast.sources.get(location.source).get_line_column(location);
     let (line, col) = (line - 1, col - 1);
 
     Position { line: line as u32, character: col as u32 }
 }
 
-pub fn inverse_convert_position(db: &Db, source_id: SourceId, position: &Position) -> SourceLocation {
-    let offset = db.get(source_id).get_offset(position.line as u64, position.character as u64);
+pub fn inverse_convert_position(ast: &Ast, source_id: SourceId, position: &Position) -> SourceLocation {
+    let offset = ast.sources.get(source_id).get_offset(position.line as u64, position.character as u64);
 
     SourceLocation {
         source: source_id,
@@ -52,15 +50,15 @@ pub fn inverse_convert_position(db: &Db, source_id: SourceId, position: &Positio
     }
 }
 
-pub fn convert_range(db: &Db, location: &SourceLocation) -> Range {
+pub fn convert_range(ast: &Ast, location: &SourceLocation) -> Range {
     let end = location.end();
-    let start = convert_position(db, location);
-    let end = convert_position(db, &end);
+    let start = convert_position(ast, location);
+    let end = convert_position(ast, &end);
 
     Range { start, end }
 }
 
-fn report_errors(db: &Db, doc_map: &HashMap<SourceId, Arc<Document>>) -> Diagnostics {
+fn report_errors(ast: &Ast, db: &Db, doc_map: &HashMap<SourceId, Arc<Document>>) -> Diagnostics {
     let mut diags = Diagnostics { all: vec![] };
 
     let mut idx_map: HashMap<SourceId, usize> = HashMap::new();
@@ -74,7 +72,7 @@ fn report_errors(db: &Db, doc_map: &HashMap<SourceId, Arc<Document>>) -> Diagnos
 
     for error in &db.errors {
         let diag = Diagnostic {
-            range: convert_range(db, &error.main_location),
+            range: convert_range(ast, &error.main_location),
             severity: Some(if error.is_warning { DiagnosticSeverity::WARNING } else { DiagnosticSeverity::ERROR }),
             code: None,
             code_description: None,
@@ -112,16 +110,16 @@ impl SourceProvider for LSPSource {
     }
 }
 
-fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Vec<Module>, Diagnostics) {
+fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics) {
     let mut args = Args::default();
     //args.input_paths.push(path);
 
-    let mut db = Db::new();
     let mut ast = Ast::new();
+    let mut db = Db::new(&mut ast);
 
     let mut doc_map: HashMap<SourceId, Arc<Document>> = HashMap::new();
 
-    let (mut modules, had_error) = parse_all_modules(&mut ast, &mut db, &mut doc_map, store);
+    let had_error = parse_all_modules(&mut ast, &mut db, &mut doc_map, store);
 
 	// if had_error {
     //     let err = report_errors(&db, &doc_map);
@@ -129,7 +127,7 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Vec<Module>, Diagnostics)
 	// }
 
 	// Pass 2: Binding
-	let had_error = binder::bind(&mut db, &mut ast, &mut modules);
+	let had_error = binder::bind(&mut db, &mut ast);
 
 	// if had_error {
 	// 	let err = report_errors(&db, &doc_map);
@@ -164,10 +162,10 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Vec<Module>, Diagnostics)
 	// }
 
 	// Pass 4: Type check and infer
-	let had_error = typecheck::typecheck(&mut db, &mut ast, &mut modules);
+	let had_error = typecheck::typecheck(&mut db, &mut ast);
 
-    let err = report_errors(&db, &doc_map);
-    return (db, ast, modules, err);
+    let err = report_errors(&ast, &db, &doc_map);
+    return (db, ast, err);
 }
 
 pub struct Document {
@@ -178,7 +176,7 @@ pub struct Document {
 pub struct DocumentStore {
     documents: HashMap<Url, Arc<Document>>,
 
-    cached_stuff: Option<(Db, Ast, Vec<Module>, Diagnostics)>
+    cached_stuff: Option<(Db, Ast, Diagnostics)>
 }
 
 impl DocumentStore {
@@ -197,7 +195,7 @@ impl DocumentStore {
         self.cached_stuff = None;
     }
 
-    pub fn get_cached_stuff(&mut self) -> &mut (Db, Ast, Vec<Module>, Diagnostics) {
+    pub fn get_cached_stuff(&mut self) -> &mut (Db, Ast, Diagnostics) {
         if self.cached_stuff.is_none() {
             self.cached_stuff = Some(do_handle_files(&self));
         }
@@ -207,7 +205,7 @@ impl DocumentStore {
 
     pub fn steal_diagnostics(&mut self) -> Diagnostics {
         self.get_cached_stuff();
-        let diagnostics = std::mem::replace(&mut self.cached_stuff.as_mut().unwrap().3, Diagnostics { all: vec![] });
+        let diagnostics = std::mem::replace(&mut self.cached_stuff.as_mut().unwrap().2, Diagnostics { all: vec![] });
         diagnostics
     }
 }
