@@ -1,10 +1,13 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc, time::SystemTime};
+use std::{collections::HashMap, hash::Hash, rc::Rc, sync::Arc, time::SystemTime};
 
+use hashbrown::hash_map::EntryRef;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 use poniescript_core::{
     arena::{ArenaKey, IndexCell}, binder, db::*, expr::*, init_ordering, module::{self, Module}, source::*, typecheck, Args
 };
+
+use crate::inlay_hint::{self, compute_inlay_hint_cache, InlayHintCache};
 
 pub struct Diagnostics {
     pub all: Vec<(Url, Vec<Diagnostic>)>
@@ -186,6 +189,8 @@ pub struct Document {
 pub struct DocumentStore {
     documents: HashMap<Url, Arc<Document>>,
 
+    inlay_hints: hashbrown::HashMap<Url, InlayHintCache>,
+
     cached_stuff: Option<(Db, Ast, Diagnostics, HashMap<Url, SourceId>, HashMap<SourceId, Url>)>
 }
 
@@ -193,6 +198,7 @@ impl DocumentStore {
     pub fn new() -> Self {
         Self {
             documents: HashMap::new(),
+            inlay_hints: hashbrown::HashMap::new(),
             cached_stuff: None
         }
     }
@@ -211,6 +217,20 @@ impl DocumentStore {
         }
 
         return self.cached_stuff.as_mut().unwrap()
+    }
+
+    pub fn get_inlay_hint_cache(&mut self, url: &Url) -> &InlayHintCache {
+        self.inlay_hints.entry_ref(url).or_insert_with(|| {
+            match self.get_cached_stuff().3.get(url) {
+                Some(id) => {
+                    inlay_hint::compute_inlay_hint_cache(*id, self)
+                }
+                None => {
+                    eprintln!("Warning: Returning null inlay hint cache");
+                    InlayHintCache::empty()
+                }
+            }
+        })
     }
 
     pub fn steal_diagnostics(&mut self) -> Diagnostics {

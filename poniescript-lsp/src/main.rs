@@ -261,10 +261,12 @@ impl LanguageServer for Backend {
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let range = params.range;
         let mut lock = self.store.lock().await;
-        let cache = inlay_hint::compute_inlay_hint_cache(params, &mut lock);
+        let Some(cache) = lock.get_inlay_hint_cache(&params.text_document.uri) else {
+            return Ok(None);
+        };
 
         let mut overlay = vec![];
-        for hint in cache.hints {
+        for hint in &cache.hints {
             if in_range(&hint.position, &range) {
                 overlay.push(hint.clone())
             }

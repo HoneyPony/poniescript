@@ -68,15 +68,16 @@ pub struct InlayHintCache {
     pub hints: Vec<InlayHint>,
 }
 
-pub fn compute_inlay_hint_cache(params: InlayHintParams, store: &mut DocumentStore) -> InlayHintCache {
+impl InlayHintCache {
+    pub fn empty() -> Self {
+        InlayHintCache { hints: vec![] }
+    }
+}
+
+pub fn compute_inlay_hint_cache(id: SourceId, store: &mut DocumentStore) -> InlayHintCache {
     let cache = InlayHintCache { hints: vec![] };
 
     //self.client.log_message(MessageType::INFO, format!("Semantic tokens requested for {}", params.text_document.uri)).await;
-
-    let Ok(path) = params.text_document.uri.to_file_path() else {
-        //self.client.log_message(MessageType::INFO, format!("Unable to get Path as file: {}", params.text_document.uri)).await;
-        return cache;
-    };
 
     // TODO: Yep, this is horrible.
     let (db, ast, ..) = store.get_cached_stuff();
@@ -84,13 +85,11 @@ pub fn compute_inlay_hint_cache(params: InlayHintParams, store: &mut DocumentSto
     let mut visitor = InlayHintVisitor { cache };
 
     // TODO: Implement another Visitor that lets us iterate over everything
-    // in a module.
-    for source in ast.sources.iter() {
-        let source = ast.sources.get(source);
-        let module = &source.module;
-        for fun in &module.functions {
-            visitor.visit_expr(&ast, db, fun.value);
-        }
+    // in a module. (and everyting in an Ast.)
+    let source = ast.sources.get(id);
+    let module = &source.module;
+    for fun in &module.functions {
+        visitor.visit_expr(&ast, db, fun.value);
     }
 
     visitor.cache
