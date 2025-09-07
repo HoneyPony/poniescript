@@ -996,6 +996,10 @@ impl<'b> Parser<'b> {
 					// We do want to parse it correctly. So don't start advancing
 					// until we've already set in_err_mode to true.
 
+					// TODO: For this to work properly, we *also* need to disable
+					// reporting further errors while we're in_err_mode. This
+					// is because we'll just get duplicate errors like this.
+
 					if in_err_mode { self.advance()?; }
 					in_err_mode = true;
 				}
