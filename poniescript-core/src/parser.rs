@@ -970,14 +970,34 @@ impl<'b> Parser<'b> {
 
 		self.push_scope();
 
+		let mut in_err_mode = false;
+
 		while !self.at(Tok::RightBrace) && !self.is_at_end() {
 			let err = self.stmt();
 			match err {
-				Ok(stmt) => stmts.push(stmt),
+				Ok(stmt) => {
+					stmts.push(stmt);
+					// Reset in_err_mode whenever we successfully parse something.
+					in_err_mode = false;
+				}
 				Err(ParseErr::IoErr(err)) => return Err(ParseErr::IoErr(err)),
 				Err(ParseErr::SyntaxErr) => {
 					// Inside a block is essentially a synchronization point.
 					// Keep going until we see a '}'.
+
+					// Note that we have to start advance()ing ourselves if
+					// we are e.g. somewhere that is simply not a valid statement
+					// starter. But, in case the next token *is* the start of
+					// a valid statement, such as in:
+					//
+					// var x = 
+					// var y = 30;
+					//
+					// We do want to parse it correctly. So don't start advancing
+					// until we've already set in_err_mode to true.
+
+					if in_err_mode { self.advance()?; }
+					in_err_mode = true;
 				}
 			}
 		}
@@ -1294,6 +1314,8 @@ impl<'b> Parser<'b> {
 			_ => {
 				// Skip the erroneous token, as nothing else will drive
 				// parsing forward.
+				//
+				// TODO: Does this need an in_err_mode too?
 				self.advance()?;
 				got!(self, "Expected 'var', 'const', 'class', or 'fun'")
 			}
