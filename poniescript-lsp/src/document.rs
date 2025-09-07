@@ -1,13 +1,12 @@
 use std::{collections::HashMap, hash::Hash, rc::Rc, sync::Arc, time::SystemTime};
 
-use hashbrown::hash_map::EntryRef;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 use poniescript_core::{
     arena::{ArenaKey, IndexCell}, binder, db::*, expr::*, init_ordering, module::{self, Module}, source::*, typecheck, Args
 };
 
-use crate::inlay_hint::{self, compute_inlay_hint_cache, InlayHintCache};
+use crate::inlay_hint::{compute_inlay_hint_cache, InlayHintCache};
 
 pub struct Diagnostics {
     pub all: Vec<(Url, Vec<Diagnostic>)>
@@ -189,7 +188,7 @@ pub struct Document {
 pub struct DocumentStore {
     documents: HashMap<Url, Arc<Document>>,
 
-    inlay_hints: hashbrown::HashMap<Url, InlayHintCache>,
+    inlay_hints: HashMap<Url, InlayHintCache>,
 
     cached_stuff: Option<(Db, Ast, Diagnostics, HashMap<Url, SourceId>, HashMap<SourceId, Url>)>
 }
@@ -198,7 +197,7 @@ impl DocumentStore {
     pub fn new() -> Self {
         Self {
             documents: HashMap::new(),
-            inlay_hints: hashbrown::HashMap::new(),
+            inlay_hints: HashMap::new(),
             cached_stuff: None
         }
     }
@@ -209,6 +208,8 @@ impl DocumentStore {
         }));
 
         self.cached_stuff = None;
+        // Of course, this will need to be made more efficient..
+        self.inlay_hints.clear();
     }
 
     pub fn get_cached_stuff(&mut self) -> &mut (Db, Ast, Diagnostics, HashMap<Url, SourceId>, HashMap<SourceId, Url>) {
@@ -219,18 +220,19 @@ impl DocumentStore {
         return self.cached_stuff.as_mut().unwrap()
     }
 
-    pub fn get_inlay_hint_cache(&mut self, url: &Url) -> &InlayHintCache {
-        self.inlay_hints.entry_ref(url).or_insert_with(|| {
-            match self.get_cached_stuff().3.get(url) {
-                Some(id) => {
-                    inlay_hint::compute_inlay_hint_cache(*id, self)
-                }
-                None => {
-                    eprintln!("Warning: Returning null inlay hint cache");
-                    InlayHintCache::empty()
-                }
-            }
-        })
+    pub fn get_inlay_hint_cache(&mut self, url: &Url) -> Option<&InlayHintCache> {
+        if self.inlay_hints.contains_key(url) {
+            return Some(self.inlay_hints.get(url).unwrap());
+        }
+
+        let Some(id) = self.get_cached_stuff().3.get(url).copied() else {
+            return None;
+        };
+
+        let cache = compute_inlay_hint_cache(id, self);
+        self.inlay_hints.insert(url.clone(), cache);
+
+        return Some(self.inlay_hints.get(&url).unwrap())
     }
 
     pub fn steal_diagnostics(&mut self) -> Diagnostics {
