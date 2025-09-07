@@ -179,8 +179,12 @@ poni_hot_poll_dynlib(struct poni_hot_context *context) {
         reload = true;
     }
     // TODO: Consider comparing whole timespec.
-    else if(context->stat_buf.st_mtime < now_buf.st_mtime) {
+    else if(context->stat_buf.st_mtim.tv_sec < now_buf.st_mtim.tv_sec) {
         reload = true;
+    }
+    else if((context->stat_buf.st_mtim.tv_sec == now_buf.st_mtim.tv_sec) &&
+        (context->stat_buf.st_mtim.tv_nsec < now_buf.st_mtim.tv_nsec)) {
+            reload = true;
     }
 
     // Note: Don't update the context-> values until we properly load another

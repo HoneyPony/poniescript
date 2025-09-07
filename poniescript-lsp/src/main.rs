@@ -4,6 +4,7 @@ mod goto;
 
 use std::path::PathBuf;
 
+use clap::Parser;
 use poniescript_core::arena::IndexCell;
 use tokio::sync::{Mutex, RwLock};
 use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
@@ -237,6 +238,13 @@ impl LanguageServer for Backend {
         self.client
             .log_message(MessageType::INFO, "server initialized!")
             .await;
+        
+        let lock = self.store.lock().await;
+        if let Some(c_output) = &lock.c_output {
+            self.client
+                .log_message(MessageType::INFO, format!("writing to c file: {}", c_output.display()))
+                .await;
+        }
     }
 
     async fn shutdown(&self) -> Result<()> {
@@ -343,14 +351,24 @@ impl LanguageServer for Backend {
     }
 }
 
+#[derive(Parser)]
+struct LspArgs {
+    /// An optional file path to write generated C code to whenever the input
+    /// document changes. Primarily used for hot-code reloading.
+    #[arg(short = 'o', long)]
+    c_output: Option<PathBuf>,
+}
+
 #[tokio::main]
 async fn main() {
+    let args = LspArgs::parse();
+
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
     let (service, socket) = LspService::new(|client| Backend {
         client,
-        store: Mutex::new(DocumentStore::new())
+        store: Mutex::new(DocumentStore::new(&args))
     });
     Server::new(stdin, stdout, socket).serve(service).await;
 }

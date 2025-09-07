@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, rc::Rc, sync::Arc, time::SystemTime};
+use std::{collections::HashMap, hash::Hash, path::PathBuf, rc::Rc, sync::Arc, time::SystemTime};
 
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
@@ -6,7 +6,7 @@ use poniescript_core::{
     arena::{ArenaKey, IndexCell}, binder, db::*, expr::*, init_ordering, module::{self, Module}, source::*, typecheck, Args
 };
 
-use crate::inlay_hint::{compute_inlay_hint_cache, InlayHintCache};
+use crate::{inlay_hint::{compute_inlay_hint_cache, InlayHintCache}, LspArgs};
 
 pub struct Diagnostics {
     pub all: Vec<(Url, Vec<Diagnostic>)>
@@ -116,11 +116,33 @@ impl SourceProvider for LSPSource {
     }
 }
 
+fn do_finish_compile(db: &mut Db, ast: &mut Ast, output: &PathBuf, args: &Args) {
+    poniescript_core::dead_code::eliminate_dead_code(db, ast);
+
+    // Sort value types.
+    if db.sort_value_types().is_err() {
+        // TODO: Report these errors
+        return;
+    }
+
+    // Pass 5: Codegen
+    // Generate any caches that require type checking info.
+    db.generate_codegen_caches(&args);
+
+    // TODO: Figure out how to make this async correctly...?
+    let Ok(mut output) = std::fs::File::create(output) else {
+        eprintln!("Warning: Unable to create output C file");
+        return;
+    };
+
+    if let Err(err) = poniescript_core::codegen::codegen(&args, db, ast, &mut output) {
+        eprintln!("Warning: Unable to write C file: {err}");
+    }
+}
+
 fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics, HashMap<Url, SourceId>, HashMap<SourceId, Url>) {
     eprintln!("--- re-parse modules ---");
     let start = SystemTime::now();
-    let mut args = Args::default();
-    //args.input_paths.push(path);
 
     let mut ast = Ast::new();
     let mut db = Db::new(&mut ast);
@@ -137,7 +159,7 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics, HashMap<Url,
 	// }
 
 	// Pass 2: Binding
-	let had_error = binder::bind(&mut db, &mut ast);
+	let had_error = binder::bind(&mut db, &mut ast) || had_error;
 
 	// if had_error {
 	// 	let err = report_errors(&db, &doc_map);
@@ -172,11 +194,24 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics, HashMap<Url,
 	// }
 
 	// Pass 4: Type check and infer
-	let had_error = typecheck::typecheck(&mut db, &mut ast);
+	let had_error = typecheck::typecheck(&mut db, &mut ast) || had_error;
 
     let err = report_errors(&ast, &db, &doc_map);
     let end = SystemTime::now();
     eprintln!("rebuild ast/db took {}ms", end.duration_since(start).unwrap().as_millis());
+
+    if !had_error && db.errors.len() == 0 {
+        let mut args = Args::default();
+        // For now, these are the only args that the LSP is doing. At some point,
+        // we probably want to make the Args available as part of core?
+        args.hot = true;
+        args.engine = true;
+
+        if let Some(output) = &store.c_output {
+            do_finish_compile(&mut db, &mut ast, output, &args);
+        }
+    }
+    
     return (db, ast, err, url_to_id_map, id_to_url_map);
 }
 
@@ -190,15 +225,18 @@ pub struct DocumentStore {
 
     inlay_hints: HashMap<Url, InlayHintCache>,
 
-    cached_stuff: Option<(Db, Ast, Diagnostics, HashMap<Url, SourceId>, HashMap<SourceId, Url>)>
+    cached_stuff: Option<(Db, Ast, Diagnostics, HashMap<Url, SourceId>, HashMap<SourceId, Url>)>,
+
+    pub c_output: Option<PathBuf>,
 }
 
 impl DocumentStore {
-    pub fn new() -> Self {
+    pub fn new(args: &LspArgs) -> Self {
         Self {
             documents: HashMap::new(),
             inlay_hints: HashMap::new(),
-            cached_stuff: None
+            cached_stuff: None,
+            c_output: args.c_output.clone()
         }
     }
 
