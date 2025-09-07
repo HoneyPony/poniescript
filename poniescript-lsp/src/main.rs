@@ -203,7 +203,7 @@ impl LanguageServer for Backend {
                 position_encoding: Some(encoding),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions::default()),
-                semantic_tokens_provider: Some(
+                semantic_tokens_provider: None, /*Some(
                     SemanticTokensServerCapabilities::SemanticTokensOptions(
                         SemanticTokensOptions {
                             legend: SemanticTokensLegend {
@@ -219,7 +219,7 @@ impl LanguageServer for Backend {
                             work_done_progress_options: Default::default(),
                         },
                     )
-                ),
+                ),*/
 
                 inlay_hint_provider: Some(OneOf::Left(true)),
 
@@ -277,6 +277,10 @@ impl LanguageServer for Backend {
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
+        // Disable semantic tokens for now. They're not very useful and the LSP
+        // is pretty unstable.
+        return Ok(None);
+
         self.client.log_message(MessageType::INFO, format!("Semantic tokens requested for {}", params.text_document.uri)).await;
 
         let Ok(path) = params.text_document.uri.to_file_path() else {
@@ -286,7 +290,7 @@ impl LanguageServer for Backend {
 
         let mut lock = self.store.lock().await;
         
-        let (db, ast, _) = lock.get_cached_stuff();
+        let (db, ast, ..) = lock.get_cached_stuff();
 
         let mut visitor = SemanticTokenVisitor { tokens: vec![], cursor_line: 0, cursor_start: 0 };
 
@@ -320,6 +324,7 @@ impl LanguageServer for Backend {
             lock.update(uri, text);
 
             let diag = lock.steal_diagnostics();
+            drop(lock);
 
             for diag in diag.all {
                 self.client.publish_diagnostics(diag.0, diag.1, None).await;

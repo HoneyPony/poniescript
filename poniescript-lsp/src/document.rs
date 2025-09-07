@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, sync::Arc};
+use std::{collections::HashMap, rc::Rc, sync::Arc, time::SystemTime};
 
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
@@ -10,12 +10,16 @@ pub struct Diagnostics {
     pub all: Vec<(Url, Vec<Diagnostic>)>
 }
 
-fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId, Arc<Document>>, store: &DocumentStore) -> bool {
+fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId, Arc<Document>>,
+    url_to_id_map: &mut HashMap<Url, SourceId>, id_to_url_map: &mut HashMap<SourceId, Url>, store: &DocumentStore) -> bool {
 	let mut had_error = false;
 
 	for doc in store.documents.values() {
         let source = LSPSource::new(doc.clone());
         let source_id = ast.sources.push(Source::new(source));
+
+        url_to_id_map.insert(doc.url.clone(), source_id);
+        id_to_url_map.insert(source_id, doc.url.clone());
 
         doc_map.insert(source_id, doc.clone());
 
@@ -110,7 +114,9 @@ impl SourceProvider for LSPSource {
     }
 }
 
-fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics) {
+fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics, HashMap<Url, SourceId>, HashMap<SourceId, Url>) {
+    eprintln!("--- re-parse modules ---");
+    let start = SystemTime::now();
     let mut args = Args::default();
     //args.input_paths.push(path);
 
@@ -118,8 +124,10 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics) {
     let mut db = Db::new(&mut ast);
 
     let mut doc_map: HashMap<SourceId, Arc<Document>> = HashMap::new();
+    let mut url_to_id_map = HashMap::new();
+    let mut id_to_url_map = HashMap::new();
 
-    let had_error = parse_all_modules(&mut ast, &mut db, &mut doc_map, store);
+    let had_error = parse_all_modules(&mut ast, &mut db, &mut doc_map, &mut url_to_id_map, &mut id_to_url_map, store);
 
 	// if had_error {
     //     let err = report_errors(&db, &doc_map);
@@ -165,18 +173,20 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics) {
 	let had_error = typecheck::typecheck(&mut db, &mut ast);
 
     let err = report_errors(&ast, &db, &doc_map);
-    return (db, ast, err);
+    let end = SystemTime::now();
+    eprintln!("rebuild ast/db took {}ms", end.duration_since(start).unwrap().as_millis());
+    return (db, ast, err, url_to_id_map, id_to_url_map);
 }
 
 pub struct Document {
     text: String,
-    url: Url
+    url: Url,
 }
 
 pub struct DocumentStore {
     documents: HashMap<Url, Arc<Document>>,
 
-    cached_stuff: Option<(Db, Ast, Diagnostics)>
+    cached_stuff: Option<(Db, Ast, Diagnostics, HashMap<Url, SourceId>, HashMap<SourceId, Url>)>
 }
 
 impl DocumentStore {
@@ -189,13 +199,13 @@ impl DocumentStore {
 
     pub fn update(&mut self, url: Url, text: String) {
         self.documents.insert(url.clone(), Arc::new(Document {
-            text, url
+            text, url,
         }));
 
         self.cached_stuff = None;
     }
 
-    pub fn get_cached_stuff(&mut self) -> &mut (Db, Ast, Diagnostics) {
+    pub fn get_cached_stuff(&mut self) -> &mut (Db, Ast, Diagnostics, HashMap<Url, SourceId>, HashMap<SourceId, Url>) {
         if self.cached_stuff.is_none() {
             self.cached_stuff = Some(do_handle_files(&self));
         }

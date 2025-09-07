@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use poniescript_core::arena::ArenaKey;
 use tower_lsp::lsp_types::*;
 
@@ -10,21 +12,26 @@ use poniescript_core::{
 use crate::document::DocumentStore;
 use crate::document::*;
 
-struct GotoDefinitionVisitor {
+struct GotoDefinitionVisitor<'map> {
     response: Option<GotoDefinitionResponse>,
 
-    todo_uri_remove_this: Url,
+    id_to_url_map: &'map HashMap<SourceId, Url>
 }
 
-impl GotoDefinitionVisitor {
+impl<'map> GotoDefinitionVisitor<'map> {
     fn set_link(&mut self, ast: &Ast, origin_selection_range: Option<&SourceLocation>, target_range: &SourceLocation, target_selection_range: &SourceLocation) {
+        let Some(target_uri) = self.id_to_url_map.get(&target_range.source) else {
+            // Nothing found.
+            return;
+        };
+        
         let origin_selection_range = origin_selection_range.map(|r| convert_range(ast, r));
         let target_range = convert_range(ast, target_range);
         let target_selection_range = convert_range(ast, target_selection_range);
 
         let link = LocationLink {
             origin_selection_range,
-            target_uri: self.todo_uri_remove_this.clone(),
+            target_uri: target_uri.clone(),
             target_range,
             target_selection_range
         };
@@ -73,7 +80,7 @@ fn cursor_on(cursor: &SourceLocation, target: &SourceLocation) -> bool {
     return true;
 }
 
-impl LocateAst for GotoDefinitionVisitor {
+impl<'a> LocateAst for GotoDefinitionVisitor<'a> {
     fn locate_assign(&mut self,ast: &Ast,db: &Db,loc: &SourceLocation,it: &Assign) {
         // TODO: We could just not even do an origin_selection_range here as the
         // default should be correct...?
@@ -107,19 +114,22 @@ impl LocateAst for GotoDefinitionVisitor {
 // We need a good mapping of Url -> SourceId -> Module or something.
 
 pub fn goto_definition(store: &mut DocumentStore, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
-    let (db, ast, _) = store.get_cached_stuff();
+    let (db, ast, _, url_to_id, id_to_url) = store.get_cached_stuff();
+
+    let Some(source_id) = url_to_id.get(&params.text_document_position_params.text_document.uri) else {
+        return None;
+    };
+
+    let source_loc = inverse_convert_position(ast, *source_id, &params.text_document_position_params.position);
 
     let mut visitor = GotoDefinitionVisitor {
         response: None,
 
         // For now we just assume the thing is inside the same document
-        todo_uri_remove_this: params.text_document_position_params.text_document.uri.clone(),
+        id_to_url_map: &id_to_url
     };
 
-    let todo_source_id_remove_this = unsafe { SourceId::from_nonzero_u32(std::num::NonZeroU32::new_unchecked(2)) };
-    let loc = inverse_convert_position(ast, todo_source_id_remove_this, &params.text_document_position_params.position);
-
-    visitor.visit_ast(ast, db, &loc);
+    visitor.visit_ast(ast, db, &source_loc);
 
     visitor.response
 }
