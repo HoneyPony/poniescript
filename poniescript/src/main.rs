@@ -313,6 +313,18 @@ fn main() {
 		exit(5);
 	}
 
+	// In check mode, we're done after semantic analysis.
+	if args.check_mode {
+		// This is a bit ugly but whatever, the main point of this mode for
+		// now is the timing information
+		if !args.no_timing {
+			for info in duration_set {
+				eprintln!("{}", info);
+			}
+		}
+		exit(0);
+	}
+
 	// Pass 5: Codegen
 	// Generate any caches that require type checking info.
 	db.generate_codegen_caches(&args);

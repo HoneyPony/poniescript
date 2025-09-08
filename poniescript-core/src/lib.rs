@@ -66,6 +66,11 @@ pub struct Args {
 	/// Compile this code for hot reload (integration with poni_hot). Not recommended
 	/// for release builds.
 	pub hot: bool,
+
+	#[arg(long = "check")]
+	/// Whether to run the compiler in check mode. In this mode, it does not
+	/// output any C code, it merely runs the semantic analysis.
+	pub check_mode: bool,
 }
 
 #[cfg(test)]
