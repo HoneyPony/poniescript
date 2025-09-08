@@ -151,19 +151,23 @@ impl Lexer {
 		};
 	}
 
-	fn mk_token(&self, db: &mut Db, ty: Tok) -> Token {
+	fn mk_token(&mut self, db: &mut Db, ty: Tok) -> Token {
 		let location = self.get_current_location();
+
+		// TODO: Is this legit? It seems like a good idea.
+		let old_buffer = std::mem::take(&mut self.buffer);
+		self.start = self.current;
 
 		// eprintln!("-- trace lexer: {}:[{}] {:?}", location.offset, location.length, ty);
 
 		return Token {
 			typ: ty,
-			lexeme: db.put_str(&self.buffer),
+			lexeme: db.put_string(old_buffer),
 			location
 		}
 	}
 
-	fn mk_token_res(&self, db: &mut Db, ty: Tok) -> std::io::Result<Token> {
+	fn mk_token_res(&mut self, db: &mut Db, ty: Tok) -> std::io::Result<Token> {
 		Ok(self.mk_token(db, ty))
 	}
 

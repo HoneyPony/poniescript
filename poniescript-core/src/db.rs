@@ -574,6 +574,24 @@ impl Db {
 		return id;
 	}
 
+	/// Most of the time, you will want to call put_str.
+	/// 
+	/// But if you have an owned String that you don't need anyway, and particularly
+	/// if it's likely that that string does NOT yet exist in the Db, you should
+	/// use this function to save the allocation + copy.
+	pub fn put_string(&mut self, str: String) -> StrId {
+		if let Some(existing) = self.str_side_map.get(&str) {
+			return *existing;
+		}
+
+		let leaked = str.leak();
+
+		let id = IdFuncs::<StrId>::push(self, leaked);
+		self.str_side_map.insert(leaked.to_string(), id);
+
+		return id;
+	}
+
 	pub fn put_type(&mut self, typ: Type) -> TypId {
 		if let Some(existing) = self.type_side_map.get(&typ) {
 			return *existing;
