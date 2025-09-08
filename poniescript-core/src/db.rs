@@ -574,16 +574,17 @@ impl Db {
 		return id;
 	}
 
-	/// Most of the time, you will want to call put_str.
-	/// 
-	/// But if you have an owned String that you don't need anyway, and particularly
-	/// if it's likely that that string does NOT yet exist in the Db, you should
-	/// use this function to save the allocation + copy.
-	pub fn put_string(&mut self, str: String) -> StrId {
-		if let Some(existing) = self.str_side_map.get(&str) {
+	/// This function will:
+	/// - If the string is already in the side_map, simply clear its buffer
+	/// - If the string is NOT in the side map, std::mem::take() it for usage
+	///   as the leaked string.
+	pub fn put_clear_string(&mut self, str: &mut String) -> StrId {
+		if let Some(existing) = self.str_side_map.get(str) {
+			str.clear();
 			return *existing;
 		}
 
+		let str = std::mem::take(str);
 		let leaked = str.leak();
 
 		let id = IdFuncs::<StrId>::push(self, leaked);
