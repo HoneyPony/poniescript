@@ -42,6 +42,9 @@ void poni_gc_join(struct poni_gc_handle *handle);
 void poni_gc_send_request(struct poni_gc_handle *handle, uint64_t request);
 struct poni_gc_context *poni_gc_create_context_for_existing(struct poni_gc_handle *handle);
 
+void poni_gc_free_context(struct poni_gc_context *ctx);
+void poni_gc_free_handle(struct poni_gc_handle *handle);
+
 struct object1 {
     uint64_t tag;
     int x;
@@ -190,7 +193,26 @@ main(int argc, char **argv) {
         usleep(0);
     }
 
+    // Now, remove myobj, and then collect everything. This is a valgrind test.
+    frame.myobj = NULL;
+    poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
+
+    for(int i = 0; i < 100000; ++i) {
+        if(poni_gc_flags != 0) break;
+        usleep(0);
+    }
+
+    for(int i = 0; i < 10000; ++i) {
+        // Run it multiple times. This is just because we previously had some
+        // bugs related to this, so it's a good thing to test.
+        PONI_GC_SAFEPOINT(ctx);
+        usleep(0);
+    }
+
     printf("testgc: joining gc\n");
 
     poni_gc_join(handle);
+
+    poni_gc_free_context(ctx);
+    poni_gc_free_handle(handle);
 }

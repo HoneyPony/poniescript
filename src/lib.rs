@@ -1,4 +1,4 @@
-use std::{alloc::{self, Layout}, collections::VecDeque, ptr::{self, null}, sync::{atomic::{AtomicU64, Ordering}, Condvar, Mutex}, thread::{self, JoinHandle}, time::Instant};
+use std::{alloc::{self, Layout}, collections::VecDeque, ptr::{self, null}, sync::{atomic::{AtomicPtr, AtomicU64, Ordering}, Condvar, Mutex}, thread::{self, JoinHandle}, time::Instant};
 
 extern "C" {
     fn poni_gc_visit_object(gc: &mut Gc, ptr: *mut u64);
@@ -17,12 +17,8 @@ const GC_REQUEST_SHUTDOWN: u64 = 2;
 #[export_name = "poni_gc_flags"]
 static GC_FLAGS: AtomicU64 = AtomicU64::new(0);
 
-struct SendPtr(*mut u64);
-unsafe impl Send for SendPtr {}
-unsafe impl Sync for SendPtr {}
-
 struct Gc<'a> {
-    mark_queue: VecDeque<*mut u64>,
+    mark_queue: VecDeque<AtomicPtr<u64>>,
     shared: &'a GcShared,
 }
 
@@ -32,12 +28,12 @@ struct GcHandle<'a> {
 }
 
 struct GcAllocator {
-    allocations: Vec<SendPtr>,
+    allocations: Vec<AtomicPtr<u64>>,
     allocate_marked: bool,
 }
 
 struct GcShared {
-    queue_queue: Mutex<Vec<Vec<SendPtr>>>,
+    queue_queue: Mutex<Vec<Vec<AtomicPtr<u64>>>>,
 
     available_threads: Mutex<u64>,
 
@@ -87,7 +83,7 @@ impl<'a> GcContext<'a> {
                 if !candidate.is_null() {
                     // Skip objects that have already been marked.
                     if unsafe { *candidate & 1 == 0 } {
-                        queue.push(SendPtr(candidate));
+                        queue.push(AtomicPtr::new(candidate));
                     }
                 }
             }
@@ -192,13 +188,13 @@ impl GcAllocator {
             unsafe { *ptr |= 1; }
         }
 
-        self.allocations.push(SendPtr(ptr));
+        self.allocations.push(AtomicPtr::new(ptr));
 
         ptr
     }
 
     pub fn sweep(&mut self) {
-        const DO_STATS: bool = false;
+        const DO_STATS: bool = true;
         let mut stats = GcStatistics {
             objects_freed: 0,
             objects_kept: 0,
@@ -208,9 +204,9 @@ impl GcAllocator {
 
         // TODO: Maybe build the new_allocations array as part of marking? That
         // should save some time.
-        let mut new_allocations: Vec<SendPtr> = vec![];
+        let mut new_allocations: Vec<AtomicPtr<u64>> = vec![];
         for alloc in &self.allocations {
-            let alloc = alloc.0;
+            let alloc = alloc.load(Ordering::Relaxed);
 
             // Free & skip any alloccations that aren't marked.
             if unsafe { *alloc & 1 == 0 } {
@@ -231,7 +227,7 @@ impl GcAllocator {
 
             // Otherwise, clear the mark bit.
             unsafe { *alloc &= !1; }
-            new_allocations.push(SendPtr(alloc));
+            new_allocations.push(AtomicPtr::new(alloc));
 
             if DO_STATS {
                 stats.objects_kept += 1;
@@ -298,7 +294,7 @@ impl<'a> Gc<'a> {
             for queue in queue_queue {
                 for ptr in queue {
                     // Mark every pointer in the queue.
-                    self.poni_gc_mark(ptr.0);
+                    self.poni_gc_mark(ptr.load(Ordering::Relaxed));
                 }
             }
 
@@ -329,7 +325,7 @@ impl<'a> Gc<'a> {
             // marked, and so will unconditionally be visited.
             unsafe {
                 //eprintln!("poni-gc: visit: {next:?}");
-                poni_gc_visit_object(self, next);
+                poni_gc_visit_object(self, next.load(Ordering::Relaxed));
             }
         }
     }
@@ -352,7 +348,7 @@ impl<'a> Gc<'a> {
 
             //eprintln!("mark: {ptr:?} now marked: {:x}", *ptr);
 
-            self.mark_queue.push_front(ptr);
+            self.mark_queue.push_front(AtomicPtr::new(ptr));
         }
     }
 
@@ -360,41 +356,6 @@ impl<'a> Gc<'a> {
         let mut allocator = self.shared.allocator.lock().unwrap();
         allocator.sweep();
         allocator.allocate_marked = false;
-    }
-
-    #[no_mangle]
-    pub extern "C" fn poni_gc_spawn() -> Box<GcHandle<'static>> {
-        let shared = Box::new(GcShared::new());
-        let shared = Box::leak(shared);
-
-        let join_handle = thread::spawn(|| {
-            let mut gc = Gc { mark_queue: VecDeque::new(), shared };
-            loop {
-                let request = {
-                    let mut request = gc.shared.gc_request.lock().unwrap();
-                    while *request == 0 {
-                        request = gc.shared.gc_request_cv.wait(request).unwrap();
-                    }
-                    let take = *request;
-                    *request = 0;
-                    take
-                };
-
-                if request & GC_REQUEST_SHUTDOWN != 0 {
-                    break;
-                }
-
-                if request & GC_REQUEST_COLLECT != 0 {
-                    eprintln!("poni-gc: start collect()");
-                    gc.collect();
-                }
-            }
-        });
-
-        Box::new(GcHandle {
-            join_handle: Some(join_handle),
-            shared
-        })
     }
 }
 
@@ -420,5 +381,71 @@ impl<'a> GcHandle<'a> {
         *avail += 1;
 
         Box::new(GcContext { frame_list: null(), shared: self.shared, flag: 0 })
+    }
+}
+
+#[export_name = "poni_gc_spawn"]
+extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
+    let shared = Box::new(GcShared::new());
+    let shared = Box::leak(shared);
+
+    let join_handle = thread::spawn(|| {
+        let mut gc = Gc { mark_queue: VecDeque::new(), shared };
+        loop {
+            let request = {
+                let mut request = gc.shared.gc_request.lock().unwrap();
+                while *request == 0 {
+                    request = gc.shared.gc_request_cv.wait(request).unwrap();
+                }
+                let take = *request;
+                *request = 0;
+                take
+            };
+
+            if request & GC_REQUEST_SHUTDOWN != 0 {
+                break;
+            }
+
+            if request & GC_REQUEST_COLLECT != 0 {
+                eprintln!("poni-gc: start collect()");
+                gc.collect();
+            }
+        }
+    });
+
+    Box::new(GcHandle {
+        join_handle: Some(join_handle),
+        shared
+    })
+}
+
+/// Frees a single Box<GcContext> that was returned from one of the functions
+/// for creating them (e.g. GcHandle::create_context_for_existing).
+/// 
+/// This function does nothing but drop the Box; it exists so that we can do
+/// this from C.
+#[export_name = "poni_gc_free_context"]
+unsafe extern "C" fn free_context(context: Box<GcContext>) {
+    drop(context);
+}
+
+/// Frees a Box<GcHandle> and the &GcShared reference stored inside it.
+/// 
+/// This function is the opposite of `gc_spawn`. It is unsafe because it is
+/// freeing the shared &GcShared pointer -- if any outstanding references exist
+/// to this pointer, bad things will happen.
+/// 
+/// As such, you should only call free_handle if you have freed every single
+/// GcContext, *and* have joined the handle.
+/// 
+/// The main purpose of this function is to make it easier to check the GC
+/// behavior with Valgrind. It allows us to clean up every allocation we make.
+/// 
+/// For the most part, it is not actually necessary to call these functions.
+#[export_name = "poni_gc_free_handle"]
+unsafe extern "C" fn free_handle(handle: Box<GcHandle>) {
+    unsafe {
+        let shared = Box::from_raw(handle.shared as *const GcShared as *mut GcShared);
+        drop(shared);
     }
 }
