@@ -69,7 +69,7 @@ struct GcContext<'a> {
     frame_list: *const GcFrame,
     shared: &'a GcShared,
     flag: u64,
-    own_allocs: Vec<AtomicPtr<u64>>
+    own_allocs: Vec<AtomicPtr<u64>>,
 }
 
 impl<'a> GcContext<'a> {
@@ -87,6 +87,15 @@ impl<'a> GcContext<'a> {
         }
 
         self.own_allocs.push(AtomicPtr::new(ptr));
+
+        // Interesting thing to try:
+        // Always try_lock and move the allocations over.
+        // This seems to in general reduce our efficiency, which makes sense; it
+        // does, however, move the "safepoints" and "no safepoints" code closer
+        // together in performance, which also makes sense.
+        // if let Ok(mut alloc) = self.shared.allocator.try_lock() {
+        //     alloc.allocations.append(&mut self.own_allocs);
+        // }
 
         ptr
     }
@@ -123,6 +132,8 @@ impl<'a> GcContext<'a> {
     }
 
     fn do_handoff(&mut self) {
+        if self.own_allocs.is_empty() { return; }
+
         // Hand off existing allocations to the main allocator. This lets it
         // sweep independently of us doing additional allocations.
         {
