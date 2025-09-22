@@ -60,3 +60,11 @@ I knew that I wanted to get rid of the "single mutex for allocation" anyway,
 but this gives a completely different reason why -- it's not just contended allocation
 that's a problem, but really contended sweeping (although I definitely had thought
 of that before).
+
+## To copy or to move?
+
+It's not really clear what the best way to handoff the vector of allocations is.
+
+Copying it seems to be faster, but moving it seems to be faster in the case that
+we very, very occasionally safepoint. I suppose that makes some sense -- rarer
+safepoints result in more to copy -- but the crossover seems somewhat surprising.
