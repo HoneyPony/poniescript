@@ -1,50 +1,70 @@
-use std::{alloc::{self, Layout}, collections::VecDeque, ptr, sync::{atomic::{AtomicU64, Ordering}, Condvar, Mutex}};
+use std::{alloc::{self, Layout}, collections::VecDeque, ptr::{self, null}, sync::{atomic::{AtomicU64, Ordering}, Condvar, Mutex}, thread::{self, JoinHandle}, time::Instant};
 
 extern "C" {
     fn poni_gc_visit_object(gc: &mut Gc, ptr: *mut u64);
     fn poni_gc_visit_roots(gc: &mut Gc);
+    fn poni_gc_get_allocation_size(ptr: *mut u64) -> usize;
 }
 
 const GC_FLAG_SCAN: u64 = 2;
 const GC_FLAG_NOP: u64 = 1;
+// Dummy flag to toggle between so that the safepoints recognize there's work to do
+const GC_FLAG_DUMMY: u64 = 4;
 
-struct Gc {
+const GC_REQUEST_COLLECT: u64 = 1;
+const GC_REQUEST_SHUTDOWN: u64 = 2;
+
+#[export_name = "poni_gc_flags"]
+static GC_FLAGS: AtomicU64 = AtomicU64::new(0);
+
+struct SendPtr(*mut u64);
+unsafe impl Send for SendPtr {}
+unsafe impl Sync for SendPtr {}
+
+struct Gc<'a> {
     mark_queue: VecDeque<*mut u64>,
-    shared: GcShared,
+    shared: &'a GcShared,
+}
+
+struct GcHandle<'a> {
+    join_handle: Option<JoinHandle<()>>,
+    shared: &'a GcShared,
 }
 
 struct GcAllocator {
-    allocations: Vec<*mut u64>,
+    allocations: Vec<SendPtr>,
     allocate_marked: bool,
 }
 
 struct GcShared {
-    queue_queue: Mutex<Vec<Vec<*mut u64>>>,
+    queue_queue: Mutex<Vec<Vec<SendPtr>>>,
 
-    gc_flags: AtomicU64,
-
-    available_threads: u64,
+    available_threads: Mutex<u64>,
 
     outstanding_threads: Mutex<u64>,
     outstanding_thread_cv: Condvar,
 
     allocator: Mutex<GcAllocator>,
+
+    gc_request: Mutex<u64>,
+    gc_request_cv: Condvar,
 }
 
 #[repr(C)]
 struct GcFrame {
     prev: *const GcFrame,
     pointer_count: u64,
-    pointers: [*mut u64; 0]
 }
 
 #[repr(C)]
 struct GcContext<'a> {
     frame_list: *const GcFrame,
     shared: &'a GcShared,
+    flag: u64,
 }
 
 impl<'a> GcContext<'a> {
+    #[no_mangle]
     pub extern "C" fn poni_gc_alloc(&mut self, size: usize) -> *mut u64 {
         self.shared.alloc(size)
     }
@@ -57,15 +77,20 @@ impl<'a> GcContext<'a> {
             // Dereference the inner frame: We have checked that it's not NULL.
             let inner_frame = unsafe { &*frame };
 
+            eprintln!("poni-gc: do_scan: reading from frame {:?}", ptr::addr_of!(inner_frame));
+
             // Push all of the pointers from the frame into our queue.
             for i in 0..inner_frame.pointer_count {
                 let candidate = inner_frame.read_ptr(i as usize);
 
+                eprintln!("candidate: {:?}", candidate);
+
                 // Skip null pointers.
                 if !candidate.is_null() {
                     // Skip objects that have already been marked.
-                    if unsafe { *candidate & 1 != 0 } {
-                        queue.push(candidate);
+                    if unsafe { *candidate & 1 == 0 } {
+                        eprintln!("push candidate to queue");
+                        queue.push(SendPtr(candidate));
                     }
                 }
             }
@@ -79,8 +104,17 @@ impl<'a> GcContext<'a> {
     }
 
     #[no_mangle]
-    extern "C" fn poni_gc_poll_slow(&self) {
-        let do_scan = self.shared.gc_flags.load(Ordering::Relaxed) & GC_FLAG_SCAN != 0;
+    extern "C" fn poni_gc_poll_slow(&mut self) {
+        let cur_flags = GC_FLAGS.load(Ordering::Relaxed);
+        //eprintln!("poni-gc: poll: self = {:b}, new = {:b}", self.flag, cur_flags);
+        if cur_flags == self.flag {
+            // TODO: Is this the best way? it may require a few extra steps...?
+            return;
+        }
+
+        self.flag = cur_flags;
+
+        let do_scan = GC_FLAGS.load(Ordering::Relaxed) & GC_FLAG_SCAN != 0;
         if do_scan {
             self.do_scan();
         }
@@ -98,7 +132,24 @@ impl GcFrame {
         if idx >= self.pointer_count as usize {
             panic!("Invalid index in GCFrame");
         }
-        self.pointers[idx]
+        unsafe {
+            let addr = self as *const GcFrame;
+            eprintln!("read ptr from frame: {:?}", addr);
+            let addr = addr.byte_offset(16);
+            // Pointer-to-a-pointer
+            let addr = addr as *const usize;
+        
+            eprintln!("read ptr from {:?} + {idx}", addr);
+
+            let addr = addr.offset(idx as isize);
+            let value = *addr;
+
+            let val = value as *mut u64;
+
+            eprintln!("read_ptr: {val:?}");
+
+            val
+        }
     }
 }
 
@@ -106,11 +157,13 @@ impl GcShared {
     pub fn new() -> Self {
         GcShared {
             queue_queue: Mutex::new(Vec::new()),
-            gc_flags: AtomicU64::new(0),
-            available_threads: 0,
+            available_threads: Mutex::new(0),
             outstanding_threads: Mutex::new(0),
             outstanding_thread_cv: Condvar::new(),
             allocator: Mutex::new(GcAllocator::new()),
+
+            gc_request: Mutex::new(0),
+            gc_request_cv: Condvar::new(),
         }
     }
 
@@ -118,6 +171,13 @@ impl GcShared {
         let mut allocator = self.allocator.lock().unwrap();
         allocator.alloc(size)
     }
+}
+
+struct GcStatistics {
+    objects_freed: u64,
+    objects_kept: u64,
+    bytes_freed: u64,
+    bytes_kept: u64
 }
 
 impl GcAllocator {
@@ -133,47 +193,95 @@ impl GcAllocator {
         let ptr = unsafe { alloc::alloc(layout) };
         let ptr = ptr as *mut u64;
 
+        // We must always reset the first 8-bytes to 0.
+        unsafe { *ptr = 0; }
+
         if self.allocate_marked {
             unsafe { *ptr |= 1; }
         }
 
-        self.allocations.push(ptr);
+        self.allocations.push(SendPtr(ptr));
 
         ptr
     }
 
     pub fn sweep(&mut self) {
+        const DO_STATS: bool = true;
+        let mut stats = GcStatistics {
+            objects_freed: 0,
+            objects_kept: 0,
+            bytes_freed: 0,
+            bytes_kept: 0,
+        };
+
         // TODO: Maybe build the new_allocations array as part of marking? That
         // should save some time.
-        let mut new_allocations: Vec<*mut u64> = vec![];
+        let mut new_allocations: Vec<SendPtr> = vec![];
         for alloc in &self.allocations {
-            let alloc = *alloc;
+            let alloc = alloc.0;
 
-            // Skip any alloccations that aren't marked.
-            if unsafe { *alloc & 1 == 0 } { continue; }
+            // Free & skip any alloccations that aren't marked.
+            if unsafe { *alloc & 1 == 0 } {
+                unsafe { 
+                    let size = poni_gc_get_allocation_size(alloc);
+                    let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
+                    alloc::dealloc(alloc as *mut u8, layout);
+
+                    if DO_STATS {
+                        stats.objects_freed += 1;
+                        stats.bytes_freed += size as u64;
+                    }
+                }
+
+                // Don't add this allocation to the new_allocations list.
+                continue;
+            }
 
             // Otherwise, clear the mark bit.
             unsafe { *alloc &= !1; }
-            new_allocations.push(alloc);
+            new_allocations.push(SendPtr(alloc));
+
+            if DO_STATS {
+                stats.objects_kept += 1;
+                unsafe { stats.bytes_kept += poni_gc_get_allocation_size(alloc) as u64; }
+            }
         }
         self.allocations = new_allocations;
+
+        if DO_STATS {
+            eprintln!("--- gc statistics ---");
+            eprintln!("objects freed: {}", stats.objects_freed);
+            eprintln!("  bytes freed: {}", stats.bytes_freed);
+            eprintln!("");
+            eprintln!(" objects kept: {}", stats.objects_kept);
+            eprintln!("   bytes kept: {}", stats.bytes_kept);
+        }
     }
 }
 
-impl Gc {
+impl<'a> Gc<'a> {
     fn handshake(&self, flags: u64) {
         let mut outstanding = self.shared.outstanding_threads.lock().unwrap();
 
-        *outstanding = self.shared.available_threads;
-        self.shared.gc_flags.fetch_update(Ordering::SeqCst, Ordering::SeqCst, 
-            |f| Some(f | flags)).unwrap();
+        if *outstanding > 0 {
+            panic!("poni-gc: handshake: tried to handshake while there were still outstanding threads");
+        }
+
+        *outstanding = *self.shared.available_threads.lock().unwrap();
+        GC_FLAGS.fetch_update(Ordering::SeqCst, Ordering::SeqCst, 
+            |f| Some(flags)).unwrap();
+
+        eprintln!("poni-gc: handshake: begin {:b} ({} threads)", flags, *outstanding);
 
         while *outstanding > 0 {
             outstanding = self.shared.outstanding_thread_cv.wait(outstanding).unwrap();
         }
+
+        eprintln!("poni-gc: handshake: finished")
     }
 
     pub fn collect(&mut self) {
+        let start_time = Instant::now();
         {
             let mut allocator = self.shared.allocator.lock().unwrap();
             allocator.allocate_marked = true;
@@ -183,8 +291,11 @@ impl Gc {
 
         unsafe { poni_gc_visit_roots(self); }
 
+        let mut toggle = GC_FLAG_DUMMY;
+
         loop {
-            self.handshake(GC_FLAG_SCAN);
+            self.handshake(GC_FLAG_SCAN | toggle);
+            toggle ^= GC_FLAG_DUMMY;
 
             // Move objects from queue_queue to regular queue
             let queue_queue: Vec<_> = {
@@ -194,8 +305,9 @@ impl Gc {
 
             for queue in queue_queue {
                 for ptr in queue {
+                    eprintln!("ptr in queue: {:?}", ptr.0);
                     // Mark every pointer in the queue.
-                    self.poni_gc_mark(ptr);
+                    self.poni_gc_mark(ptr.0);
                 }
             }
 
@@ -210,15 +322,24 @@ impl Gc {
         }
 
         self.sweep();
+        let end_time = Instant::now();
+
+        eprintln!("poni-gc: collect start-to-finish: {:?}", end_time.duration_since(start_time))
     }
 
     pub fn process_queue(&mut self) {
         loop {
-            let Some(next) = self.mark_queue.pop_back() else { break; };
+            let Some(next) = self.mark_queue.pop_back() else {
+                eprintln!("poni-gc: mark queue emptied");
+                break;
+            };
 
             // We assume objects that are in the mark queue have already been
             // marked, and so will unconditionally be visited.
-            unsafe { poni_gc_visit_object(self, next); }
+            unsafe {
+                eprintln!("poni-gc: visit: {next:?}");
+                poni_gc_visit_object(self, next);
+            }
         }
     }
 
@@ -229,11 +350,13 @@ impl Gc {
         let is_marked = unsafe { *ptr & 1 != 0 };
 
         // Object already marked: Nothing to do.
-        if is_marked { return; }
+        if is_marked { eprintln!("mark: {ptr:?} already marked"); return; }
 
         // Object is not marked: Mark it now, and visit it when we get a chance.
         unsafe {
             *ptr |= 1;
+
+            eprintln!("mark: {ptr:?} now marked: {:x}", *ptr);
 
             self.mark_queue.push_front(ptr);
         }
@@ -246,7 +369,62 @@ impl Gc {
     }
 
     #[no_mangle]
-    pub extern "C" fn poni_gc_spawn() -> Box<Gc> {
-        Box::new(Gc { mark_queue: VecDeque::new(), shared: GcShared::new() })
+    pub extern "C" fn poni_gc_spawn() -> Box<GcHandle<'static>> {
+        let shared = Box::new(GcShared::new());
+        let shared = Box::leak(shared);
+
+        let join_handle = thread::spawn(|| {
+            let mut gc = Gc { mark_queue: VecDeque::new(), shared };
+            loop {
+                let request = {
+                    let mut request = gc.shared.gc_request.lock().unwrap();
+                    while *request == 0 {
+                        request = gc.shared.gc_request_cv.wait(request).unwrap();
+                    }
+                    let take = *request;
+                    *request = 0;
+                    take
+                };
+
+                if request & GC_REQUEST_SHUTDOWN != 0 {
+                    break;
+                }
+
+                if request & GC_REQUEST_COLLECT != 0 {
+                    eprintln!("poni-gc: start collect()");
+                    gc.collect();
+                }
+            }
+        });
+
+        Box::new(GcHandle {
+            join_handle: Some(join_handle),
+            shared
+        })
+    }
+}
+
+impl<'a> GcHandle<'a> {
+    #[export_name = "poni_gc_send_request"]
+    pub fn send_request(&self, request: u64) {
+        let mut req = self.shared.gc_request.lock().unwrap();
+        *req |= request;
+        self.shared.gc_request_cv.notify_one();
+    }
+
+    #[export_name = "poni_gc_join"]
+    pub fn join(&mut self) {
+        if let Some(handle) = self.join_handle.take() {
+            self.send_request(GC_REQUEST_SHUTDOWN);
+            handle.join().unwrap()
+        }
+    }
+
+    #[export_name = "poni_gc_create_context_for_existing"]
+    pub fn create_context_for_existing(&mut self) -> Box<GcContext> {
+        let mut avail = self.shared.available_threads.lock().unwrap();
+        *avail += 1;
+
+        Box::new(GcContext { frame_list: null(), shared: self.shared, flag: 0 })
     }
 }

@@ -1,7 +1,10 @@
 #include <stdint.h>
 #include <stddef.h>
+#include <stdatomic.h>
+#include <stdio.h>
 
 struct poni_gc;
+struct poni_gc_handle;
 struct poni_gc_shared;
 
 struct poni_gc_frame {
@@ -15,10 +18,28 @@ struct poni_gc_context {
     struct poni_gc_shared *shared;
 };
 
+extern _Atomic uint64_t poni_gc_flags;
+#define PONI_GC_FLAG_SCAN 2
+#define PONI_GC_FLAG_NOP  1
+
+#define PONI_GC_REQUEST_COLLECT 1
+#define PONI_GC_REQUEST_SHUTDOWN 2
+
+#define PONI_UNLIKELY(expr) __builtin_expect(!!(expr), 0)
+
+#define PONI_GC_SAFEPOINT(ctx) \
+if(PONI_UNLIKELY(poni_gc_flags & (PONI_GC_FLAG_NOP | PONI_GC_FLAG_SCAN))) { \
+    poni_gc_poll_slow(ctx); \
+}
+
 void* poni_gc_alloc(struct poni_gc_context *ctx, size_t size);
 void  poni_gc_mark(struct poni_gc *gc, void *object);
-struct poni_gc *poni_gc_spawn();
 void poni_gc_poll_slow(struct poni_gc_context *ctx);
+
+struct poni_gc_handle *poni_gc_spawn();
+void poni_gc_join(struct poni_gc_handle *handle);
+void poni_gc_send_request(struct poni_gc_handle *handle, uint64_t request);
+struct poni_gc_context *poni_gc_create_context_for_existing(struct poni_gc_handle *handle);
 
 struct object1 {
     uint64_t tag;
@@ -31,6 +52,8 @@ struct object2 {
     struct object1 *ptr1;
     struct object1 *ptr2;
 };
+
+
 
 #define TAG_OBJ1 0x2
 #define TAG_OBJ2 0x4
@@ -53,9 +76,20 @@ poni_gc_visit_roots(struct poni_gc *gc) {
 
 }
 
+size_t
+poni_gc_get_allocation_size(void *object) {
+    uint64_t tag = *(uint64_t*)object;
+    switch(tag & 0xFE) {
+        case TAG_OBJ1: return sizeof(struct object1);
+        case TAG_OBJ2: return sizeof(struct object2);
+        default: return 0;
+    }
+}
+
 struct object1*
 mk_obj1(struct poni_gc_context *ctx, int x, int y) {
     struct object1 *obj = poni_gc_alloc(ctx, sizeof(struct object1));
+    obj->tag |= TAG_OBJ1;
     obj->x = x;
     obj->y = y;
     return obj;
@@ -64,12 +98,30 @@ mk_obj1(struct poni_gc_context *ctx, int x, int y) {
 struct object2*
 mk_obj2(struct poni_gc_context *ctx, struct object1 *o1, struct object1 *o2) {
     struct object2 *obj = poni_gc_alloc(ctx, sizeof(struct object2));
+    obj->tag |= TAG_OBJ2;
     obj->ptr1 = o1;
     obj->ptr2 = o2;
     return obj;
 }
 
-void
+#define PONI_FRAME(ptr_count, ...) \
+union { \
+    struct poni_gc_frame gc_frame; \
+    struct { \
+        struct poni_gc_frame *gc_prev; \
+        uint64_t gc_count; \
+        __VA_ARGS__ \
+    }; \
+} frame; \
+frame.gc_count = ptr_count; \
+frame.gc_prev = ctx->frame; \
+ctx->frame = &frame.gc_frame; \
+
+#define PONI_RETURN(expr) \
+ctx->frame = frame.gc_prev; \
+return expr
+
+struct object2*
 myfun(struct poni_gc_context *ctx) {
     union {
         struct poni_gc_frame gc_frame;
@@ -78,18 +130,48 @@ myfun(struct poni_gc_context *ctx) {
             uint64_t pointer_count;
             void *obj1_1;
             void *obj1_2;
+            void *obj2;
         };
     } frame;
+    frame.pointer_count = 2;
     frame.gc_prev = ctx->frame;
     ctx->frame = &frame.gc_frame;
 
     frame.obj1_1 = mk_obj1(ctx, 10, 20);
     frame.obj1_2 = mk_obj1(ctx, 30, 40);
+    frame.obj2 = mk_obj2(ctx, frame.obj1_1, frame.obj1_2);
 
     ctx->frame = frame.gc_prev;
+    return frame.obj2;
 }
 
 int
 main(int argc, char **argv) {
+    struct poni_gc_handle *handle = poni_gc_spawn();
+    struct poni_gc_context *ctx = poni_gc_create_context_for_existing(handle);
 
+    PONI_FRAME(1, struct object2 *myobj;)
+    for(int i = 0; i < 100; ++i) {
+        frame.myobj = myfun(ctx);
+    }
+    printf("frame.myobj: %p\n", frame.myobj);
+    printf("frame.myobj.tag: %lx\n", frame.myobj->tag);
+    printf("&frame.gc_frame: %p\n", &frame.gc_frame);
+    poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
+
+    for(int i = 0; i < 100000; ++i) {
+        if(poni_gc_flags != 0) break;
+        usleep(10);
+    }
+
+    for(int i = 0; i < 10000; ++i) {
+        // Run it multiple times. This is just because we previously had some
+        // bugs related to this, so it's a good thing to test.
+        PONI_GC_SAFEPOINT(ctx);
+        usleep(10);
+    }
+
+    printf("testgc: joining gc\n");
+
+    poni_gc_join(handle);
 }
