@@ -30,7 +30,7 @@ extern _Atomic uint64_t poni_gc_flags;
 
 #define PONI_GC_SAFEPOINT(ctx) \
 do { \
-    if(PONI_UNLIKELY(poni_gc_flags & (PONI_GC_FLAG_NOP | PONI_GC_FLAG_SCAN))) { \
+    if(PONI_UNLIKELY(atomic_load_explicit(&poni_gc_flags, memory_order_relaxed) & (PONI_GC_FLAG_NOP | PONI_GC_FLAG_SCAN))) { \
         poni_gc_poll_slow(ctx); \
     } \
 } while(0)
@@ -177,12 +177,12 @@ main(int argc, char **argv) {
     clock_t loop_start = clock();
 
     PONI_FRAME(1, struct object2 *myobj;)
-    for(int i = 0; i < 1000000; ++i) {
+    for(int i = 0; i < 100000; ++i) {
         frame.myobj = myfun(ctx);
 
         //if(i % 5000 == 0) {  }
 
-        if(i % 50000 == 0) PONI_GC_SAFEPOINT(ctx);
+        PONI_GC_SAFEPOINT(ctx);
         
         // if(i % 1000 == 0) {
         //     poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
@@ -195,6 +195,7 @@ main(int argc, char **argv) {
 
     clock_t loop_end = clock();
     printf("time for loop: %fms\n", 1000.0 * (double)(loop_end - loop_start) / (double)CLOCKS_PER_SEC);
+    exit(0);
 
     //benchmark_safepoint(ctx);
 

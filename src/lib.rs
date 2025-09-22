@@ -223,7 +223,7 @@ impl GcAllocator {
     }
 
     pub fn sweep(&mut self) {
-        const DO_STATS: bool = true;
+        const DO_STATS: bool = false;
         let mut stats = GcStatistics {
             objects_freed: 0,
             objects_kept: 0,
@@ -460,7 +460,7 @@ extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
                 //eprintln!("poni-gc: start collect()");
                 gc.collect();
 
-                const AUTOCOLLECT: bool = false;
+                const AUTOCOLLECT: bool = true;
                 if AUTOCOLLECT {
                     let mut request = gc.shared.gc_request.lock().unwrap();
                     *request |= GC_REQUEST_COLLECT;
