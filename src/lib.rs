@@ -33,7 +33,7 @@ struct GcHandle<'a> {
 }
 
 struct GcAllocator {
-    allocations: Vec<AtomicPtr<u64>>,
+    allocations: Vec<Vec<AtomicPtr<u64>>>,
     allocate_marked: bool,
 }
 
@@ -127,7 +127,7 @@ impl<'a> GcContext<'a> {
         // sweep independently of us doing additional allocations.
         {
             let mut allocator = self.shared.allocator.lock().unwrap();
-            allocator.allocations.append(&mut self.own_allocs);
+            allocator.allocations.push(std::mem::take(&mut self.own_allocs));
         }
 
         // We don't track those anymore.
@@ -251,36 +251,39 @@ impl GcAllocator {
         // should save some time.
         let mut new_allocations: Vec<AtomicPtr<u64>> = vec![];
 
-        for alloc in &self.allocations {
-            let alloc = alloc.load(Ordering::Relaxed);
+        for alloc_set in &self.allocations {
+            for alloc in alloc_set { 
+                let alloc = alloc.load(Ordering::Relaxed);
 
-            // Free & skip any alloccations that aren't marked.
-            if unsafe { *alloc & 1 == 0 } {
-                unsafe { 
-                    let size = poni_gc_get_allocation_size(alloc);
-                    let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
-                    alloc::dealloc(alloc as *mut u8, layout);
+                // Free & skip any alloccations that aren't marked.
+                if unsafe { *alloc & 1 == 0 } {
+                    unsafe { 
+                        let size = poni_gc_get_allocation_size(alloc);
+                        let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
+                        alloc::dealloc(alloc as *mut u8, layout);
 
-                    if DO_STATS {
-                        stats.objects_freed += 1;
-                        stats.bytes_freed += size as u64;
+                        if DO_STATS {
+                            stats.objects_freed += 1;
+                            stats.bytes_freed += size as u64;
+                        }
                     }
+
+                    // Don't add this allocation to the new_allocations list.
+                    continue;
                 }
 
-                // Don't add this allocation to the new_allocations list.
-                continue;
-            }
+                // Otherwise, clear the mark bit.
+                unsafe { *alloc &= !1; }
+                new_allocations.push(AtomicPtr::new(alloc));
 
-            // Otherwise, clear the mark bit.
-            unsafe { *alloc &= !1; }
-            new_allocations.push(AtomicPtr::new(alloc));
-
-            if DO_STATS {
-                stats.objects_kept += 1;
-                unsafe { stats.bytes_kept += poni_gc_get_allocation_size(alloc) as u64; }
+                if DO_STATS {
+                    stats.objects_kept += 1;
+                    unsafe { stats.bytes_kept += poni_gc_get_allocation_size(alloc) as u64; }
+                }
             }
         }
-        self.allocations = new_allocations;
+        self.allocations.clear();
+        self.allocations.push(new_allocations);
 
         if DO_STATS {
             eprintln!("--- gc statistics ---");
