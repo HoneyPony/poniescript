@@ -1,10 +1,10 @@
 RUSTLIB=target/release/libponi_gc_rs.a
 
 testgc: test/main.o $(RUSTLIB)
-	gcc -O2 test/main.o $(RUSTLIB) -o $@
+	gcc -g -O2 test/main.o $(RUSTLIB) -o $@
 
 test/main.o: test/main.c
-	gcc -O2 -c $^ -o $@
+	gcc -g -O2 -c $^ -o $@
 
 $(RUSTLIB):
 	cargo build --quiet --release

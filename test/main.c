@@ -122,11 +122,18 @@ union { \
 } frame; \
 frame.gc_count = ptr_count; \
 frame.gc_prev = ctx->frame; \
-ctx->frame = &frame.gc_frame; \
+ctx->frame = &frame.gc_frame;
 
 #define PONI_RETURN(expr) \
-ctx->frame = frame.gc_prev; \
-return expr
+do { \
+    ctx->frame = frame.gc_prev; \
+    return expr; \
+} while(0)
+
+#define PONI_EXIT() \
+do { \
+    ctx->frame = frame.gc_prev; \
+} while(0)
 
 struct object2*
 myfun(struct poni_gc_context *ctx) {
@@ -167,49 +174,43 @@ benchmark_safepoint(struct poni_gc_context *ctx) {
     printf("safepoint time: %fms total, %fns per-iter\n", total_ms, per_iter_ns);
 }
 
+void
+do_loop_benchmark(struct poni_gc_handle *handle, struct poni_gc_context *ctx, int do_safepoints) {
+    poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
+    clock_t loop_start = clock();
+
+    PONI_FRAME(1, struct object2 *myobj;)
+    for(int i = 0; i < 1000000; ++i) {
+        frame.myobj = myfun(ctx);
+
+        if(do_safepoints) PONI_GC_SAFEPOINT(ctx);
+    }
+
+    clock_t loop_end = clock();
+    const char *text = do_safepoints ? "safepoints" : "just alloc";
+    printf("%s: %fms\n", text, 1000.0 * (double)(loop_end - loop_start) / (double)CLOCKS_PER_SEC);
+
+    for(int i = 0; i < 500; ++i) {
+        PONI_GC_SAFEPOINT(ctx);
+        usleep(20);
+    }
+
+    //poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
+    //poni_gc_poll_until_cycle_finished(ctx);
+
+    PONI_EXIT();
+}
+
 int
 main(int argc, char **argv) {
     struct poni_gc_handle *handle = poni_gc_spawn();
     struct poni_gc_context *ctx = poni_gc_create_context_for_existing(handle);
 
-    poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
-
-    clock_t loop_start = clock();
-
-    PONI_FRAME(1, struct object2 *myobj;)
-    for(int i = 0; i < 100000; ++i) {
-        frame.myobj = myfun(ctx);
-
-        //if(i % 5000 == 0) {  }
-
-        PONI_GC_SAFEPOINT(ctx);
-        
-        // if(i % 1000 == 0) {
-        //     poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
-        
-        //     PONI_GC_SAFEPOINT(ctx);
-        // }
+    for(int j = 0; j < 4; ++j) {
+        for(int i = 0; i < 20; ++i) {
+            do_loop_benchmark(handle, ctx, j & 1);
+        }
     }
-
-   // poni_gc_poll_until_cycle_finished(ctx);
-
-    clock_t loop_end = clock();
-    printf("time for loop: %fms\n", 1000.0 * (double)(loop_end - loop_start) / (double)CLOCKS_PER_SEC);
-    exit(0);
-
-    //benchmark_safepoint(ctx);
-
-    printf("frame.myobj: %p\n", frame.myobj);
-    printf("frame.myobj.tag: %lx\n", frame.myobj->tag);
-    printf("&frame.gc_frame: %p\n", &frame.gc_frame);
-    poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
-    poni_gc_poll_until_cycle_finished(ctx);
-
-    // Now, remove myobj, and then collect everything. This is a valgrind test.
-    frame.myobj = NULL;
-    poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
-    poni_gc_poll_until_cycle_finished(ctx);
-
 
     printf("testgc: joining gc\n");
 

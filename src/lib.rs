@@ -1,4 +1,4 @@
-use std::{alloc::{self, Layout}, collections::VecDeque, ptr::{self, null}, sync::{atomic::{AtomicPtr, AtomicU64, Ordering}, Condvar, Mutex}, thread::{self, JoinHandle}, time::Instant};
+use std::{alloc::{self, Layout}, collections::VecDeque, ptr::{self, null}, sync::{atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering}, Condvar, Mutex}, thread::{self, JoinHandle}, time::Instant};
 
 
 #[global_allocator]
@@ -11,7 +11,7 @@ extern "C" {
 }
 
 const GC_FLAG_SCAN: u64 = 2;
-const GC_FLAG_NOP: u64 = 1;
+const GC_FLAG_HANDOFF_ALLOCS: u64 = 1;
 // Dummy flag to toggle between so that the safepoints recognize there's work to do
 const GC_FLAG_DUMMY: u64 = 4;
 
@@ -20,6 +20,7 @@ const GC_REQUEST_SHUTDOWN: u64 = 2;
 
 #[export_name = "poni_gc_flags"]
 static GC_FLAGS: AtomicU64 = AtomicU64::new(0);
+static GC_ALLOCATE_MARKED: AtomicBool = AtomicBool::new(false);
 
 struct Gc<'a> {
     mark_queue: VecDeque<AtomicPtr<u64>>,
@@ -68,12 +69,26 @@ struct GcContext<'a> {
     frame_list: *const GcFrame,
     shared: &'a GcShared,
     flag: u64,
+    own_allocs: Vec<AtomicPtr<u64>>
 }
 
 impl<'a> GcContext<'a> {
-    #[no_mangle]
-    pub extern "C" fn poni_gc_alloc(&mut self, size: usize) -> *mut u64 {
-        self.shared.alloc(size)
+    #[export_name = "poni_gc_alloc"]
+    pub extern "C" fn alloc(&mut self, size: usize) -> *mut u64 {
+        let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
+        let ptr = unsafe { alloc::alloc(layout) };
+        let ptr = ptr as *mut u64;
+
+        // We must always reset the first 8-bytes to 0.
+        unsafe { *ptr = 0; }
+
+        if GC_ALLOCATE_MARKED.load(Ordering::Relaxed) {
+            unsafe { *ptr |= 1; }
+        }
+
+        self.own_allocs.push(AtomicPtr::new(ptr));
+
+        ptr
     }
 
     fn do_scan(&self) {
@@ -107,6 +122,24 @@ impl<'a> GcContext<'a> {
         lock.push(queue);
     }
 
+    fn do_handoff(&mut self) {
+        // Hand off existing allocations to the main allocator. This lets it
+        // sweep independently of us doing additional allocations.
+        {
+            let mut allocator = self.shared.allocator.lock().unwrap();
+            allocator.allocations.append(&mut self.own_allocs);
+        }
+
+        // We don't track those anymore.
+        //
+        // TODO: We should really have a Vec of Vectors in the allocator, so
+        // that handing off our own allocs is constant-time over the number of
+        // things we've allocated. This would keep mutex contention at an
+        // absolute minimum (short of, e.g., assigning each vecotr a particular
+        // slot so they could all hand off in parallel, which would be cool too).
+        self.own_allocs.clear();
+    }
+
     #[no_mangle]
     extern "C" fn poni_gc_poll_slow(&mut self) {
         let cur_flags = GC_FLAGS.load(Ordering::Relaxed);
@@ -118,15 +151,20 @@ impl<'a> GcContext<'a> {
 
         self.flag = cur_flags;
 
-        let do_scan = GC_FLAGS.load(Ordering::Relaxed) & GC_FLAG_SCAN != 0;
+        let do_scan = cur_flags & GC_FLAG_SCAN != 0;
         if do_scan {
             self.do_scan();
+        }
+
+        let do_handoff = cur_flags & GC_FLAG_HANDOFF_ALLOCS != 0;
+        if do_handoff {
+            self.do_handoff();
         }
 
         let mut lock = self.shared.outstanding_threads.lock().unwrap();
         *lock -= 1;
         if *lock == 0 {
-            self.shared.outstanding_thread_cv.notify_one();
+            self.shared.outstanding_thread_cv.notify_all();
         }
     }
 
@@ -183,11 +221,6 @@ impl GcShared {
             gc_flags_cv: Condvar::new(),
         }
     }
-
-    pub fn alloc(&self, size: usize) -> *mut u64 {
-        let mut allocator = self.allocator.lock().unwrap();
-        allocator.alloc(size)
-    }
 }
 
 struct GcStatistics {
@@ -205,23 +238,6 @@ impl GcAllocator {
         }
     }
 
-    pub fn alloc(&mut self, size: usize) -> *mut u64 {
-        let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
-        let ptr = unsafe { alloc::alloc(layout) };
-        let ptr = ptr as *mut u64;
-
-        // We must always reset the first 8-bytes to 0.
-        unsafe { *ptr = 0; }
-
-        if self.allocate_marked {
-            unsafe { *ptr |= 1; }
-        }
-
-        self.allocations.push(AtomicPtr::new(ptr));
-
-        ptr
-    }
-
     pub fn sweep(&mut self) {
         const DO_STATS: bool = false;
         let mut stats = GcStatistics {
@@ -234,6 +250,7 @@ impl GcAllocator {
         // TODO: Maybe build the new_allocations array as part of marking? That
         // should save some time.
         let mut new_allocations: Vec<AtomicPtr<u64>> = vec![];
+
         for alloc in &self.allocations {
             let alloc = alloc.load(Ordering::Relaxed);
 
@@ -316,12 +333,10 @@ impl<'a> Gc<'a> {
 
     pub fn collect(&mut self) {
         let start_time = Instant::now();
-        {
-            let mut allocator = self.shared.allocator.lock().unwrap();
-            allocator.allocate_marked = true;
-        }
 
-        self.handshake(GC_FLAG_NOP);
+        GC_ALLOCATE_MARKED.store(true, Ordering::Relaxed);
+
+        self.handshake(GC_FLAG_HANDOFF_ALLOCS);
 
         unsafe { poni_gc_visit_roots(self); }
 
@@ -353,6 +368,15 @@ impl<'a> Gc<'a> {
             // Otherwise, perform the graph travesal.
             self.process_queue();
         }
+
+        // We've marked everything. Because new allocations do not go into
+        // the global allocator anymore, there's no need to keep allocating
+        // thing as marked.
+        //
+        // We still do this relaxed for the time begin, but we might want
+        // to consider making it stronger to ensure threads start allocating
+        // un-marked ASAP (?)
+        GC_ALLOCATE_MARKED.store(false, Ordering::Relaxed);
 
         self.sweep();
         let end_time = Instant::now();
@@ -401,7 +425,6 @@ impl<'a> Gc<'a> {
     fn sweep(&mut self) {
         let mut allocator = self.shared.allocator.lock().unwrap();
         allocator.sweep();
-        allocator.allocate_marked = false;
     }
 }
 
@@ -426,7 +449,7 @@ impl<'a> GcHandle<'a> {
         let mut avail = self.shared.available_threads.lock().unwrap();
         *avail += 1;
 
-        Box::new(GcContext { frame_list: null(), shared: self.shared, flag: 0 })
+        Box::new(GcContext { frame_list: null(), shared: self.shared, flag: 0, own_allocs: Vec::new() })
     }
 }
 
