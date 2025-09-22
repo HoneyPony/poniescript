@@ -176,13 +176,14 @@ benchmark_safepoint(struct poni_gc_context *ctx) {
 
 void
 do_loop_benchmark(struct poni_gc_handle *handle, struct poni_gc_context *ctx, int do_safepoints) {
-    poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
+    
     clock_t loop_start = clock();
 
     PONI_FRAME(1, struct object2 *myobj;)
     for(int i = 0; i < 1000000; ++i) {
         frame.myobj = myfun(ctx);
 
+        if(i % 250000 == 0) { poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT); }
         if(do_safepoints) PONI_GC_SAFEPOINT(ctx);
     }
 

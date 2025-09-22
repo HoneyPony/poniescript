@@ -494,7 +494,7 @@ extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
                 //eprintln!("poni-gc: start collect()");
                 gc.collect();
 
-                const AUTOCOLLECT: bool = true;
+                const AUTOCOLLECT: bool = false;
                 if AUTOCOLLECT {
                     let mut request = gc.shared.gc_request.lock().unwrap();
                     *request |= GC_REQUEST_COLLECT;

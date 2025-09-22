@@ -68,3 +68,17 @@ It's not really clear what the best way to handoff the vector of allocations is.
 Copying it seems to be faster, but moving it seems to be faster in the case that
 we very, very occasionally safepoint. I suppose that makes some sense -- rarer
 safepoints result in more to copy -- but the crossover seems somewhat surprising.
+
+## More insights on the loop test
+
+Reducing the number of GC's to just four inside the loop -- just four -- takes
+almost exactly the same amount of time as doing a GC as often as possible.
+
+I think this shows that, by far, the majority of the overhead from the GC is
+simply the fact that mimalloc has to dealloc at the same time as it is allocing.
+
+(it is, however, the case that doing only one gc inside the loop seems to be 
+quite a bit faster).
+
+I'm not sure the safepointing itself can really get any faster, then. Almost
+all of the overhead is just going to be allocator interactions.
