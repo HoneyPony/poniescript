@@ -29,13 +29,16 @@ extern _Atomic uint64_t poni_gc_flags;
 #define PONI_UNLIKELY(expr) __builtin_expect(!!(expr), 0)
 
 #define PONI_GC_SAFEPOINT(ctx) \
-if(PONI_UNLIKELY(poni_gc_flags & (PONI_GC_FLAG_NOP | PONI_GC_FLAG_SCAN))) { \
-    poni_gc_poll_slow(ctx); \
-}
+do { \
+    if(PONI_UNLIKELY(poni_gc_flags & (PONI_GC_FLAG_NOP | PONI_GC_FLAG_SCAN))) { \
+        poni_gc_poll_slow(ctx); \
+    } \
+} while(0)
 
 void* poni_gc_alloc(struct poni_gc_context *ctx, size_t size);
 void  poni_gc_mark(struct poni_gc *gc, void *object);
 void poni_gc_poll_slow(struct poni_gc_context *ctx);
+void poni_gc_poll_until_cycle_finished(struct poni_gc_context *ctx);
 
 struct poni_gc_handle *poni_gc_spawn();
 void poni_gc_join(struct poni_gc_handle *handle);
@@ -169,45 +172,43 @@ main(int argc, char **argv) {
     struct poni_gc_handle *handle = poni_gc_spawn();
     struct poni_gc_context *ctx = poni_gc_create_context_for_existing(handle);
 
+    poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
+
+    clock_t loop_start = clock();
+
     PONI_FRAME(1, struct object2 *myobj;)
-    for(int i = 0; i < 100; ++i) {
+    for(int i = 0; i < 1000000; ++i) {
         frame.myobj = myfun(ctx);
+
+        //if(i % 5000 == 0) {  }
+
+        if(i % 50000 == 0) PONI_GC_SAFEPOINT(ctx);
+        
+        // if(i % 1000 == 0) {
+        //     poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
+        
+        //     PONI_GC_SAFEPOINT(ctx);
+        // }
     }
 
-    benchmark_safepoint(ctx);
+   // poni_gc_poll_until_cycle_finished(ctx);
+
+    clock_t loop_end = clock();
+    printf("time for loop: %fms\n", 1000.0 * (double)(loop_end - loop_start) / (double)CLOCKS_PER_SEC);
+
+    //benchmark_safepoint(ctx);
 
     printf("frame.myobj: %p\n", frame.myobj);
     printf("frame.myobj.tag: %lx\n", frame.myobj->tag);
     printf("&frame.gc_frame: %p\n", &frame.gc_frame);
     poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
-
-    for(int i = 0; i < 100000; ++i) {
-        if(poni_gc_flags != 0) break;
-        usleep(0);
-    }
-
-    for(int i = 0; i < 10000; ++i) {
-        // Run it multiple times. This is just because we previously had some
-        // bugs related to this, so it's a good thing to test.
-        PONI_GC_SAFEPOINT(ctx);
-        usleep(0);
-    }
+    poni_gc_poll_until_cycle_finished(ctx);
 
     // Now, remove myobj, and then collect everything. This is a valgrind test.
     frame.myobj = NULL;
     poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
+    poni_gc_poll_until_cycle_finished(ctx);
 
-    for(int i = 0; i < 100000; ++i) {
-        if(poni_gc_flags != 0) break;
-        usleep(0);
-    }
-
-    for(int i = 0; i < 10000; ++i) {
-        // Run it multiple times. This is just because we previously had some
-        // bugs related to this, so it's a good thing to test.
-        PONI_GC_SAFEPOINT(ctx);
-        usleep(0);
-    }
 
     printf("testgc: joining gc\n");
 

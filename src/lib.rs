@@ -1,5 +1,9 @@
 use std::{alloc::{self, Layout}, collections::VecDeque, ptr::{self, null}, sync::{atomic::{AtomicPtr, AtomicU64, Ordering}, Condvar, Mutex}, thread::{self, JoinHandle}, time::Instant};
 
+
+#[global_allocator]
+static MIMALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 extern "C" {
     fn poni_gc_visit_object(gc: &mut Gc, ptr: *mut u64);
     fn poni_gc_visit_roots(gc: &mut Gc);
@@ -44,6 +48,13 @@ struct GcShared {
 
     gc_request: Mutex<u64>,
     gc_request_cv: Condvar,
+
+    gc_busy: Mutex<bool>,
+    gc_busy_cv: Condvar,
+
+    /// A dummy mutex for sleeping on the gc_flags_cv.
+    gc_flags_mutex: Mutex<()>,
+    gc_flags_cv: Condvar,
 }
 
 #[repr(C)]
@@ -118,6 +129,18 @@ impl<'a> GcContext<'a> {
             self.shared.outstanding_thread_cv.notify_one();
         }
     }
+
+    #[export_name = "poni_gc_poll_until_cycle_finished"]
+    extern "C" fn poll_until_cycle_finished(&mut self) {
+        let mut lock = self.shared.gc_flags_mutex.lock().unwrap();
+        loop {
+            self.poni_gc_poll_slow();
+            lock = self.shared.gc_flags_cv.wait(lock).unwrap();
+
+            let busy = self.shared.gc_busy.lock().unwrap();
+            if !*busy { break; }
+        }
+    }
 }
 
 impl GcFrame {
@@ -152,6 +175,12 @@ impl GcShared {
 
             gc_request: Mutex::new(0),
             gc_request_cv: Condvar::new(),
+
+            gc_busy: Mutex::new(false),
+            gc_busy_cv: Condvar::new(),
+
+            gc_flags_mutex: Mutex::new(()),
+            gc_flags_cv: Condvar::new(),
         }
     }
 
@@ -248,6 +277,20 @@ impl GcAllocator {
 }
 
 impl<'a> Gc<'a> {
+    fn mark_busy(&self) {
+        let mut busy = self.shared.gc_busy.lock().unwrap();
+        *busy = true;
+        self.shared.gc_busy_cv.notify_all();
+    }
+
+    fn mark_not_busy(&self) {
+        let mut busy = self.shared.gc_busy.lock().unwrap();
+        *busy = false;
+        self.shared.gc_busy_cv.notify_all();
+        // Also notify this cv...?
+        self.shared.gc_flags_cv.notify_all();
+    }
+
     fn handshake(&self, flags: u64) {
         let mut outstanding = self.shared.outstanding_threads.lock().unwrap();
 
@@ -258,6 +301,9 @@ impl<'a> Gc<'a> {
         *outstanding = *self.shared.available_threads.lock().unwrap();
         GC_FLAGS.fetch_update(Ordering::SeqCst, Ordering::SeqCst, 
             |f| Some(flags)).unwrap();
+
+        // Notify any sleeping threads
+        self.shared.gc_flags_cv.notify_all();
 
         //eprintln!("poni-gc: handshake: begin {:b} ({} threads)", flags, *outstanding);
 
@@ -311,7 +357,7 @@ impl<'a> Gc<'a> {
         self.sweep();
         let end_time = Instant::now();
 
-        eprintln!("poni-gc: collect start-to-finish: {:?}", end_time.duration_since(start_time))
+        //eprintln!("poni-gc: collect start-to-finish: {:?}", end_time.duration_since(start_time))
     }
 
     pub fn process_queue(&mut self) {
@@ -392,6 +438,8 @@ extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
     let join_handle = thread::spawn(|| {
         let mut gc = Gc { mark_queue: VecDeque::new(), shared };
         loop {
+            gc.mark_not_busy();
+
             let request = {
                 let mut request = gc.shared.gc_request.lock().unwrap();
                 while *request == 0 {
@@ -402,15 +450,25 @@ extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
                 take
             };
 
+            gc.mark_busy();
+
             if request & GC_REQUEST_SHUTDOWN != 0 {
                 break;
             }
 
             if request & GC_REQUEST_COLLECT != 0 {
-                eprintln!("poni-gc: start collect()");
+                //eprintln!("poni-gc: start collect()");
                 gc.collect();
+
+                const AUTOCOLLECT: bool = false;
+                if AUTOCOLLECT {
+                    let mut request = gc.shared.gc_request.lock().unwrap();
+                    *request |= GC_REQUEST_COLLECT;
+                }
             }
         }
+
+        gc.mark_not_busy();
     });
 
     Box::new(GcHandle {
