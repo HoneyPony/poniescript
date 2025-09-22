@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <time.h>
 
 struct poni_gc;
 struct poni_gc_handle;
@@ -145,6 +146,21 @@ myfun(struct poni_gc_context *ctx) {
     return frame.obj2;
 }
 
+void
+benchmark_safepoint(struct poni_gc_context *ctx) {
+    clock_t start = clock();
+    const int iters = 10000000;
+    for(int i = 0; i < iters; ++i) {
+        PONI_GC_SAFEPOINT(ctx);
+    }
+
+    clock_t end = clock();
+    clock_t time = end - start;
+    double total_ms = (time / (double)CLOCKS_PER_SEC) * 1000.0;
+    double per_iter_ns = (total_ms / (double)iters) * 10000000.0;
+    printf("safepoint time: %fms total, %fns per-iter\n", total_ms, per_iter_ns);
+}
+
 int
 main(int argc, char **argv) {
     struct poni_gc_handle *handle = poni_gc_spawn();
@@ -154,6 +170,9 @@ main(int argc, char **argv) {
     for(int i = 0; i < 100; ++i) {
         frame.myobj = myfun(ctx);
     }
+
+    benchmark_safepoint(ctx);
+
     printf("frame.myobj: %p\n", frame.myobj);
     printf("frame.myobj.tag: %lx\n", frame.myobj->tag);
     printf("&frame.gc_frame: %p\n", &frame.gc_frame);
@@ -161,14 +180,14 @@ main(int argc, char **argv) {
 
     for(int i = 0; i < 100000; ++i) {
         if(poni_gc_flags != 0) break;
-        usleep(10);
+        usleep(0);
     }
 
     for(int i = 0; i < 10000; ++i) {
         // Run it multiple times. This is just because we previously had some
         // bugs related to this, so it's a good thing to test.
         PONI_GC_SAFEPOINT(ctx);
-        usleep(10);
+        usleep(0);
     }
 
     printf("testgc: joining gc\n");

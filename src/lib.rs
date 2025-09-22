@@ -77,19 +77,16 @@ impl<'a> GcContext<'a> {
             // Dereference the inner frame: We have checked that it's not NULL.
             let inner_frame = unsafe { &*frame };
 
-            eprintln!("poni-gc: do_scan: reading from frame {:?}", ptr::addr_of!(inner_frame));
+            //eprintln!("poni-gc: do_scan: reading from frame {:?}", ptr::addr_of!(inner_frame));
 
             // Push all of the pointers from the frame into our queue.
             for i in 0..inner_frame.pointer_count {
                 let candidate = inner_frame.read_ptr(i as usize);
 
-                eprintln!("candidate: {:?}", candidate);
-
                 // Skip null pointers.
                 if !candidate.is_null() {
                     // Skip objects that have already been marked.
                     if unsafe { *candidate & 1 == 0 } {
-                        eprintln!("push candidate to queue");
                         queue.push(SendPtr(candidate));
                     }
                 }
@@ -134,19 +131,14 @@ impl GcFrame {
         }
         unsafe {
             let addr = self as *const GcFrame;
-            eprintln!("read ptr from frame: {:?}", addr);
             let addr = addr.byte_offset(16);
             // Pointer-to-a-pointer
             let addr = addr as *const usize;
-        
-            eprintln!("read ptr from {:?} + {idx}", addr);
 
             let addr = addr.offset(idx as isize);
             let value = *addr;
 
             let val = value as *mut u64;
-
-            eprintln!("read_ptr: {val:?}");
 
             val
         }
@@ -206,7 +198,7 @@ impl GcAllocator {
     }
 
     pub fn sweep(&mut self) {
-        const DO_STATS: bool = true;
+        const DO_STATS: bool = false;
         let mut stats = GcStatistics {
             objects_freed: 0,
             objects_kept: 0,
@@ -271,13 +263,13 @@ impl<'a> Gc<'a> {
         GC_FLAGS.fetch_update(Ordering::SeqCst, Ordering::SeqCst, 
             |f| Some(flags)).unwrap();
 
-        eprintln!("poni-gc: handshake: begin {:b} ({} threads)", flags, *outstanding);
+        //eprintln!("poni-gc: handshake: begin {:b} ({} threads)", flags, *outstanding);
 
         while *outstanding > 0 {
             outstanding = self.shared.outstanding_thread_cv.wait(outstanding).unwrap();
         }
 
-        eprintln!("poni-gc: handshake: finished")
+        //eprintln!("poni-gc: handshake: finished")
     }
 
     pub fn collect(&mut self) {
@@ -305,7 +297,6 @@ impl<'a> Gc<'a> {
 
             for queue in queue_queue {
                 for ptr in queue {
-                    eprintln!("ptr in queue: {:?}", ptr.0);
                     // Mark every pointer in the queue.
                     self.poni_gc_mark(ptr.0);
                 }
@@ -330,14 +321,14 @@ impl<'a> Gc<'a> {
     pub fn process_queue(&mut self) {
         loop {
             let Some(next) = self.mark_queue.pop_back() else {
-                eprintln!("poni-gc: mark queue emptied");
+                //eprintln!("poni-gc: mark queue emptied");
                 break;
             };
 
             // We assume objects that are in the mark queue have already been
             // marked, and so will unconditionally be visited.
             unsafe {
-                eprintln!("poni-gc: visit: {next:?}");
+                //eprintln!("poni-gc: visit: {next:?}");
                 poni_gc_visit_object(self, next);
             }
         }
@@ -350,13 +341,16 @@ impl<'a> Gc<'a> {
         let is_marked = unsafe { *ptr & 1 != 0 };
 
         // Object already marked: Nothing to do.
-        if is_marked { eprintln!("mark: {ptr:?} already marked"); return; }
+        if is_marked {
+            //eprintln!("mark: {ptr:?} already marked");
+            return;
+        }
 
         // Object is not marked: Mark it now, and visit it when we get a chance.
         unsafe {
             *ptr |= 1;
 
-            eprintln!("mark: {ptr:?} now marked: {:x}", *ptr);
+            //eprintln!("mark: {ptr:?} now marked: {:x}", *ptr);
 
             self.mark_queue.push_front(ptr);
         }
