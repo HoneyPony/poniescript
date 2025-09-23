@@ -34,7 +34,6 @@ struct GcHandle<'a> {
 
 struct GcAllocator {
     allocations: Vec<AtomicPtr<u64>>,
-    allocate_marked: bool,
 }
 
 struct GcShared {
@@ -245,7 +244,6 @@ impl GcAllocator {
     pub fn new() -> Self {
         GcAllocator {
             allocations: Vec::new(),
-            allocate_marked: false,
         }
     }
 
