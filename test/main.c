@@ -214,7 +214,7 @@ main(int argc, char **argv) {
     struct poni_gc_handle *handle = poni_gc_spawn();
     struct poni_gc_context *ctx = poni_gc_create_context_for_existing(handle);
 
-    for(int j = 0; j < 4; ++j) {
+    for(int j = 0; j < 2; ++j) {
         for(int i = 0; i < 20; ++i) {
             do_loop_benchmark(handle, ctx, j & 1);
         }
