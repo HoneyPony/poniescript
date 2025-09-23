@@ -144,8 +144,9 @@ impl SourceMap {
 		
 		// Generate the "name" info
 		// TODO: SourceProvider should show its path?
-		//eprintln!("{STYLE_LINE_NUM}    --- {STYLE_LINE_NUM:#}{}:{}:{}:", path.display(), start.0, start.1);
-		//eprintln!("{STYLE_LINE_NUM}     | {STYLE_LINE_NUM:#}");
+		let display_path = provider.repr_path();
+		eprintln!("{STYLE_LINE_NUM}    --- {STYLE_LINE_NUM:#}{}:{}:{}:", display_path, start.0, start.1);
+		eprintln!("{STYLE_LINE_NUM}     | {STYLE_LINE_NUM:#}");
 
 		// Convert back to indices
 		start.0 -= 1;
@@ -229,7 +230,7 @@ impl SourceMap {
 pub trait SourceProvider {
 	fn to_reader(&self) -> io::Result<Box<dyn Read>>;
 
-	
+	fn repr_path(&self) -> String;
 }
 
 pub struct PathBufFileSource { path: PathBuf }
@@ -240,11 +241,19 @@ impl SourceProvider for PathBufFileSource {
 		let file = File::open(&self.path)?;
 		Ok(Box::new(file))
 	}
+
+	fn repr_path(&self) -> String {
+		self.path.to_string_lossy().to_string()
+	}
 }
 
 impl SourceProvider for SyntheticSource {
 	fn to_reader(&self) -> io::Result<Box<dyn Read>> {
 		panic!("ICE: Trying to read from SyntheticSource")
+	}
+
+	fn repr_path(&self) -> String {
+		"<synthetic>".to_string()
 	}
 }
 

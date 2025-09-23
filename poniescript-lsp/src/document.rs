@@ -109,6 +109,10 @@ impl SourceProvider for LSPSource {
         let bytes = Box::new(std::io::Cursor::new(self.document.text.as_bytes().to_vec()));
         return Ok(bytes);
     }
+
+    fn repr_path(&self) -> String {
+        self.document.url.to_string()
+    }
 }
 
 fn do_finish_compile(db: &mut Db, ast: &mut Ast, output: &PathBuf, args: &Args) {
