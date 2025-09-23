@@ -106,7 +106,7 @@ impl<'db> DeadCodeElim<'db> {
                 //     *expr = left;
                 // }
             },
-            Expr::Lerp(lerp) => {
+            Expr::Lerp(_lerp) => {
                 // TODO
                 false
             }
@@ -161,7 +161,7 @@ impl<'db> DeadCodeElim<'db> {
                 elim_sequence!(self, ast, expr,
                     ValCall, args)
             },
-            Expr::FunCapture(fun_capture) => { false },
+            Expr::FunCapture(_) => { false },
             Expr::Assign(assign) => {
                 if self.elim_expr(ast, &mut assign.value) {
                     *expr_id = assign.value;
@@ -170,9 +170,9 @@ impl<'db> DeadCodeElim<'db> {
                 false
             },
             Expr::UnboundAssign(_unbound_assign) => panic!("ICE: Tried to DCE UnboundAssign"),
-            Expr::NumLiteral(num_literal) => false,
-            Expr::StrLiteral(str_literal) => false,
-            Expr::BoolLiteral(bool_literal) => false,
+            Expr::NumLiteral(_) => false,
+            Expr::StrLiteral(_) => false,
+            Expr::BoolLiteral(_) => false,
             Expr::Block(block) => {
                 let mut last_needed_idx = None;
 
@@ -221,11 +221,11 @@ impl<'db> DeadCodeElim<'db> {
             },
             Expr::Unbound(_) => panic!("ICE: Tried to DCE Unbound"),
             Expr::UnboundFunCapture(_) => panic!("ICE: Tried to DCE UnboundFunCapture"),
-            Expr::Print(print) => {
+            Expr::Print(_) => {
                 elim_sequence!(self, ast, expr,
                     Print, exprs)
             },
-            Expr::Str(str) => {
+            Expr::Str(_) => {
                 elim_sequence!(self, ast, expr,
                     Str, exprs)
             },
