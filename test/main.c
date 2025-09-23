@@ -190,7 +190,7 @@ do_loop_benchmark(struct poni_gc_handle *handle, struct poni_gc_context *ctx, in
     for(int i = 0; i < 1000000; ++i) {
         frame.myobj = myfun(ctx);
 
-        if(i % 250000 == 0) { poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT); }
+        if(1) { poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT); }
         if(do_safepoints) PONI_GC_SAFEPOINT(ctx);
     }
 
@@ -198,10 +198,16 @@ do_loop_benchmark(struct poni_gc_handle *handle, struct poni_gc_context *ctx, in
     const char *text = do_safepoints ? "safepoints" : "just alloc";
     printf("%s: %fms\n", text, 1000.0 * (double)(loop_end - loop_start) / (double)CLOCKS_PER_SEC);
 
-    for(int i = 0; i < 500; ++i) {
-        PONI_GC_SAFEPOINT(ctx);
-        usleep(20);
-    }
+    // poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
+    // for(int i = 0; i < 500; ++i) {
+    //     PONI_GC_SAFEPOINT(ctx);
+    //     usleep(20);
+    // }
+    // poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
+    // for(int i = 0; i < 500; ++i) {
+    //     PONI_GC_SAFEPOINT(ctx);
+    //     usleep(20);
+    // }
 
     //poni_gc_send_request(handle, PONI_GC_REQUEST_COLLECT);
     //poni_gc_poll_until_cycle_finished(ctx);
@@ -214,11 +220,14 @@ main(int argc, char **argv) {
     struct poni_gc_handle *handle = poni_gc_spawn();
     struct poni_gc_context *ctx = poni_gc_create_context_for_existing(handle);
 
-    for(int j = 0; j < 2; ++j) {
-        for(int i = 0; i < 20; ++i) {
-            do_loop_benchmark(handle, ctx, j & 1);
-        }
-    }
+    do_loop_benchmark(handle, ctx, 1);
+    exit(0);
+
+    // for(int j = 0; j < 2; ++j) {
+    //     for(int i = 0; i < 20; ++i) {
+    //         do_loop_benchmark(handle, ctx, j & 1);
+    //     }
+    // }
 
     printf("testgc: joining gc\n");
 

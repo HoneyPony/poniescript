@@ -96,6 +96,12 @@ impl<'a> GcContext<'a> {
         //     alloc.allocations.append(&mut self.own_allocs);
         // }
 
+        if self.own_allocs.len() >= 4096 {
+            if let Ok(mut alloc) = self.shared.allocator.try_lock() {
+                alloc.allocations.push(std::mem::take(&mut self.own_allocs));
+            }
+        }
+
         ptr
     }
 
@@ -137,7 +143,10 @@ impl<'a> GcContext<'a> {
         // sweep independently of us doing additional allocations.
         {
             let mut allocator = self.shared.allocator.lock().unwrap();
+            //let a = Instant::now();
             allocator.allocations.push(std::mem::take(&mut self.own_allocs));
+            //let b = Instant::now();
+            //eprintln!("do_handoff: {:?}", b.duration_since(a));
         }
 
         // We don't track those anymore.
@@ -147,7 +156,7 @@ impl<'a> GcContext<'a> {
         // things we've allocated. This would keep mutex contention at an
         // absolute minimum (short of, e.g., assigning each vecotr a particular
         // slot so they could all hand off in parallel, which would be cool too).
-        self.own_allocs.clear();
+        // self.own_allocs.clear();
     }
 
     #[no_mangle]
