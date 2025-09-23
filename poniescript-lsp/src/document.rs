@@ -13,8 +13,7 @@ pub struct Diagnostics {
 }
 
 fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId, Arc<Document>>,
-    url_to_id_map: &mut HashMap<Url, SourceId>, id_to_url_map: &mut HashMap<SourceId, Url>, store: &DocumentStore) -> bool {
-	let had_error = false;
+    url_to_id_map: &mut HashMap<Url, SourceId>, id_to_url_map: &mut HashMap<SourceId, Url>, store: &DocumentStore) {
 
 	for doc in store.documents.values() {
         let source = LSPSource::new(doc.clone());
@@ -27,15 +26,11 @@ fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId,
 
 		match module::parse_module(ast, db, source_id) {
 			Ok(_) => { },
-			Err(err) => {
+			Err(_) => {
                 todo!("Report I/O errors to LSP?");
-				//eprintln!("Unable to parse source file {}: {err}", path.display());
-				had_error = true;
 			}
 		}
 	}
-
-	had_error
 }
 
 // TODO: Respect utf-16, utf-8, etc
@@ -151,20 +146,11 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics, HashMap<Url,
     let mut url_to_id_map = HashMap::new();
     let mut id_to_url_map = HashMap::new();
 
-    let had_error = parse_all_modules(&mut ast, &mut db, &mut doc_map, &mut url_to_id_map, &mut id_to_url_map, store);
-
-	// if had_error {
-    //     let err = report_errors(&db, &doc_map);
-    //     return (db, ast, modules, err);
-	// }
+    parse_all_modules(&mut ast, &mut db, &mut doc_map, &mut url_to_id_map, &mut id_to_url_map, store);
 
 	// Pass 2: Binding
-	let had_error = binder::bind(&mut db, &mut ast) || had_error;
+	binder::bind(&mut db, &mut ast);
 
-	// if had_error {
-	// 	let err = report_errors(&db, &doc_map);
-    //     return (db, ast, modules, err);
-	// }
 
 	// Pass 3: Initialization orders. Fix initialization order of various things,
 	// including globals.
@@ -188,19 +174,14 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics, HashMap<Url,
 	}
 	db.globals = globals;
 
-	// if !db.errors.is_empty() {
-	//     let err = report_errors(&db, &doc_map);
-    //     return (db, ast, modules, err);
-	// }
-
 	// Pass 4: Type check and infer
-	let had_error = typecheck::typecheck(&mut db, &mut ast) || had_error;
+	typecheck::typecheck(&mut db, &mut ast);
 
     let err = report_errors(&ast, &db, &doc_map);
     let end = SystemTime::now();
     eprintln!("rebuild ast/db took {}ms", end.duration_since(start).unwrap().as_millis());
 
-    if !had_error && db.errors.len() == 0 {
+    if db.errors.len() == 0 {
         let mut args = Args::default();
         // For now, these are the only args that the LSP is doing. At some point,
         // we probably want to make the Args available as part of core?
