@@ -28,6 +28,13 @@ extern _Atomic uint64_t poni_gc_flags;
 
 #define PONI_UNLIKELY(expr) __builtin_expect(!!(expr), 0)
 
+#define PONI_WRITE_BARRIER(ptr) \
+do { \
+    if(poni_gc_is_marking && (ptr) && !((*(uint64_t*)ptr) & 1)) { \
+        poni_gc_mark_from_anywhere(ptr); \
+    } \
+} while(0)
+
 #define PONI_GC_SAFEPOINT(ctx) \
 do { \
     if(PONI_UNLIKELY(atomic_load_explicit(&poni_gc_flags, memory_order_relaxed) & (PONI_GC_FLAG_NOP | PONI_GC_FLAG_SCAN))) { \
