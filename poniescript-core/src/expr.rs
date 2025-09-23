@@ -50,7 +50,7 @@ impl Stmt {
 			Stmt::Return(_) => {
 				db.types.bottom
 			},
-			Stmt::ClassDeclare(class_declare) => {
+			Stmt::ClassDeclare(_) => {
 				// TODO: Different typing for ClassDeclare?
 				db.types.void
 			},
