@@ -197,7 +197,6 @@ pub struct Db {
 	arenas: DbArenas,
 
 	str_side_map: FxHashMap<String, StrId>,
-	source_side_map: FxHashMap<PathBuf, SourceId>,
 	type_side_map: FxHashMap<Type, TypId>,
 	sig_side_map: FxHashMap<Sig, SigId>,
 
@@ -224,7 +223,6 @@ pub struct Db {
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
 	class_cname_cache: Vec<&'static str>,
-	class_preparer_cache: Vec<&'static str>,
 
 	/// Keep a cache of generated type reprs also for re-using them.
 	/// 
@@ -316,7 +314,6 @@ impl Db {
 			arenas: DbArenas::new(),
 
 			str_side_map: FxHashMap::default(),
-			source_side_map: FxHashMap::default(),
 			type_side_map: FxHashMap::default(),
 			sig_side_map: FxHashMap::default(),
 
@@ -344,7 +341,6 @@ impl Db {
 			var_cname_cache: Vec::new(),
 			fun_cname_cache: Vec::new(),
 			class_cname_cache: Vec::new(),
-			class_preparer_cache: Vec::new(),
 
 			tuple_cname_cache: FxHashMap::default(),
 
@@ -1290,10 +1286,8 @@ impl Db {
 				},
 			};
 			let cname = cname.leak();
-			let preparer = format!("i{}", cname).leak();
 
 			self.class_cname_cache.push(cname);
-			//self.class_preparer_cache.push(preparer);
 		}
 	}
 
