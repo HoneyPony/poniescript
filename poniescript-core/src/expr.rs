@@ -3,7 +3,6 @@ include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 use rustc_hash::FxHashMap;
 
 use crate::arena::ArenaKey;
-use crate::typ::Type;
 use crate::{db::*, lexer::Token};
 use crate::source::SourceLocation;
 use crate::lexer::Tok;

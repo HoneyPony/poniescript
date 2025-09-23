@@ -1,4 +1,4 @@
-use crate::{db::{Ast, AstProxy, Db}, expr::*, module::Module, source::SourceLocation};
+use crate::{db::{Ast, AstProxy, Db}, expr::*, module::Module};
 
 use crate::db::ExprId;
 use crate::db::StmtId;

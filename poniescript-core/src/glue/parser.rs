@@ -1,4 +1,4 @@
-use std::{fs::File, path::Path};
+use std::path::Path;
 
 use rustc_hash::FxHashMap;
 
@@ -201,11 +201,11 @@ impl<'b> Parser<'b> {
         expected!(self, GlueTok::Struct, "'struct' after PS_CLASS")?;
         let c_name = expected!(self, GlueTok::Identifier, "Identifier after 'struct'")?;
 
-		let mut funs = Vec::<FunId>::new();
+		let funs = Vec::<FunId>::new();
 		let mut vars = Vec::<VarId>::new();
 
 		let mut var_map = FxHashMap::default();
-		let mut fun_map = FxHashMap::default();
+		let fun_map = FxHashMap::default();
 
         // If there's a semicolon, this is a completely opaque class (which is
         // fine). Otherwise, we can look for member variables in the struct

@@ -1,14 +1,11 @@
-use std::fs::File;
 use std::io;
 
 use rustc_hash::FxHashMap;
 
-use crate::arena::ArenaBorrow;
 use crate::arena::ArenaBorrowMut;
 use crate::db::*;
 
 use crate::lexer::*;
-use crate::module::Module;
 
 use crate::expr::*;
 use crate::error::Error;

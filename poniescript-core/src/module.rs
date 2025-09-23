@@ -1,4 +1,3 @@
-use std::path::Path;
 
 use crate::arena::IndexCell;
 use crate::db::*;

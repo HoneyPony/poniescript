@@ -15,17 +15,9 @@ pub mod dead_code;
 pub mod init_ordering;
 pub mod glue;
 
-use std::fs::File;
-use std::io::Read;
-use std::path::{Path, PathBuf};
-use std::process::{exit, Child, Command, Stdio};
-use std::time::{Duration, SystemTime};
+use std::path::PathBuf;
 
-use db::*;
-use module::Module;
-use clap::Parser as _;
 
-use crate::db::Ast;
 
 #[derive(clap::Parser, std::default::Default)]
 pub struct Args {

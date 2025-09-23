@@ -1,7 +1,6 @@
 use std::fmt::Write;
 use std::hash::Hash;
-use std::path::{Path, PathBuf};
-use std::cell::RefCell;
+use std::path::PathBuf;
 use std::sync::RwLock;
 
 use crate::error::Error;
@@ -13,7 +12,7 @@ use crate::expr::Sig;
 use crate::expr::Class;
 use crate::expr::Var;
 use crate::typ::Type;
-use crate::source::{PathBufFileSource, Source, SourceLocation, SourceProvider, SyntheticSource};
+use crate::source::{PathBufFileSource, Source, SourceLocation, SyntheticSource};
 use crate::{arena::*, inf_writeln, Args};
 
 use crate::glue::lexer::GlueTok;
