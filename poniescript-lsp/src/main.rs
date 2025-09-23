@@ -6,8 +6,8 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use poniescript_core::arena::IndexCell;
-use tokio::sync::{Mutex, RwLock};
-use tower_lsp::jsonrpc::{Error, ErrorCode, Result};
+use tokio::sync::Mutex;
+use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
@@ -15,15 +15,7 @@ use poniescript_core::{
     db::*,
     expr::*,
 
-    binder,
-    module,
-    module::Module,
-    init_ordering,
-    typecheck,
-
-    source::*,
-
-    Args
+    source::*
 };
 
 use crate::document::*;

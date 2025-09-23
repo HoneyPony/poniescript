@@ -1,9 +1,9 @@
-use std::{collections::HashMap, hash::Hash, path::PathBuf, rc::Rc, sync::Arc, time::SystemTime};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::SystemTime};
 
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 use poniescript_core::{
-    arena::{ArenaKey, IndexCell}, binder, db::*, expr::*, init_ordering, module::{self, Module}, source::*, typecheck, Args
+    arena::IndexCell, binder, db::*, init_ordering, module::{self}, source::*, typecheck, Args
 };
 
 use crate::{inlay_hint::{compute_inlay_hint_cache, InlayHintCache}, LspArgs};
@@ -14,7 +14,7 @@ pub struct Diagnostics {
 
 fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId, Arc<Document>>,
     url_to_id_map: &mut HashMap<Url, SourceId>, id_to_url_map: &mut HashMap<SourceId, Url>, store: &DocumentStore) -> bool {
-	let mut had_error = false;
+	let had_error = false;
 
 	for doc in store.documents.values() {
         let source = LSPSource::new(doc.clone());

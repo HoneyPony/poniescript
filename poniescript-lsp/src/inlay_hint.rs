@@ -1,7 +1,7 @@
 use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
-    arena::IndexCell, binder, db::*, expr::*, init_ordering, module::{self, Module}, source::*, typecheck, Args
+    arena::IndexCell, db::*, expr::*
 };
 
 use crate::document::DocumentStore;

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use poniescript_core::arena::ArenaKey;
 use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
