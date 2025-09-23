@@ -377,7 +377,7 @@ impl<'db> TypeChecker<'db> {
 		let stmt = binding.as_mut();
 
 		match stmt {
-			Stmt::Declare(declare) => {
+			Stmt::Declare(_) => {
 				// Should have already promoted.
 			},
 			Stmt::Expression(expression) => {
@@ -386,7 +386,7 @@ impl<'db> TypeChecker<'db> {
 			Stmt::Return(_) => {
 				// Should have already promoted.
 			},
-			Stmt::ClassDeclare(class_declare) => {
+			Stmt::ClassDeclare(_) => {
 				// Should have already promoted.
 			},
 		}
@@ -424,20 +424,20 @@ impl<'db> TypeChecker<'db> {
 			Expr::Variable(_) => { /* Can't promote. */ },
 			Expr::Logical(_) => { /* Can't promote. */ },
 			Expr::FunCall(_) => { /* Can't promote. */ },
-			Expr::FunDeclare(fun_declare) => {},
-			Expr::ValCall(val_call) => {},
-			Expr::FunCapture(fun_capture) => {},
-			Expr::Assign(assign) => {},
-			Expr::UnboundAssign(unbound_assign) => { if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr UnboundAssign") } },
+			Expr::FunDeclare(_) => {},
+			Expr::ValCall(_) => {},
+			Expr::FunCapture(_) => {},
+			Expr::Assign(_) => {},
+			Expr::UnboundAssign(_) => { if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr UnboundAssign") } },
 			Expr::NumLiteral(num_literal) => {
 				// Promote to the incoming type.
 				num_literal.typ = promote_to;
 			},
-			Expr::StrLiteral(str_literal) => {
+			Expr::StrLiteral(_) => {
 				// For now: Don't promote, promote in codegen stage.
 				// OPT: Promote here, let the codegen make better use of information?
 			},
-			Expr::BoolLiteral(bool_literal) => {},
+			Expr::BoolLiteral(_) => {},
 			Expr::Block(block) => {
 				// Promote the last statement.
 				if let Some(last) = block.stmts.last() {
@@ -463,9 +463,9 @@ impl<'db> TypeChecker<'db> {
 			Expr::Print(_) => {},
 			Expr::Str(_) => { /* TODO: Possibly promote here, to improve stuff in backend? */ },
 			Expr::New(_) => {},
-			Expr::Get(get) => {},
-			Expr::Set(set) => {},
-			Expr::SelfVal(self_val) => {},
+			Expr::Get(_) => {},
+			Expr::Set(_) => {},
+			Expr::SelfVal(_) => {},
 			Expr::ArrayLit(array_lit) => {
 				let incoming_elem_typ = match self.db.get(promote_to) {
 					Type::ArrayOf(elem) => *elem,
@@ -487,8 +487,8 @@ impl<'db> TypeChecker<'db> {
 					self.do_promote_expr(ast, expr, array_lit.elem_typ);
 				}
 			},
-			Expr::Index(index) => {},
-			Expr::SetIndex(set_index) => {},
+			Expr::Index(_) => {},
+			Expr::SetIndex(_) => {},
 			Expr::MakeTuple(make_tuple) => {
 				// This is also kind of like a big binary expression.
 				if self.db.is_not_concrete(make_tuple.typ) {
@@ -1279,7 +1279,9 @@ impl<'db> TypeChecker<'db> {
 					panic!("ICE: Tried to typecheck an UnboundAssign")
 				}
 				else {
-					let typ = self.check_expr(ast, assign.value, value_used)?;
+					// This is a best-effort attempt at typechecking to help
+					// the LSP out.
+					self.check_expr(ast, assign.value, value_used)?;
 					self.promote_from_unassigned(ast, &mut assign.value)
 				}
 			}
