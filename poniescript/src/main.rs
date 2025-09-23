@@ -2,7 +2,6 @@ use poniescript_core::{
     db::*,
     db,
     module,
-    module::Module,
     glue,
     binder,
     init_ordering,
