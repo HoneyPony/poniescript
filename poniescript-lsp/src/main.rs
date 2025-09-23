@@ -29,7 +29,7 @@ struct SemanticTokenVisitor {
 }
 
 impl SemanticTokenVisitor {
-    fn push_token(&mut self, ast: &Ast, db: &Db, location: &SourceLocation, token_type: u32, token_modifiers_bitset: u32) {
+    fn push_token(&mut self, ast: &Ast, _db: &Db, location: &SourceLocation, token_type: u32, token_modifiers_bitset: u32) {
         let (line, col) = ast.sources.get(location.source).get_line_column(location);
         let (line, col) = (line - 1, col - 1);
 
@@ -281,14 +281,10 @@ impl LanguageServer for Backend {
     ) -> Result<Option<SemanticTokensResult>> {
         // Disable semantic tokens for now. They're not very useful and the LSP
         // is pretty unstable.
-        return Ok(None);
+        const ENABLE_SEMANTIC_TOKEN_SUPPORT: bool = false;
+        if !ENABLE_SEMANTIC_TOKEN_SUPPORT { return Ok(None); }
 
         self.client.log_message(MessageType::INFO, format!("Semantic tokens requested for {}", params.text_document.uri)).await;
-
-        let Ok(path) = params.text_document.uri.to_file_path() else {
-            self.client.log_message(MessageType::INFO, format!("Unable to get Path as file: {}", params.text_document.uri)).await;
-            return Ok(None);
-        };
 
         let mut lock = self.store.lock().await;
         

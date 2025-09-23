@@ -75,7 +75,7 @@ impl InlayHintCache {
 }
 
 pub fn compute_inlay_hint_cache(id: SourceId, store: &mut DocumentStore) -> InlayHintCache {
-    let cache = InlayHintCache { hints: vec![] };
+    let cache = InlayHintCache::empty();
 
     //self.client.log_message(MessageType::INFO, format!("Semantic tokens requested for {}", params.text_document.uri)).await;
 

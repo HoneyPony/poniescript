@@ -80,25 +80,25 @@ fn cursor_on(cursor: &SourceLocation, target: &SourceLocation) -> bool {
 }
 
 impl<'a> LocateAst for GotoDefinitionVisitor<'a> {
-    fn locate_assign(&mut self,ast: &Ast,db: &Db,loc: &SourceLocation,it: &Assign) {
+    fn locate_assign(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Assign) {
         // TODO: We could just not even do an origin_selection_range here as the
         // default should be correct...?
         self.goto_var(ast, db, it.identity,  Some(&it.var_name));
     }
 
-    fn locate_variable(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &Variable) {
+    fn locate_variable(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Variable) {
         self.goto_var(ast, db, it.identity, Some(&it.location));
     }
 
-    fn locate_get(&mut self,ast: &Ast,db: &Db,loc: &SourceLocation,it: &Get) {
+    fn locate_get(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Get) {
         self.goto_var(ast, db, it.var, Some(&it.identifier.location));
     }
 
-    fn locate_set(&mut self,ast: &Ast,db: &Db,loc: &SourceLocation,it: &Set) {
+    fn locate_set(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Set) {
         self.goto_var(ast, db, it.var, Some(&it.identifier.location));
     }
 
-    fn locate_new(&mut self,ast: &Ast,db: &Db,loc: &SourceLocation,it: &New) {
+    fn locate_new(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &New) {
         eprintln!("it.identifier.location: {} ? {} ? {}",
             it.identifier.location.offset,
             loc.offset,
@@ -124,7 +124,6 @@ pub fn goto_definition(store: &mut DocumentStore, params: GotoDefinitionParams) 
     let mut visitor = GotoDefinitionVisitor {
         response: None,
 
-        // For now we just assume the thing is inside the same document
         id_to_url_map: &id_to_url
     };
 
