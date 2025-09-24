@@ -126,6 +126,7 @@ pub fn generate(tests_file: &mut File) {
 		("functions/", "call_promote"),
 		("functions/", "void_fun"),
 		("functions/", "fib"),
+		("functions/", "simple_fun_ref"),
 
 		("functions/", "err_assign_to_fun"),
 

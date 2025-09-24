@@ -1,0 +1,8 @@
+fun other() {
+    print("hello");
+}
+
+fun init() {
+    var x = other;
+    x();
+}

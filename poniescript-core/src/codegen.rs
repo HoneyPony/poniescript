@@ -1477,18 +1477,23 @@ impl<'a> Codegen<'a> {
 				// actually exists, and so it can be saved.
 
 				let slots = self.db.type_gc_slots(self.db.get(declare.identity).typ);
-				if slots > 0 {
-					let last = self.block_scopes.last_mut().unwrap();
-					let own_slot = self.gc_frame.allocate_slot(self.db.get_cname(declare.identity).to_string());
-					last.push(own_slot); // TODO: We probably need the gc_frame to actually
-					// keep track of the val name for each slot..?
+				if slots != 0 {
+					// We re-use the slot allocation functionality from Vals to
+					// get the slots. This is so we can handle Fun types and Tuple
+					// types correctly.
 
-					// For helping us debug, generate a comment showing which slot
-					// each var gets.
-					inf_writeln!(into, "{}// gc slot for {}: {}",
-						self.indent(),
-						self.db.get(self.db.get(declare.identity).name),
-						own_slot);
+					let mut tmp = vec![];
+
+					let prefix = self.db.get_cname(declare.identity).to_string();
+					self.val_alloc_slots_recurse(&prefix, self.db.get_var_type(declare.identity), &mut tmp);
+
+					// We will write into the last block_scopes vec. This should
+					// exist; if not, it's a bug.
+					let last = self.block_scopes.last_mut().unwrap();
+					last.append(&mut tmp);
+
+					// It would be NICE to write directly into last, but unfortunately,
+					// we cannot, thanks to the borrow checker.
 				}
 
 				None
