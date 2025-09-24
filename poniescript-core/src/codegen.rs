@@ -10,7 +10,58 @@ use crate::expr::*;
 
 use crate::arena::IndexCell;
 
+use std::cell::{Cell, RefCell};
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
+use std::rc::Rc;
+
+/// Helper struct for keeping track of where to store pointers across GC safepoints
+/// and function call boundaries.
+struct GCFrame {
+	/// The next slot to add to the Set if none are available. Note that this
+	/// also equals the number of slots we need at the end.
+	next_alloc_slot: Cell<usize>,
+
+	// TODO: Is there elsewhere in the code that we should use a BTreeSet?
+	avail: RefCell<BTreeSet<usize>>,
+}
+
+impl GCFrame {
+	fn new() -> Self {
+		GCFrame {
+			next_alloc_slot: Cell::new(0),
+			avail: RefCell::new(BTreeSet::new()),
+		}
+	}
+
+	fn allocate_slot(&self) -> usize {
+		let mut avail = self.avail.borrow_mut();
+		if let Some(last) = avail.pop_last() {
+			return last;
+		}
+
+		let slot = self.next_alloc_slot.get();
+		self.next_alloc_slot.set(slot + 1);
+		slot
+	}
+
+	fn allocate_slots(&self, count: usize) -> Vec<usize> {
+		let mut slots = vec![];
+		for _ in 0..count {
+			slots.push(self.allocate_slot());
+		}
+		slots
+	}
+
+	fn free_slots(&self, slots: &Vec<usize>) {
+		let mut avail = self.avail.borrow_mut();
+		for slot in slots {
+			// This should always return true, because this slot should only
+			// have belonged to use when we freed it.
+			debug_assert!(avail.insert(*slot));
+		}
+	}
+}
 
 struct Codegen<'a> {
 	functions: Vec<String>,
@@ -35,6 +86,12 @@ struct Codegen<'a> {
 	/// we need the this_val to be something other than what it is, we can
 	/// store a Tmp(usize) here.
 	this_val: Option<usize>,
+
+	gc_frame: Rc<GCFrame>,
+
+	/// A list of Vec<usize>, where the inner Vecs contain references to the
+	/// current GCFrame.
+	block_scopes: Vec<Vec<usize>>,
 
 	db: &'a Db
 }
@@ -118,10 +175,19 @@ enum Val {
 }
 
 impl Val {
-	pub fn typed(self, typ: TypId) -> TypedVal {
+	pub fn typed(self, typ: TypId, frame: &Rc<GCFrame>, gc_slots: usize) -> TypedVal {
+		let gc_slots_and_frame = match gc_slots {
+			0 => None,
+			_ => {
+				// If we do have any slots, allocate them from the frame, and
+				// give ourselves an Rc copy of the frame.
+				Some((frame.allocate_slots(gc_slots), frame.clone()))
+			}
+		};
 		return TypedVal {
 			val: self,
 			typ,
+			gc_slots_and_frame
 		}
 	}
 }
@@ -129,6 +195,20 @@ impl Val {
 struct TypedVal {
 	val: Val,
 	typ: TypId,
+	
+	// TODO: To make this more efficient, what we should really do is have the frame
+	// be &GCFrame, and then pass a &gcframe down the whole tree of codegen
+	// functions. That avoids needing an Rc.
+	
+	gc_slots_and_frame: Option<(Vec<usize>, Rc<GCFrame>)>
+}
+
+impl<'f> Drop for TypedVal {
+	fn drop(&mut self) {
+		if let Some((slots, frame)) = &self.gc_slots_and_frame {
+			frame.free_slots(slots)
+		}
+	}
 }
 
 impl TypedVal {
@@ -301,6 +381,9 @@ impl<'a> Codegen<'a> {
 			fun_init_buffer: String::new(),
 
 			inside_class: Vec::new(),
+
+			gc_frame: Rc::new(GCFrame::new()),
+			block_scopes: Vec::new(),
 		}
 	}
 
@@ -314,10 +397,12 @@ impl<'a> Codegen<'a> {
 
 	// TODO: MOve all uses of new_val() to this function
 	fn new_val_typed(&mut self, typ: TypId) -> TypedVal {
-		if typ == self.db.types.void { return Val::Void.typed(typ); }
-		if typ == self.db.types.bottom { return Val::Bottom.typed(typ); }
+		if typ == self.db.types.void { return Val::Void.typed(typ, &self.gc_frame, 0); }
+		if typ == self.db.types.bottom { return Val::Bottom.typed(typ, &self.gc_frame, 0); }
 
-		self.new_val().typed(typ)
+		let slots = self.db.type_gc_slots(typ);
+
+		self.new_val().typed(typ, &self.gc_frame, slots)
 	}
 
 	fn compile_partial_binary(&mut self, result_val: &TypedVal, lhs_val: &TypedVal, rhs_val: &TypedVal, op: char, cur_typ: TypId, postfix: &String, into: &mut String) {
@@ -501,7 +586,7 @@ impl<'a> Codegen<'a> {
 
 		inf_writeln!(into, "{indent}const ps_bool {val} = (ps_bool)({left} {op} {right});");
 
-		val.typed(self.db.types.bool)
+		val.typed(self.db.types.bool, &self.gc_frame, 0)
 	}
 
 	fn compile_partial_print(&mut self, val: &TypedVal, into: &mut String) {
@@ -538,7 +623,7 @@ impl<'a> Codegen<'a> {
 					// generated here by splitting compile_partial_print into 
 					// another helper function that just prints *any* value
 					// of a given type.
-					let new_val = self.new_val().typed(*ty);
+					let new_val = self.new_val_typed(*ty);
 					define_val!(self, into, new_val, " = {val}.v_{idx};\n");
 					self.compile_partial_print(&new_val, into);
 				}
@@ -629,6 +714,15 @@ impl<'a> Codegen<'a> {
 		own_val
 	}
 
+	fn push_block_scope(&mut self) {
+		self.block_scopes.push(Vec::new());
+	}
+	fn pop_block_scope(&mut self) {
+		let scope = self.block_scopes.pop().expect("unmatched push/pop pair");
+		// When we leave a block scope, free the slots that we had stored for it.
+		self.gc_frame.free_slots(&scope);
+	}
+
 	fn expr(&mut self, ast: &Ast, expr: ExprId, into: &mut String) -> TypedVal {
 		let indent = self.indent();
 		match ast.exprs.get(expr).as_ref() {
@@ -702,8 +796,12 @@ impl<'a> Codegen<'a> {
 					// right one.
 				}
 
+				// For GC Slots, DirectVars are special.
+				//
+				// The variable itself should already have a gc slot. So the
+				// DirectVar does not need any additional slots.
 				Val::DirectVar { this_val: self.this_val, name: self.db.get_cname(variable.identity), depth }
-					.typed(self.db.get_var_type(variable.identity))
+					.typed(self.db.get_var_type(variable.identity), &self.gc_frame, 0)
 			},
 			Expr::Assign(assign) => {
 				self.compile_assign(ast, assign.identity, assign.value, into, false)
@@ -746,13 +844,13 @@ impl<'a> Codegen<'a> {
 				Val::DirectLit {
 					ctype: self.db.get_ctype(lit.typ),
 					lit: self.db.get(lit.contents.lexeme),
-				}.typed(lit.typ)
+				}.typed(lit.typ, &self.gc_frame, 0)
 			},
 			Expr::StrLiteral(lit) => {
-				return Val::StringLit { id: lit.id }.typed(self.db.types.str_const)
+				return Val::StringLit { id: lit.id }.typed(self.db.types.str_const, &self.gc_frame, 0)
 			},
 			Expr::BoolLiteral(lit) => {
-				return Val::BoolLit { val: lit.value }.typed(self.db.types.bool);
+				return Val::BoolLit { val: lit.value }.typed(self.db.types.bool, &self.gc_frame, 0);
 			}
 			Expr::Block(block) => {
 				let val = if self.db.type_generates_value(block.typ) {
@@ -771,6 +869,13 @@ impl<'a> Codegen<'a> {
 				};
 				inf_writeln!(into, "{indent}{{");
 				self.indent_level += 1;
+
+				// Each block contains its own list of var GC scopes. This
+				// somewhat helps us have a more conservative GC frame. We
+				// really need a more powerful IR to have an ideal GC frame
+				// system.
+				self.push_block_scope();
+
 				for stmt in &block.stmts[0..all_but_last] {
 					let val = self.compile_stmt(ast, *stmt, into);
 					if let Some(val) = val {
@@ -781,6 +886,7 @@ impl<'a> Codegen<'a> {
 							// will be relevant to avoid e.g. generating accesses
 							// to nonexistent variables).
 							self.indent_level -= 1;
+							self.pop_block_scope();
 							inf_writeln!(into, "{indent}}}");
 							return val;
 						}
@@ -816,9 +922,11 @@ impl<'a> Codegen<'a> {
 					}
 				};
 
+				self.pop_block_scope();
+
 				self.indent_level -= 1;
 				inf_writeln!(into, "{indent}}}");
-				val.typed(block.typ)
+				val.typed(block.typ, &self.gc_frame, self.db.type_gc_slots(block.typ))
 			},
 			Expr::Print(print) => {
 				let mut vals = Vec::new();
@@ -874,7 +982,7 @@ impl<'a> Codegen<'a> {
 					self.compile_partial_str(val, &buf_val, into);
 				}
 
-				buf_val.typed(self.db.types.str_buf)
+				buf_val.typed(self.db.types.str_buf, &self.gc_frame, self.db.type_gc_slots(self.db.types.str_buf))
 			}
 			Expr::Unbound(_) => {
 				panic!("ICE: Tried to codegen an Unbound");
@@ -1103,7 +1211,11 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::SelfVal(selfval) => {
-				Val::DirectSelf.typed(selfval.typ)
+				// Self is kind of special for the GC. We don't actually need
+				// to keep a reference to it ourselves, because we're guaranteed
+				// that it is either pointed to by a root, or by some other function
+				// frame up the call stack.
+				Val::DirectSelf.typed(selfval.typ, &self.gc_frame, 0)
 			}
 
 			Expr::Index(index) => {
@@ -1272,6 +1384,24 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 		match ast.stmts.get(stmt).as_ref() {
 			Stmt::Declare(declare) => {
+				// Each variable obtains a single GC slot for itself, if relevant.
+				// These are stored in the "block scopes" vector.
+
+				let slots = self.db.type_gc_slots(self.db.get(declare.identity).typ);
+				if slots > 0 {
+					let last = self.block_scopes.last_mut().unwrap();
+					let own_slot = self.gc_frame.allocate_slot();
+					last.push(own_slot); // TODO: We probably need the gc_frame to actually
+					// keep track of the val name for each slot..?
+
+					// For helping us debug, generate a comment showing which slot
+					// each var gets.
+					inf_writeln!(into, "{}// gc slot for {}: {}",
+						self.indent(),
+						self.db.get(self.db.get(declare.identity).name),
+						own_slot);
+				}
+
 				self.compile_assign(ast, declare.identity, declare.value, into, true);
 				None
 			},
@@ -1308,7 +1438,7 @@ impl<'a> Codegen<'a> {
 					}
 				}
 
-				Some(Val::Bottom.typed(self.db.types.bottom))
+				Some(Val::Bottom.typed(self.db.types.bottom, &self.gc_frame, 0))
 			}
 		}
 	}
@@ -1330,8 +1460,11 @@ impl<'a> Codegen<'a> {
 			// right one.
 		}
 
+		// Again, because this is a direct var, we don't need a GC slot for it.
+		//
+		// (We will need write barriers in the future..?)
 		Val::DirectVar { this_val: self.this_val, name: self.db.get_cname(var), depth }
-			.typed(self.db.get_var_type(var))
+			.typed(self.db.get_var_type(var), &self.gc_frame, 0)
 	}
 
 	fn compile_assign(&mut self, ast: &Ast, var: VarId, expr: ExprId, into: &mut String, is_declaration: bool) -> TypedVal {
@@ -1370,6 +1503,14 @@ impl<'a> Codegen<'a> {
 		self.indent_level = 1;
 		let indent = self.indent();
 
+		let enclosing_gc_frame = self.gc_frame.clone();
+		self.gc_frame = Rc::new(GCFrame::new());
+
+		// This resets block_scopes to empty, which is what we want.
+		let enclosing_block_scopes = std::mem::take(&mut self.block_scopes);
+		// Push a block scope for the parameters (?)
+		// self.block_scopes.push(Vec::new());
+
 		let mut own_buffer = String::new();
 
 		// init() fun has no surrounding definition -- it is poni_init()
@@ -1396,9 +1537,15 @@ impl<'a> Codegen<'a> {
 			inf_writeln!(own_buffer, "{indent}return {val};");
 		}
 
+		// Now that we have generated the inner expression, we know how big
+		// of a GC frame we need. TODO: Actually generate the GC frame.
+		inf_writeln!(own_buffer, "{indent}// gc frame count: {}", self.gc_frame.next_alloc_slot.get());
+
 		// Pop type value
 		self.return_types.pop();
 
+		self.block_scopes = enclosing_block_scopes;
+		self.gc_frame = enclosing_gc_frame;
 		self.indent_level = enclosing_indent;
 		self.val_idx = enclosing_val;
 

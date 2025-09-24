@@ -1011,6 +1011,45 @@ impl Db {
 			_ => true,
 		}
 	}
+
+	/// Computes the number of slots that the given type needs if a value of
+	/// it is stored.
+	/// 
+	/// Every value in the type that needs a slot must be stored to the GC
+	/// shadow stack at any time that the current thread might be doing a stack
+	/// scan.
+	pub fn type_gc_slots(&self, id: TypId) -> usize {
+		match self.get(id) {
+			Type::Int | Type::Float | Type::Bool => 0,
+			Type::Void => 0,
+
+			Type::StrConst => 0,
+			Type::Str => 1,
+			Type::StrBuf => 1,
+
+			Type::FunRaw(_) => 0,
+			Type::Fun(_) => 1,
+
+			Type::Bottom => 0,
+			Type::Class(_) => 1,
+			Type::ArrayOf(_) => 1,
+			Type::Tuple(typ_ids) => {
+				// TODO: Given that we have to call this function for every
+				// single tuple Val that we create, we really should probably
+				// cache this values.
+				let mut sum = 0;
+				for typ in typ_ids {
+					sum += self.type_gc_slots(*typ);
+				}
+				sum
+			},
+			Type::Unassigned => 0,
+			Type::AssumeInt => 0,
+			Type::AssumeFloat => 0,
+			Type::UnboundIdent(_) => 0,
+			Type::UnboundCStructPtr(_) => 0,
+		}
+	}
 	
 	pub fn lookup_property(&self, typ: TypId, propname: StrId) -> Option<VarId> {
 		let ty = self.get(typ);
