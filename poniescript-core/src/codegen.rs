@@ -1352,7 +1352,7 @@ impl<'a> Codegen<'a> {
 			Expr::ArrayLit(lit) => {
 				let val = self.new_val_typed_tmp(lit.arr_typ);
 
-				define_val!(self, into, val, " =  poni_gc_alloc_tagged(ctx, sizeof(struct ps_array_header) + sizeof({}) * {}, PS_TAG_ARRAY);\n",
+				define_val!(self, into, val, " =  poni_gc_alloc_tagged(ctx, sizeof(struct ps_array_header) + sizeof({}) * {}, PONI_TAG_ARRAY);\n",
 					self.db.get_ctype(lit.elem_typ),
 					lit.values.len());
 
