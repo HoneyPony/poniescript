@@ -676,7 +676,11 @@ impl Db {
 			self.get_ctype(sig.return_type),
 			fnptr_name);
 
+		// TODO: We should probably just use PONI_ABI() throughout the codebase
+		// so we don't have to edit this more in case things change again..?
 		let mut comma = false;
+		inf_write!(self.sig_declare_code, "struct poni_gc_context*");
+		comma = true;
 		for param in &sig.parameters {
 			if comma { inf_write!(self.sig_declare_code, ", "); }
 			comma = true;
@@ -1369,6 +1373,9 @@ impl Db {
 			let mut buffer = String::new();
 
 			let mut comma = false;
+
+			buffer.push_str("struct poni_gc_context *ctx");
+			comma = true;
 
 			for param in &self.get(id).parameters {
 				if comma { buffer.push_str(", "); }

@@ -87,13 +87,18 @@ impl CompileMode {
 					_ => {}
 				};
 					
-				let cc = cc.arg("-o")
+				let mut cc = cc.arg("-o")
 					.arg(&args.output_path)
 					.arg("-I.")
 					.arg("-x")
 					.arg("c")
-					.arg("-")
-					.spawn();
+					.arg("-");
+
+				for arg in &args.c_opt {
+					cc = cc.arg(arg);
+				}
+				
+				let cc = cc.spawn();
 				let mut cc = match cc {
 					Ok(cc) => cc,
 					Err(err) => {

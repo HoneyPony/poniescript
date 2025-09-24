@@ -34,6 +34,10 @@ pub struct Args {
 	/// Expects gcc-style arguments.
 	pub c_compiler: Option<String>,
 
+	#[arg(short = 'C', long = "c-opt")]
+	/// Options to pass along to the C compiler.
+	pub c_opt: Vec<String>,
+
 	#[arg(required = true)]
 	/// The list of input files to compile into one .C file or executable.
 	pub input_paths: Vec<PathBuf>,

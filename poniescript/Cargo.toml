@@ -6,5 +6,6 @@ build = "build/main.rs"
 
 [dependencies]
 poniescript-core = { path = "../poniescript-core" }
+poniescript-gc = { path = "../poniescript-gc" }
 mimalloc = "0.1.47"
 clap = { workspace = true }

@@ -658,12 +658,12 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 
 		match typ {
-			Type::Int => inf_writeln!(into, "{indent}ps_strfmt_int({buf_val}, {val});"),
-			Type::Float => inf_writeln!(into, "{indent}ps_strfmt_float({buf_val}, {val});"),
+			Type::Int => inf_writeln!(into, "{indent}ps_strfmt_int(ctx, {buf_val}, {val});"),
+			Type::Float => inf_writeln!(into, "{indent}ps_strfmt_float(ctx, {buf_val}, {val});"),
 			Type::Void => inf_writeln!(into, "{indent}/* ps_strfmt_void */"),
-			Type::Bool => inf_writeln!(into, "{indent}ps_strfmt_bool({buf_val}, {val});"),
-			Type::StrConst | Type::Str => inf_writeln!(into, "{indent}ps_strfmt_str({buf_val}, {val});"),
-			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_strbuf({buf_val}, {val});"),
+			Type::Bool => inf_writeln!(into, "{indent}ps_strfmt_bool(ctx, {buf_val}, {val});"),
+			Type::StrConst | Type::Str => inf_writeln!(into, "{indent}ps_strfmt_str(ctx, {buf_val}, {val});"),
+			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_strbuf(ctx, {buf_val}, {val});"),
 			Type::Bottom => { },
 			
 			Type::Fun(_) => todo!("str() for Fun"),
@@ -827,12 +827,11 @@ impl<'a> Codegen<'a> {
 				// for a function call, we have to be sure to always generate
 				// the cname separately.
 				define_val!(self, into, val, " = ");
-				inf_write!(into, "{}(", self.db.get_fun_cname(call.identity));
+				inf_write!(into, "{}(ctx", self.db.get_fun_cname(call.identity));
 
-				let mut comma = "";
+				let comma = ", ";
 				for val in vals {
 					inf_write!(into, "{comma}{val}");
-					comma = ", ";
 				}
 				// TODO: Implement closure, gc scoping, etc
 				inf_writeln!(into, "{comma}NULL);");
@@ -976,7 +975,7 @@ impl<'a> Codegen<'a> {
 				// str() always returns a StrBuf, so we can easily generate a new
 				// one unconditionally.
 				let buf_val = self.new_val();
-				inf_writeln!(into, "{indent}ps_strbuf *{buf_val} = ps_strbuf_new(8);");
+				inf_writeln!(into, "{indent}ps_strbuf *{buf_val} = ps_strbuf_new(ctx, 8);");
 				
 				for val in &vals {
 					self.compile_partial_str(val, &buf_val, into);
@@ -1058,12 +1057,12 @@ impl<'a> Codegen<'a> {
 				// for a function call, we have to be sure to always generate
 				// the cname separately.
 				define_val!(self, into, val, " = ");
-				inf_write!(into, "{fun_val}.fun(");
+				inf_write!(into, "{fun_val}.fun(ctx");
 
-				let mut comma = "";
+				let comma = ", ";
 				for val in vals {
 					inf_write!(into, "{comma}{val}");
-					comma = ", ";
+					//comma = ", ";
 				}
 				// TODO: Implement closure, gc scoping, etc
 				inf_writeln!(into, "{comma}{fun_val}.closure);");
@@ -1096,7 +1095,7 @@ impl<'a> Codegen<'a> {
 				// each class, so we can do e.g. sizeof(struct cl_Class) or
 				// just directly generate 16 or whatever. For now, use 32 bytes,
 				// which is terrible, but it's a start.
-				define_val!(self, into, val, " = ps_gc_must_calloc(sizeof(struct {}), 0);\n",
+				define_val!(self, into, val, " = poni_gc_alloc_tagged(ctx, sizeof(struct {}), 0);\n",
 					self.db.get_class_cname(new.class));
 				// Initialize the value.
 				if val.needs_storage() {
@@ -1190,7 +1189,7 @@ impl<'a> Codegen<'a> {
 			Expr::ArrayLit(lit) => {
 				let val = self.new_val_typed(lit.arr_typ);
 
-				define_val!(self, into, val, " = ps_gc_must_calloc(sizeof(struct ps_array_header) + sizeof({}) * {}, PS_TAG_ARRAY);\n",
+				define_val!(self, into, val, " =  poni_gc_alloc_tagged(ctx, sizeof(struct ps_array_header) + sizeof({}) * {}, PS_TAG_ARRAY);\n",
 					self.db.get_ctype(lit.elem_typ),
 					lit.values.len());
 
@@ -1290,7 +1289,7 @@ impl<'a> Codegen<'a> {
 
 		// Helper function for doing the promotions
 		let mut do_promote = |the_fn: &'static str| {
-			inf_writeln!(into, "{indent}{to}{to_post} = {the_fn}({from}{from_post});");
+			inf_writeln!(into, "{indent}{to}{to_post} = {the_fn}{from}{from_post});");
 		};
 
 		// If we end up promoting a type to itself, that is just a no-op.
@@ -1309,10 +1308,10 @@ impl<'a> Codegen<'a> {
 				/* Don't do any promotion, but don't panic? */
 			}
 
-			(Type::Float, Type::Int) => do_promote("ps_promote_int_to_float"),
-			(Type::StrBuf, Type::StrConst) => do_promote("ps_promote_str_to_buf"),
-			(Type::StrBuf, Type::Str) => do_promote("ps_promote_str_to_buf"),
-			(Type::Str, Type::StrConst) => do_promote("ps_promote_str_const_to_str"),
+			(Type::Float, Type::Int) => do_promote("ps_promote_int_to_float("),
+			(Type::StrBuf, Type::StrConst) => do_promote("ps_promote_str_to_buf(ctx, "),
+			(Type::StrBuf, Type::Str) => do_promote("ps_promote_str_to_buf(ctx, "),
+			(Type::Str, Type::StrConst) => do_promote("ps_promote_str_const_to_str(ctx, "),
 
 			// Tuples are where things get interesting. We have to recursively promote
 			// every part of each tuple.
@@ -1572,10 +1571,10 @@ impl<'a> Codegen<'a> {
 	}
 
 	fn compile_string_constant_init(&mut self, define: &mut String, init: &mut String) {
-		inf_writeln!(init, "void poni_init_strings(void) {{");
+		inf_writeln!(init, "void poni_init_strings(struct poni_gc_context *ctx) {{");
 		for id in self.db.iter_strconst() {
 			inf_writeln!(define, "const ps_str* ps_str_const{} = NULL;", id.to_index());
-			inf_writeln!(init, "\tps_str_const{} = ps_str_from_literal({});",
+			inf_writeln!(init, "\tps_str_const{} = ps_str_from_literal(ctx, {});",
 				id.to_index(), self.db.get(id));
 		}
 		inf_writeln!(init, "}}");
@@ -1594,6 +1593,31 @@ impl<'a> Codegen<'a> {
 		}
 
 		
+	}
+
+
+	fn codegen_gc_functions(&mut self) -> String {
+"void
+poni_gc_visit_object(struct poni_gc *gc, void *object) {
+    uint64_t tag = *(uint64_t*)object;
+    switch(tag & 0xFFFFFFFFFFFFFFFEULL) {
+        default: {}
+    }
+}
+
+void
+poni_gc_visit_roots(struct poni_gc *gc) {
+	// TODO
+}
+
+size_t
+poni_gc_get_allocation_size(void *object) {
+    uint64_t tag = *(uint64_t*)object;
+    switch(tag & 0xFFFFFFFFFFFFFFFEULL) {
+		// TODO: Generate a table of allocation size
+        default: return 4096;
+    }
+}".to_string()
 	}
 
 	fn codegen(&mut self, args: &Args, ast: &Ast, output: &mut dyn std::io::Write) -> std::io::Result<()> {
@@ -1708,9 +1732,12 @@ impl<'a> Codegen<'a> {
 		}
 		writeln!(output, "{}", outputs.string_const_init)?;
 
+		writeln!(output, "// --- gc support ---")?;
+		writeln!(output, "{}", self.codegen_gc_functions())?;
+
 		// The various poni initializer functions are split into several pieces,
 		// so as to enable hot code reloading.
-		writeln!(output, "void poni_init_globals() {{")?;
+		writeln!(output, "void poni_init_globals(struct poni_gc_context *ctx) {{")?;
 		if args.hot {
 			// For hot-code reloading, we need the bool flag 'existed' to decide
 			// whether to run each initializer
@@ -1719,7 +1746,7 @@ impl<'a> Codegen<'a> {
 		writeln!(output, "{}", outputs.global_init)?;
 		writeln!(output, "}}")?;
 
-		writeln!(output, "void poni_init() {{")?;
+		writeln!(output, "void poni_init(struct poni_gc_context *ctx) {{")?;
 		writeln!(output, "{}", self.fun_init_buffer)?;
 		writeln!(output, "}}")?;
 

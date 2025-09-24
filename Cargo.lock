@@ -609,19 +609,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
-name = "poni-gc-rs"
-version = "0.1.0"
-dependencies = [
- "mimalloc",
-]
-
-[[package]]
 name = "poniescript"
 version = "0.1.0"
 dependencies = [
  "clap",
  "mimalloc",
  "poniescript-core",
+ "poniescript-gc",
 ]
 
 [[package]]
@@ -632,6 +626,13 @@ dependencies = [
  "anstyle",
  "clap",
  "rustc-hash",
+]
+
+[[package]]
+name = "poniescript-gc"
+version = "0.1.0"
+dependencies = [
+ "mimalloc",
 ]
 
 [[package]]

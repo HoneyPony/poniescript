@@ -1,6 +1,8 @@
 #ifndef PONI_STANDALONE_H
 #define PONI_STANDALONE_H
 
+#include "poni_gc.h"
+
 // "standalone" refers to poniescripts that are compiled without the addition
 // of the ponygame game engine.
 //
@@ -10,16 +12,27 @@
 
 // Standalone programs include their own main() function.
 
-void poni_init_strings(void);
-void poni_init_globals(void);
-void poni_init(void);
+void poni_init_strings(struct poni_gc_context *ctx);
+void poni_init_globals(struct poni_gc_context *ctx);
+void poni_init(struct poni_gc_context *ctx);
 
 int
 main(int argc, char **argv) {
+	struct poni_gc_handle *gc_handle = poni_gc_spawn();
+	struct poni_gc_context *ctx = poni_gc_create_context_for_existing(gc_handle);
+
 	// Must do strings before globals
-	poni_init_strings();
-	poni_init_globals();
-	poni_init();
+	poni_init_strings(ctx);
+	poni_init_globals(ctx);
+	poni_init(ctx);
+
+	// For testing purposes, we would like to:
+	// 1) Trigger a GC
+	// 2) Wait for everything to be collected
+	//
+	// This should make sure that GC integration at least basically works.
+	// poni_gc_send_request(gc_handle, PONI_GC_REQUEST_COLLECT);
+	// poni_gc_join(gc_handle);
 }
 
 #endif
