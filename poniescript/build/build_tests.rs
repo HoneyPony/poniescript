@@ -132,6 +132,7 @@ pub fn generate(tests_file: &mut File) {
 
 		("gc/", "simple_tuple"),
 		("gc/", "tuple_as_member"),
+		("gc/", "fun_as_member"),
 
 		("scope/", "block_shadow"),
 

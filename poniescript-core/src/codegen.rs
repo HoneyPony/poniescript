@@ -1970,6 +1970,22 @@ poni_gc_get_allocation_size(void *object) {
 					inf_writeln!(valuetype, "\t}}");
 				},
 
+				Type::Fun(sig) => {
+					// Don't generate these for unused sigs -- they might not
+					// be valid C, so we can't generate them; and they won't
+					// be needed anyway.
+					if !self.db.is_sig_used(*sig) { continue; }
+
+					inf_writeln!(valuetype, "\tcase {tag}: {{");
+					inf_writeln!(valuetype, "\t\t{} *self = object;", self.db.get_ctype(typ));
+					// Visit the closure for each fun.
+					// We could make this particular bit of code some sort of
+					// helper function / case-that-falls-through for each function,
+					// but this is fine for now.
+					inf_writeln!(valuetype, "\t\tponi_gc_mark(gc, self->closure);");
+					inf_writeln!(valuetype, "\t}}");
+				}
+
 				_ => {}
 			}
 		}

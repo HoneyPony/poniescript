@@ -703,6 +703,10 @@ impl Db {
 			struct_name, fnptr_name, struct_name);
 	}
 
+	pub fn is_sig_used(&self, sig_id: SigId) -> bool {
+		self.sig_cdeclared.get(&sig_id).is_some()
+	}
+
 	pub fn use_sig(&mut self, sig_id: SigId) {
 		if *self.sig_cdeclared.get(&sig_id).unwrap_or(&false) {
 			// Return if we've already done it.
@@ -1466,9 +1470,12 @@ impl Db {
 	fn generate_sigs_cache(&mut self) {
 		let sigs = std::mem::take(&mut self.sig_cdeclared);
 
-		for sig in sigs {
-			self.gen_sig(sig.0);
+		for sig in &sigs {
+			self.gen_sig(*sig.0);
 		}
+
+		// Put sigs back for is_sig_used()
+		self.sig_cdeclared = sigs;
 	}
 
 	fn gen_array(&mut self, elem_ty: TypId) {
