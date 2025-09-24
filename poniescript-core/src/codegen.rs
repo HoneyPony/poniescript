@@ -1911,7 +1911,12 @@ poni_gc_get_allocation_size(void *object) {
 							Type::Int | Type::Float | Type::Bool => {}
 							Type::Void | Type::Bottom => {}
 
-							Type::StrConst | Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+							Type::StrConst => {
+								// For now, we don't mark StrConst, because
+								// they can't be deallocated.
+							}
+
+							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
 								inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->{});", self.db.get_cname(*field));
 							}
 
@@ -1940,7 +1945,12 @@ poni_gc_get_allocation_size(void *object) {
 							Type::Int | Type::Float | Type::Bool => {}
 							Type::Void | Type::Bottom => {}
 
-							Type::StrConst | Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+							Type::StrConst => {
+								// For now, we don't mark StrConst, because
+								// they can't be deallocated.
+							}
+
+							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
 								inf_writeln!(valuetype, "\t\tponi_gc_mark(gc, self->v_{});", idx);
 							}
 
