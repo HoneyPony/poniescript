@@ -1931,8 +1931,9 @@ poni_gc_get_allocation_size(void *object) {
 
 							Type::Unassigned | Type::AssumeFloat | Type::AssumeInt | Type::UnboundIdent(_) | Type::UnboundCStructPtr(_) => {}
 						}
-
 					}
+
+					inf_writeln!(visit_object, "\t\tbreak;");
 					inf_writeln!(visit_object, "\t}}");
 				},
 
@@ -1967,6 +1968,7 @@ poni_gc_get_allocation_size(void *object) {
 						}
 					}
 
+					inf_writeln!(valuetype, "\t\tbreak;");
 					inf_writeln!(valuetype, "\t}}");
 				},
 
@@ -1983,6 +1985,7 @@ poni_gc_get_allocation_size(void *object) {
 					// helper function / case-that-falls-through for each function,
 					// but this is fine for now.
 					inf_writeln!(valuetype, "\t\tponi_gc_mark(gc, self->closure);");
+					inf_writeln!(valuetype, "\t\tbreak;");
 					inf_writeln!(valuetype, "\t}}");
 				}
 
