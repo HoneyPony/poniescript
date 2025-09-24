@@ -11,7 +11,7 @@ use crate::expr::*;
 use crate::arena::IndexCell;
 
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::rc::Rc;
 
@@ -24,6 +24,8 @@ struct GCFrame {
 
 	// TODO: Is there elsewhere in the code that we should use a BTreeSet?
 	avail: RefCell<BTreeSet<usize>>,
+
+	saved: RefCell<BTreeMap<usize, String>>,
 }
 
 impl GCFrame {
@@ -31,10 +33,11 @@ impl GCFrame {
 		GCFrame {
 			next_alloc_slot: Cell::new(0),
 			avail: RefCell::new(BTreeSet::new()),
+			saved: RefCell::new(BTreeMap::new())
 		}
 	}
 
-	fn allocate_slot(&self) -> usize {
+	fn allocate_slot_internal(&self) -> usize {
 		let mut avail = self.avail.borrow_mut();
 		if let Some(last) = avail.pop_last() {
 			return last;
@@ -45,20 +48,22 @@ impl GCFrame {
 		slot
 	}
 
-	fn allocate_slots(&self, count: usize) -> Vec<usize> {
-		let mut slots = vec![];
-		for _ in 0..count {
-			slots.push(self.allocate_slot());
-		}
-		slots
+	fn allocate_slot(&self, val: String) -> usize {
+		let slot = self.allocate_slot_internal();
+		let mut saved = self.saved.borrow_mut();
+		debug_assert!(saved.insert(slot, val).is_none());
+
+		slot
 	}
 
 	fn free_slots(&self, slots: &Vec<usize>) {
 		let mut avail = self.avail.borrow_mut();
+		let mut saved = self.saved.borrow_mut();
 		for slot in slots {
 			// This should always return true, because this slot should only
 			// have belonged to use when we freed it.
 			debug_assert!(avail.insert(*slot));
+			debug_assert!(saved.remove(slot).is_some());
 		}
 	}
 }
@@ -175,15 +180,7 @@ enum Val {
 }
 
 impl Val {
-	pub fn typed(self, typ: TypId, frame: &Rc<GCFrame>, gc_slots: usize) -> TypedVal {
-		let gc_slots_and_frame = match gc_slots {
-			0 => None,
-			_ => {
-				// If we do have any slots, allocate them from the frame, and
-				// give ourselves an Rc copy of the frame.
-				Some((frame.allocate_slots(gc_slots), frame.clone()))
-			}
-		};
+	pub fn typed(self, typ: TypId, gc_slots_and_frame: Option<(Vec<usize>, Rc<GCFrame>)>) -> TypedVal {
 		return TypedVal {
 			val: self,
 			typ,
@@ -395,14 +392,87 @@ impl<'a> Codegen<'a> {
 		val
 	}
 
+	fn val_alloc_slots_recurse(&mut self, prefix: &str, typ: TypId, slots: &mut Vec<usize>) {
+		match self.db.get(typ) {
+			Type::Int | Type::Float | Type::Bool | Type::Void => {}
+			Type::StrConst => {}
+
+			Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+				slots.push(self.gc_frame.allocate_slot(prefix.to_string()));
+			}
+
+			Type::Fun(_) => {
+				// For functions, we are specifically saving the closure.
+				//
+				// TODO: It seems we often save the closure alongside the value
+				// that we used to form the closure. This might just keep happening
+				// until we get FunCall functionality working again, or until we
+				// get a better IR..?
+				slots.push(self.gc_frame.allocate_slot(format!("{prefix}.closure")));
+			}
+
+			Type::FunRaw(_) => {}
+			Type::Bottom => {}
+
+			Type::Tuple(typ_ids) => {
+				let mut idx = 0;
+				for typ in typ_ids {
+					// Don't allocate a new prefix string for any of the types
+					// that don't have any slots.
+
+					// TODO: Maybe profile this method, see if it's being
+					// problematic..?
+					if self.db.type_gc_slots(*typ) == 0 {
+						continue;
+					}
+					let prefix = format!("{prefix}.v_{idx}");
+					self.val_alloc_slots_recurse(&prefix, *typ, slots);
+					idx += 1;
+				}
+			},
+
+			Type::Unassigned | Type::AssumeInt | Type::AssumeFloat => {}
+			Type::UnboundIdent(_) | Type::UnboundCStructPtr(_) => {}
+		}
+	}
+
+	/// Helper function for safely converting a Val into a TypedVal. Think of it
+	/// as val.typed() but without needing to specify the GC metadata, because
+	/// this function computes the metadata.
+	fn val_alloc_slots(&mut self, val: Val, typ: TypId) -> TypedVal {
+		// In this case, don't bother even creating the vector, just directly
+		// create the val.
+		if self.db.type_gc_slots(typ) == 0 {
+			return val.typed(typ, None);
+		}
+
+		let mut slots = vec![];
+		let prefix = format!("{val}");
+		self.val_alloc_slots_recurse(&prefix, typ, &mut slots);
+
+		val.typed(typ, Some((slots, self.gc_frame.clone())))
+	}
+
 	// TODO: MOve all uses of new_val() to this function
 	fn new_val_typed(&mut self, typ: TypId) -> TypedVal {
-		if typ == self.db.types.void { return Val::Void.typed(typ, &self.gc_frame, 0); }
-		if typ == self.db.types.bottom { return Val::Bottom.typed(typ, &self.gc_frame, 0); }
+		if typ == self.db.types.void { return Val::Void.typed(typ, None); }
+		if typ == self.db.types.bottom { return Val::Bottom.typed(typ, None); }
 
-		let slots = self.db.type_gc_slots(typ);
+		let val = self.new_val();
+		self.val_alloc_slots(val, typ)
+	}
 
-		self.new_val().typed(typ, &self.gc_frame, slots)
+	fn save_gc_values(&mut self, into: &mut String) {
+		let saved = self.gc_frame.saved.borrow();
+		let indent = self.indent();
+		for (k, v) in saved.iter() {
+			// TODO:
+			// If we do something where we always allocate the smallest available
+			// k, then we can do an optimization in the GC where we stop checking
+			// each frame when we hit a NULL. It probably won't really save much
+			// though.
+			inf_writeln!(into, "{indent}gc_frame.ptrs[{k}] = {v};");
+		}
 	}
 
 	fn compile_partial_binary(&mut self, result_val: &TypedVal, lhs_val: &TypedVal, rhs_val: &TypedVal, op: char, cur_typ: TypId, postfix: &String, into: &mut String) {
@@ -586,7 +656,8 @@ impl<'a> Codegen<'a> {
 
 		inf_writeln!(into, "{indent}const ps_bool {val} = (ps_bool)({left} {op} {right});");
 
-		val.typed(self.db.types.bool, &self.gc_frame, 0)
+		// Bool: No gc slot
+		val.typed(self.db.types.bool, None)
 	}
 
 	fn compile_partial_print(&mut self, val: &TypedVal, into: &mut String) {
@@ -801,7 +872,7 @@ impl<'a> Codegen<'a> {
 				// The variable itself should already have a gc slot. So the
 				// DirectVar does not need any additional slots.
 				Val::DirectVar { this_val: self.this_val, name: self.db.get_cname(variable.identity), depth }
-					.typed(self.db.get_var_type(variable.identity), &self.gc_frame, 0)
+					.typed(self.db.get_var_type(variable.identity), None)
 			},
 			Expr::Assign(assign) => {
 				self.compile_assign(ast, assign.identity, assign.value, into, false)
@@ -821,6 +892,9 @@ impl<'a> Codegen<'a> {
 
 					vals.push(val);
 				}
+
+				// We must save values at this time.
+				self.save_gc_values(into);
 
 				// TODO: An awkward thing about the define_val! syntax is that
 				// it must be remembed that it does not always print. So,
@@ -843,13 +917,15 @@ impl<'a> Codegen<'a> {
 				Val::DirectLit {
 					ctype: self.db.get_ctype(lit.typ),
 					lit: self.db.get(lit.contents.lexeme),
-				}.typed(lit.typ, &self.gc_frame, 0)
+				}.typed(lit.typ, None)
 			},
 			Expr::StrLiteral(lit) => {
-				return Val::StringLit { id: lit.id }.typed(self.db.types.str_const, &self.gc_frame, 0)
+				// Literals don't need a gc slot. If they get promoted by an
+				// Expr::Promote, it should take the slot.
+				return Val::StringLit { id: lit.id }.typed(self.db.types.str_const, None)
 			},
 			Expr::BoolLiteral(lit) => {
-				return Val::BoolLit { val: lit.value }.typed(self.db.types.bool, &self.gc_frame, 0);
+				return Val::BoolLit { val: lit.value }.typed(self.db.types.bool, None);
 			}
 			Expr::Block(block) => {
 				let val = if self.db.type_generates_value(block.typ) {
@@ -925,7 +1001,7 @@ impl<'a> Codegen<'a> {
 
 				self.indent_level -= 1;
 				inf_writeln!(into, "{indent}}}");
-				val.typed(block.typ, &self.gc_frame, self.db.type_gc_slots(block.typ))
+				self.val_alloc_slots(val, block.typ)
 			},
 			Expr::Print(print) => {
 				let mut vals = Vec::new();
@@ -981,7 +1057,9 @@ impl<'a> Codegen<'a> {
 					self.compile_partial_str(val, &buf_val, into);
 				}
 
-				buf_val.typed(self.db.types.str_buf, &self.gc_frame, self.db.type_gc_slots(self.db.types.str_buf))
+				// Note that val_alloc_slots is essentially saying "give me
+				// this Val with this TypId, safely"
+				self.val_alloc_slots(buf_val, self.db.types.str_buf)
 			}
 			Expr::Unbound(_) => {
 				panic!("ICE: Tried to codegen an Unbound");
@@ -1051,6 +1129,8 @@ impl<'a> Codegen<'a> {
 					assert!(val.typ == self.db.get_sig_param_type(call.sig, idx));
 					vals.push(val);
 				}
+
+				self.save_gc_values(into);
 
 				// TODO: An awkward thing about the define_val! syntax is that
 				// it must be remembed that it does not always print. So,
@@ -1214,7 +1294,7 @@ impl<'a> Codegen<'a> {
 				// to keep a reference to it ourselves, because we're guaranteed
 				// that it is either pointed to by a root, or by some other function
 				// frame up the call stack.
-				Val::DirectSelf.typed(selfval.typ, &self.gc_frame, 0)
+				Val::DirectSelf.typed(selfval.typ, None)
 			}
 
 			Expr::Index(index) => {
@@ -1389,7 +1469,7 @@ impl<'a> Codegen<'a> {
 				let slots = self.db.type_gc_slots(self.db.get(declare.identity).typ);
 				if slots > 0 {
 					let last = self.block_scopes.last_mut().unwrap();
-					let own_slot = self.gc_frame.allocate_slot();
+					let own_slot = self.gc_frame.allocate_slot(self.db.get_cname(declare.identity).to_string());
 					last.push(own_slot); // TODO: We probably need the gc_frame to actually
 					// keep track of the val name for each slot..?
 
@@ -1418,6 +1498,8 @@ impl<'a> Codegen<'a> {
 				Some(self.expr(ast, expression.expression, into))
 			},
 			Stmt::Return(ret) => {
+				inf_writeln!(into, "{indent}ctx->frame = gc_frame.prev;");
+
 				match &ret.expression {
 					Some(value) => {
 						let needed_type = *self.return_types.last().unwrap();
@@ -1437,7 +1519,7 @@ impl<'a> Codegen<'a> {
 					}
 				}
 
-				Some(Val::Bottom.typed(self.db.types.bottom, &self.gc_frame, 0))
+				Some(Val::Bottom.typed(self.db.types.bottom, None))
 			}
 		}
 	}
@@ -1463,7 +1545,7 @@ impl<'a> Codegen<'a> {
 		//
 		// (We will need write barriers in the future..?)
 		Val::DirectVar { this_val: self.this_val, name: self.db.get_cname(var), depth }
-			.typed(self.db.get_var_type(var), &self.gc_frame, 0)
+			.typed(self.db.get_var_type(var), None)
 	}
 
 	fn compile_assign(&mut self, ast: &Ast, var: VarId, expr: ExprId, into: &mut String, is_declaration: bool) -> TypedVal {
@@ -1510,11 +1592,14 @@ impl<'a> Codegen<'a> {
 		// Push a block scope for the parameters (?)
 		// self.block_scopes.push(Vec::new());
 
+		// Separate out the beginning of the buffer from the rest so that
+		// we can generate the GC frame once we know how deep it needs to be.
+		let mut own_buffer_beginning = String::new();
 		let mut own_buffer = String::new();
 
 		// init() fun has no surrounding definition -- it is poni_init()
 		if !is_init {
-			inf_writeln!(own_buffer, "{} {}({}) {{",
+			inf_writeln!(own_buffer_beginning, "{} {}({}) {{",
 				self.db.get_fun_ret_ctype(fun),
 				self.db.get_fun_cname(fun),
 				self.db.get_fun_cparams(fun));
@@ -1529,6 +1614,10 @@ impl<'a> Codegen<'a> {
 		self.return_types.push(own_return_type);
 
 		let val = self.expr(ast, body, &mut own_buffer);
+
+		// Generate unconditional GC-frame pop
+		inf_writeln!(own_buffer, "{indent}ctx->frame = gc_frame.prev;");
+
 		if val.needs_storage() {
 			assert!(val.typ == own_return_type);
 			// If it does have a value, then we write it as a default
@@ -1538,8 +1627,18 @@ impl<'a> Codegen<'a> {
 
 		// Now that we have generated the inner expression, we know how big
 		// of a GC frame we need. TODO: Actually generate the GC frame.
-		inf_writeln!(own_buffer, "{indent}// gc frame count: {}", self.gc_frame.next_alloc_slot.get());
+		let gc_frame_count = self.gc_frame.next_alloc_slot.get();
+		inf_writeln!(own_buffer_beginning, "{indent}// gc frame count: {}", gc_frame_count);
 
+		inf_writeln!(own_buffer_beginning, "{indent}struct {{");
+		inf_writeln!(own_buffer_beginning, "{indent}\tstruct poni_gc_frame *prev;");
+		inf_writeln!(own_buffer_beginning, "{indent}\tuint64_t ptr_count;");
+		inf_writeln!(own_buffer_beginning, "{indent}\tvoid *ptrs[{}];", gc_frame_count);
+		inf_writeln!(own_buffer_beginning, "{indent}}} gc_frame = {{0}};");
+		inf_writeln!(own_buffer_beginning, "{indent}gc_frame.ptr_count = {};", gc_frame_count);
+		inf_writeln!(own_buffer_beginning, "{indent}gc_frame.prev = ctx->frame;");
+		inf_writeln!(own_buffer_beginning, "{indent}ctx->frame = (void*)&gc_frame;");
+		
 		// Pop type value
 		self.return_types.pop();
 
@@ -1552,9 +1651,12 @@ impl<'a> Codegen<'a> {
 		if !is_init { inf_writeln!(own_buffer, "}}"); }
 
 		if Some(fun) == self.db.fun_init {
-			self.fun_init_buffer = own_buffer;
+			self.fun_init_buffer = format!("{}{}", own_buffer_beginning, own_buffer);
 		}
 		else {
+			// Just let the big codegen function "concatenate" these togther,
+			// no need for the copy. This might change if we get multithreading.
+			self.functions.push(own_buffer_beginning);
 			self.functions.push(own_buffer);
 		}
 
