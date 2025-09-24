@@ -4,5 +4,5 @@ fun other() {
 
 fun init() {
     var x = other;
-    x();
+    x(); //! hello
 }
