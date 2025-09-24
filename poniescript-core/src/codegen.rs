@@ -86,7 +86,8 @@ impl GCFrame {
 	/// - false if it was.
 	/// This lets us generate code to only write to a slot when it needs marking.
 	fn mark(&self, slot: usize) -> bool {
-		true
+		let mut written = self.written.borrow_mut();
+		written.insert(slot)
 	}
 }
 
