@@ -415,8 +415,7 @@ impl<'a> Codegen<'a> {
 			Type::Bottom => {}
 
 			Type::Tuple(typ_ids) => {
-				let mut idx = 0;
-				for typ in typ_ids {
+				for (idx, typ) in typ_ids.iter().enumerate() {
 					// Don't allocate a new prefix string for any of the types
 					// that don't have any slots.
 
@@ -427,7 +426,6 @@ impl<'a> Codegen<'a> {
 					}
 					let prefix = format!("{prefix}.v_{idx}");
 					self.val_alloc_slots_recurse(&prefix, *typ, slots);
-					idx += 1;
 				}
 			},
 
