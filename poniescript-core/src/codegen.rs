@@ -26,6 +26,13 @@ struct GCFrame {
 	avail: RefCell<BTreeSet<usize>>,
 
 	saved: RefCell<BTreeMap<usize, String>>,
+
+	/// Contains a map of handed-out slots that we have already written into
+	/// the array. We track slots in this map when we write them, so that we
+	/// can avoid re-writing into the same slot -- this is because nothing
+	/// else is allowed to overwrite them, but there's nothing telling the C
+	/// compiler that except for us.
+	written: RefCell<BTreeSet<usize>>,
 }
 
 impl GCFrame {
@@ -33,7 +40,8 @@ impl GCFrame {
 		GCFrame {
 			next_alloc_slot: Cell::new(0),
 			avail: RefCell::new(BTreeSet::new()),
-			saved: RefCell::new(BTreeMap::new())
+			saved: RefCell::new(BTreeMap::new()),
+			written: RefCell::new(BTreeSet::new()),
 		}
 	}
 
@@ -59,12 +67,26 @@ impl GCFrame {
 	fn free_slots(&self, slots: &Vec<usize>) {
 		let mut avail = self.avail.borrow_mut();
 		let mut saved = self.saved.borrow_mut();
+		let mut written = self.written.borrow_mut();
 		for slot in slots {
 			// This should always return true, because this slot should only
 			// have belonged to use when we freed it.
 			debug_assert!(avail.insert(*slot));
 			debug_assert!(saved.remove(slot).is_some());
+
+			// This might not be some, if we never wrote that slot. (Although,
+			// in that case, ideally it would not have taken up a slot at all.
+			// Oh well!)
+			written.remove(slot);
 		}
+	}
+
+	/// Marks a slot in the "written" array and returns:
+	/// - true if it was not there before;
+	/// - false if it was.
+	/// This lets us generate code to only write to a slot when it needs marking.
+	fn mark(&self, slot: usize) -> bool {
+		true
 	}
 }
 
@@ -515,7 +537,12 @@ impl<'a> Codegen<'a> {
 			// k, then we can do an optimization in the GC where we stop checking
 			// each frame when we hit a NULL. It probably won't really save much
 			// though.
-			inf_writeln!(into, "{indent}gc_frame.ptrs[{k}] = {v};");
+
+			// Use the 'mark' functionality of GCFrame to make sure we don't
+			// do redundant writes of the same pointer.
+			if self.gc_frame.mark(*k) {
+				inf_writeln!(into, "{indent}gc_frame.ptrs[{k}] = {v};");
+			}
 		}
 	}
 
