@@ -98,6 +98,11 @@ struct Codegen<'a> {
 	/// current GCFrame.
 	block_scopes: Vec<Vec<usize>>,
 
+	/// A flag for disabling the generation of GC frames. In this case, whenever
+	/// we would write to the GC frame, we simply don't. (Mainly relevant for
+	/// global initialization)
+	disable_gc_frames: bool,
+
 	db: &'a Db
 }
 
@@ -381,6 +386,8 @@ impl<'a> Codegen<'a> {
 
 			gc_frame: Rc::new(GCFrame::new()),
 			block_scopes: Vec::new(),
+
+			disable_gc_frames: false,
 		}
 	}
 
@@ -496,6 +503,10 @@ impl<'a> Codegen<'a> {
 	}
 
 	fn save_gc_values(&mut self, into: &mut String) {
+		// If we're disabling gc frames, trying to save the values will cause
+		// issues.
+		if self.disable_gc_frames { return; }
+
 		let saved = self.gc_frame.saved.borrow();
 		let indent = self.indent();
 		for (k, v) in saved.iter() {
@@ -1652,6 +1663,9 @@ impl<'a> Codegen<'a> {
 		// Push a block scope for the parameters (?)
 		// self.block_scopes.push(Vec::new());
 
+		let enclosing_disable_gc_frames = self.disable_gc_frames;
+		self.disable_gc_frames = false; // Don't disable gc frames, in general.
+
 		// Separate out the beginning of the buffer from the rest so that
 		// we can generate the GC frame once we know how deep it needs to be.
 		let mut own_buffer_beginning = String::new();
@@ -1702,6 +1716,7 @@ impl<'a> Codegen<'a> {
 		// Pop type value
 		self.return_types.pop();
 
+		self.disable_gc_frames = enclosing_disable_gc_frames;
 		self.block_scopes = enclosing_block_scopes;
 		self.gc_frame = enclosing_gc_frame;
 		self.indent_level = enclosing_indent;
@@ -1788,6 +1803,11 @@ poni_gc_get_allocation_size(void *object) {
 		// Generate global variables in one pass as their ordering is a global
 		// property.
 
+		// Disable GC frame for now; we don't bother with one in the globals
+		// initializer (it shouldn't be able to GC).
+
+		self.disable_gc_frames = true;
+
 		// Use an indent level of 1 for the initialization code for all global variables.
 		self.indent_level = 1;
 		for global in &self.db.globals {
@@ -1847,6 +1867,8 @@ poni_gc_get_allocation_size(void *object) {
 				inf_writeln!(outputs.global_init, "{indent}}}");
 			}
 		}
+
+		self.disable_gc_frames = false;
 
 		for source in ast.sources.iter() {
             let mut source = ast.sources.get_mut(source);
