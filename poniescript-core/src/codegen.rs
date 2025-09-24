@@ -462,6 +462,41 @@ impl<'a> Codegen<'a> {
 		self.val_alloc_slots(val, typ)
 	}
 
+	/// Create a Val that is assume to have no gc_slots_and_frame.
+	/// 
+	/// This should be paired with a call to tmp_to_used_val(typ) once the Val
+	/// actually has a value.
+	fn new_val_typed_tmp(&mut self, typ: TypId) -> TypedVal {
+		if typ == self.db.types.void { return Val::Void.typed(typ, None); }
+		if typ == self.db.types.bottom { return Val::Bottom.typed(typ, None); }
+
+		let val = self.new_val();
+		val.typed(typ, None)
+	}
+
+	// TODO: This is Jank & Kind of Unsafe ?
+	fn tmp_to_used_val(&mut self, mut val: TypedVal) -> TypedVal {
+		// For Bottom in particular, we actually can't format it to a prefix
+		// and then do the thing, so instead do this.
+		if val.typ == self.db.types.void { return val; }
+		if val.typ == self.db.types.bottom { return val; }
+		
+		// Also, we might as well actually check if the value has any slots
+		// to fill out before we do format!() and allocate a vector.
+		if self.db.type_gc_slots(val.typ) == 0 {
+			return val;
+		}
+
+		let prefix = format!("{val}");
+		let mut slots = vec![];
+		self.val_alloc_slots_recurse(&prefix, val.typ, &mut slots);
+		
+		debug_assert!(val.gc_slots_and_frame.is_none());
+
+		val.gc_slots_and_frame = Some((slots, self.gc_frame.clone()));
+		val
+	}
+
 	fn save_gc_values(&mut self, into: &mut String) {
 		let saved = self.gc_frame.saved.borrow();
 		let indent = self.indent();
@@ -757,7 +792,9 @@ impl<'a> Codegen<'a> {
 		let cond = self.expr(ast, if_.condition, into);
 
 		// Generate storage for the value of the expression, if relevant.
-		let own_val = self.new_val_typed(if_.typ);
+		// Note that we cannot have this value interacting with the GC until
+		// we actually write to it.
+		let own_val = self.new_val_typed_tmp(if_.typ);
 		define_val!(self, into, own_val, ";\n");
 
 		inf_writeln!(into, "{indent}if ({cond}) {{");
@@ -782,7 +819,7 @@ impl<'a> Codegen<'a> {
 			inf_writeln!(into, "{indent}}}");
 		}
 
-		own_val
+		self.tmp_to_used_val(own_val)
 	}
 
 	fn push_block_scope(&mut self) {
@@ -1076,8 +1113,6 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::FunCapture(capt) => {
-				let val = self.new_val_typed(capt.typ);
-
 				// BIG TODO: Support closures. Not exactly clear how that will work.
 
 				let closure = match &capt.object {
@@ -1086,6 +1121,9 @@ impl<'a> Codegen<'a> {
 					},
 					None => None
 				};
+
+				// Define val after inner expression (for GC)
+				let val = self.new_val_typed(capt.typ);
 
 				define_val!(self, into, val,
 					" = ({}) {{ .fun = {}, ",
@@ -1154,14 +1192,16 @@ impl<'a> Codegen<'a> {
 			},
 
 			Expr::FunDeclare(declare) => {
-				let val = self.new_val_typed(declare.typ);
-
 				self.compile_function(ast, declare.identity, declare.value);
 
 				// BIG TODO: Support closures. Not exactly clear how that will work.
 				// Also, when we do this, either we probably want to desugar
 				// FunDeclare to somehow be wrapped in FunCapture, or at least
 				// have some helper methods..
+
+				// Define val after inner expression, even though it shouldn't
+				// matter here..?
+				let val = self.new_val_typed(declare.typ);
 
 				define_val!(self, into, val,
 					" = ({}) {{ .fun = {}, .closure = NULL }};\n",
@@ -1172,7 +1212,7 @@ impl<'a> Codegen<'a> {
 			},
 
 			Expr::New(new) => {
-				let val = self.new_val_typed(new.typ);
+				let val = self.new_val_typed_tmp(new.typ);
 
 				// TODO: We need the C size (or at least the type name) of
 				// each class, so we can do e.g. sizeof(struct cl_Class) or
@@ -1230,17 +1270,19 @@ impl<'a> Codegen<'a> {
 					self.this_val = enclosing_this_val;
 				}
 
-				val
+				self.tmp_to_used_val(val)
 			},
 
 			Expr::Get(get) => {
-				let typ = self.db.get_var_type(get.var);
-				let val = self.new_val_typed(typ);
-			
 				let lhs = self.expr(ast, get.lhs, into);
 				let arrow = self.db.get_c_member_lookup(lhs.typ);
 				
 				let varname = self.db.get_cname(get.var);
+
+				// Don't define our own val until we've evaluated inner expr,
+				// for GC.
+				let typ = self.db.get_var_type(get.var);
+				let val = self.new_val_typed(typ);
 
 				// TODO: Should lhs be promoted...??
 				define_val!(self, into, val, " = {}{arrow}{};\n", lhs.val, varname);
@@ -1249,9 +1291,6 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::Set(set) => {
-				let typ = self.db.get_var_type(set.var);
-				let val = self.new_val_typed(typ);
-			
 				let rhs = self.expr(ast, set.rhs, into);
 				if rhs.is_bottom() {
 					return rhs;
@@ -1262,6 +1301,10 @@ impl<'a> Codegen<'a> {
 				
 				let varname = self.db.get_cname(set.var);
 
+				// Define our own val as late as possible, for GC.
+				let typ = self.db.get_var_type(set.var);
+				let val = self.new_val_typed(typ);
+
 				// TODO: Should lhs be promoted...??
 				// This is a bit hacky (the double assign), but I think it is overall fine.
 				define_val!(self, into, val, " = {}{arrow}{} = {};\n", lhs.val, varname, rhs);
@@ -1270,7 +1313,7 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::ArrayLit(lit) => {
-				let val = self.new_val_typed(lit.arr_typ);
+				let val = self.new_val_typed_tmp(lit.arr_typ);
 
 				define_val!(self, into, val, " =  poni_gc_alloc_tagged(ctx, sizeof(struct ps_array_header) + sizeof({}) * {}, PS_TAG_ARRAY);\n",
 					self.db.get_ctype(lit.elem_typ),
@@ -1289,7 +1332,7 @@ impl<'a> Codegen<'a> {
 					}
 				}
 
-				val
+				self.tmp_to_used_val(val)
 			}
 
 			Expr::SelfVal(selfval) => {
@@ -1301,11 +1344,14 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::Index(index) => {
-				let val = self.new_val_typed(index.typ);
+				
 				let arr_val = self.expr(ast, index.value, into);
 
 				let idx_val = self.expr(ast, index.index, into);
 				assert!(idx_val.typ == self.db.types.int);
+
+				// Generate own val after inner expressions, for GC
+				let val = self.new_val_typed(index.typ);
 
 				// TODO: Generate bounds checks
 				define_val!(self, into, val, " = {arr_val}->contents[{idx_val}];\n");
@@ -1314,13 +1360,15 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::SetIndex(set) => {
-				let val = self.new_val_typed(set.typ);
 				let arr_val = self.expr(ast, set.value, into);
 
 				let idx_val = self.expr(ast, set.index, into);
 				assert!(idx_val.typ == self.db.types.int);
 
 				let rhs_val = self.expr(ast, set.rhs, into);
+
+				// Generate own val after inner expressions, for GC
+				let val = self.new_val_typed(set.typ);
 
 				// TODO: Generate bounds checks
 				define_val!(self, into, val, " = {arr_val}->contents[{idx_val}] = {rhs_val};\n");
@@ -1329,7 +1377,7 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::MakeTuple(tuple) => {
-				let val = self.new_val_typed(tuple.typ);
+				let val = self.new_val_typed_tmp(tuple.typ);
 				let Type::Tuple(subtypes) = self.db.get(tuple.typ) else { unreachable!() };
 
 				define_val!(self, into, val, ";\n");
@@ -1344,11 +1392,11 @@ impl<'a> Codegen<'a> {
 					}
 				}
 
-				val
+				self.tmp_to_used_val(val)
 			}
 
 			Expr::Promote(promote) => {
-				let val = self.new_val_typed(promote.promote_to);
+				let val = self.new_val_typed_tmp(promote.promote_to);
 
 				let inner = self.expr(ast, promote.inner, into);
 				define_val!(self, into, val, ";\n");
@@ -1359,7 +1407,7 @@ impl<'a> Codegen<'a> {
 						into);
 				}
 
-				val
+				self.tmp_to_used_val(val)
 			}
 		}
 	}
