@@ -878,10 +878,7 @@ impl<'a> Codegen<'a> {
 				self.compile_assign(ast, assign.identity, assign.value, into, false)
 			},
 			Expr::FunCall(call) => {
-				let ret_type = self.db.get_fun_ret_type(call.identity);
-				let val = self.new_val_typed(ret_type);
-
-				// TODO: Figure out a way to re-use PromotedVal buffers, maybe..
+				// TODO: FIgure out a way to re-use these vec buffers, maybe...
 				let mut vals = Vec::new();
 				for idx in 0..call.args.len() {
 					let arg = &call.args[idx];
@@ -895,6 +892,10 @@ impl<'a> Codegen<'a> {
 
 				// We must save values at this time.
 				self.save_gc_values(into);
+
+				// Don't create the FunCall val itself until the GC vals are saved.
+				let ret_type = self.db.get_fun_ret_type(call.identity);
+				let val = self.new_val_typed(ret_type);
 
 				// TODO: An awkward thing about the define_val! syntax is that
 				// it must be remembed that it does not always print. So,
@@ -1114,9 +1115,6 @@ impl<'a> Codegen<'a> {
 				// TODO: Support FunRaw, etc
 				assert!(fun_val.typ == self.db.must_get_type(Type::Fun(call.sig)));
 
-				let ret_type = self.db.get(call.sig).return_type;
-				let val = self.new_val_typed(ret_type);
-
 				// TODO: Figure out a way to re-use PromotedVal buffers, maybe..
 				let mut vals = Vec::new();
 				for idx in 0..call.args.len() {
@@ -1131,6 +1129,11 @@ impl<'a> Codegen<'a> {
 				}
 
 				self.save_gc_values(into);
+
+				// Don't create the function val itself until we have saved
+				// the GC values.
+				let ret_type = self.db.get(call.sig).return_type;
+				let val = self.new_val_typed(ret_type);
 
 				// TODO: An awkward thing about the define_val! syntax is that
 				// it must be remembed that it does not always print. So,
@@ -1463,8 +1466,15 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 		match ast.stmts.get(stmt).as_ref() {
 			Stmt::Declare(declare) => {
+				self.compile_assign(ast, declare.identity, declare.value, into, true);
+
 				// Each variable obtains a single GC slot for itself, if relevant.
 				// These are stored in the "block scopes" vector.
+				//
+				// It is CRITICAL that we DON'T allocate the GC slot for the
+				// variable until we have compiled its initial assignment.
+				// Once the initial assignment has been compiled, the variable
+				// actually exists, and so it can be saved.
 
 				let slots = self.db.type_gc_slots(self.db.get(declare.identity).typ);
 				if slots > 0 {
@@ -1481,7 +1491,6 @@ impl<'a> Codegen<'a> {
 						own_slot);
 				}
 
-				self.compile_assign(ast, declare.identity, declare.value, into, true);
 				None
 			},
 			Stmt::ClassDeclare(class_declare) => {
