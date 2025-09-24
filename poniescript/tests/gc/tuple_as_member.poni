@@ -1,0 +1,22 @@
+class Horse {
+    var name = "horse";
+}
+
+class Horses {
+    // TODO: Apparently we still don't support variables without initializers...
+    var horses: (Horse, Horse) = (new Horse { name: "twilight" }, new Horse { name: "starlight" });
+
+    fun do_stuff() {
+        print(horses.0 .name);
+        print(horses.1 .name);
+    }
+}
+
+fun init() {
+    var horses = new Horses {};
+
+    //! twilight
+    //! starlight
+
+    horses.do_stuff();
+}

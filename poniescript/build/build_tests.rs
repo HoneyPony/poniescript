@@ -130,6 +130,9 @@ pub fn generate(tests_file: &mut File) {
 
 		("functions/", "err_assign_to_fun"),
 
+		("gc/", "simple_tuple"),
+		("gc/", "tuple_as_member"),
+
 		("scope/", "block_shadow"),
 
 		("if/", "basic_if_expr_ret"),

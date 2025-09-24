@@ -272,6 +272,10 @@ pub struct Db {
 	/// Defines each value-typed struct type.
 	pub valty_define_code: String,
 
+	/// Defines #define's for each type tag.
+	pub tag_define_code: String,
+	pub tag_cname_cache: FxHashMap<TypId, &'static str>,
+
 	/// A list of all value types. Needed for sorting them in order.
 	/// TODO: This may change a bit when class initializers become a thing.
 	///       Those will also essentially be treating things as value types.
@@ -390,6 +394,9 @@ impl Db {
 
 			valty_declare_code: String::new(),
 			valty_define_code: String::new(),
+
+			tag_define_code: String::new(),
+			tag_cname_cache: FxHashMap::default(),
 
 			str_anonymous: StrId::invalid(),
 			str_lambda: StrId::invalid(),
@@ -1194,6 +1201,68 @@ impl Db {
 		Ok(())
 	}
 
+	fn generate_tags(&mut self) {
+		// Start at a somewhat high value so we don't have to update this wrt
+		// the standard library too much. We still have to figure out how to
+		// import existing tags, of course.
+		let mut tag_num = 256u64;
+		for typ in self.iter_typ() {
+			if !self.is_cgen_safe(typ) { continue; }
+
+			match self.get(typ) {
+				Type::Int => { self.tag_cname_cache.insert(typ, "PONI_TAG_INT"); }
+				Type::Float => { self.tag_cname_cache.insert(typ, "PONI_TAG_FLOAT"); }
+				Type::Bool => { self.tag_cname_cache.insert(typ, "PONI_TAG_BOOL"); }
+
+				Type::Str => { self.tag_cname_cache.insert(typ, "PONI_TAG_STR"); }
+				Type::StrBuf => { self.tag_cname_cache.insert(typ, "PONI_TAG_STRBUF"); }
+				Type::StrConst => { self.tag_cname_cache.insert(typ, "PONI_TAG_STRCONST"); }
+			
+				// No tag, as there is no way (?) to store a value of these types.
+				Type::Void | Type::Bottom => continue,
+
+				// All arrays use the same tag.
+				Type::ArrayOf(_) => { self.tag_cname_cache.insert(typ, "PONI_TAG_ARRAY"); },
+
+				Type::Fun(_) | Type::Class(_) => {
+					// This is very sad, but for now we'll just make their name
+					// the TypId. We really should make it some kind of relevant
+					// string instead.
+					let name = format!("PONI_TAG_TY{}", typ.to_nonzero_usize());
+					writeln!(self.tag_define_code, "#define {name} 0x{tag_num:x}ULL").unwrap();
+					tag_num += 2; // For now, the GC bit is the last bit. This
+					// might change.	
+					
+					self.tag_cname_cache.insert(typ, name.leak());
+				}
+				Type::FunRaw(_) | Type::Tuple(_) => {
+					// This is very sad, but for now we'll just make their name
+					// the TypId. We really should make it some kind of relevant
+					// string instead.
+					let name = format!("PONI_TAG_TY{}", typ.to_nonzero_usize());
+					// For now, we'll make value types simply have their high bit
+					// set, so we can easily distinguish them.
+					writeln!(self.tag_define_code, "#define {name} 0x{:x}ULL", tag_num | 0x8000000000000000).unwrap();
+					tag_num += 2; // For now, the GC bit is the last bit. This
+					// might change.	
+					
+					self.tag_cname_cache.insert(typ, name.leak());
+
+				}
+				Type::Unassigned | Type::AssumeInt | Type::AssumeFloat | Type::UnboundIdent(_) | Type::UnboundCStructPtr(_) => continue,
+			}
+		}
+	}
+
+	pub fn get_type_ctag(&self, typ: TypId) -> &'static str {
+		match self.tag_cname_cache.get(&typ) {
+			Some(str) => str,
+			// For types that don't have a tag, we should not be generating
+			// code that involves them. Maybe this should be a panic?
+			None => "<compile-err:invalid-tag>",
+		}
+	}
+
 	pub fn generate_codegen_caches(&mut self, args: &Args) {
 		// The order matters, as e.g. var cnames are used for fun cparams.
 		self.generate_class_cnames_cache();
@@ -1204,6 +1273,7 @@ impl Db {
 		self.generate_sigs_cache();
 		self.generate_arrays_cache();
 		self.generate_valtypes_cache();
+		self.generate_tags();
 	}
 
 	fn generate_valtypes_cache(&mut self) {

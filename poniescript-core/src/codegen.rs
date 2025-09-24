@@ -1255,8 +1255,8 @@ impl<'a> Codegen<'a> {
 				// each class, so we can do e.g. sizeof(struct cl_Class) or
 				// just directly generate 16 or whatever. For now, use 32 bytes,
 				// which is terrible, but it's a start.
-				define_val!(self, into, val, " = poni_gc_alloc_tagged(ctx, sizeof(struct {}), 0);\n",
-					self.db.get_class_cname(new.class));
+				define_val!(self, into, val, " = poni_gc_alloc_tagged(ctx, sizeof(struct {}), {});\n",
+					self.db.get_class_cname(new.class), self.db.get_type_ctag(new.typ));
 				// Initialize the value.
 				if val.needs_storage() {
 					// Note: The value is a pointer-to-struct cl_Thing, so
@@ -1358,6 +1358,8 @@ impl<'a> Codegen<'a> {
 
 				if val.needs_storage() {
 					inf_writeln!(into, "{indent}{}->header.length = {};\n", val.val, lit.values.len());
+					// Arrays keep track of their type at runtime, for the GC.
+					inf_writeln!(into, "{indent}{}->header.type = {};\n", val.val, self.db.get_type_ctag(lit.elem_typ));
 
 					let mut idx = 0;
 					for value in &lit.values {
@@ -1802,27 +1804,177 @@ impl<'a> Codegen<'a> {
 
 
 	fn codegen_gc_functions(&mut self) -> String {
-"void
+
+		let mut type_stride = "static inline size_t
+poni_get_type_stride(uint64_t tag) {
+	switch(tag) {
+		case PONI_TAG_STRCONST:
+		case PONI_TAG_STR:
+		case PONI_TAG_STRBUF:
+		case PONI_TAG_ARRAY:
+			return sizeof(void*);
+		case PONI_TAG_FLOAT: return sizeof(ps_float);
+		case PONI_TAG_INT:   return sizeof(ps_int);
+		case PONI_TAG_BOOL:  return sizeof(ps_bool);
+".to_string();
+
+		let mut is_valuetype = "static inline ps_bool
+poni_is_value_type(uint64_t tag) { return !!(tag & 0x8000000000000000ULL); }
+".to_string();
+
+		let mut valuetype = "void
+poni_gc_visit_valuetype(struct poni_gc *gc, void *object, uint64_t tag) {
+	switch(tag) {
+".to_string();
+		let mut visit_object = "void
 poni_gc_visit_object(struct poni_gc *gc, void *object) {
     uint64_t tag = *(uint64_t*)object;
     switch(tag & 0xFFFFFFFFFFFFFFFEULL) {
-        default: {}
-    }
-}
+		case PONI_TAG_STRCONST:
+		case PONI_TAG_STR:
+			break; // Nothing to do
+		case PONI_TAG_STRBUF: {
+			struct ps_strbuf *self = object;
+			poni_gc_mark(gc, self->buffer);
+			break;
+		}
+		case PONI_TAG_ARRAY: {
+			struct ps_array_header *header = object;
+			char *elem_root = (char*)object + sizeof(struct ps_array_header);
+			if(poni_is_value_type(header->type)) {
+				// As an optimization, never visit any objects inside an
+				// array of primitive types. We should probably have an additional
+				// type info function that tells us whether we need to iterate
+				// here.
+				if(header->type == PONI_TAG_INT || header->type == PONI_TAG_FLOAT
+					|| header->type == PONI_TAG_BOOL)
+				{ break; }
 
-void
+				size_t stride = poni_get_type_stride(header->type);
+
+				// For value types, the inner objects do not themselves need
+				// to be marked; so instead of going through the gc marker,
+				// instead just visit them directly.
+				for(ps_int i = 0; i < header->length; ++i) {
+					poni_gc_visit_valuetype(gc, elem_root, header->type);
+					elem_root += stride;
+				}
+			}
+			else {
+				size_t stride = poni_get_type_stride(header->type);
+
+				for(ps_int i = 0; i < header->length; ++i) {
+					poni_gc_mark(gc, elem_root);
+					elem_root += stride;
+				}
+			}
+			break;
+		}
+".to_string();
+
+	let mut visit_roots = "void
 poni_gc_visit_roots(struct poni_gc *gc) {
-	// TODO
-}
+".to_string();
 
-size_t
+	let mut allocation_size = "size_t
 poni_gc_get_allocation_size(void *object) {
-    uint64_t tag = *(uint64_t*)object;
-    switch(tag & 0xFFFFFFFFFFFFFFFEULL) {
-		// TODO: Generate a table of allocation size
-        default: return 4096;
-    }
-}".to_string()
+	uint64_t tag = *(uint64_t*)object;
+	switch(tag) {
+		case PONI_TAG_STRCONST:
+		case PONI_TAG_STR:
+		{
+			struct ps_str *self = object;
+			return sizeof(*self) + self->length;
+		}
+		case PONI_TAG_STRBUF: {
+			return sizeof(struct ps_strbuf);
+		}
+		case PONI_TAG_ARRAY: {
+			struct ps_array_header *header = object;
+			size_t stride = poni_get_type_stride(header->type);
+			return sizeof(*header) + stride * header->length;
+		}
+".to_string();
+
+		for typ in self.db.iter_typ() {
+			if !self.db.is_cgen_safe(typ) { continue; }
+
+			let tag = self.db.get_type_ctag(typ);
+			match self.db.get(typ) {
+				Type::Class(id) => {
+					inf_writeln!(visit_object, "\tcase {tag}: {{");
+					inf_writeln!(visit_object, "\t\tstruct {} *self = object;", self.db.get_class_cname(*id));
+					for field in &self.db.get(*id).vars {
+						let field_ty = self.db.get(*field).typ;
+
+						match self.db.get(field_ty) {
+							Type::Int | Type::Float | Type::Bool => {}
+							Type::Void | Type::Bottom => {}
+
+							Type::StrConst | Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+								inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->{});", self.db.get_cname(*field));
+							}
+
+							// Nothing to visit.
+							Type::FunRaw(_) => {}
+
+							Type::Fun(_) | Type::Tuple(_) => {
+								let inner_tag = self.db.get_type_ctag(field_ty);
+								inf_writeln!(visit_object, "\t\tponi_gc_visit_valuetype(gc, &self->{}, {inner_tag});",
+									self.db.get_cname(*field));
+							}
+
+							Type::Unassigned | Type::AssumeFloat | Type::AssumeInt | Type::UnboundIdent(_) | Type::UnboundCStructPtr(_) => {}
+						}
+
+					}
+					inf_writeln!(visit_object, "\t}}");
+				},
+
+				Type::Tuple(typs) => {
+					inf_writeln!(valuetype, "\tcase {tag}: {{");
+					inf_writeln!(valuetype, "\t\t{} *self = object;", self.db.get_ctype(typ));
+
+					for (idx, typ) in typs.iter().enumerate() {
+						match self.db.get(*typ) {
+							Type::Int | Type::Float | Type::Bool => {}
+							Type::Void | Type::Bottom => {}
+
+							Type::StrConst | Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+								inf_writeln!(valuetype, "\t\tponi_gc_mark(gc, self->v_{});", idx);
+							}
+
+							// Nothing to visit.
+							Type::FunRaw(_) => {}
+
+							Type::Fun(_) | Type::Tuple(_) => {
+								let inner_tag = self.db.get_type_ctag(*typ);
+								inf_writeln!(valuetype, "\t\tponi_gc_visit_valuetype(gc, &self->v_{}, {inner_tag});",
+									idx);
+							}
+
+							Type::Unassigned | Type::AssumeFloat | Type::AssumeInt | Type::UnboundIdent(_) | Type::UnboundCStructPtr(_) => {}
+						}
+					}
+
+					inf_writeln!(valuetype, "\t}}");
+				},
+
+				_ => {}
+			}
+		}
+
+		inf_writeln!(type_stride, "\t}}\n}}");
+		inf_writeln!(valuetype, "\t}}\n}}");
+		inf_writeln!(visit_object, "\t}}\n}}");
+		inf_writeln!(allocation_size, "\t}}\n}}");
+
+		inf_writeln!(visit_roots, "}}");
+
+		// Just concatenate everything together.
+		//
+		// It might be cleaner if we just append each of these as separate buffers...
+		format!("{type_stride}{is_valuetype}{valuetype}{visit_object}{visit_roots}{allocation_size}")
 	}
 
 	fn codegen(&mut self, args: &Args, ast: &Ast, output: &mut dyn std::io::Write) -> std::io::Result<()> {
@@ -1919,6 +2071,8 @@ poni_gc_get_allocation_size(void *object) {
 			writeln!(output, "#include \"{}\"", path.display())?;
 		}
 
+		writeln!(output, "// --- tag definitions ---\n{}", self.db.tag_define_code)?;
+
 		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
 		writeln!(output, "// --- struct declarations ---\n")?;
 		for struc_declare in &self.struct_declares {
@@ -1927,12 +2081,17 @@ poni_gc_get_allocation_size(void *object) {
 		writeln!(output, "// --- struct declarations (ps_tuple) ---\n{}", self.db.valty_declare_code)?;
 		writeln!(output, "// --- struct declarations (ps_array) ---\n{}", self.db.arr_declare_code)?;
 		writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
+		
+		writeln!(output, "// --- struct definitions (ps_tuple) ---\n{}", self.db.valty_define_code)?;
+		writeln!(output, "// --- struct definitions (ps_array) ---\n{}", self.db.arr_define_code)?;
+
+		// I believe these have to come after the ps_tuple, because they might
+		// refer to tuples.
 		writeln!(output, "// --- struct definitions ---")?;
 		for struc in &self.structs {
 			writeln!(output, "{}", struc)?;
 		}
-		writeln!(output, "// --- struct definitions (ps_tuple) ---\n{}", self.db.valty_define_code)?;
-		writeln!(output, "// --- struct definitions (ps_array) ---\n{}", self.db.arr_define_code)?;
+
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
 		for dec in &self.fun_declares {

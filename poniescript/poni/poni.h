@@ -9,10 +9,13 @@
 
 #include "poni_gc.h"
 
-#define PS_TAG_STRCONST 1
-#define PS_TAG_STR      2
-#define PS_TAG_STRBUF   3
-#define PS_TAG_ARRAY    4
+#define PONI_TAG_FLOAT    0x8000000000000002ULL
+#define PONI_TAG_INT      0x8000000000000004ULL
+#define PONI_TAG_BOOL     0x8000000000000006ULL
+#define PONI_TAG_STRCONST 8
+#define PONI_TAG_STR      10
+#define PONI_TAG_STRBUF   12
+#define PONI_TAG_ARRAY    14
 
 typedef float   ps_float;
 typedef int32_t ps_int;
@@ -117,7 +120,7 @@ static inline
 ps_str*
 ps_str_from_literal_size(struct poni_gc_context *ctx, const char *input, size_t length) {
 	size_t bytes = sizeof(ps_str) + ((length + 1) * sizeof(char));
-	ps_str *str =  poni_gc_alloc_tagged(ctx, bytes, PS_TAG_STRCONST);
+	ps_str *str =  poni_gc_alloc_tagged(ctx, bytes, PONI_TAG_STRCONST);
 
 	memcpy(str->contents, input, length);
 	str->contents[length] = '\0';
@@ -131,7 +134,7 @@ ps_str*
 ps_str_from_alloc(struct poni_gc_context *ctx, size_t length) {
 	// For from_alloc, do not add 1 to length.
 	size_t bytes = sizeof(ps_str) + ((length) * sizeof(char));
-	ps_str *str =  poni_gc_alloc_tagged(ctx, bytes, PS_TAG_STRCONST);
+	ps_str *str =  poni_gc_alloc_tagged(ctx, bytes, PONI_TAG_STRCONST);
 
 	str->length = length;
 	return str;
@@ -143,7 +146,7 @@ ps_str_from_alloc(struct poni_gc_context *ctx, size_t length) {
 static inline
 ps_strbuf*
 ps_strbuf_new(struct poni_gc_context *ctx, size_t prealloc) {
-	ps_strbuf *result =  poni_gc_alloc_tagged(ctx, sizeof(*result), PS_TAG_STRBUF);
+	ps_strbuf *result =  poni_gc_alloc_tagged(ctx, sizeof(*result), PONI_TAG_STRBUF);
 	result->buffer = ps_str_from_alloc(ctx, prealloc);
 	result->length = 0;
 
