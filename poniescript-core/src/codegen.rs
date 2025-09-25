@@ -1821,6 +1821,9 @@ poni_get_type_stride(uint64_t tag) {
 		let mut funraw_types = String::new();
 
 		for typ in self.db.iter_typ() {
+			// Skip types that aren't cgen safe
+			if !self.db.is_cgen_safe(typ) { continue; }
+
 			let tag = self.db.get_type_ctag(typ);
 			match self.db.get(typ) {
 				// Primitive types already done
