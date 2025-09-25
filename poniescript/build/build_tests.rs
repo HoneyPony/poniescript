@@ -1,19 +1,25 @@
 use std::collections::HashMap;
 use std::fs::File;
+use std::hash::Hash;
 use std::io::Write as _;
 
 struct BuiltTests {
 	modules: HashMap<String, String>
 }
 
-fn generate_test(bt: &mut BuiltTests, path: &str, test_name: &str) {
-	let out = if let Some(out) = bt.modules.get_mut(path) {
-		out
+fn get_module<'a>(bt: &'a mut BuiltTests, path: &str) -> &'a mut String {
+	if bt.modules.contains_key(path) {
+		bt.modules.get_mut(path).unwrap()
 	}
 	else {
 		bt.modules.insert(path.to_string(), "".to_string());
 		bt.modules.get_mut(path).unwrap()
-	};
+	}
+}
+
+fn generate_test(bt: &mut BuiltTests, bt_valgrind: &mut BuiltTests, path: &str, test_name: &str) {
+	let out = get_module(bt, path);
+	let out_vg = get_module(bt_valgrind, path);
 
 	use std::fmt::Write;
 
@@ -25,6 +31,14 @@ fn generate_test(bt: &mut BuiltTests, path: &str, test_name: &str) {
 
 	writeln!(out, "\t\trun_integration_test(\"tests/{path}{test_name}.poni\", {exe_path});").unwrap();
 	writeln!(out, "\t}}").unwrap();
+
+	// Generate a valgrind test case too.
+	writeln!(out_vg, "\t#[test]").unwrap();
+	writeln!(out_vg, "\t#[ignore]").unwrap(); // Ignore valgrind tests by default because they are slow.
+	writeln!(out_vg, "\tfn {test_name}() {{").unwrap();
+
+	writeln!(out_vg, "\t\trun_integration_test_valgrind(\"tests/{path}{test_name}.poni\", {exe_path});").unwrap();
+	writeln!(out_vg, "\t}}").unwrap();
 }
 
 pub fn generate(tests_file: &mut File) {
@@ -306,9 +320,13 @@ pub fn generate(tests_file: &mut File) {
 	let mut bt = BuiltTests {
 		modules: HashMap::new()
 	};
+	let mut bt_valgrind = BuiltTests {
+		modules: HashMap::new()
+	};
 	for (path, test) in tests {
-		generate_test(&mut bt, path, test);
+		generate_test(&mut bt, &mut bt_valgrind, path, test);
 	}
+
 	for (k, v) in &bt.modules {
 		// get rid of slash
 		let substr = &k[..k.len() - 1];
@@ -317,4 +335,15 @@ pub fn generate(tests_file: &mut File) {
 		writeln!(tests_file, "{v}").unwrap();
 		writeln!(tests_file, "}}").unwrap();
 	}
+		
+	writeln!(tests_file, "mod valgrind {{").unwrap();
+	for (k, v) in &bt_valgrind.modules {
+		// get rid of slash
+		let substr = &k[..k.len() - 1];
+		writeln!(tests_file, "mod r#{substr} {{").unwrap();
+		writeln!(tests_file, "\tuse crate::run_integration_test_valgrind;").unwrap();
+		writeln!(tests_file, "{v}").unwrap();
+		writeln!(tests_file, "}}").unwrap();
+	}
+	writeln!(tests_file, "}}").unwrap();
 }
