@@ -31,8 +31,9 @@ main(int argc, char **argv) {
 	// 2) Wait for everything to be collected
 	//
 	// This should make sure that GC integration at least basically works.
-	// poni_gc_send_request(gc_handle, PONI_GC_REQUEST_COLLECT);
-	// poni_gc_join(gc_handle);
+	poni_gc_send_request(gc_handle, PONI_GC_REQUEST_COLLECT);
+	poni_gc_poll_until_cycle_finished(ctx);
+	poni_gc_join(gc_handle);
 }
 
 #endif
