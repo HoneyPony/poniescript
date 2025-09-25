@@ -1802,9 +1802,7 @@ impl<'a> Codegen<'a> {
 		
 	}
 
-
-	fn codegen_gc_functions(&mut self) -> String {
-
+	fn codegen_gc_stride(&mut self) -> String {
 		let mut type_stride = "static inline size_t
 poni_get_type_stride(uint64_t tag) {
 	switch(tag) {
@@ -1817,6 +1815,61 @@ poni_get_type_stride(uint64_t tag) {
 		case PONI_TAG_INT:   return sizeof(ps_int);
 		case PONI_TAG_BOOL:  return sizeof(ps_bool);
 ".to_string();
+
+		let mut ptr_types = String::new();
+		let mut fun_types = String::new();
+		let mut funraw_types = String::new();
+
+		for typ in self.db.iter_typ() {
+			let tag = self.db.get_type_ctag(typ);
+			match self.db.get(typ) {
+				// Primitive types already done
+				Type::Int | Type::Float | Type::Bool => { continue; }
+
+				// Illegal
+				Type::Void | Type::Bottom => { continue; }
+
+				// Already done
+				Type::StrConst | Type::StrBuf | Type::Str | Type::ArrayOf(_) => { continue; }
+
+				// Build up one big set of pointer types.
+				Type::Class(_) => {
+					inf_writeln!(ptr_types, "\t\tcase {tag}:");
+				}
+
+				Type::Fun(_) => { inf_writeln!(fun_types, "\t\tcase {tag}:"); }
+				Type::FunRaw(_) => { inf_writeln!(funraw_types, "\t\tcase {tag}:"); }
+
+				// Value types should each return their sizeof.
+				Type::Tuple(_) => {
+					inf_writeln!(type_stride, "\t\tcase {tag}: return sizeof({});", self.db.get_ctype(typ));
+				}
+
+				Type::AssumeFloat | Type::AssumeInt | Type::Unassigned
+				| Type::UnboundCStructPtr(_) | Type::UnboundIdent(_) => { continue; }
+			}
+		}
+
+		if ptr_types.len() > 0 {
+			inf_writeln!(ptr_types, "\t\t\treturn sizeof(void*);");
+		}
+		if fun_types.len() > 0 {
+			// This should be valid on each compiler.
+			inf_writeln!(fun_types, "\t\t\treturn sizeof(struct {{ void (*fn)(void); void *closure; }});");
+		}
+		if funraw_types.len() > 0 {
+			inf_writeln!(funraw_types, "\t\t\treturn sizeof(void (*)(void))")
+		}
+
+		inf_write!(type_stride, "{ptr_types}{fun_types}{funraw_types}");
+
+		inf_writeln!(type_stride, "\t}}\n}}");
+		type_stride
+	}
+
+
+	fn codegen_gc_functions(&mut self) -> String {
+		let type_stride = self.codegen_gc_stride();
 
 		let mut is_valuetype = "static inline ps_bool
 poni_is_value_type(uint64_t tag) { return !!(tag & 0x8000000000000000ULL); }
@@ -1993,7 +2046,6 @@ poni_gc_get_allocation_size(void *object) {
 			}
 		}
 
-		inf_writeln!(type_stride, "\t}}\n}}");
 		inf_writeln!(valuetype, "\t}}\n}}");
 		inf_writeln!(visit_object, "\t}}\n}}");
 		inf_writeln!(allocation_size, "\t}}\n}}");
