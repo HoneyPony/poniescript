@@ -3,9 +3,36 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <time.h>
+
+// TCC unfortunately does not define STDC_NO_ATOMICS, even though it doesn't
+// support atomics.
+//
+// Maybe we should just use has_include(stdatomic)?
+#if defined(__STDC_NO_ATOMICS__) || defined(__TINYC__)
+
+// If we don't have atomics support, i.e. tcc -- we still assume that the compiler
+// will probably compile our code correctly (and you should use a compiler that
+// does support atomics for release builds.)
+
+extern uint64_t poni_gc_flags;
+
+// We assume that on, e.g., x86, this will be equivalent to a relaxed load.
+#define PONI_GC_READ_FLAGS (poni_gc_flags)
+
+#else
+
+#include <stdatomic.h>
+
+extern _Atomic uint64_t poni_gc_flags;
+
+// When we have atomics available, explicitly use a relaxed load; on most
+// platforms, this really should just be equivalent to reading from a non-
+// _Atomic pointer.
+#define PONI_GC_READ_FLAGS atomic_load_explicit(&poni_gc_flags, memory_order_relaxed)
+
+#endif
 
 /** Opaque handle to Rust struct. */
 struct poni_gc;
@@ -25,7 +52,6 @@ struct poni_gc_context {
     struct poni_gc_shared *shared;
 };
 
-extern _Atomic uint64_t poni_gc_flags;
 #define PONI_GC_FLAG_SCAN 2
 #define PONI_GC_FLAG_NOP  1
 
@@ -47,7 +73,7 @@ do { \
 
 #define PONI_GC_SAFEPOINT(ctx) \
 do { \
-    if(PONI_UNLIKELY(atomic_load_explicit(&poni_gc_flags, memory_order_relaxed) & (PONI_GC_FLAG_NOP | PONI_GC_FLAG_SCAN))) { \
+    if(PONI_UNLIKELY(PONI_GC_READ_FLAGS & (PONI_GC_FLAG_NOP | PONI_GC_FLAG_SCAN))) { \
         poni_gc_poll_slow(ctx); \
     } \
 } while(0)
