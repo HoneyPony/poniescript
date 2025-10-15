@@ -190,6 +190,31 @@ impl<'a> GcContext<'a> {
     #[export_name = "poni_gc_poll_until_cycle_finished"]
     extern "C" fn poll_until_cycle_finished(&mut self) {
         let mut lock = self.shared.gc_flags_mutex.lock().unwrap();
+
+        // First, we have to wait for the first request from the GC (the GC should
+        // be busy). This is because otherwise, the following sequence doesn't work:
+        //
+        // send_request(SHUTDOWN);
+        // poll_until_cycle_finished();
+        // join_gc();
+        //
+        // This is because, we might immediately finish our poll, because the
+        // garbage collector isn't busy (becasue it hasn't seen our request yet).
+        // This leaves the GC spinning forever in handshake waiting for us to 
+        // finish, which we won't, because we're waiting on the GC to join
+        // (i.e. it is a good ol' deadlock).
+        //
+        // So instead, we want to wait until gc_busy is true.
+
+        {
+            let mut busy = self.shared.gc_busy.lock().unwrap();
+            loop {
+                if *busy { break; }
+
+                busy = self.shared.gc_busy_cv.wait(busy).unwrap();
+            }
+        }
+
         loop {
             self.poni_gc_poll_slow();
             lock = self.shared.gc_flags_cv.wait(lock).unwrap();
