@@ -1,6 +1,6 @@
 use std::{alloc::{self, Layout}, collections::VecDeque, ptr::{self, null}, sync::{atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering}, Condvar, Mutex}, thread::{self, JoinHandle}, time::Instant};
 
-
+#[cfg(feature = "mimalloc")]
 #[global_allocator]
 static MIMALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 

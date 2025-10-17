@@ -6,5 +6,8 @@ edition = "2021"
 [lib]
 crate-type = ["staticlib"]
 
+[features]
+mimalloc = ["dep:mimalloc"]
+
 [dependencies]
-mimalloc = "0.1.48"
+mimalloc = { version = "0.1.48", optional = true }
