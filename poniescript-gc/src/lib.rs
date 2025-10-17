@@ -85,7 +85,11 @@ impl<'a> GcContext<'a> {
         unsafe { *ptr = 0; }
 
         if GC_ALLOCATE_MARKED.load(Ordering::Relaxed) {
+            log::trace!("ctx {:?}: allocated {} bytes (marked)", self as *const _, size);
             unsafe { *ptr |= 1; }
+        }
+        else {
+            log::trace!("ctx {:?}: allocated {} bytes (unmarked)", self as *const _, size);
         }
 
         self.own_allocs.push(AtomicPtr::new(ptr));
@@ -100,8 +104,10 @@ impl<'a> GcContext<'a> {
         // }
 
         if self.own_allocs.len() >= 4096 {
+            log::trace!("ctx {:?}: try to move {} allocations to gc thread", self as *const _, self.own_allocs.len());
             if let Ok(mut alloc) = self.shared.allocator.try_lock() {
                 alloc.allocations.push(std::mem::take(&mut self.own_allocs));
+                log::trace!("ctx {:?}: succesfully moved allocations to gc thread", self as *const _, );
             }
         }
 
@@ -111,6 +117,8 @@ impl<'a> GcContext<'a> {
     fn do_scan(&self) {
         let mut queue = Vec::new();
         let mut frame = self.frame_list;
+
+        log::trace!("ctx {:?}: begin scan", self as *const _);
 
         while !frame.is_null() {
             // Dereference the inner frame: We have checked that it's not NULL.
@@ -126,6 +134,7 @@ impl<'a> GcContext<'a> {
                 if !candidate.is_null() {
                     // Skip objects that have already been marked.
                     if unsafe { *candidate & 1 == 0 } {
+                        log::trace!("ctx {:?}: found mark candidate {:?}", self as *const _, candidate);
                         queue.push(AtomicPtr::new(candidate));
                     }
                 }
@@ -135,12 +144,21 @@ impl<'a> GcContext<'a> {
             frame = inner_frame.prev;
         }
 
+        log::trace!("ctx {:?}: scan finished", self as *const _);
+
         let mut lock = self.shared.queue_queue.lock().unwrap();
         lock.push(queue);
+
+        log::trace!("ctx {:?}: scan finished + pushed", self as *const _);
     }
 
     fn do_handoff(&mut self) {
-        if self.own_allocs.is_empty() { return; }
+        if self.own_allocs.is_empty() {
+            log::trace!("ctx {:?}: handoff: nothing to handoff", self as *const _);
+            return;
+        }
+
+        log::trace!("ctx {:?}: begin handoff", self as *const _);
 
         // Hand off existing allocations to the main allocator. This lets it
         // sweep independently of us doing additional allocations.
@@ -152,6 +170,7 @@ impl<'a> GcContext<'a> {
             //eprintln!("do_handoff: {:?}", b.duration_since(a));
         }
 
+        log::trace!("ctx {:?}: handoff finished", self as *const _);
         // We don't track those anymore.
         //
         // TODO: We should really have a Vec of Vectors in the allocator, so
