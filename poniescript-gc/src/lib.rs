@@ -306,6 +306,7 @@ impl GcAllocator {
                     unsafe { 
                         let size = poni_gc_get_allocation_size(alloc);
                         let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
+                        log::trace!("poni-gc: freeing {:?} ({} bytes, tag {:x})", alloc, size, *alloc);
                         alloc::dealloc(alloc as *mut u8, layout);
 
                         if DO_STATS {
@@ -371,13 +372,13 @@ impl<'a> Gc<'a> {
         // Notify any sleeping threads
         self.shared.gc_flags_cv.notify_all();
 
-        //eprintln!("poni-gc: handshake: begin {:b} ({} threads)", flags, *outstanding);
+        log::trace!("poni-gc: handshake: begin {:b} ({} threads)", flags, *outstanding);
 
         while *outstanding > 0 {
             outstanding = self.shared.outstanding_thread_cv.wait(outstanding).unwrap();
         }
 
-        //eprintln!("poni-gc: handshake: finished")
+        log::trace!("poni-gc: handshake: finished")
     }
 
     pub fn collect(&mut self) {
@@ -521,6 +522,10 @@ impl<'a> GcHandle<'a> {
 
 #[export_name = "poni_gc_spawn"]
 extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
+    // TODO: This should not be in the GC crate at all, but it is convenient
+    // for the time being.
+    env_logger::init();
+
     let shared = Box::new(GcShared::new());
     let shared = Box::leak(shared);
 
@@ -541,10 +546,8 @@ extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
 
             gc.mark_busy();
 
-            if request & GC_REQUEST_SHUTDOWN != 0 {
-                break;
-            }
-
+            // COLLECT request takes priority over SHUTDOWN request, so that
+            // we can force a collection at shutdown time.
             if request & GC_REQUEST_COLLECT != 0 {
                 //eprintln!("poni-gc: start collect()");
                 gc.collect();
@@ -554,6 +557,10 @@ extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
                     let mut request = gc.shared.gc_request.lock().unwrap();
                     *request |= GC_REQUEST_COLLECT;
                 }
+            }
+
+            if request & GC_REQUEST_SHUTDOWN != 0 {
+                break;
             }
         }
 
