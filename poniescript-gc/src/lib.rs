@@ -14,6 +14,9 @@ const GC_FLAG_SCAN: u64 = 2;
 const GC_FLAG_HANDOFF_ALLOCS: u64 = 1;
 // Dummy flag to toggle between so that the safepoints recognize there's work to do
 const GC_FLAG_DUMMY: u64 = 4;
+/// Flag indicating that the garbage collector has shut down. Necessary to safely
+/// join with the thread while also collecting.
+const GC_FLAG_DEAD: u64 = 8;
 
 const GC_REQUEST_COLLECT: u64 = 1;
 const GC_REQUEST_SHUTDOWN: u64 = 2;
@@ -483,9 +486,26 @@ impl<'a> GcHandle<'a> {
     }
 
     #[export_name = "poni_gc_join"]
-    pub fn join(&mut self) {
+    pub fn join(&mut self, context: Option<&mut GcContext>) {
         if let Some(handle) = self.join_handle.take() {
             self.send_request(GC_REQUEST_SHUTDOWN);
+            
+            if let Some(context) = context {
+                let mut lock = context.shared.gc_flags_mutex.lock().unwrap();
+                loop {
+                    // Wait until the garbage collector is dead.
+                    if GC_FLAGS.load(Ordering::Relaxed) & GC_FLAG_DEAD != 0 {
+                        break;
+                    }
+
+                    // Otherwise, perform a safepoint. We might as well do it
+                    // the slow way because we're just spinning anyway.
+                    context.poni_gc_poll_slow();
+
+                    lock = context.shared.gc_flags_cv.wait(lock).unwrap();
+                }
+            }
+
             handle.join().unwrap()
         }
     }
@@ -538,6 +558,9 @@ extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
         }
 
         gc.mark_not_busy();
+
+        GC_FLAGS.store(GC_FLAG_DEAD, Ordering::Relaxed);
+        gc.shared.gc_flags_cv.notify_all();
     });
 
     Box::new(GcHandle {

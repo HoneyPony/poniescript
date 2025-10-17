@@ -53,7 +53,7 @@ struct poni_gc_context {
 };
 
 #define PONI_GC_FLAG_SCAN 2
-#define PONI_GC_FLAG_NOP  1
+#define PONI_GC_FLAG_HANDOFF_ALLOCS  1
 
 #define PONI_GC_REQUEST_COLLECT 1
 #define PONI_GC_REQUEST_SHUTDOWN 2
@@ -73,7 +73,7 @@ do { \
 
 #define PONI_GC_SAFEPOINT(ctx) \
 do { \
-    if(PONI_UNLIKELY(PONI_GC_READ_FLAGS & (PONI_GC_FLAG_NOP | PONI_GC_FLAG_SCAN))) { \
+    if(PONI_UNLIKELY(PONI_GC_READ_FLAGS & (PONI_GC_FLAG_HANDOFF_ALLOCS | PONI_GC_FLAG_SCAN))) { \
         poni_gc_poll_slow(ctx); \
     } \
 } while(0)
@@ -98,12 +98,22 @@ poni_gc_realloc(struct poni_gc_context *ctx, void *old, size_t new_size) {
     return newmem;
 }
 
-void  poni_gc_mark(struct poni_gc *gc, void *object);
+void poni_gc_mark(struct poni_gc *gc, void *object);
 void poni_gc_poll_slow(struct poni_gc_context *ctx);
 void poni_gc_poll_until_cycle_finished(struct poni_gc_context *ctx);
 
 struct poni_gc_handle *poni_gc_spawn();
-void poni_gc_join(struct poni_gc_handle *handle);
+
+/**
+ * Shutdown and then join the GC thread, using the handle. Every other thread
+ * that is using the GC must have also shut down, otherwise this will block
+ * until they do.
+ * 
+ * If this is being called from a thread with a poni_gc_context, provide the
+ * context so that it can participate in safepoints, in case the GC is currently
+ * collecting (or if you trigger a collection before joining).
+ */
+void poni_gc_join(struct poni_gc_handle *handle, struct poni_gc_context *maybe_spin_ctx);
 void poni_gc_send_request(struct poni_gc_handle *handle, uint64_t request);
 struct poni_gc_context *poni_gc_create_context_for_existing(struct poni_gc_handle *handle);
 
