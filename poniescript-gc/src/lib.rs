@@ -56,6 +56,20 @@ struct GcShared {
     gc_busy_cv: Condvar,
 
     /// A dummy mutex for sleeping on the gc_flags_cv.
+    /// 
+    /// IMPORTANT: When *writing* to the flags, you must hold the lock, because
+    /// otherwise it is possible for a thread to hold the lock, read the flags,
+    /// see they're not what they're expecting, sleep on the CV, and then never
+    /// wake up, because the flags were written to *right in the middle* after
+    /// we checked but before we went to sleep.
+    /// 
+    /// So, you must hold the lock in the following 2 cases:
+    /// 1) You are writing to the flags (and want to wake up sleepers)
+    /// 2) You are reading from the flags, and *deciding whether to sleep based
+    ///    on this read*
+    /// 
+    /// It is still safe to read the flags without holding the lock, if you aren't
+    /// going to go to sleep based on that decision.
     gc_flags_mutex: Mutex<()>,
     gc_flags_cv: Condvar,
 }
@@ -385,8 +399,16 @@ impl<'a> Gc<'a> {
         }
 
         *outstanding = *self.shared.available_threads.lock().unwrap();
-        GC_FLAGS.fetch_update(Ordering::SeqCst, Ordering::SeqCst, 
-            |f| Some(flags)).unwrap();
+
+        {
+            // Must hold the lock while writing the flags, as per the comment
+            // above.
+            let _lock = self.shared.gc_flags_mutex.lock().unwrap();
+            GC_FLAGS.store(flags, Ordering::Relaxed);
+            //GC_FLAGS.fetch_update(Ordering::SeqCst, Ordering::SeqCst, 
+            //    |f| Some(flags)).unwrap();   
+         }
+        
 
         // Notify any sleeping threads
         self.shared.gc_flags_cv.notify_all();
@@ -543,7 +565,7 @@ impl<'a> GcHandle<'a> {
 extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
     // TODO: This should not be in the GC crate at all, but it is convenient
     // for the time being.
-    env_logger::init();
+    // env_logger::init();
 
     let shared = Box::new(GcShared::new());
     let shared = Box::leak(shared);
@@ -585,7 +607,11 @@ extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
 
         gc.mark_not_busy();
 
-        GC_FLAGS.store(GC_FLAG_DEAD, Ordering::Relaxed);
+        {
+            // Must hold the lock when writing a value, as per the documentation.
+            let _lock = gc.shared.gc_flags_mutex.lock();
+            GC_FLAGS.store(GC_FLAG_DEAD, Ordering::Relaxed);
+        }
         gc.shared.gc_flags_cv.notify_all();
     });
 
