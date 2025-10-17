@@ -33,6 +33,9 @@ main(int argc, char **argv) {
 	// This should make sure that GC integration at least basically works.
 	poni_gc_send_request(gc_handle, PONI_GC_REQUEST_COLLECT);
 	poni_gc_join(gc_handle, ctx);
+
+	poni_gc_free_context(ctx);
+	poni_gc_free_handle(gc_handle);
 }
 
 #endif
