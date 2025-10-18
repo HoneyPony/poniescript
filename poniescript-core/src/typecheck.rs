@@ -577,6 +577,14 @@ impl<'db> TypeChecker<'db> {
 				type_error!(self, at, "Variable '{}' is type 'bottom' which is not a valid type for a variable.",
 					self.db.repr_var(var));
 			}
+
+			// If the type is not concrete, it's also not valid, e.g.
+			//     var x = nil;
+			if self.db.is_not_concrete(computed) {
+				type_error!(self, at, "Variable '{}' is type '{}' which is invalid. The variable may require a type annotation.",
+					self.db.repr_var(var), self.db.repr_type(computed));
+			}
+
 			self.db.get_mut(var).typ = computed;
 		}
 		self.do_promote_expr(ast, expr_id, computed);
