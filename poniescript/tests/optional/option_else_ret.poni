@@ -1,9 +1,9 @@
 class Horse {
-    var name = "bailey"
+    var name = "bailey";
 }
 
 fun printer(x: Horse?) {
-    var y = x else { print("nil"); return; }
+    var y = x else { print("nil"); return; };
     print(y.name);
 }
 

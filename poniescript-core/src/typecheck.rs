@@ -853,7 +853,7 @@ impl<'db> TypeChecker<'db> {
 			},
 			Expr::OptionElse(opt_else) => {
 				let value_ty = self.check_expr(ast, opt_else.value, value_used)?;
-				let otherwise_ty = self.check_expr(ast, opt_else.value, value_used)?;
+				let otherwise_ty = self.check_expr(ast, opt_else.otherwise, value_used)?;
 
 				let value_unwrapped = match self.db.get(value_ty) {
 					Type::Option(inner) => *inner,
