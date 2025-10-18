@@ -1470,7 +1470,7 @@ impl<'a> Codegen<'a> {
 				let val = self.new_val_typed_tmp(sum.typ);
 
 				// Right now, this is nothing but nil.
-				define_val!(self, into, val, "NULL;\n");
+				define_val!(self, into, val, " = NULL;\n");
 
 				self.tmp_to_used_val(val)
 			}
