@@ -218,6 +218,11 @@ impl<'db> TypeChecker<'db> {
 				return Ok(self.db.put_type(Type::Tuple(new_from)))
 			}
 
+			(Type::Option(lhs), Type::Option(rhs)) => {
+				let inner = self.compute_assignable(*lhs, *rhs)?;
+				return Ok(self.db.put_type(Type::Option(inner)))
+			}
+
 			(Type::Fun(sig), Type::Fun(sig2)) => {
 				if *sig == self.db.sig_unassigned {
 					return Ok(from);
@@ -530,7 +535,6 @@ impl<'db> TypeChecker<'db> {
 					// error.
 					_ => panic!("ICE: promote_expr(MakeSumType) to non-option (sum) type {}", self.db.repr_type(promote_to))
 				};
-
 				
 				if self.db.is_not_concrete(sum.typ) {
 					sum.typ = promote_to;
