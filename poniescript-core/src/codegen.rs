@@ -444,6 +444,21 @@ impl<'a> Codegen<'a> {
 			Type::FunRaw(_) => {}
 			Type::Bottom => {}
 
+			Type::Option(id) => {
+				// If it's a reference type, it has the same representation as
+				// the non-Option type, so just re-use the logic.
+
+				// If it's a value type... I'm not sure yet. I am starting to
+				// wonder if a more powerful IR would be useful here.
+
+				if self.db.is_value_type(*id) {
+					todo!()
+				}
+				else {
+					self.val_alloc_slots_recurse(prefix, *id, slots);
+				}
+			}
+
 			Type::Tuple(typ_ids) => {
 				for (idx, typ) in typ_ids.iter().enumerate() {
 					// Don't allocate a new prefix string for any of the types
@@ -755,6 +770,7 @@ impl<'a> Codegen<'a> {
 			Type::FunRaw(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun*\", (uintptr_t){val});"),
 			Type::Class(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"object\", (uintptr_t){val});"),
 			
+			Type::Option(_) => todo!("print() for Option"),
 			Type::ArrayOf(_) => todo!("print() for Array"),
 			Type::Tuple(tup) => {
 				inf_writeln!(into, "{indent}ps_print_const(\"(\");");
@@ -814,6 +830,7 @@ impl<'a> Codegen<'a> {
 			Type::Class(_) => todo!("str() for Class"),
 			Type::ArrayOf(_) => todo!("str() for Array"),
 			Type::Tuple(_) => todo!("str() for Tuple"),
+			Type::Option(_) => todo!("str() for Option"),
 
 			Type::AssumeFloat => panic!("ICE: Tried to codegen str(AssumeFloat)"),
 			Type::AssumeInt => panic!("ICE: Tried to codegen str(AssumeInt)"),
@@ -1840,6 +1857,16 @@ poni_get_type_stride(uint64_t tag) {
 					inf_writeln!(ptr_types, "\t\tcase {tag}:");
 				}
 
+				Type::Option(id) => {
+					if self.db.is_value_type(*id) {
+						todo!()
+					}
+					else {
+						// If it's a reference type, we're re-using the type id,
+						// so we actually don't need a case at all.
+					}
+				}
+
 				Type::Fun(_) => { inf_writeln!(fun_types, "\t\tcase {tag}:"); }
 				Type::FunRaw(_) => { inf_writeln!(funraw_types, "\t\tcase {tag}:"); }
 
@@ -1976,6 +2003,15 @@ poni_gc_get_allocation_size(void *object) {
 								inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->{});", self.db.get_cname(*field));
 							}
 
+							Type::Option(id) => {
+								match self.db.get(*id) {
+									Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+										inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->{});", self.db.get_cname(*field));
+									},
+									_ => todo!()
+								}
+							}
+
 							// Nothing to visit.
 							Type::FunRaw(_) => {}
 
@@ -2009,6 +2045,15 @@ poni_gc_get_allocation_size(void *object) {
 
 							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
 								inf_writeln!(valuetype, "\t\tponi_gc_mark(gc, self->v_{});", idx);
+							}
+
+							Type::Option(id) => {
+								match self.db.get(*id) {
+									Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+										inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->v_{});", idx);
+									},
+									_ => todo!()
+								}
 							}
 
 							// Nothing to visit.

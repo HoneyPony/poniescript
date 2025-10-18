@@ -820,6 +820,18 @@ impl<'b> Parser<'b> {
 	}
 
 	fn typ(&mut self) -> Result<TypId> {
+		// TODO: Consider making ?Ty the option type, not  Ty?. This does make
+		// parsing it slightly more natural because it is just, see ?, then
+		// call typ() again, and we don't need this typ_prefix function.
+
+		let typ = self.typ_prefix()?;
+		if self.match_(Tok::Question)?.is_some() {
+			return Ok(self.db.put_type(Type::Option(typ)));
+		}
+		Ok(typ)
+	}
+
+	fn typ_prefix(&mut self) -> Result<TypId> {
 		let tok = self.advance()?;
 		Ok(match tok.typ {
 			Tok::Identifier => {

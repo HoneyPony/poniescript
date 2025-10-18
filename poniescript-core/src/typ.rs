@@ -43,6 +43,8 @@ pub enum Type {
 	ArrayOf(TypId),
 
 	Tuple(Vec<TypId>),
+
+	Option(TypId),
 	
 	Unassigned,
 	AssumeInt,
@@ -129,6 +131,9 @@ impl Type {
 			Type::ArrayOf(typ) => {
 				format!("Array[{}]", db.get(*typ).to_string(db))
 			}
+			Type::Option(typ) => {
+				format!("{}?", db.get(*typ).to_string(db))
+			}
 
 			Type::AssumeInt => "a number".to_string(),
 			Type::AssumeFloat => "a decimal number".to_string(),
@@ -159,6 +164,7 @@ impl Type {
 			Type::Class(class_id) => format!("struct {}*", db.get_class_cname(*class_id)),
 
 			Type::ArrayOf(typ) => String::from(db.gen_array_ctype(*typ)),
+			Type::Option(typ) => { todo!("this is implemented in Db") }
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 

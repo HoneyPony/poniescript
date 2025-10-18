@@ -1,0 +1,7 @@
+class Horse {}
+
+fun do_something(horse: Horse?) {}
+
+fun init() {
+    print("success"); //! success
+}

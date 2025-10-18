@@ -490,6 +490,13 @@ impl<'db> Binder<'db> {
 				}
 				return self.db.put_type(Type::Tuple(resolved));
 			}
+			Type::Option(inner_typ) => {
+				let inner = self.visit_type(inner_typ, location);
+				if inner != inner_typ {
+					return self.db.put_type(Type::Option(inner));
+				}
+				return typ;
+			}
 			_ => { return typ; }
 		}
 	}

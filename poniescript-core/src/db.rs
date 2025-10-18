@@ -1058,6 +1058,10 @@ impl Db {
 				}
 				sum
 			},
+			Type::Option(id) => {
+				// It should require the same number of slots as its inner type
+				self.type_gc_slots(*id)
+			}
 			Type::Unassigned => 0,
 			Type::AssumeInt => 0,
 			Type::AssumeFloat => 0,
@@ -1253,6 +1257,24 @@ impl Db {
 					self.tag_cname_cache.insert(typ, name.leak());
 
 				}
+				Type::Option(id) => {
+					// Because nullable types are the same type, we reuse
+					// the tag. (?)
+					//
+					// For value types, we require a new tag.
+					if self.is_value_type(*id) {
+						todo!()
+					}
+					else {
+						let name = format!("PONI_TAG_TY{}", typ.to_nonzero_usize());
+						// Generate the macro in terms of the other one (?)
+						writeln!(self.tag_define_code, "#define {name} PONI_TAG_TY{}", id.to_nonzero_usize()).unwrap();
+						tag_num += 2; // For now, the GC bit is the last bit. This
+						// might change.	
+						
+						self.tag_cname_cache.insert(typ, name.leak());
+					}
+				}
 				Type::Unassigned | Type::AssumeInt | Type::AssumeFloat | Type::UnboundIdent(_) | Type::UnboundCStructPtr(_) => continue,
 			}
 		}
@@ -1332,6 +1354,23 @@ impl Db {
 
 				// TODO: Right now we have to skip tuple gen_ctype this way.
 				// This really seems ugly.
+				continue;
+			}
+
+			if let Type::Option(typ) = &ty {
+				// Should move this whole thing to Db...?
+				if self.is_value_type(*typ) {
+					// For value types, we have to generate a wrapper.
+					todo!()
+				}
+				else {
+					// For reference types, we use a nullable pointer. For function
+					// types, it is still a bundle, but the function pointer is null.
+					let typ = *typ;
+					let ctype = self.get(typ).clone().gen_ctype(self);
+					self.ctype_cache.push(ctype.leak());
+				}
+
 				continue;
 			}
 
