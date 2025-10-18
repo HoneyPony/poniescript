@@ -3,6 +3,8 @@ class Horse {
 }
 
 fun printer(x: Horse?) {
+    // Note that the type here can be inferred because 'x' has a real type,
+    // so the 'else' expression gets a type, so the variable gets a type.
     var y = x else { print("nil"); return; };
     print(y.name);
 }

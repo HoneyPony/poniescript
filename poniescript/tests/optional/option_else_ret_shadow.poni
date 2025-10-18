@@ -1,0 +1,14 @@
+class Horse {
+    var name = "bailey";
+}
+
+fun printer(x: Horse?) {
+    var x = x else { print("nil"); return; };
+    print(x.name);
+}
+
+fun init() {
+    printer(nil); //! nil
+    printer(new Horse{}); //! bailey
+    printer(new Horse { name: "alex" }); //! alex
+}
