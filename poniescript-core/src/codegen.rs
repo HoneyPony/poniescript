@@ -914,7 +914,9 @@ impl<'a> Codegen<'a> {
 				self.indent_level += 1;
 
 				let otherwise_val = self.expr(ast, opt_else.otherwise, into);
-				if own_val.needs_storage() {
+				// If the otherwise value is bottom, that means that we do NOT write
+				// it into our own value, because the else branch should have diverged.
+				if own_val.needs_storage() && !otherwise_val.is_bottom() {
 					inf_writeln!(into, "{indent}\t{own_val} = {otherwise_val};");
 				}
 
