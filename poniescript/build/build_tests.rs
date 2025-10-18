@@ -315,6 +315,12 @@ pub fn generate(tests_file: &mut File) {
 		("array/", "array_length"),
 		("array/", "array_complicated_signature"),
 		("array/", "err_empty_arr_and_var"),
+
+		("optional/", "err_unknown_nil"),
+		("optional/", "flip_flop"),
+		("optional/", "horse_question_mark"),
+		("optional/", "implicit_some"),
+		("optional/", "nil"),
 	];
 
 	let mut bt = BuiltTests {

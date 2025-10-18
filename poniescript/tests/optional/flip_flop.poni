@@ -1,0 +1,11 @@
+class Horse {}
+
+fun init() {
+    var x: Horse? = nil;
+    x = new Horse{};
+    x = nil;
+    x = new Horse{};
+    x = nil;
+    x = new Horse{};
+    print("success"); //! success
+}
