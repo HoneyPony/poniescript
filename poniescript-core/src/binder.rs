@@ -369,6 +369,12 @@ impl<'db> Binder<'db> {
 				return None;
 			}
 
+			Expr::OptionElse(optelse) => {
+				self.visit_expr(ast, optelse.value);
+				self.visit_expr(ast, optelse.otherwise);
+				return None;
+			}
+
 			Expr::Promote(_) => panic!("ICE: Tried to bind Expr::Promote"),
 		}
 	}

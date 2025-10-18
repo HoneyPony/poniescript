@@ -368,6 +368,7 @@ pub fn generate(file: &mut File) {
 	Promote       : Expr inner, TypId promote_to
 	Lerp          : Expr from, Expr to, Expr amount, TypId typ
 	MakeSumType   : TypId typ
+	OptionElse    : Expr value, Expr otherwise, TypId typ
 	Undefined     : 
 
 	"#;

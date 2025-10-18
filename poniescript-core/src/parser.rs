@@ -717,15 +717,17 @@ impl<'b> Parser<'b> {
 		// Note: This matches up with expr_infix().
 		// If (a, b) a < b this operator is left-associative, else right-associative.
 		match self.peek_typ() {
+			// `else` has very low precedence.
+			Tok::Else => (1, 2),
 			// Or has lower precedence than And.
-			Tok::Or => (1, 2),
-			Tok::And => (3, 4),
-			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual => (5, 6),
+			Tok::Or => (3, 4),
+			Tok::And => (5, 6),
+			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual => (7, 8),
 
-			Tok::Plus | Tok::Minus => (7, 8),
-			Tok::Star | Tok::Slash => (9, 10),
+			Tok::Plus | Tok::Minus => (9, 10),
+			Tok::Star | Tok::Slash => (11, 12),
 
-			Tok::Dot => (11, 12),
+			Tok::Dot => (13, 14),
 
 			// Any other tokens should not be parsed as infix.
 			_ => (0, 0)
@@ -742,6 +744,14 @@ impl<'b> Parser<'b> {
 		let cur_prec = self.peek_precedence().1;
 
 		match self.peek_typ() {
+			// Option else-expression
+			Tok::Else => {
+				// TODO: Maybe we do want this 'op' for error reporting
+				let _op = self.advance()?;
+				let rhs = self.expr_precedence(cur_prec)?;
+				return Expr::put_optionelse_ok(self.ast, self.end(location), lhs, rhs, self.db.types.unassigned);
+			}
+
 			// Binary expressions
 			Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash => {
 				let op = self.advance()?;

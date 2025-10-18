@@ -892,6 +892,36 @@ impl<'a> Codegen<'a> {
 			Expr::Lerp(lerp) => self.compile_lerp(ast, lerp, into),
 			Expr::Comparison(compare) => self.compile_comparison(ast, compare, into),
 			Expr::If(if_) => self.compile_if(ast, if_, into),
+			Expr::OptionElse(opt_else) => {
+				let own_val = self.new_val_typed_tmp(opt_else.typ);
+				define_val!(self, into, own_val, ";\n");
+
+				let value_val = self.expr(ast, opt_else.value, into);
+
+				// Here we need to check if the optional value is nil or not.
+				// For pointers this is easy; for everything else, we don't
+				// know yet.
+				if self.db.is_value_type(opt_else.typ) { todo!("option type 'is nil?' for value types") };
+
+				// If the 'value' is non-null, then we take on that value.
+				inf_writeln!(into, "{indent}if({value_val}) {{");
+				if own_val.needs_storage() { inf_writeln!(into, "{indent}\t{own_val} = {value_val};"); }
+				inf_writeln!(into, "{indent}}}");
+
+				// Otherwise, we evaluate the 'otherwise' branch, and take on
+				// that value (if there was one).
+				inf_writeln!(into, "{indent}else {{");
+				self.indent_level += 1;
+
+				let otherwise_val = self.expr(ast, opt_else.otherwise, into);
+				if own_val.needs_storage() {
+					inf_writeln!(into, "{indent}\t{own_val} = {otherwise_val};");
+				}
+
+				self.indent_level -= 1;
+				inf_writeln!(into, "{indent}}}");
+				self.tmp_to_used_val(own_val)
+			}
 
 			Expr::Logical(logical) => {
 				// Compute the left value up-front. The right value will be

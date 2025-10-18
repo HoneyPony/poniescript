@@ -428,6 +428,21 @@ impl<'db> TypeChecker<'db> {
 				self.do_promote_expr(ast, &mut binary.left, binary.typ);
 				self.do_promote_expr(ast, &mut binary.right, binary.typ);
 			},
+			Expr::OptionElse(opt_else) => {
+				if self.db.is_not_concrete(opt_else.typ) {
+					opt_else.typ = promote_to;
+				}
+
+				// Must promote the left branch to the Option[T]. This is the
+				// Option[T] of our overall type, so this can't fail.
+
+				let option_ty = self.db.put_type(Type::Option(opt_else.typ));
+
+				self.do_promote_expr(ast, &mut opt_else.value, option_ty);
+				// Promote otherwise to our overall type, as it must be the
+				// type we are trying to else into.
+				self.do_promote_expr(ast, &mut opt_else.otherwise, opt_else.typ);
+			}
 			Expr::Lerp(lerp) => {
 				if self.db.is_not_concrete(lerp.typ) {
 					lerp.typ = promote_to;
@@ -836,6 +851,40 @@ impl<'db> TypeChecker<'db> {
 
 				computed
 			},
+			Expr::OptionElse(opt_else) => {
+				let value_ty = self.check_expr(ast, opt_else.value, value_used)?;
+				let otherwise_ty = self.check_expr(ast, opt_else.value, value_used)?;
+
+				let value_unwrapped = match self.db.get(value_ty) {
+					Type::Option(inner) => *inner,
+					_ => {
+						type_error!(self, opt_else.location,
+							"'else' operator can only be applied to Option types.");
+					}
+				};
+
+				// PROMOTION: value and otherwise promotion occurs in promote_expr
+
+				// For now, we use compute_intersect with bottom_eats as false.
+				//
+				// There is a problem:
+				//     { return } else { value }
+				// should have type Bottom, but it won't in this case.
+				//
+				// Although, Bottom cannot even have `else` called on it, so,
+				// idk.
+				let computed = self.compute_intersect(false, value_unwrapped, otherwise_ty);
+
+				let computed = maybe_type_error!(self, computed, 
+					opt_else.location,
+					// TODO: Note that LHS should equal RHS?
+					"Invalid 'else' expression: LHS has type {}, but RHS has type {}",
+					self.db.repr_type(value_ty),
+					self.db.repr_type(otherwise_ty),
+				);
+
+				computed
+			}
 			Expr::Index(index) => {
 				let arr_ty = self.check_expr(ast, index.value, true)?;
 
