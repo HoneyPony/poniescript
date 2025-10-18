@@ -1,0 +1,71 @@
+class Tree {
+    var left : Tree? = nil;
+    var right: Tree? = nil;
+    var letter = "a";
+
+    fun do_walk(x: Tree?) {
+        var x = x else { return; };
+        x.walk();
+    }
+
+    fun walk() {
+        // I also don't have 'self' yet. Whoops...
+        //do_walk(self);
+
+        do_walk(left);
+        do_walk(right);
+        print(letter);
+    }
+}
+
+fun make_tree() -> Tree {
+    // I... still do not have comparison operators...
+    return new Tree {
+        left: new Tree {
+            left : new Tree { letter: "a" },
+            right: new Tree { letter: "b" },
+            letter: "c",
+        },
+        right: new Tree {
+            left : new Tree { letter: "d" },
+            right: new Tree { 
+                left : new Tree { letter: "e" },
+                right: new Tree { letter: "f" },
+                letter: "g",
+            },
+            letter: "h",
+        },
+        letter: "i"
+    };
+}
+
+fun inspect(x: Tree?) {
+    var x = x       else { print("0"); return; };
+    var x = x.right else { print("1"); return; };
+    var x = x.right else { print("2"); return; };
+    var x = x.left  else { print("3"); return; };
+    print(x.letter);
+}
+
+fun init() {
+    //! a
+    //! b
+    //! c
+    //! d
+    //! e
+    //! f
+    //! g
+    //! h
+    //! i
+    var tree = make_tree();
+    tree.walk();
+
+    //! e
+    inspect(tree);
+
+    //! 2
+    inspect(tree.left);
+
+    //! 3
+    inspect(tree.right);
+}

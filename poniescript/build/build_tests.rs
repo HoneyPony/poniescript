@@ -324,6 +324,7 @@ pub fn generate(tests_file: &mut File) {
 		("optional/", "option_else"),
 		("optional/", "option_else_ret"),
 		("optional/", "option_else_ret_shadow"),
+		("optional/", "tree"),
 	];
 
 	let mut bt = BuiltTests {
