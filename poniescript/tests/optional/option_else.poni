@@ -7,5 +7,5 @@ fun converter(x: Horse?) -> Horse {
 }
 
 fun init() {
-    print(converter(nil).name);
+    print(converter(nil).name); //! bailey
 }
