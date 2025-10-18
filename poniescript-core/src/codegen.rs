@@ -1509,6 +1509,27 @@ impl<'a> Codegen<'a> {
 			(Type::StrBuf, Type::Str) => do_promote("ps_promote_str_to_buf(ctx, "),
 			(Type::Str, Type::StrConst) => do_promote("ps_promote_str_const_to_str(ctx, "),
 
+			(Type::Option(inner), rhs) => {
+				// For now, we only support the case where inner == from_type_id.
+				// This is not the only case, but it is the first one we will
+				// bother implementing.
+				if *inner != from_typ_id { todo!("implement multi-step option promotions") };
+
+				if self.db.is_value_type(*inner) {
+					todo!("implement value type promotions in option")
+				}
+				else {
+					// For reference types, there is actually no work at all
+					// to promote -- a pointer of type X is already a valid value
+					// of type X?.
+
+					// For now, I guess we still do through an extra temporary,
+					// which is a little sad. (Maybe a real IR will save us??)
+					do_promote("(");
+				}
+
+			}
+
 			// Tuples are where things get interesting. We have to recursively promote
 			// every part of each tuple.
 			(Type::Tuple(a), Type::Tuple(b)) => {

@@ -223,6 +223,21 @@ impl<'db> TypeChecker<'db> {
 				return Ok(self.db.put_type(Type::Option(inner)))
 			}
 
+			(Type::Option(lhs), _) => {
+				// If the from type is equal to lhs, we can promote. This is
+				// the "implicit some" rule.
+				if *lhs == from {
+					return Ok(to);
+				}
+				// In theory, it is assignable if lhs = some from is valid, 
+				// which means e.g. var x: Animal? = new Horse{} should work,
+				// so we have to call through compute_assignable.
+				//
+				// This will make the codegen logic more annoying, once we
+				// actually implement it for real.
+				return self.compute_assignable(*lhs, from);
+			}
+
 			(Type::Fun(sig), Type::Fun(sig2)) => {
 				if *sig == self.db.sig_unassigned {
 					return Ok(from);
