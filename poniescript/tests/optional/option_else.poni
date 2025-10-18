@@ -1,0 +1,11 @@
+class Horse {
+    var name = "bailey"
+}
+
+fun converter(x: Horse?) -> Horse {
+    x else new Horse {}
+}
+
+fun init() {
+    print(converter(nil).name);
+}
