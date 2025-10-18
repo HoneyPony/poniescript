@@ -364,6 +364,11 @@ impl<'db> Binder<'db> {
 				return None;
 			}
 
+			Expr::MakeSumType(sum) => {
+				// Currently nothing to do. This will change...
+				return None;
+			}
+
 			Expr::Promote(_) => panic!("ICE: Tried to bind Expr::Promote"),
 		}
 	}

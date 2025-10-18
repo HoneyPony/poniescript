@@ -132,6 +132,7 @@ impl Expr {
 			Expr::MakeTuple(make_tuple) => make_tuple.typ,
 			Expr::Promote(promote) => promote.promote_to,
 			Expr::Lerp(lerp) => lerp.typ,
+			Expr::MakeSumType(sum) => sum.typ,
 		}
 	}
 }

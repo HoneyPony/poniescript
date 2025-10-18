@@ -1465,6 +1465,15 @@ impl<'a> Codegen<'a> {
 
 				self.tmp_to_used_val(val)
 			}
+
+			Expr::MakeSumType(sum) => {
+				let val = self.new_val_typed_tmp(sum.typ);
+
+				// Right now, this is nothing but nil.
+				define_val!(self, into, val, "NULL;\n");
+
+				self.tmp_to_used_val(val)
+			}
 		}
 	}
 

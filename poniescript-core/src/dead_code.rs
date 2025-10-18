@@ -110,6 +110,11 @@ impl<'db> DeadCodeElim<'db> {
                 // TODO
                 false
             }
+            Expr::MakeSumType(sum) => {
+                // TODO
+                // Currently nothing to do. This will change...
+                false
+            }
             Expr::Comparison(comparison) => {
                 if self.elim_expr(ast, &mut comparison.left) {
                     *expr_id = comparison.left;

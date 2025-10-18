@@ -527,6 +527,7 @@ impl Db {
 			Type::Unassigned => true,
 
 			Type::ArrayOf(elem) => self.is_not_concrete(*elem),
+			Type::Option(inner) => self.is_not_concrete(*inner),
 			Type::Tuple(inner) => {
 				for ty in inner {
 					if self.is_not_concrete(*ty) { return true; }

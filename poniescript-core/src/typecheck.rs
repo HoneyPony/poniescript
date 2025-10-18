@@ -518,6 +518,24 @@ impl<'db> TypeChecker<'db> {
 				// Let's try panicing and see what happens.
 				panic!("ICE: promote_expr(Promote)")
 			},
+			Expr::MakeSumType(sum) => {
+				// Pretend that in the future, Type::Option will be used for
+				// all sum types. I think that will have to be the way that this
+				// evolves, essentially.
+				let incoming_inner_typ = match self.db.get(promote_to) {
+					Type::Option(inner) => *inner,
+
+					// Also, because promotion is sometimes where the type is
+					// assigned at all, this will have to be a regualr user-facing
+					// error.
+					_ => panic!("ICE: promote_expr(MakeSumType) to non-option (sum) type {}", self.db.repr_type(promote_to))
+				};
+
+				
+				if self.db.is_not_concrete(sum.typ) {
+					sum.typ = promote_to;
+				}
+			}
 			Expr::Undefined(_) => panic!("ICE: promote_expr(Undefined)"),
 		}
 	}
@@ -1305,6 +1323,11 @@ impl<'db> TypeChecker<'db> {
 
 				typ
 			},
+
+			Expr::MakeSumType(sum) => {
+				// Nothing to do yet.
+				sum.typ
+			}
 
 			// Promote should not be generated until we get to the TypeCheck stage.
 			Expr::Promote(_) => panic!("ICE: Tried to typecheck Promote"),

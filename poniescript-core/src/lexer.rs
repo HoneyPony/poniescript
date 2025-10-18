@@ -38,6 +38,8 @@ pub enum Tok {
 
 	Print, Str,
 
+	Some, Nil,
+
 	Eof
 }
 
@@ -75,6 +77,9 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {
 	add("var"   , Tok::Var);
 	add("while" , Tok::While);
 	add("new"   , Tok::New);
+
+	add("some"  , Tok::Some);
+	add("nil"   , Tok::Nil);
 
 	add("print", Tok::Print);
 	add("str"  , Tok::Str);

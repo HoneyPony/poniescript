@@ -702,6 +702,11 @@ impl<'b> Parser<'b> {
 				self.array_literal()
 			}
 
+			Tok::Nil => {
+				let tok = expected!(self, Tok::Nil, "'nil'")?;
+				Expr::put_makesumtype_ok(self.ast, tok.location, self.db.put_type(Type::Option(self.db.types.unassigned)))
+			}
+
 			_ => {
 				got!(self, "Expected expression")
 			}
