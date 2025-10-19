@@ -328,6 +328,8 @@ pub fn generate(tests_file: &mut File) {
 		("optional/", "option_else"),
 		("optional/", "option_else_ret"),
 		("optional/", "option_else_ret_shadow"),
+		("optional/", "optional_strings"),
+		("optional/", "optional_strings_promote"),
 		("optional/", "tree"),
 		("optional/", "tree2"),
 	];
