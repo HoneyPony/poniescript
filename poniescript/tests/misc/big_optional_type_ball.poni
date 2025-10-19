@@ -1,0 +1,30 @@
+class Horse {}
+
+fun init() {
+    // The type we want to create:
+    // Array[(Horse?, Array[(Str?, StrBuf?, Array[((int, float, Horse?, StrBuf?), Horse?)]?)]?)]
+
+    // Currently, I believe assignment is the only way to create a value of type
+    // Str.
+    var a_str: Str = "a";
+
+    var array = [
+        (new Horse {}, nil),
+        (nil, []),
+        (nil, [("a", "b", [])]),
+        (nil, [(a_str, nil, nil)]),
+        (nil, [(nil, str("b"), [])]),
+        (nil, [(nil, nil, [((0, 0.0, nil, nil), nil)])]),
+        (nil, [(nil, nil, [((0, 0.0, new Horse{}, "c"), nil)])]),
+        (nil, [(nil, nil, [((0, 0.0, new Horse{}, str("c")), new Horse{})])]),
+        (nil, [(nil, nil, [((0, 4, new Horse{}, str("c")), new Horse{})])]),
+    ];
+
+    fun get_innermost_strbuf(x: Array[(Horse?, Array[(Str?, StrBuf?, Array[((int, float, Horse?, StrBuf?), Horse?)]?)]?)]) {
+        var x = x[6] .1 else { return; };
+        var x = x[0] .0 .3 else { return; };
+        print(x);
+    }
+
+    get_innermost_strbuf(array);
+}
