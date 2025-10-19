@@ -1,0 +1,34 @@
+class Horse {
+    var name = "horse";
+}
+
+fun takes_optional_horse(horse: Horse?) {
+    var horse = horse else { return; };
+
+    print("the horse: ", horse.name);
+}
+
+fun init() {
+    takes_optional_horse(nil);
+
+    //! the horse: horse
+    takes_optional_horse(new Horse{});
+
+    var horse: Horse? = new Horse{};
+    //! the horse: horse
+    takes_optional_horse(horse);
+
+    var horse_nil: Horse? = nil;
+
+    // Weird case: What if we give it an else{} that is unwrapping a Horse?,
+    // this should work.
+    //
+    // This test case, in fact, explains why we want to *avoid* the promotion
+    // to Horse?? in the LHS of the else. If the LHS is promoted to Horse??,
+    // then it will always unwrap, and we won't get the expected behavior
+    // of 'else' here.
+    //! else
+    takes_optional_horse(horse_nil else new Horse { name: "else" });
+    
+    takes_optional_horse(horse else { return; });
+}

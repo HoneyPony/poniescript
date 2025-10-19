@@ -323,6 +323,7 @@ pub fn generate(tests_file: &mut File) {
 		("optional/", "horse_question_mark"),
 		("optional/", "implicit_some"),
 		("optional/", "nil"),
+		("optional/", "opt_else_promote"),
 		("optional/", "option_else"),
 		("optional/", "option_else_ret"),
 		("optional/", "option_else_ret_shadow"),
