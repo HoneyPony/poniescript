@@ -1,0 +1,29 @@
+fun the_fun(x: (StrBuf?, StrBuf?, StrBuf?)) {
+    fun helper(x: StrBuf?) {
+        var x = x else { print("nil"); return; };
+        print("'", x, "'");
+    }
+
+    helper(x.0);
+    helper(x.1);
+    helper(x.2);
+}
+
+fun init() {
+    //! nil
+    //! nil
+    //! nil
+    the_fun((nil, nil, nil));
+
+    // This requires a multi-step promote for each tuple member.
+    //! 'a'
+    //! 'b'
+    //! 'c'
+    the_fun(("a", "b", "c"));
+
+    var x: Str = "hello";
+    //! 'a'
+    //! 'hello'
+    //! 'c'
+    the_fun(("a", x, "c"));
+}

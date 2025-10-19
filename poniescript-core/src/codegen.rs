@@ -2130,9 +2130,11 @@ poni_gc_get_allocation_size(void *object) {
 							}
 
 							Type::Option(id) => {
+								log::trace!("gc tuple field with type {}?", self.db.repr_type(*id));
 								match self.db.get(*id) {
+									Type::StrConst => {}
 									Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
-										inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->v_{});", idx);
+										inf_writeln!(valuetype, "\t\tponi_gc_mark(gc, self->v_{});", idx);
 									},
 									_ => todo!()
 								}

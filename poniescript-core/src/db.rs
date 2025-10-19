@@ -559,6 +559,9 @@ impl Db {
 				}
 				true
 			}
+			Type::Option(inner) => {
+				self.is_cgen_safe(*inner)
+			}
 
 			_ => true
 		}
