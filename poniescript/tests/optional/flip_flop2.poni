@@ -1,0 +1,21 @@
+class Horse {}
+
+fun pr(x: Horse?) {
+    var x = x else { print("nil"); return; };
+    print("horse");
+}
+
+fun init() {
+    var x: Horse? = nil;
+    pr(x); //! nil
+    x = new Horse{};
+    pr(x); //! horse
+    x = nil;
+    pr(x); //! nil
+    x = new Horse{};
+    pr(x); //! horse
+    x = nil;
+    pr(x); //! nil
+    x = new Horse{};
+    pr(x); //! horse
+}

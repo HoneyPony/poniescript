@@ -1,0 +1,33 @@
+class Tree {
+    var left : Tree? = nil;
+    var right: Tree? = nil;
+
+    fun do_compute(x: Tree?, y: int) -> int {
+        var x = x else { return 0; };
+        x.compute(y + 1);
+    }
+
+    fun compute(y: int) -> int {
+        print("compute ", y);
+        do_compute(left, y) + do_compute(right, y) + 1
+    }
+}
+
+fun make_tree(n: int) -> Tree? {
+    if(n < 1) { return nil; }
+
+    return new Tree {
+        left : make_tree(n - 1),
+        right: make_tree(n - 1),
+    };
+}
+
+fun init() {
+    var tree = make_tree(5) else { return; };
+    //! 31
+    print(tree.compute(0));
+
+    tree = make_tree(7) else { return; };
+    //! 127
+    print(tree.compute(0));
+}

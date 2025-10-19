@@ -318,6 +318,7 @@ pub fn generate(tests_file: &mut File) {
 
 		("optional/", "err_unknown_nil"),
 		("optional/", "flip_flop"),
+		("optional/", "flip_flop2"),
 		("optional/", "horse_question_mark"),
 		("optional/", "implicit_some"),
 		("optional/", "nil"),
@@ -325,6 +326,7 @@ pub fn generate(tests_file: &mut File) {
 		("optional/", "option_else_ret"),
 		("optional/", "option_else_ret_shadow"),
 		("optional/", "tree"),
+		("optional/", "tree2"),
 	];
 
 	let mut bt = BuiltTests {
