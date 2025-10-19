@@ -21,6 +21,9 @@ fun init() {
     //
     // I could make it so that else simply never promotes the LHS?? That probably
     // doesn't quite work though.
+    //
+    // NOTE: This is no longer a problem after fixing the type computation
+    // for OptionElse. See also opt_else_promote.poni.
     x = fake_new("twilight") else { return; };
     pr(x); //! twilight
 

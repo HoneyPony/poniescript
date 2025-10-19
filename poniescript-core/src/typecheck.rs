@@ -895,6 +895,8 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(otherwise_ty),
 				);
 
+				opt_else.typ = computed;
+
 				log::trace!("check_expr: OptionElse: computed = {}", self.db.repr_type(computed));
 
 				computed

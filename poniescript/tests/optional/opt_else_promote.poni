@@ -27,8 +27,21 @@ fun init() {
     // to Horse?? in the LHS of the else. If the LHS is promoted to Horse??,
     // then it will always unwrap, and we won't get the expected behavior
     // of 'else' here.
-    //! else
+    //
+    // NOTE: This test case was fixed by just making sure that OptionElse
+    // stores its own type. Is there a case where the promotion still occurs?
+    //! the horse: else
     takes_optional_horse(horse_nil else new Horse { name: "else" });
     
+    //! the horse: horse
     takes_optional_horse(horse else { return; });
+
+    // Apparently this still works, I guess because the else branch has nil.
+    //! the horse: else
+    takes_optional_horse(nil else new Horse { name: "else" });
+
+    // This one has no choice except to promote the LHS to Horse??, because
+    // the else case results in <something>?, which must turn into <something>??
+    // for the LHS.
+    // takes_optional_horse(nil else nil);
 }
