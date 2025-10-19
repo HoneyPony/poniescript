@@ -225,6 +225,9 @@ fn report_errors(ast: &Ast, db: &Db) {
 }
 
 fn main() {
+	#[cfg(feature = "env_logger")]
+	env_logger::init();
+
 	let timer = SystemTime::now();
 	let timer_begin = SystemTime::now();
 	let mut duration_set = Vec::new();

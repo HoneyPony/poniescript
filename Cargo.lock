@@ -675,6 +675,7 @@ name = "poniescript"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "env_logger",
  "mimalloc",
  "poniescript-core",
  "poniescript-gc",
@@ -687,6 +688,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "clap",
+ "log",
  "rustc-hash",
 ]
 
