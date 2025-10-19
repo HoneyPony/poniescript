@@ -273,6 +273,25 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	// Wrapper that does logging.
+	fn compute_intersect(&mut self, bottom_eats: bool, left: TypId, right: TypId) -> std::result::Result<TypId, TypeComputeErr> {
+		let result = self.compute_intersect_nolog(bottom_eats, left, right);
+		// Only log if left != right, because those are the interesting cases.
+		if left != right {
+			match result {
+				Ok(result) => log::trace!("compute_intersect {} + {} -> {}",
+					self.db.repr_type(left),
+					self.db.repr_type(right),
+					self.db.repr_type(result)),
+				Err(_) => log::trace!("compute_intersect {} + {} -> ERR",
+					self.db.repr_type(left),
+					self.db.repr_type(right)),
+			}
+		}
+
+		result
+	}
+
 	// Computes the common "intersection" type of the two types. This can result
 	// in promotions, e.g. from int to float (even though float is technically
 	// not an intersection of float and int), while it can also result in 
@@ -280,7 +299,7 @@ impl<'db> TypeChecker<'db> {
 	//
 	// Finally, one thing to note is the intersection of Bottom with anything
 	// is itself.
-	fn compute_intersect(&mut self, bottom_eats: bool, left: TypId, right: TypId) -> std::result::Result<TypId, TypeComputeErr> {
+	fn compute_intersect_nolog(&mut self, bottom_eats: bool, left: TypId, right: TypId) -> std::result::Result<TypId, TypeComputeErr> {
 		if left == right { return Ok(left); }
 
 		let ty_left = self.db.get(left).clone();
@@ -304,6 +323,14 @@ impl<'db> TypeChecker<'db> {
 
 			(Type::AssumeFloat, Type::AssumeInt) => return Ok(left),
 			(Type::AssumeInt, Type::AssumeFloat) => return Ok(right),
+
+			// In order to match up with the assignment semantics, and for e.g.
+			// misc/array_of_strbuf, we need the intersection of various string
+			// types to be the "most generic" available one.
+			(Type::StrBuf, Type::Str | Type::StrConst) => return Ok(left),
+			(Type::Str | Type::StrConst, Type::StrBuf) => return Ok(right),
+			(Type::Str, Type::StrConst) => return Ok(left),
+			(Type::StrConst, Type::Str) => return Ok(right),
 
 			// TODO: Is this correct?
 			// It seems necessary for array_nested_empty_lhs, array_nested_empty_rhs
