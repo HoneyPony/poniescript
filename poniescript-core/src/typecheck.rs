@@ -168,6 +168,10 @@ impl<'db> TypeChecker<'db> {
 				}
 				self.db.put_type(Type::Tuple(inner_promoted))
 			}
+			Type::Option(inner) => {
+				let inner_promoted = self.promote_ty_from_unassigned(*inner);
+				self.db.put_type(Type::Option(inner_promoted))
+			}
 			_ => ty
 		}
 	}
