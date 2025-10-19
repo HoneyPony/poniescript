@@ -1,0 +1,17 @@
+class Horse {
+    var name = "twilight";
+}
+
+fun pr(x: Horse?) {
+    var x = x else { print("nil"); return; };
+    print(x.name);
+}
+
+fun init() {
+    var array = [
+        (nil        , nil           ),
+        (new Horse{}, nil           ),
+        (nil        , "Hello"       ),
+        (nil        , str("Goodbye")),
+    ];
+}
