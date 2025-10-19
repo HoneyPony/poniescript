@@ -8,7 +8,6 @@ class Tree {
     }
 
     fun compute(y: int) -> int {
-        print("compute ", y);
         do_compute(left, y) + do_compute(right, y) + 1
     }
 }

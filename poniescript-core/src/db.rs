@@ -1265,7 +1265,8 @@ impl Db {
 					//
 					// For value types, we require a new tag.
 					if self.is_value_type(*id) {
-						todo!()
+						// For now, just do nothing...
+						//todo!()
 					}
 					else {
 						let name = format!("PONI_TAG_TY{}", typ.to_nonzero_usize());
@@ -1341,6 +1342,8 @@ impl Db {
 
 	fn generate_ctypes_cache(&mut self) {
 		for id in self.iter_typ() {
+			log::trace!("generate_ctype for {}", self.repr_type(id));
+
 			// It's OK to clone here because types are *somewhat* lightweight
 			// (specifically because we're doing all this TypId stuff).
 			let ty = self.get(id).clone();
@@ -1363,7 +1366,10 @@ impl Db {
 				// Should move this whole thing to Db...?
 				if self.is_value_type(*typ) {
 					// For value types, we have to generate a wrapper.
-					todo!()
+
+					// Right now, these are not ctype safe, but some other
+					// todo!() should kill us anyway...?
+					self.ctype_cache.push("<unimplemented>");
 				}
 				else {
 					// For reference types, we use a nullable pointer. For function

@@ -1780,6 +1780,8 @@ impl<'a> Codegen<'a> {
 		let mut own_buffer_beginning = String::new();
 		let mut own_buffer = String::new();
 
+		log::trace!("compile_function: {}", self.db.get_fun_cname(fun));
+
 		// init() fun has no surrounding definition -- it is poni_init()
 		if !is_init {
 			inf_writeln!(own_buffer_beginning, "{} {}({}) {{",

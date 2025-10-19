@@ -109,16 +109,16 @@ impl<'db> DeadCodeElim<'db> {
             Expr::OptionElse(opt_else) => {
                 // If the value is dead, the whole expression is dead. If the
                 // otherwise is dead, then the expression is just the value.
-                //
-                // I think this still ends up essentially just being equivalent
-                // to Binary though.
                 if self.elim_expr(ast, &mut opt_else.value) {
                     *expr_id = opt_else.value;
                     return true;
                 }
 
-                 if self.elim_expr(ast, &mut opt_else.otherwise) {
-                    return true;
+                if self.elim_expr(ast, &mut opt_else.otherwise) {
+                    // In the case of OptionElse, we are not ourselves a
+                    // Bottom value in this case. In fact, our type will end
+                    // just being the non-else branch.
+                    return false;
                 }
 
                 false

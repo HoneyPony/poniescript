@@ -382,6 +382,11 @@ impl<'db> TypeChecker<'db> {
 		// If the child node's type does NOT equal the promoted type, we synthesize
 		// a runtime promotion.
 		if ast.get_expr(*expr_id).typ(ast, &self.db) != promote_to {
+			log::trace!("synthesizing Promote: {:?}: {} -> {}",
+				ast.get_expr(*expr_id).as_ref(),
+				self.db.repr_type(ast.get_expr(*expr_id).typ(ast, &self.db)),
+				self.db.repr_type(promote_to));
+
 			let id = ast.exprs.push(Expr::Promote(Promote {
 				location: ast.get_expr(*expr_id).location().clone(),
 				inner: *expr_id,
@@ -429,6 +434,8 @@ impl<'db> TypeChecker<'db> {
 				self.do_promote_expr(ast, &mut binary.right, binary.typ);
 			},
 			Expr::OptionElse(opt_else) => {
+				log::trace!("promote_expr: OptionElse: promote_to = {}", self.db.repr_type(promote_to));
+
 				if self.db.is_not_concrete(opt_else.typ) {
 					opt_else.typ = promote_to;
 				}
@@ -617,6 +624,7 @@ impl<'db> TypeChecker<'db> {
 
 			self.db.get_mut(var).typ = computed;
 		}
+		log::trace!("check_assign: computed {}", self.db.repr_type(computed));
 		self.do_promote_expr(ast, expr_id, computed);
 
 		Ok(computed)
@@ -855,6 +863,9 @@ impl<'db> TypeChecker<'db> {
 				let value_ty = self.check_expr(ast, opt_else.value, value_used)?;
 				let otherwise_ty = self.check_expr(ast, opt_else.otherwise, value_used)?;
 
+				log::trace!("check_expr: OptionElse: value_ty = {}, otherwise_ty = {}",
+					self.db.repr_type(value_ty), self.db.repr_type(otherwise_ty));
+
 				let value_unwrapped = match self.db.get(value_ty) {
 					Type::Option(inner) => *inner,
 					_ => {
@@ -882,6 +893,8 @@ impl<'db> TypeChecker<'db> {
 					self.db.repr_type(value_ty),
 					self.db.repr_type(otherwise_ty),
 				);
+
+				log::trace!("check_expr: OptionElse: computed = {}", self.db.repr_type(computed));
 
 				computed
 			}
