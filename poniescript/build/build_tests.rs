@@ -316,6 +316,7 @@ pub fn generate(tests_file: &mut File) {
 		("array/", "array_complicated_signature"),
 		("array/", "err_empty_arr_and_var"),
 
+		("optional/", "array_of_opt"),
 		("optional/", "confusing_implicit_some"),
 		("optional/", "else_ret_assigns"),
 		("optional/", "err_unknown_nil"),

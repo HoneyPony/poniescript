@@ -313,12 +313,27 @@ impl<'db> TypeChecker<'db> {
 			(Type::ArrayOf(lhs), Type::ArrayOf(rhs)) => {
 				// For arrays, the intersection is the intersection of their inner
 				// types.
-				// Note that right now, because we always return left or right
-				// for the other cases for this function, we don't have to synthesize
-				// a new type here. If we ever change that, we will.
 				let inner = self.compute_intersect(bottom_eats, lhs, rhs)?;
-				if inner == lhs { return Ok(lhs); }
-				return Ok(rhs);
+				// TODO: We used to have an optimization that involved returning
+				// an existing TypId if we have one. It might be nice to keep
+				// doing that...
+				return Ok(self.db.put_type(Type::ArrayOf(inner)));
+			}
+
+			(Type::Option(lhs), Type::Option(rhs)) => {
+				// Same idea as Array.
+				let inner = self.compute_intersect(bottom_eats, lhs, rhs)?;
+				return Ok(self.db.put_type(Type::Option(inner)));
+			}
+			// The following two rules are for implict-Some, e.g. in an array
+			// of [nil, new Horse {}, nil]
+			(Type::Option(lhs), _) => {
+				let inner = self.compute_intersect(bottom_eats, lhs, right)?;
+				return Ok(self.db.put_type(Type::Option(inner)));
+			}
+			(_, Type::Option(rhs)) => {
+				let inner = self.compute_intersect(bottom_eats, left, rhs)?;
+				return Ok(self.db.put_type(Type::Option(inner)));
 			}
 
 			(Type::Tuple(lhs), Type::Tuple(rhs)) => {
