@@ -1,0 +1,29 @@
+class Horse {
+    var name = "twilight";
+}
+
+fun pr(horse: Horse?) {
+    var horse = horse else { print("nil"); return; };
+    print(horse.name);
+}
+
+// Wrapper method so that new Horse{} can return a Horse? instead of Horse
+fun fake_new(name: StrConst) -> Horse? {
+    new Horse { name: name }
+}
+
+fun init() {
+    var x: Horse? = nil;
+    pr(x); //! nil
+    
+    // This should always work, even though in practice something like
+    // an unwrap() would be more convenient
+    x = fake_new("twilight") else { return; };
+    pr(x); //! twilight
+
+    x = fake_new("starlight") else { return; };
+    pr(x); //! starlight
+
+    x = fake_new("fluttershy") else { return; };
+    pr(x); //! fluttershy
+}
