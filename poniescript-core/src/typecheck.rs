@@ -552,10 +552,21 @@ impl<'db> TypeChecker<'db> {
 			Expr::Set(_) => {},
 			Expr::SelfVal(_) => {},
 			Expr::ArrayLit(array_lit) => {
-				let incoming_elem_typ = match self.db.get(promote_to) {
-					Type::ArrayOf(elem) => *elem,
-					_ => panic!("ICE: promote_expr(ArrayLit) to non-array type {}", self.db.repr_type(promote_to))
-				};
+				fn unwrap_array_type(checker: &mut TypeChecker, id: TypId) -> TypId {
+					match checker.db.get(id) {
+						Type::ArrayOf(elem) => *elem,
+						Type::Option(id) => {
+							// It's unfortunate but we kind of have to explicitly
+							// unwrap the option type here. I wonder if there is a way
+							// to do this more nicely, so that we don't have to explicitly
+							// check every single composition of relevant types...
+							unwrap_array_type(checker, *id)
+						}
+						_ => panic!("ICE: promote_expr(ArrayLit) to non-array type {}", checker.db.repr_type(id))
+					}
+				}
+
+				let incoming_elem_typ = unwrap_array_type(self, promote_to);
 
 				// The ArrayLit should be kind of like a big binary expression.
 				// If we already have a concrete type, e.g. because we are an
