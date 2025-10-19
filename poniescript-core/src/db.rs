@@ -1117,6 +1117,7 @@ impl Db {
 		match self.get(typ) {
 			Type::Int | Type::Float | Type::Bool | Type::Void => true,
 			Type::Tuple(_) => true,
+			Type::Option(_) => true,
 			_ => false
 		}
 	}
