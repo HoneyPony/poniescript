@@ -36,7 +36,7 @@ fun init() {
     //! the horse: horse
     takes_optional_horse(horse else { return; });
 
-    // Apparently this still works, I guess because the else branch has nil.
+    // Apparently this still works, I guess because the else branch has a type.
     //! the horse: else
     takes_optional_horse(nil else new Horse { name: "else" });
 
