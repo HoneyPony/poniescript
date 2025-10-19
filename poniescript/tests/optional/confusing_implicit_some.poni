@@ -13,15 +13,16 @@ fun fake_new(name: StrConst) -> Horse? {
 }
 
 fun init() {
-    var x: Horse = new Horse{};
-    // Honestly, using an indirect pr() like this is unnecessary here. Oh
-    // well. It's a holdover from an earlier version of the test.
-    pr(x); //! twilight
+    var x: Horse? = nil;
+    pr(x); //! nil
     
-    // This should always work, even though in practice something like
-    // an unwrap() would be more convenient
-    x = fake_new("sunset") else { return; };
-    pr(x); //! sunset
+    // These result in fake_new() being promoted to Horse?? because the else
+    // needs to unwrap *something*. This is a bit confusing.
+    //
+    // I could make it so that else simply never promotes the LHS?? That probably
+    // doesn't quite work though.
+    x = fake_new("twilight") else { return; };
+    pr(x); //! twilight
 
     x = fake_new("starlight") else { return; };
     pr(x); //! starlight

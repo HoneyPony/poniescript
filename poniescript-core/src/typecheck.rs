@@ -658,7 +658,8 @@ impl<'db> TypeChecker<'db> {
 	fn check_expr(&mut self, ast: &AstProxy, expr_id: ExprId, value_used: bool) -> Result<TypId> {
 		let mut binding = ast.exprs.get_mut(expr_id);
 		let expr = binding.as_mut();
-		Ok(match expr {
+		log::trace!("check_expr: {:?}", expr);
+		let result = Ok(match expr {
 			Expr::Binary(binary) => {
 				let left = self.check_expr(ast, binary.left, true)?;
 				let right = self.check_expr(ast, binary.right, true)?;
@@ -1420,7 +1421,10 @@ impl<'db> TypeChecker<'db> {
 
 			// Promote should not be generated until we get to the TypeCheck stage.
 			Expr::Promote(_) => panic!("ICE: Tried to typecheck Promote"),
-		})
+		});
+
+		log::trace!("check_expr: {:?} -> {}", expr, self.db.repr_type(expr.typ(ast, self.db)));
+		result
 	}
 
 	fn check_class(&mut self, ast: &AstProxy, class_declare: &mut ClassDeclare) -> Result<()> {
