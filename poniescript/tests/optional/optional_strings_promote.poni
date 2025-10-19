@@ -14,12 +14,12 @@ fun takes_strbuf(x: StrBuf?) {
 }
 
 fun init() {
-    takes_strconst("strconst"); //! strconst
+    takes_strconst("strconst"); //! 'strconst'
     takes_strconst(nil);        //! nil
 
-    takes_str("str");           //! str
+    takes_str("str");           //! 'str'
     takes_str(nil);             //! nil
 
-    takes_strbuf("strbuf");     //! strbuf
+    takes_strbuf("strbuf");     //! 'strbuf'
     takes_strbuf(nil);          //! nil
 }
