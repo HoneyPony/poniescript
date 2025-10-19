@@ -1516,7 +1516,7 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 
 		// Helper function for doing the promotions
-		let mut do_promote = |the_fn: &'static str| {
+		let mut do_promote = |the_fn: &'static str, into: &mut String| {
 			inf_writeln!(into, "{indent}{to}{to_post} = {the_fn}{from}{from_post});");
 		};
 
@@ -1536,16 +1536,34 @@ impl<'a> Codegen<'a> {
 				/* Don't do any promotion, but don't panic? */
 			}
 
-			(Type::Float, Type::Int) => do_promote("ps_promote_int_to_float("),
-			(Type::StrBuf, Type::StrConst) => do_promote("ps_promote_str_to_buf(ctx, "),
-			(Type::StrBuf, Type::Str) => do_promote("ps_promote_str_to_buf(ctx, "),
-			(Type::Str, Type::StrConst) => do_promote("ps_promote_str_const_to_str(ctx, "),
+			(Type::Float, Type::Int) => do_promote("ps_promote_int_to_float(", into),
+			(Type::StrBuf, Type::StrConst) => do_promote("ps_promote_str_to_buf(ctx, ", into),
+			(Type::StrBuf, Type::Str) => do_promote("ps_promote_str_to_buf(ctx, ", into),
+			(Type::Str, Type::StrConst) => do_promote("ps_promote_str_const_to_str(ctx, ", into),
 
 			(Type::Option(inner), rhs) => {
-				// For now, we only support the case where inner == from_type_id.
-				// This is not the only case, but it is the first one we will
-				// bother implementing.
-				if *inner != from_typ_id { todo!("implement multi-step option promotions") };
+				if *inner != from_typ_id {
+					// Synthesize a new temporary and promote to the inner
+					// temporary first.
+					let inner_val = self.new_val_typed_tmp(*inner);
+					define_val!(self, into, inner_val, ";\n");
+
+					self.compile_partial_promote(&inner_val.val, from, 
+						*inner, from_typ_id, 
+						&"".to_string(), from_post,
+						into);
+
+					let inner_val = self.tmp_to_used_val(inner_val);
+
+					// Now, we can promote from the temporary we created, into
+					// the real into.
+					self.compile_partial_promote(to, &inner_val.val, 
+						to_typ_id, *inner, 
+						to_post, &"".to_string(), // From post is nothing because this is a standalone val (?)
+						into);
+
+					return;
+				};
 
 				if self.db.is_value_type(*inner) {
 					todo!("implement value type promotions in option")
@@ -1557,7 +1575,7 @@ impl<'a> Codegen<'a> {
 
 					// For now, I guess we still do through an extra temporary,
 					// which is a little sad. (Maybe a real IR will save us??)
-					do_promote("(");
+					do_promote("(", into);
 				}
 
 			}

@@ -235,7 +235,8 @@ impl<'db> TypeChecker<'db> {
 				//
 				// This will make the codegen logic more annoying, once we
 				// actually implement it for real.
-				return self.compute_assignable(*lhs, from);
+				let inner = self.compute_assignable(*lhs, from)?;
+				return Ok(self.db.put_type(Type::Option(inner)));
 			}
 
 			(Type::Fun(sig), Type::Fun(sig2)) => {
@@ -1170,6 +1171,8 @@ impl<'db> TypeChecker<'db> {
 						self.db.repr_type(arg)
 					);
 
+					log::trace!("check_expr: ValCall: {} parameter: {}", i, self.db.repr_type(computed));
+
 					self.do_promote_expr(ast, &mut call.args[i], computed);
 				}
 
@@ -1549,6 +1552,8 @@ impl<'db> TypeChecker<'db> {
 		// If it's void, we need no value; otherwise, we need a value.
 		let value_used = !self.db.does_fun_return_void(fun.identity);
 		let return_type = self.db.get_fun_return_typid(fun.identity);
+
+		log::trace!("check_fun_declare: {}", self.db.get_fun_name(fun.identity));
 
 		self.return_types.push(return_type);
 
