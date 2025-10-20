@@ -1,0 +1,95 @@
+// So, this article:
+// https://journal.stuffwithstuff.com/2023/10/19/does-go-have-subtyping/
+// is very helpful. It points out that, if you have value types that can implement
+// interfaces/traits, and those value types need to be turned into some kind of
+// fat pointer to do so, then you can't just convert Array[ValueTy: Trait] into 
+// Array[Trait], because the representation of Array[Trait] would assumed to be
+// a big list of pointers, while Array[ValueTy] would not be.
+
+// So, first of all, my planned reprsentation for value types that are moved
+// onto the heap for traits is something like:
+struct BoxedTReference {
+    uint64_t tag;
+    // Points to the root object that stores this T
+    void     *ptr;
+    // The offset inside that object that stores this T
+    size_t    offset;
+    
+    // If this reference is pointing to itself, this is the value.
+    might_exist<T> value;
+}
+
+// That said, this representation may need some changes.
+
+// In any case, assuming that something like this was the representation, I
+// also wonder about Array[Trait].
+//
+// Array[Trait] could be represented as such:
+struct Array {
+    normal_array_header;
+    void *pointers[];
+}
+// Sure, but then how do we automatically convert a value type array into this?
+//
+// So I guess it could be more like:
+struct ArrayOfTraits {
+    header;
+    char buffer[];
+}
+// Then the buffer would just be "whatever" was in the real array. So, we take
+// our two arrays:
+
+struct cl_Horse {
+    uint64_t tag;
+    ...
+};
+
+struct st_Pony {
+    ...
+};
+
+struct array_Horse {
+    ps_array_header header;
+    struct cl_horse contents[];
+}
+
+struct array_Pony {
+    ps_array_header header;
+    struct st_Pony contents[];
+}
+
+void*
+read_trait_object_from_header(ps_array_header *header, size_t index) {
+    char *buf = ((char*)header + sizeof(*header));
+    if(IS_VALUE_TYPE(header->type)) {
+        struct Ref = alloc {
+            .tag    = header->type,
+            .ptr    = header,
+            .offset = sizeof(*header) + ps_valuetype_size(header->type) * index,
+        };
+
+        return ref;
+    }
+    else {
+        return buf + sizeof(void*) * index;
+    }
+}
+
+// Okay, but what about function variance? What if we have fun(valuety) and
+// we assign a fun(trait) to it?
+
+void
+do_stuff_valuety(struct thing)
+
+void
+do_stuff_trait(void *ptr)
+
+// There's just no way for that to work unless the struct is always moved onto
+// the heap...
+
+// I think probably the simplest solution is to say:
+// fun(Trait) may be assigned to fun(Obj) if Obj: Trait AND Obj is a heap type
+// fun() -> Obj may be assigned to fun() -> Trait if Obj: Trait AND Obj is a heap type
+//
+// and maybe do the same for slices, to keep things fast -- i.e.
+// Slice[Obj] may be assigned to ReadonlySlice[Trait] if Obj: Trait AND Obj is a heap type
