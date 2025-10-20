@@ -364,7 +364,7 @@ impl<'db> Binder<'db> {
 				return None;
 			}
 
-			Expr::MakeSumType(sum) => {
+			Expr::MakeSumType(_sum) => {
 				// Currently nothing to do. This will change...
 				return None;
 			}

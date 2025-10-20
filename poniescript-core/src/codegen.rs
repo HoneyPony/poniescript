@@ -1516,7 +1516,7 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 
 		// Helper function for doing the promotions
-		let mut do_promote = |the_fn: &'static str, into: &mut String| {
+		let do_promote = |the_fn: &'static str, into: &mut String| {
 			inf_writeln!(into, "{indent}{to}{to_post} = {the_fn}{from}{from_post});");
 		};
 
@@ -1541,7 +1541,7 @@ impl<'a> Codegen<'a> {
 			(Type::StrBuf, Type::Str) => do_promote("ps_promote_str_to_buf(ctx, ", into),
 			(Type::Str, Type::StrConst) => do_promote("ps_promote_str_const_to_str(ctx, ", into),
 
-			(Type::Option(inner), rhs) => {
+			(Type::Option(inner), _) => {
 				if *inner != from_typ_id {
 					// Synthesize a new temporary and promote to the inner
 					// temporary first.
@@ -1886,9 +1886,7 @@ impl<'a> Codegen<'a> {
 		inf_writeln!(init, "}}");
 	}
 
-	fn codegen_to_buffers(&mut self, ast: &Ast, module: &Module, out: &mut CodegenOutputs) {
-		
-
+	fn codegen_to_buffers(&mut self, ast: &Ast, module: &Module) {
 		self.indent_level = 0;
 		for fun in &module.functions {
 			self.compile_function(ast, fun.identity, fun.value);
@@ -1897,8 +1895,6 @@ impl<'a> Codegen<'a> {
 		for class in &module.classes {
 			self.compile_class(ast, class);
 		}
-
-		
 	}
 
 	fn codegen_gc_stride(&mut self) -> String {
@@ -1983,7 +1979,7 @@ poni_get_type_stride(uint64_t tag) {
 	fn codegen_gc_functions(&mut self) -> String {
 		let type_stride = self.codegen_gc_stride();
 
-		let mut is_valuetype = "static inline ps_bool
+		let is_valuetype = "static inline ps_bool
 poni_is_value_type(uint64_t tag) { return !!(tag & 0x8000000000000000ULL); }
 ".to_string();
 
@@ -2266,7 +2262,7 @@ poni_gc_get_allocation_size(void *object) {
 		for source in ast.sources.iter() {
             let mut source = ast.sources.get_mut(source);
             let module = &mut source.module;
-			self.codegen_to_buffers(ast, module, &mut outputs);
+			self.codegen_to_buffers(ast, module);
 		}
 		self.compile_string_constant_init(&mut outputs.string_const_define, &mut outputs.string_const_init);
 

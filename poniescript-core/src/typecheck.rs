@@ -622,7 +622,7 @@ impl<'db> TypeChecker<'db> {
 				// Pretend that in the future, Type::Option will be used for
 				// all sum types. I think that will have to be the way that this
 				// evolves, essentially.
-				let incoming_inner_typ = match self.db.get(promote_to) {
+				let _incoming_inner_typ = match self.db.get(promote_to) {
 					Type::Option(inner) => *inner,
 
 					// Also, because promotion is sometimes where the type is

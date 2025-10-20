@@ -164,7 +164,7 @@ impl Type {
 			Type::Class(class_id) => format!("struct {}*", db.get_class_cname(*class_id)),
 
 			Type::ArrayOf(typ) => String::from(db.gen_array_ctype(*typ)),
-			Type::Option(typ) => { todo!("this is implemented in Db") }
+			Type::Option(_) => { todo!("this is implemented in Db") }
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
 

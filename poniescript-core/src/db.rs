@@ -689,19 +689,14 @@ impl Db {
 
 		// TODO: We should probably just use PONI_ABI() throughout the codebase
 		// so we don't have to edit this more in case things change again..?
-		let mut comma = false;
 		inf_write!(self.sig_declare_code, "struct poni_gc_context*");
-		comma = true;
 		for param in &sig.parameters {
-			if comma { inf_write!(self.sig_declare_code, ", "); }
-			comma = true;
-
-			inf_write!(self.sig_declare_code, "{}", self.get_ctype(*param));
+			// Always comma thanks to first param
+			inf_write!(self.sig_declare_code, ", {}", self.get_ctype(*param));
 		}
 
 		// Add closure param
-		if comma { inf_write!(self.sig_declare_code, ", "); }
-		inf_writeln!(self.sig_declare_code, "void*);");
+		inf_writeln!(self.sig_declare_code, ", void*);");
 
 		inf_writeln!(self.sig_declare_code, "typedef struct {} {{ {} fun; void* closure; }} {};",
 			struct_name, fnptr_name, struct_name);
@@ -1496,22 +1491,18 @@ impl Db {
 		for id in self.arenas.arena_fun.iter() {
 			let mut buffer = String::new();
 
-			let mut comma = false;
-
 			buffer.push_str("struct poni_gc_context *ctx");
-			comma = true;
 
 			for param in &self.get(id).parameters {
-				if comma { buffer.push_str(", "); }
-				comma = true;
+				// Always comma thanks to first param
+				buffer.push_str(", ");
 
 				buffer.push_str(self.get_var_ctype(*param));
 				buffer.push(' ');
 				buffer.push_str(self.get_cname(*param));
 			}
 
-			if comma { buffer.push_str(", "); }
-			buffer.push_str("void* closure");
+			buffer.push_str(", void* closure");
 
 			self.fun_cparams_cache.push(buffer.leak());
 		}

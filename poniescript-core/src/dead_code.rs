@@ -127,7 +127,7 @@ impl<'db> DeadCodeElim<'db> {
                 // TODO
                 false
             }
-            Expr::MakeSumType(sum) => {
+            Expr::MakeSumType(_sum) => {
                 // TODO
                 // Currently nothing to do. This will change...
                 false
