@@ -153,8 +153,8 @@ pub struct ArenaCellProxy<'ar, Ty, Key: ArenaKey> {
 }
 
 pub trait IndexCell<Ty, Key: ArenaKey> {
-    fn get(&self, key: Key) -> ArenaBorrow<Ty, Key>;
-    fn get_mut(&self, key: Key) -> ArenaBorrowMut<Ty, Key>;
+    fn get(&self, key: Key) -> ArenaBorrow<'_, Ty, Key>;
+    fn get_mut(&self, key: Key) -> ArenaBorrowMut<'_, Ty, Key>;
 }
 
 enum ArenaBorrowParent<'a, Ty, Key: ArenaKey> {
@@ -307,7 +307,7 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
         unsafe { Key::from_index(self.objects.get_mut().len() - 1) }
     }
 
-    pub fn get_proxy(&mut self) -> ArenaCellProxy<Ty, Key> {
+    pub fn get_proxy(&mut self) -> ArenaCellProxy<'_, Ty, Key> {
         return ArenaCellProxy {
             arena: self, added: UnsafeCell::new(Vec::new()),
 
@@ -349,13 +349,13 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
         }
     }
 
-    pub fn iter(&self) -> ArenaCellIterator<Ty, Key> {
+    pub fn iter(&self) -> ArenaCellIterator<'_, Ty, Key> {
         ArenaCellIterator { current: 0, arena: self }
     }
 }
 
 impl<Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCell<Ty, Key> {
-    fn get(&self, id: Key) -> ArenaBorrow<Ty, Key> {
+    fn get(&self, id: Key) -> ArenaBorrow<'_, Ty, Key> {
         let idx = id.to_index();
 
         #[cfg(debug_assertions)]
@@ -387,7 +387,7 @@ impl<Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCell<Ty, Key> {
         };
     }
 
-    fn get_mut(&self, id: Key) -> ArenaBorrowMut<Ty, Key> {
+    fn get_mut(&self, id: Key) -> ArenaBorrowMut<'_, Ty, Key> {
         let idx = id.to_index();
 
         #[cfg(debug_assertions)]
@@ -462,7 +462,7 @@ impl <'ar, Ty, Key: ArenaKey> ArenaCellProxy<'ar, Ty, Key> {
 }
 
 impl<'a, Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCellProxy<'a, Ty, Key> {
-    fn get(&self, id: Key) -> ArenaBorrow<Ty, Key> {
+    fn get(&self, id: Key) -> ArenaBorrow<'_, Ty, Key> {
         let idx = id.to_index();
 
         if idx < self.parent_len() {
@@ -500,7 +500,7 @@ impl<'a, Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCellProxy<'a, Ty, Key> {
         };
     }
 
-    fn get_mut(&self, id: Key) -> ArenaBorrowMut<Ty, Key> {
+    fn get_mut(&self, id: Key) -> ArenaBorrowMut<'_, Ty, Key> {
         let idx = id.to_index();
 
         if idx < self.parent_len() {
