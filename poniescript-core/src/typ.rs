@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::db::*;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -42,7 +44,7 @@ pub enum Type {
 
 	ArrayOf(TypId),
 
-	Tuple(Vec<TypId>),
+	Tuple(Arc<[TypId]>),
 
 	Option(TypId),
 	
@@ -109,7 +111,7 @@ impl Type {
 			Type::Tuple(typs) => {
 				let mut result = "(".to_string();
 				let mut comma = false;
-				for typ in typs {
+				for typ in typs.iter() {
 					if comma { result.push_str(", "); }
 					comma = true;
 

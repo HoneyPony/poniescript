@@ -1,4 +1,5 @@
 use std::io;
+use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
 
@@ -934,7 +935,7 @@ impl<'b> Parser<'b> {
 				// has a (,) because it's unambiguous.
 				expected!(self, Tok::RightParen, "')' after tuple type name")?;
 
-				self.db.put_type(Type::Tuple(inner))
+				self.db.put_type(Type::Tuple(Arc::from(inner)))
 			}
 
 			// More type syntax to come...

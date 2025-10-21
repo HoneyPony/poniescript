@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::db::*;
 use crate::error::Error;
 use crate::expr::*;
@@ -496,10 +498,10 @@ impl<'db> Binder<'db> {
 			Type::Tuple(inner) => {
 				// TODO: Any way to optimize this?
 				let mut resolved = Vec::new();
-				for typ in inner {
-					resolved.push(self.visit_type(typ, location));
+				for typ in inner.iter() {
+					resolved.push(self.visit_type(*typ, location));
 				}
-				return self.db.put_type(Type::Tuple(resolved));
+				return self.db.put_type(Type::Tuple(Arc::from(resolved)));
 			}
 			Type::Option(inner_typ) => {
 				let inner = self.visit_type(inner_typ, location);

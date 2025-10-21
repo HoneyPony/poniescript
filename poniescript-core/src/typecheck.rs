@@ -1,4 +1,6 @@
 
+use std::sync::Arc;
+
 use crate::db::*;
 use crate::module::Module;
 use crate::source::SourceLocation;
@@ -163,10 +165,10 @@ impl<'db> TypeChecker<'db> {
 
 				// Big TODO: Fix this nonsense. Grr.
 				let inner = inner.clone();
-				for ty in &inner {
+				for ty in inner.iter() {
 					inner_promoted.push(self.promote_ty_from_unassigned(*ty));
 				}
-				self.db.put_type(Type::Tuple(inner_promoted))
+				self.db.put_type(Type::Tuple(Arc::from(inner_promoted)))
 			}
 			Type::Option(inner) => {
 				let inner_promoted = self.promote_ty_from_unassigned(*inner);
@@ -219,7 +221,7 @@ impl<'db> TypeChecker<'db> {
 					new_from.push(self.compute_assignable(*l, *r)?);
 				}
 
-				return Ok(self.db.put_type(Type::Tuple(new_from)))
+				return Ok(self.db.put_type(Type::Tuple(Arc::from(new_from))))
 			}
 
 			(Type::Option(lhs), Type::Option(rhs)) => {
@@ -384,7 +386,7 @@ impl<'db> TypeChecker<'db> {
 					inner.push(self.compute_intersect(bottom_eats, *l, *r)?);
 				}
 
-				return Ok(self.db.put_type(Type::Tuple(inner)))
+				return Ok(self.db.put_type(Type::Tuple(Arc::from(inner))))
 			}
 
 			_ => return Err(TypeComputeErr)
@@ -701,8 +703,8 @@ impl<'db> TypeChecker<'db> {
 			Type::AssumeInt | Type::AssumeFloat => true,
 			Type::Tuple(inner) => {
 				let sad = inner.clone();
-				for typ in sad {
-					if !self.is_numeric_or_vec(typ) { return false; }
+				for typ in sad.iter() {
+					if !self.is_numeric_or_vec(*typ) { return false; }
 				}
 				true
 			},
@@ -1470,7 +1472,7 @@ impl<'db> TypeChecker<'db> {
 					inner.push(self.check_expr(ast, *expr, value_used)?);
 				}
 
-				let typ = self.db.put_type(Type::Tuple(inner));
+				let typ = self.db.put_type(Type::Tuple(Arc::from(inner)));
 				tuple.typ = typ;
 
 				typ

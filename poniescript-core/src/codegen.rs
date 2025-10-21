@@ -13,7 +13,7 @@ use crate::arena::IndexCell;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Helper struct for keeping track of where to store pointers across GC safepoints
 /// and function call boundaries.
@@ -115,7 +115,7 @@ struct Codegen<'a> {
 	/// store a Tmp(usize) here.
 	this_val: Option<usize>,
 
-	gc_frame: Rc<GCFrame>,
+	gc_frame: Arc<GCFrame>,
 
 	/// A list of Vec<usize>, where the inner Vecs contain references to the
 	/// current GCFrame.
@@ -208,7 +208,7 @@ enum Val {
 }
 
 impl Val {
-	pub fn typed(self, typ: TypId, gc_slots_and_frame: Option<(Vec<usize>, Rc<GCFrame>)>) -> TypedVal {
+	pub fn typed(self, typ: TypId, gc_slots_and_frame: Option<(Vec<usize>, Arc<GCFrame>)>) -> TypedVal {
 		return TypedVal {
 			val: self,
 			typ,
@@ -223,9 +223,9 @@ struct TypedVal {
 	
 	// TODO: To make this more efficient, what we should really do is have the frame
 	// be &GCFrame, and then pass a &gcframe down the whole tree of codegen
-	// functions. That avoids needing an Rc.
+	// functions. That avoids needing an Arc.
 	
-	gc_slots_and_frame: Option<(Vec<usize>, Rc<GCFrame>)>
+	gc_slots_and_frame: Option<(Vec<usize>, Arc<GCFrame>)>
 }
 
 impl<'f> Drop for TypedVal {
@@ -407,7 +407,7 @@ impl<'a> Codegen<'a> {
 
 			inside_class: Vec::new(),
 
-			gc_frame: Rc::new(GCFrame::new()),
+			gc_frame: Arc::new(GCFrame::new()),
 			block_scopes: Vec::new(),
 
 			disable_gc_frames: false,
@@ -1783,7 +1783,7 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 
 		let enclosing_gc_frame = self.gc_frame.clone();
-		self.gc_frame = Rc::new(GCFrame::new());
+		self.gc_frame = Arc::new(GCFrame::new());
 
 		// This resets block_scopes to empty, which is what we want.
 		let enclosing_block_scopes = std::mem::take(&mut self.block_scopes);

@@ -1,6 +1,7 @@
 use std::fmt::Write;
 use std::hash::Hash;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::RwLock;
 
 use crate::error::Error;
@@ -529,7 +530,7 @@ impl Db {
 			Type::ArrayOf(elem) => self.is_not_concrete(*elem),
 			Type::Option(inner) => self.is_not_concrete(*inner),
 			Type::Tuple(inner) => {
-				for ty in inner {
+				for ty in inner.iter() {
 					if self.is_not_concrete(*ty) { return true; }
 				}
 				return false;
@@ -554,7 +555,7 @@ impl Db {
 			Type::UnboundIdent(_) => false,
 			Type::ArrayOf(ty) => self.is_cgen_safe(*ty),
 			Type::Tuple(inner) => {
-				for ty in inner {
+				for ty in inner.iter() {
 					if !self.is_cgen_safe(*ty) { return false; }
 				}
 				true
@@ -732,7 +733,7 @@ impl Db {
 		}
 	}
 
-	fn use_tuple(&mut self, inner: &Vec<TypId>, tuple_ty: TypId) {
+	fn use_tuple(&mut self, inner: &Arc<[TypId]>, tuple_ty: TypId) {
 		if !self.is_cgen_safe(tuple_ty) { return; }
 
 		self.value_types.push(tuple_ty);
@@ -1052,7 +1053,7 @@ impl Db {
 				// single tuple Val that we create, we really should probably
 				// cache this values.
 				let mut sum = 0;
-				for typ in typ_ids {
+				for typ in typ_ids.iter() {
 					sum += self.type_gc_slots(*typ);
 				}
 				sum
@@ -1166,8 +1167,8 @@ impl Db {
 				// TODO: Why. Please. Help
 				let typ_ids_clone = typ_ids.clone();
 
-				for inner in typ_ids_clone {
-					self.visit_value_types(todo, visited, ordering, inner)?;
+				for inner in typ_ids_clone.iter() {
+					self.visit_value_types(todo, visited, ordering, *inner)?;
 				}
 			},
 			// Nothing to visit. Yet.
@@ -1324,7 +1325,7 @@ impl Db {
 
 					let mut idx = 0;
 
-					for member in members {
+					for member in members.iter() {
 						inf_writeln!(self.valty_define_code, "\t{} v_{};",
 							self.get_ctype(*member), idx);
 						idx += 1;
