@@ -13,6 +13,7 @@ use crate::arena::IndexCell;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
+use std::io::BufWriter;
 use std::sync::Arc;
 
 /// Helper struct for keeping track of where to store pointers across GC safepoints
@@ -2187,6 +2188,13 @@ poni_gc_get_allocation_size(void *object) {
 	}
 
 	fn codegen(&mut self, args: &Args, ast: &Ast, output: &mut dyn std::io::Write) -> std::io::Result<()> {
+		use std::io::Write;
+		// Use a big capacity for our BufWriter, at least for now.
+		//
+		// In the future, probably what we will want to do is use a smaller capacity,
+		// especially when writing to e.g. a piped compiler, so that it can start
+		// receiving input faster.
+		let mut output = BufWriter::with_capacity(1024 * 1024 * 8, output);
 		let mut outputs = CodegenOutputs::new();
 
 		// Generate global variables in one pass as their ordering is a global
@@ -2329,6 +2337,9 @@ poni_gc_get_allocation_size(void *object) {
 		writeln!(output, "void poni_init(struct poni_gc_context *ctx) {{")?;
 		writeln!(output, "{}", self.fun_init_buffer)?;
 		writeln!(output, "}}")?;
+
+		// Because we're using a BufWriter, it is important to flush it.
+		output.flush()?;
 
 		Ok(())
 	}
