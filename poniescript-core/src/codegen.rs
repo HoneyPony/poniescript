@@ -357,10 +357,16 @@ struct Indenter {
 
 impl std::fmt::Display for Indenter {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		for _ in 0..self.level {
-			write!(f, "\t")?;
-		}
-		Ok(())
+		// In order to keep this "somewhat" fast, instead of looping, use a
+		// maximum allocation size.
+		//
+		// I think, however, that the main overhead from Indenter likely comes
+		// from the fact that it exists at all...
+		let len = match self.level {
+			l @ 0..16 => 16 - l,
+			_ => 0,
+		};
+		f.write_str(&"\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t"[len..16])
 	}
 }
 
