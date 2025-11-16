@@ -13,6 +13,7 @@ pub mod error;
 pub mod binder;
 pub mod dead_code;
 pub mod init_ordering;
+pub mod ir;
 pub mod glue;
 
 use std::path::PathBuf;
