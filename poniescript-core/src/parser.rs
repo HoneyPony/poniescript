@@ -1105,7 +1105,7 @@ impl<'b> Parser<'b> {
 				let mut expect_semicolon = match self.ast.exprs.get(inner).as_ref() {
 					// If the inner expression is a block or a similar "block-like"
 					// thing, then we don't need a semicolon.
-					Expr::Block(_) | Expr::If(_) => false,
+					Expr::Block(_) | Expr::If(_) | Expr::Loop(_) => false,
 					Expr::FunDeclare(declare) => {
 						// Named function declarations don't need a semicolon.
 						// Lambda ones are more expression-like, so they do..?
