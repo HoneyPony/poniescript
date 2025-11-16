@@ -279,7 +279,10 @@ macro_rules! inf_write {
 		match write!($into, $($arg)*) {
 			Ok(_) => {},
 			Err(_) => {
+				#[cfg(debug_assertions)]
 				panic!("ICE: Codegen: 'infallible' write to buffer failed");
+				#[cfg(not(debug_assertions))]
+				unsafe { std::hint::unreachable_unchecked() }
 			}
 		}
 	}
@@ -291,7 +294,10 @@ macro_rules! inf_writeln {
 		match writeln!($into, $($arg)*) {
 			Ok(_) => {},
 			Err(_) => {
-				panic!("ICE: Codegen: 'infallible' write to buffer failed");
+				#[cfg(debug_assertions)]
+				panic!("ICE: Codegen: 'infallible' writeln to buffer failed");
+				#[cfg(not(debug_assertions))]
+				unsafe { std::hint::unreachable_unchecked() }
 			}
 		}
 	}
