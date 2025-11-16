@@ -190,8 +190,14 @@ pub fn generate(tests_file: &mut File) {
 		("logical/", "short_or_expr_doubleblock"),
 		("logical/", "or_bottom"),
 
+		("loop/", "err_break_incompatible_hasval"),
+		("loop/", "err_break_incompatible_types"),
 		("loop/", "loop_with_return"),
 		("loop/", "loop_with_break"),
+		("loop/", "loop_with_multi_break_int"),
+		("loop/", "loop_with_multi_break_noval"),
+		("loop/", "loop_with_multi_break_promo_a"),
+		("loop/", "loop_with_multi_break_promo_b"),
 
 		("misc/", "array_of_str"),
 		("misc/", "array_of_strbuf"),
