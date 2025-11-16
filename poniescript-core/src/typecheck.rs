@@ -961,7 +961,7 @@ impl<'db> TypeChecker<'db> {
 				//
 				// This also means there is no need to promote the inner value,
 				// because it is not used.
-				self.check_expr(ast, loop_.inner, value_used)?;
+				self.check_expr(ast, loop_.inner, false)?;
 
 				// Okay, now we have a list of break exprs. Ensure that they
 				// all have the same type.
@@ -971,6 +971,15 @@ impl<'db> TypeChecker<'db> {
 				let breaks = std::mem::replace(&mut self.break_exprs, enclosing_breaks);
 				
 				if let Some((first, rest)) = breaks.split_first() {
+					// Subtle but important:
+					// If there were any breaks at all, then the loop no longer
+					// has type Bottom, but instead type Void. This is because
+					// it does return!
+					//
+					// Update the type immediately; if we find that it *also*
+					// produces a value, then this will be overwritten again.
+					loop_.typ = self.db.types.void;
+
 					let first = ast.get_expr(*first);
 					let Expr::Break(first) = first.as_ref() else { unreachable!(); };
 
