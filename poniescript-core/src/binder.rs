@@ -222,6 +222,11 @@ impl<'db> Binder<'db> {
 				self.visit_expr(ast, loop_.inner);
 				None
 			}
+
+			Expr::Break(break_) => {
+				if let Some(value) = break_.value { self.visit_expr(ast, value); }
+				None
+			}
 			
 			Expr::Assign(assign) => {
 				self.visit_expr(ast, assign.value);

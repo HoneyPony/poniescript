@@ -127,6 +127,9 @@ struct Codegen<'a> {
 	/// global initialization)
 	disable_gc_frames: bool,
 
+	/// The 'return' value of the current Loop, if any.
+	loop_val: Option<TypedVal>,
+
 	db: &'a Db
 }
 
@@ -424,6 +427,8 @@ impl<'a> Codegen<'a> {
 			block_scopes: Vec::new(),
 
 			disable_gc_frames: false,
+
+			loop_val: None,
 		}
 	}
 
@@ -908,14 +913,45 @@ impl<'a> Codegen<'a> {
 			Expr::Loop(loop_) => {
 				// TODO: We will probably need to generate labels or something
 				// for multi-level break.
-				let indent = self.indent();
+				let enclosing_loop = self.loop_val.take();
+
+				if loop_.typ != self.db.types.bottom {
+					// Create a value for the loop if it has a value.
+					let val = self.new_val_typed_tmp(loop_.typ);
+					
+					define_val!(self, into, val, ";\n");
+					self.loop_val = Some(val);
+				}
+
 				inf_writeln!(into, "{indent}for(;;) {{");
 				self.indent_level += 1;
 				self.expr(ast, loop_.inner, into);
 				self.indent_level -= 1;
 				inf_writeln!(into, "{indent}}}");
 
-				// TODO: Create value if there is one..?
+				let own_val = match self.loop_val.take() {
+					Some(val) => self.tmp_to_used_val(val),
+					// If the Loop doesn't create a val, then it is a Never.
+					None => Val::Bottom.typed(self.db.types.bottom, None),
+				};
+
+				self.loop_val = enclosing_loop;
+
+				own_val
+			}
+			Expr::Break(break_) => {
+				if let Some(inner) = break_.value {
+					let val = self.expr(ast, inner, into);
+					let Some(loop_val) = &self.loop_val else {
+						panic!("ICE: break inside a loop with no Val");
+					};
+					if loop_val.needs_storage() {
+						inf_writeln!(into, "{indent}{loop_val} = {val};");
+					}
+				}
+				inf_writeln!(into, "{indent}break;");
+
+				// The Break itself is always Never.
 				Val::Bottom.typed(self.db.types.bottom, None)
 			}
 			Expr::OptionElse(opt_else) => {

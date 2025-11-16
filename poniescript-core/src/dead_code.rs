@@ -324,6 +324,15 @@ impl<'db> DeadCodeElim<'db> {
                 elim_sequence!(self, ast, expr,
                     MakeTuple, values)
             }
+
+            Expr::Break(break_) => {
+                if let Some(inner) = &mut break_.value {
+                    self.elim_expr(ast, inner);
+                }
+
+                // Break is always Never.
+                true
+            }
         }
     }
 

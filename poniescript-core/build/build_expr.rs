@@ -369,7 +369,8 @@ pub fn generate(file: &mut File) {
 	Lerp          : Expr from, Expr to, Expr amount, TypId typ
 	MakeSumType   : TypId typ
 	OptionElse    : Expr value, Expr otherwise, TypId typ
-	Loop          : Expr inner, TypId typ
+	Loop          : Expr inner, TypId typ, Vec<ExprId> breaks
+	Break         : Option<Expr> value
 	Undefined     : 
 
 	"#;

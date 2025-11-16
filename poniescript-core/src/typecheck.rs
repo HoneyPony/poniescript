@@ -29,6 +29,9 @@ struct TypeChecker<'db> {
 
 	/// Which class we're currently in. Used to give types to SelfVal.
 	current_class: Option<TypId>,
+
+	/// A vector of the 'break' statements inside the current loop.
+	break_exprs: Vec<ExprId>,
 }
 
 struct TypeCheckErr;
@@ -98,7 +101,9 @@ impl<'db> TypeChecker<'db> {
 
 			return_types: Vec::new(),
 
-			current_class: None
+			current_class: None,
+
+			break_exprs: Vec::new(),
 		}
 	}
 
@@ -549,8 +554,27 @@ impl<'db> TypeChecker<'db> {
 					self.do_promote_expr(ast, else_, if_.typ);
 				}
 			},
-			// Not sure exactly what to do for loop.
-			Expr::Loop(_) => {}
+			// Loop is basically like an if with any number of branches.
+			Expr::Loop(loop_) => {
+				if self.db.is_not_concrete(loop_.typ) {
+					loop_.typ = promote_to;
+				}
+
+				for break_ in &loop_.breaks {
+					let mut break_ = ast.get_expr_mut(*break_);
+					let Expr::Break(break_) = break_.as_mut() else { unreachable!(); };
+
+					// Promote every 'branch' of the loop to the now-concrete
+					// type of the loop.
+					if let Some(inner) = break_.value.as_mut() {
+						self.do_promote_expr(ast, inner, promote_to);
+					}
+				}
+			}
+			Expr::Break(_) => {
+				// The inner expression of the break is promoted by the Loop,
+				// not by the Break. See above.
+			}
 			Expr::Unbound(_) => if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr(Unbound)") },
 			Expr::UnboundFunCapture(_) => if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr(UnboundFunCapture)") },
 			Expr::Print(_) => {},
@@ -925,17 +949,92 @@ impl<'db> TypeChecker<'db> {
 			Expr::Loop(loop_) => {
 				// The loop type is going to be like an if/else, except that
 				// any number of 'break's can have distinct types.
+
+				// TODO: We probably need to store the break exprs in the loop
+				// so that we can promote them later.
+				let enclosing_breaks = std::mem::take(&mut self.break_exprs);
+				self.break_exprs = Vec::new();
+				
+				// For the inner expression, the value is never used, for an
+				// infinite loop. The only way to produce a value is with
+				// a break expression.
 				//
-				// We don't have breaks yet, but we will soon!!!
-				let inner = self.check_expr(ast, loop_.inner, value_used)?;
+				// This also means there is no need to promote the inner value,
+				// because it is not used.
+				self.check_expr(ast, loop_.inner, value_used)?;
 
-				// I believe we want to promote the inner expression here. If
-				// we ended up with no break expressions, though, the value
-				// isn't actually used...?
+				// Okay, now we have a list of break exprs. Ensure that they
+				// all have the same type.
 
-				// PROMOTION: TODO.
+				let mut typ = self.db.types.unassigned;
+				let mut has_value = false;
+				let breaks = std::mem::replace(&mut self.break_exprs, enclosing_breaks);
+				
+				if let Some((first, rest)) = breaks.split_first() {
+					let first = ast.get_expr(*first);
+					let Expr::Break(first) = first.as_ref() else { unreachable!(); };
+
+					if let Some(inner) = first.value {
+						typ = inner.typ(ast, self.db);
+						has_value = true;
+					}
+					
+					for expr in rest {
+						let expr = ast.get_expr(*expr);
+						let Expr::Break(expr) = expr.as_ref() else { unreachable!(); };
+
+						let mut inner_has_value = false;
+
+						if let Some(inner) = expr.value {
+							inner_has_value = true;
+							let intersect = self.compute_intersect(false, typ, inner.typ(ast, self.db));
+
+							typ = maybe_type_error!(self, intersect,
+								expr.location,
+								"Breaks in loop have incompatible types");
+						}
+
+						if inner_has_value != has_value {
+							type_error!(self, expr.location,
+								"Incompatible breaks in loop: either all breaks must provide a value, or no breaks.");
+						}
+					} 
+				}
+
+				if has_value {
+					loop_.typ = typ;
+				}
+
+				// For promotions.... I think we have to store the vec of 
+				// break exprs, and then promote them all sort of like we 
+				// were an if-else.
+				loop_.breaks = breaks;
+
+				// Promotion occurs in promote_expr
 
 				loop_.typ
+			}
+			Expr::Break(break_) => {
+				if let Some(inner) = break_.value {
+					// So....
+					// Technically, the value used of this break is really just
+					// the value_used of the enclosing loop. So, something like:
+					//
+					// loop {
+					//     if a { break 1; } else { break "hello"; }
+					// }
+					//
+					// is sooooort of valid. I think, however, we should just
+					// always consider the value used, because if you're going
+					// to break with a value, you should make the values match
+					// up, IMO.
+					self.check_expr(ast, inner,  true)?;
+				}
+
+				self.break_exprs.push(expr_id);
+
+				// The Break itself is always Never.
+				self.db.types.bottom
 			}
 			Expr::OptionElse(opt_else) => {
 				let value_ty = self.check_expr(ast, opt_else.value, value_used)?;

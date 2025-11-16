@@ -191,6 +191,7 @@ pub fn generate(tests_file: &mut File) {
 		("logical/", "or_bottom"),
 
 		("loop/", "loop_with_return"),
+		("loop/", "loop_with_break"),
 
 		("misc/", "array_of_str"),
 		("misc/", "array_of_strbuf"),

@@ -77,6 +77,7 @@ impl Expr {
 				if_.typ
 			}
 			Expr::Loop(loop_) => loop_.typ,
+			Expr::Break(_) => db.types.bottom,
 			Expr::Variable(var) => {
 				db.get_var_type(var.identity)
 			},

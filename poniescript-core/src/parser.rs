@@ -502,7 +502,7 @@ impl<'b> Parser<'b> {
 		let inner = self.block()?;
 
 		// Loops are infinite (i.e. Never) until proven otherwise...
-		Expr::put_loop_ok(self.ast, self.end(location), inner, self.db.types.bottom)
+		Expr::put_loop_ok(self.ast, self.end(location), inner, self.db.types.bottom, Vec::new())
 	}
 
 	fn expr_prefix_callable(&mut self) -> Result<ExprId> {
@@ -696,6 +696,19 @@ impl<'b> Parser<'b> {
 
 			Tok::Print => self.expr_print_or_str(true),
 			Tok::Str => self.expr_print_or_str(false),
+
+			Tok::Break => {
+				let location = self.start();
+				self.advance()?;
+				// If there's an immediate Semicolon, it's an empty break.
+				if self.match_(Tok::Semicolon)?.is_some() {
+					return Expr::put_break_ok(self.ast, self.end(location), None);
+				}
+
+				let inner = self.expression()?;
+				expected!(self, Tok::Semicolon, "';' after break value")?;
+				Expr::put_break_ok(self.ast, self.end(location), Some(inner))
+			}
 
 			Tok::True => {
 				let location = self.advance()?.location;
