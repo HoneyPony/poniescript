@@ -487,6 +487,24 @@ impl<'b> Parser<'b> {
 		)
 	}
 
+	fn expr_loop(&mut self) -> Result<ExprId> {
+		let location = self.start();
+
+		expected!(self, Tok::Loop, "'loop'")?;
+
+		// Like functions, for now we will expect an LBrace and then parse
+		// a block. But, we could also add some sort of non-Block ifs later.
+
+		if !self.at(Tok::LeftBrace) {
+			got!(self, "'{{' after loop keyword");
+		}
+
+		let inner = self.block()?;
+
+		// Loops are infinite (i.e. Never) until proven otherwise...
+		Expr::put_loop_ok(self.ast, self.end(location), inner, self.db.types.bottom)
+	}
+
 	fn expr_prefix_callable(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
 			Tok::LeftBrace => self.block(),
@@ -522,6 +540,7 @@ impl<'b> Parser<'b> {
 			Tok::Identifier => self.expr_ident(),
 
 			Tok::If => self.expr_if(),
+			Tok::Loop => self.expr_loop(),
 
 			Tok::Fun => {
 				let fun = self.fun_declaration(false)?;
@@ -589,7 +608,7 @@ impl<'b> Parser<'b> {
 
 	fn expr_prefix(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
-			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Fun => {
+			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::Fun => {
 				let location = self.start();
 				let mut inner = self.expr_prefix_callable()?;
 

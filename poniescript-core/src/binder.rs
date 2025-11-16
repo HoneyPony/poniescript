@@ -217,6 +217,11 @@ impl<'db> Binder<'db> {
 				}
 				None
 			}
+
+			Expr::Loop(loop_) => {
+				self.visit_expr(ast, loop_.inner);
+				None
+			}
 			
 			Expr::Assign(assign) => {
 				self.visit_expr(ast, assign.value);

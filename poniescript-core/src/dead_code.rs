@@ -241,6 +241,16 @@ impl<'db> DeadCodeElim<'db> {
                     return is_bottom
                 }
             },
+            Expr::Loop(loop_) => {
+                // I thiiiiink if the inner expression is Bottom, that means
+                // the loop will only ever execute exactly once, so it could
+                // just be replaced, but for now we won't do anything other
+                // than just eliminating the inner expression.
+                self.elim_expr(ast, &mut loop_.inner);
+
+                // The loop itself can cause dead code, if it has no type (?)
+                return loop_.typ == self.db.types.bottom
+            }
             Expr::Unbound(_) => panic!("ICE: Tried to DCE Unbound"),
             Expr::UnboundFunCapture(_) => panic!("ICE: Tried to DCE UnboundFunCapture"),
             Expr::Print(_) => {

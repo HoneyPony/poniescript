@@ -190,6 +190,8 @@ pub fn generate(tests_file: &mut File) {
 		("logical/", "short_or_expr_doubleblock"),
 		("logical/", "or_bottom"),
 
+		("loop/", "loop_with_return"),
+
 		("misc/", "array_of_str"),
 		("misc/", "array_of_strbuf"),
 		("misc/", "array_of_tuple_of_opt_class_opt_strbuf"),

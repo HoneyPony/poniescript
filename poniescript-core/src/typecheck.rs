@@ -549,6 +549,8 @@ impl<'db> TypeChecker<'db> {
 					self.do_promote_expr(ast, else_, if_.typ);
 				}
 			},
+			// Not sure exactly what to do for loop.
+			Expr::Loop(_) => {}
 			Expr::Unbound(_) => if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr(Unbound)") },
 			Expr::UnboundFunCapture(_) => if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr(UnboundFunCapture)") },
 			Expr::Print(_) => {},
@@ -920,6 +922,21 @@ impl<'db> TypeChecker<'db> {
 
 				computed
 			},
+			Expr::Loop(loop_) => {
+				// The loop type is going to be like an if/else, except that
+				// any number of 'break's can have distinct types.
+				//
+				// We don't have breaks yet, but we will soon!!!
+				let inner = self.check_expr(ast, loop_.inner, value_used)?;
+
+				// I believe we want to promote the inner expression here. If
+				// we ended up with no break expressions, though, the value
+				// isn't actually used...?
+
+				// PROMOTION: TODO.
+
+				loop_.typ
+			}
 			Expr::OptionElse(opt_else) => {
 				let value_ty = self.check_expr(ast, opt_else.value, value_used)?;
 				let otherwise_ty = self.check_expr(ast, opt_else.otherwise, value_used)?;

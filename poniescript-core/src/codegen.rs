@@ -905,6 +905,19 @@ impl<'a> Codegen<'a> {
 			Expr::Lerp(lerp) => self.compile_lerp(ast, lerp, into),
 			Expr::Comparison(compare) => self.compile_comparison(ast, compare, into),
 			Expr::If(if_) => self.compile_if(ast, if_, into),
+			Expr::Loop(loop_) => {
+				// TODO: We will probably need to generate labels or something
+				// for multi-level break.
+				let indent = self.indent();
+				inf_writeln!(into, "{indent}for(;;) {{");
+				self.indent_level += 1;
+				self.expr(ast, loop_.inner, into);
+				self.indent_level -= 1;
+				inf_writeln!(into, "{indent}}}");
+
+				// TODO: Create value if there is one..?
+				Val::Bottom.typed(self.db.types.bottom, None)
+			}
 			Expr::OptionElse(opt_else) => {
 				let own_val = self.new_val_typed_tmp(opt_else.typ);
 				define_val!(self, into, own_val, ";\n");
