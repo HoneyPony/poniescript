@@ -300,6 +300,7 @@ pub fn generate(tests_file: &mut File) {
 		("while/", "while_basic"),
 		("while/", "while_nested"),
 		("while/", "while_true"),
+		("while/", "array_search"),
 
 		("dead_code/", "dead_block"),
 		("dead_code/", "dead_new"),

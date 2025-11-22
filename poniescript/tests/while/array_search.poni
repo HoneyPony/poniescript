@@ -1,0 +1,32 @@
+// Returns the index at which the given needle is in the haystack.
+//
+// Would return an option type.. if we HAD optional value types implemented.
+fun search(needle: int, haystack: Array[int]) -> int {
+    var i = 0;
+
+    while i < haystack.length {
+        // Fun fact: I don't have == yet.
+        //if haystack[i] == needle {
+        if haystack[i] >= needle and haystack[i] <= needle {
+            return i;
+        }
+        i = i + 1;
+    }
+
+    // Another fun fact: No unary minus yet.
+    return 0 - 1;
+}
+
+fun init() {
+    var my_hay = [10, 9, 20, 17, 5, 6];
+
+    print(search( 1, my_hay)); //! -1
+    print(search(10, my_hay)); //! 0
+    print(search(17, my_hay)); //! 3
+    print(search(16, my_hay)); //! -1
+    print(search( 9, my_hay)); //! 1
+    print(search(20, my_hay)); //! 2
+    print(search( 5, my_hay)); //! 4
+    print(search( 6, my_hay)); //! 5
+    print(search(99, my_hay)); //! -1
+}
