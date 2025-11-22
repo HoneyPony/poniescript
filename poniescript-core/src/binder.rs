@@ -223,6 +223,12 @@ impl<'db> Binder<'db> {
 				None
 			}
 
+			Expr::WhileLoop(while_) => {
+				self.visit_expr(ast, while_.condition);
+				self.visit_expr(ast, while_.inner);
+				None
+			}
+
 			Expr::Break(break_) => {
 				if let Some(value) = break_.value { self.visit_expr(ast, value); }
 				None

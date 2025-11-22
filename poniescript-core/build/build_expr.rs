@@ -371,6 +371,7 @@ pub fn generate(file: &mut File) {
 	OptionElse    : Expr value, Expr otherwise, TypId typ
 	Loop          : Expr inner, TypId typ, Vec<ExprId> breaks
 	Break         : Option<Expr> value
+	WhileLoop     : Expr condition, Expr inner, TypId typ, Vec<ExprId> breaks
 	Undefined     : 
 
 	"#;

@@ -297,6 +297,10 @@ pub fn generate(tests_file: &mut File) {
 		("variable/", "assign_to_bottom"),
 		("variable/", "simple_assign"),
 
+		("while/", "while_basic"),
+		("while/", "while_nested"),
+		("while/", "while_true"),
+
 		("dead_code/", "dead_block"),
 		("dead_code/", "dead_new"),
 		("dead_code/", "dead_binary1"),

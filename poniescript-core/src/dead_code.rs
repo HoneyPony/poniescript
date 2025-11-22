@@ -251,6 +251,19 @@ impl<'db> DeadCodeElim<'db> {
                 // The loop itself can cause dead code, if it has no type (?)
                 return loop_.typ == self.db.types.bottom
             }
+            Expr::WhileLoop(while_) => {
+                // Eliminate the condition expression. If it was a never, then
+                // don't do the while loop at all.
+                self.elim_expr(ast, &mut while_.condition);
+                if while_.condition.typ(ast, &self.db) == self.db.types.bottom {
+                    *expr_id = while_.condition;
+                    return true;
+                }
+                self.elim_expr(ast, &mut while_.inner);
+            
+                // For now, WhileLoop cannot have Bottom type.
+                return false;
+            }
             Expr::Unbound(_) => panic!("ICE: Tried to DCE Unbound"),
             Expr::UnboundFunCapture(_) => panic!("ICE: Tried to DCE UnboundFunCapture"),
             Expr::Print(_) => {

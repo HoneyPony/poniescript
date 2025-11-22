@@ -939,6 +939,18 @@ impl<'a> Codegen<'a> {
 
 				own_val
 			}
+			Expr::WhileLoop(while_) => {
+				// We don't have a value yet; just generate a simple loop.
+				inf_writeln!(into, "{indent}for(;;) {{");
+				self.indent_level += 1;
+				let cond = self.expr(ast, while_.condition, into);
+				inf_writeln!(into, "{indent}\tif(!{cond}) {{ break; }}");
+				let _inner = self.expr(ast, while_.inner, into);
+				self.indent_level -= 1;
+				inf_writeln!(into, "{indent}}}");
+
+				self.val_alloc_slots(Val::Void, while_.typ)
+			}
 			Expr::Break(break_) => {
 				if let Some(inner) = break_.value {
 					let val = self.expr(ast, inner, into);

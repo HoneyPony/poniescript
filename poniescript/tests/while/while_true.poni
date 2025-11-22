@@ -1,0 +1,39 @@
+fun pow(x: int) -> int {
+    var i = 0;
+    var n = 1;
+
+    // Interesting but true:
+    //
+    // Right now, the compiler thinks that the while loop is (possibly) able to
+    // terminate. This means it needs a value for the return value of the function
+    // in that case.
+    //
+    // Because the while loop is the last thing in the function, it currently
+    // just looks at the value of the loop. But the loop doesn't have a value.
+    //
+    // So, for this test case to succeed, we actually have to put a return value
+    // AFTER the infinite while loop.
+    //
+    // Of course, in most code, you will use the loop keyword instead. But I 
+    // wonder if I should implement some constant folding *before/inside* the
+    // typecheck pass that would let the compiler see this is an infinite loop.
+    while true {
+        n = n * 2;
+
+        i = i + 1;
+        if i >= x {
+            // This was a 'break' in a different test case but it has to be
+            // 'return' here.
+            return n;
+        }
+    }
+
+    return 0;
+}
+
+fun init() {
+    print(pow(2)); //! 4
+    print(pow(3)); //! 8
+    print(pow(4)); //! 16
+    print(pow(5)); //! 32
+}

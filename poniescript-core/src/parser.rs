@@ -505,6 +505,22 @@ impl<'b> Parser<'b> {
 		Expr::put_loop_ok(self.ast, self.end(location), inner, self.db.types.bottom, Vec::new())
 	}
 
+	fn expr_while(&mut self) -> Result<ExprId> {
+		let location = self.start();
+
+		expected!(self, Tok::While, "'while'")?;
+
+		let condition = self.expression()?;
+
+		if !self.at(Tok::LeftBrace) {
+			got!(self, "'{{' after while condition");
+		}
+		let inner = self.block()?;
+
+		return Expr::put_whileloop_ok(self.ast, self.end(location), condition, inner,
+			self.db.types.unassigned, Vec::new())
+	}
+
 	fn expr_prefix_callable(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
 			Tok::LeftBrace => self.block(),
@@ -541,6 +557,7 @@ impl<'b> Parser<'b> {
 
 			Tok::If => self.expr_if(),
 			Tok::Loop => self.expr_loop(),
+			Tok::While => self.expr_while(),
 
 			Tok::Fun => {
 				let fun = self.fun_declaration(false)?;
@@ -608,7 +625,7 @@ impl<'b> Parser<'b> {
 
 	fn expr_prefix(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
-			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::Fun => {
+			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::While | Tok::Fun => {
 				let location = self.start();
 				let mut inner = self.expr_prefix_callable()?;
 
@@ -1105,7 +1122,7 @@ impl<'b> Parser<'b> {
 				let mut expect_semicolon = match self.ast.exprs.get(inner).as_ref() {
 					// If the inner expression is a block or a similar "block-like"
 					// thing, then we don't need a semicolon.
-					Expr::Block(_) | Expr::If(_) | Expr::Loop(_) => false,
+					Expr::Block(_) | Expr::If(_) | Expr::Loop(_) | Expr::WhileLoop(_) => false,
 					Expr::FunDeclare(declare) => {
 						// Named function declarations don't need a semicolon.
 						// Lambda ones are more expression-like, so they do..?
