@@ -1,5 +1,5 @@
 use rustc_hash::FxHashSet;
-use tfmt::uwrite;
+use ufmt::uwrite;
 
 use crate::arena::ArenaKey;
 use crate::{db::*, Args};
@@ -280,21 +280,21 @@ impl Val {
 #[macro_export]
 macro_rules! inf_write {
 	($into:expr, $($arg:tt)*) => {
-		tfmt::uwrite!($into, $($arg)*);
+		ufmt::uwrite!($into, $($arg)*).unwrap()
 	}
 }
 
 #[macro_export]
 macro_rules! inf_writeln {
 	($into:expr, $($arg:tt)*) => {
-		tfmt::uwriteln!($into, $($arg)*);
+		ufmt::uwriteln!($into, $($arg)*).unwrap()
 	}
 }
 
-impl tfmt::uDisplay for Val {
-	fn fmt<W>(&self, f: &mut tfmt::Formatter<'_, W>) -> Result<(), W::Error>
+impl ufmt::uDisplay for Val {
+	fn fmt<W>(&self, f: &mut ufmt::Formatter<'_, W>) -> Result<(), W::Error>
 	where
-		W: tfmt::uWrite + ?Sized {
+		W: ufmt::uWrite + ?Sized {
 		match self {
 			Val::Tmp(idx) => uwrite!(f, "t{}", idx),
 			Val::DirectLit {ctype, lit } => uwrite!(f, "(({}){})", ctype, lit),
@@ -383,10 +383,10 @@ impl std::fmt::Display for Val {
 	}
 }
 
-impl tfmt::uDisplay for TypedVal {
-	fn fmt<W>(&self, f: &mut tfmt::Formatter<'_, W>) -> Result<(), W::Error>
+impl ufmt::uDisplay for TypedVal {
+	fn fmt<W>(&self, f: &mut ufmt::Formatter<'_, W>) -> Result<(), W::Error>
 	where
-		W: tfmt::uWrite + ?Sized {
+		W: ufmt::uWrite + ?Sized {
 		uwrite!(f, "{}", self.val)
 	}
 }
@@ -403,10 +403,10 @@ struct Indenter {
 	level: usize,
 }
 
-impl tfmt::uDisplay for Indenter {
-	fn fmt<W>(&self, f: &mut tfmt::Formatter<'_, W>) -> Result<(), W::Error>
+impl ufmt::uDisplay for Indenter {
+	fn fmt<W>(&self, f: &mut ufmt::Formatter<'_, W>) -> Result<(), W::Error>
 	where
-		W: tfmt::uWrite + ?Sized {
+		W: ufmt::uWrite + ?Sized {
 		// In order to keep this "somewhat" fast, instead of looping, use a
 		// maximum allocation size.
 		//
@@ -713,7 +713,8 @@ impl<'a> Codegen<'a> {
 			},
 			Type::Float => {
 				// TODO: What is the best way to lerp ints based on a float?
-				inf_writeln!(into, "{indent}{target_val}{postfix} = {from_val}{postfix} * {one_minus_val} + {to_val}{postfix} * {float_val};")
+				inf_writeln!(into, "{}{}{} = {}{} * {} + {}{} * {};",
+					indent, target_val, postfix, from_val, postfix, one_minus_val, to_val, postfix, float_val)
 			},
 			Type::Tuple(typ_ids) => {
 				// Iterate over each tuple member and lerp.
@@ -731,8 +732,10 @@ impl<'a> Codegen<'a> {
 			_ => {
 				// To do a bool-based lerp, 
 				//    lerp("a", "b", false) gives "a", and true gives "b".
-				inf_writeln!(into, "{indent}if({bool_val}) {{ {target_val}{postfix} = {to_val}{postfix}; }}");
-				inf_writeln!(into, "{indent}\telse {{ {target_val}{postfix} = {from_val}{postfix}; }}");
+				inf_writeln!(into, "{}if({}) {{ {}{} = {}{}; }}",
+					indent, bool_val, target_val, postfix, to_val, postfix);
+				inf_writeln!(into, "{}\telse {{ {}{} = {}{}; }}",
+					indent, target_val, postfix, from_val, postfix);
 			}
 		}
 	}
@@ -764,14 +767,14 @@ impl<'a> Codegen<'a> {
 			//
 			// For now, we're saying >= 0.5. But it could be > 0.5. Or anything
 			// else.
-			define_val!(self, into, bool_val, " = {amount_val} >= 0.5;\n");
+			define_val!(self, into, bool_val, " = {} >= 0.5;\n", amount_val);
 
 			(bool_val, amount_val)
 		}
 		else {
 			let float_val = self.new_val_typed(self.db.types.float);
 			// Casting should give the desired behavior.
-			define_val!(self, into, float_val, " = (ps_float){amount_val};\n");
+			define_val!(self, into, float_val, " = (ps_float){};\n", amount_val);
 
 			(amount_val, float_val)
 		};
@@ -780,7 +783,7 @@ impl<'a> Codegen<'a> {
 		// TODO: Don't do that for smaller lerps? Maybe also consider using specialized
 		// methods for vectors...?
 		let one_minus_val = self.new_val_typed(self.db.types.float);
-		define_val!(self, into, one_minus_val, " = 1.0 - {float_val};\n");
+		define_val!(self, into, one_minus_val, " = 1.0 - {};\n", float_val);
 
 		let result = self.new_val_typed(lerp.typ);
 		// The result val will be defined through compile_partial_lerp.
@@ -861,16 +864,19 @@ impl<'a> Codegen<'a> {
 					// another helper function that just prints *any* value
 					// of a given type.
 					let new_val = self.new_val_typed(*ty);
-					define_val!(self, into, new_val, " = {val}.v_{idx};\n");
+					define_val!(self, into, new_val, " = {}.v_{};\n",
+						val, idx);
 					self.compile_partial_print(&new_val, into);
 				}
 				if tup.len() == 1 {
 					// Place a comma after the last element for 1-element
 					// tuple.
-					inf_writeln!(into, "{indent}ps_print_const(\",)\");");
+					inf_writeln!(into, "{}ps_print_const(\",)\");",
+						indent);
 				}
 				else {
-					inf_writeln!(into, "{indent}ps_print_const(\")\");");
+					inf_writeln!(into, "{}ps_print_const(\")\");",
+						indent);
 				}
 			},
 
@@ -929,7 +935,8 @@ impl<'a> Codegen<'a> {
 		let own_val = self.new_val_typed_tmp(if_.typ);
 		define_val!(self, into, own_val, ";\n");
 
-		inf_writeln!(into, "{indent}if ({cond}) {{");
+		inf_writeln!(into, "{}if ({}) {{",
+			indent, cond);
 		self.indent_level += 1;
 		let then_val = self.expr(ast, if_.then_branch, into);
 		
@@ -937,18 +944,18 @@ impl<'a> Codegen<'a> {
 		// IMPORTANT: set_val will only call promote() if the value is needed.
 		set_val!(self, into, own_val, " = {};\n", then_val);
 		self.indent_level -= 1;
-		inf_writeln!(into, "{indent}}}");
+		inf_writeln!(into, "{}}}", indent);
 
 		// Generate else branch.
 		if let Some(else_branch) = if_.else_branch.as_ref() {
-			inf_writeln!(into, "{indent}else {{");
+			inf_writeln!(into, "{}else {{", indent);
 			self.indent_level += 1;
 
 			let else_val = self.expr(ast, *else_branch, into);
 			// Save the value, if relevant.
 			set_val!(self, into, own_val, " = {};\n", else_val);
 			self.indent_level -= 1;
-			inf_writeln!(into, "{indent}}}");
+			inf_writeln!(into, "{}}}", indent);
 		}
 
 		self.tmp_to_used_val(own_val)
@@ -983,11 +990,11 @@ impl<'a> Codegen<'a> {
 					self.loop_val = Some(val);
 				}
 
-				inf_writeln!(into, "{indent}for(;;) {{");
+				inf_writeln!(into, "{}for(;;) {{", indent);
 				self.indent_level += 1;
 				self.expr(ast, loop_.inner, into);
 				self.indent_level -= 1;
-				inf_writeln!(into, "{indent}}}");
+				inf_writeln!(into, "{}}}", indent);
 
 				let own_val = match self.loop_val.take() {
 					Some(val) => self.tmp_to_used_val(val),
@@ -1001,13 +1008,14 @@ impl<'a> Codegen<'a> {
 			}
 			Expr::WhileLoop(while_) => {
 				// We don't have a value yet; just generate a simple loop.
-				inf_writeln!(into, "{indent}for(;;) {{");
+				inf_writeln!(into, "{}for(;;) {{", indent);
 				self.indent_level += 1;
 				let cond = self.expr(ast, while_.condition, into);
-				inf_writeln!(into, "{indent}\tif(!{cond}) {{ break; }}");
+				inf_writeln!(into, "{}\tif(!{}) {{ break; }}",
+					indent, cond);
 				let _inner = self.expr(ast, while_.inner, into);
 				self.indent_level -= 1;
-				inf_writeln!(into, "{indent}}}");
+				inf_writeln!(into, "{}}}", indent);
 
 				self.val_alloc_slots(Val::Void, while_.typ)
 			}
@@ -1018,10 +1026,11 @@ impl<'a> Codegen<'a> {
 						panic!("ICE: break inside a loop with no Val");
 					};
 					if loop_val.needs_storage() {
-						inf_writeln!(into, "{indent}{loop_val} = {val};");
+						inf_writeln!(into, "{}{} = {};",
+							indent, loop_val, val);
 					}
 				}
-				inf_writeln!(into, "{indent}break;");
+				inf_writeln!(into, "{}break;", indent);
 
 				// The Break itself is always Never.
 				Val::Bottom.typed(self.db.types.bottom, None)
@@ -1038,24 +1047,29 @@ impl<'a> Codegen<'a> {
 				if self.db.is_value_type(opt_else.typ) { todo!("option type 'is nil?' for value types") };
 
 				// If the 'value' is non-null, then we take on that value.
-				inf_writeln!(into, "{indent}if({value_val}) {{");
-				if own_val.needs_storage() { inf_writeln!(into, "{indent}\t{own_val} = {value_val};"); }
-				inf_writeln!(into, "{indent}}}");
+				inf_writeln!(into, "{}if({}) {{",
+					indent, value_val);
+				if own_val.needs_storage() {
+					inf_writeln!(into, "{}\t{} = {};",
+						indent, own_val, value_val);
+				}
+				inf_writeln!(into, "{}}}", indent);
 
 				// Otherwise, we evaluate the 'otherwise' branch, and take on
 				// that value (if there was one).
-				inf_writeln!(into, "{indent}else {{");
+				inf_writeln!(into, "{}else {{", indent);
 				self.indent_level += 1;
 
 				let otherwise_val = self.expr(ast, opt_else.otherwise, into);
 				// If the otherwise value is bottom, that means that we do NOT write
 				// it into our own value, because the else branch should have diverged.
 				if own_val.needs_storage() && !otherwise_val.is_bottom() {
-					inf_writeln!(into, "{indent}\t{own_val} = {otherwise_val};");
+					inf_writeln!(into, "{}\t{} = {};",
+						indent, own_val, otherwise_val);
 				}
 
 				self.indent_level -= 1;
-				inf_writeln!(into, "{indent}}}");
+				inf_writeln!(into, "{}}}", indent);
 				self.tmp_to_used_val(own_val)
 			}
 
@@ -1068,7 +1082,7 @@ impl<'a> Codegen<'a> {
 				assert!(left.typ == self.db.types.bool);
 
 				let own_val = self.new_val_typed(self.db.types.bool);
-				define_val!(self, into, own_val, " = {left};\n");
+				define_val!(self, into, own_val, " = {};\n", left);
 
 				// Short-circuiting behavior:
 				// If we're 'and', and lhs is false, we don't evaluate rhs.
@@ -1080,7 +1094,8 @@ impl<'a> Codegen<'a> {
 				};
 
 				// Safe because own_val is bool
-				inf_writeln!(into, "{indent}if({bang}{}) {{", own_val.val);
+				inf_writeln!(into, "{}if({}{}) {{",
+					indent, bang, own_val.val);
 				self.indent_level += 1;
 
 				// Generate the right expression inside the if.
@@ -1091,11 +1106,11 @@ impl<'a> Codegen<'a> {
 					assert!(right.typ == self.db.types.bool);
 
 					// Our value now evalutes to this other one.
-					set_val!(self, into, own_val, " = {right};\n");
+					set_val!(self, into, own_val, " = {};\n", right);
 				}
 
 				self.indent_level -= 1;
-				inf_writeln!(into, "{indent}}}");
+				inf_writeln!(into, "{}}}", indent);
 
 				own_val
 			}
@@ -1163,10 +1178,10 @@ impl<'a> Codegen<'a> {
 
 				let comma = ", ";
 				for val in vals {
-					inf_write!(into, "{comma}{val}");
+					inf_write!(into, "{}{}", comma, val);
 				}
 				// TODO: Implement closure, gc scoping, etc
-				inf_writeln!(into, "{comma}NULL);");
+				inf_writeln!(into, "{}NULL);", comma);
 
 				val
 			},
@@ -1189,7 +1204,8 @@ impl<'a> Codegen<'a> {
 				let val = if self.db.type_generates_value(block.typ) {
 					let val = self.new_val();
 
-					inf_writeln!(into, "{indent}{} {};",
+					inf_writeln!(into, "{}{} {};",
+						indent,
 						self.db.get_ctype(block.typ),
 						val);
 
@@ -1200,7 +1216,7 @@ impl<'a> Codegen<'a> {
 					0 => 0,
 					n => n - 1,
 				};
-				inf_writeln!(into, "{indent}{{");
+				inf_writeln!(into, "{}{{", indent);
 				self.indent_level += 1;
 
 				// Each block contains its own list of var GC scopes. This
@@ -1220,7 +1236,7 @@ impl<'a> Codegen<'a> {
 							// to nonexistent variables).
 							self.indent_level -= 1;
 							self.pop_block_scope();
-							inf_writeln!(into, "{indent}}}");
+							inf_writeln!(into, "{}}}", indent);
 							return val;
 						}
 					}
@@ -1248,7 +1264,8 @@ impl<'a> Codegen<'a> {
 						let last = last.unwrap();
 						if last.needs_storage() && val.needs_storage() {
 							// Add one to indent because we're in the block
-							inf_writeln!(into, "{indent}\t{val} = {last};");
+							inf_writeln!(into, "{}\t{} = {};",
+								indent, val, last);
 						}
 
 						val
@@ -1258,7 +1275,7 @@ impl<'a> Codegen<'a> {
 				self.pop_block_scope();
 
 				self.indent_level -= 1;
-				inf_writeln!(into, "{indent}}}");
+				inf_writeln!(into, "{}}}", indent);
 				self.val_alloc_slots(val, block.typ)
 			},
 			Expr::Print(print) => {
@@ -1283,7 +1300,7 @@ impl<'a> Codegen<'a> {
 
 				// For now, the print expr always adds a newline. This is the
 				// same as GDScript, but we could change it in the future.
-				inf_writeln!(into, "{indent}ps_println();");
+				inf_writeln!(into, "{}ps_println();", indent);
 				
 				// The print returns its first value. Right now, prints always
 				// require at least one argument.
@@ -1309,7 +1326,8 @@ impl<'a> Codegen<'a> {
 				// str() always returns a StrBuf, so we can easily generate a new
 				// one unconditionally.
 				let buf_val = self.new_val();
-				inf_writeln!(into, "{indent}ps_strbuf *{buf_val} = ps_strbuf_new(ctx, 8);");
+				inf_writeln!(into, "{}ps_strbuf *{} = ps_strbuf_new(ctx, 8);",
+					indent, buf_val);
 				
 				for val in &vals {
 					self.compile_partial_str(val, &buf_val, into);
@@ -1398,15 +1416,15 @@ impl<'a> Codegen<'a> {
 				// for a function call, we have to be sure to always generate
 				// the cname separately.
 				define_val!(self, into, val, " = ");
-				inf_write!(into, "{fun_val}.fun(ctx");
+				inf_write!(into, "{}.fun(ctx", fun_val);
 
 				let comma = ", ";
 				for val in vals {
-					inf_write!(into, "{comma}{val}");
+					inf_write!(into, "{}{}", comma, val);
 					//comma = ", ";
 				}
 				// TODO: Implement closure, gc scoping, etc
-				inf_writeln!(into, "{comma}{fun_val}.closure);");
+				inf_writeln!(into, "{}{}.closure);", comma, fun_val);
 
 				val
 			},
@@ -1466,7 +1484,8 @@ impl<'a> Codegen<'a> {
 						assert!(rhs.typ == self.db.get_var_type(init.var));
 						let varname = self.db.get_cname(init.var);
 
-						inf_writeln!(into, "{indent}{}->{varname} = {rhs};", val.val);
+						inf_writeln!(into, "{}{}->{} = {};", 
+							indent, val.val, varname, rhs);
 
 						dont_initialize.insert(init.var);
 					}
@@ -1481,7 +1500,8 @@ impl<'a> Codegen<'a> {
 							// TODO: Some way to re-use compiled exprs?
 							let rhs = self.expr(ast, initializer, into); 
 							let varname = self.db.get_cname(*var);
-							inf_writeln!(into, "{indent}{}->{varname} = {rhs};", val.val);
+							inf_writeln!(into, "{}{}->{} = {};",
+								indent, val.val, varname, rhs);
 							//self.compile_assign(ast, *var, initializer, into, false);
 						}
 					}
@@ -1505,7 +1525,7 @@ impl<'a> Codegen<'a> {
 				let val = self.new_val_typed(typ);
 
 				// TODO: Should lhs be promoted...??
-				define_val!(self, into, val, " = {}{arrow}{};\n", lhs.val, varname);
+				define_val!(self, into, val, " = {}{}{};\n", lhs.val, arrow, varname);
 
 				val
 			}
@@ -1527,7 +1547,7 @@ impl<'a> Codegen<'a> {
 
 				// TODO: Should lhs be promoted...??
 				// This is a bit hacky (the double assign), but I think it is overall fine.
-				define_val!(self, into, val, " = {}{arrow}{} = {};\n", lhs.val, varname, rhs);
+				define_val!(self, into, val, " = {}{}{} = {};\n", lhs.val, arrow, varname, rhs);
 
 				val
 			}
@@ -1540,15 +1560,16 @@ impl<'a> Codegen<'a> {
 					lit.values.len());
 
 				if val.needs_storage() {
-					inf_writeln!(into, "{indent}{}->header.length = {};\n", val.val, lit.values.len());
+					inf_writeln!(into, "{}{}->header.length = {};\n", indent, val.val, lit.values.len());
 					// Arrays keep track of their type at runtime, for the GC.
-					inf_writeln!(into, "{indent}{}->header.type = {};\n", val.val, self.db.get_type_ctag(lit.elem_typ));
+					inf_writeln!(into, "{}{}->header.type = {};\n", indent, val.val, self.db.get_type_ctag(lit.elem_typ));
 
 					let mut idx = 0;
 					for value in &lit.values {
 						let nth = self.expr(ast, *value, into);
 						assert!(nth.typ == lit.elem_typ);
-						inf_writeln!(into, "{indent}{}->contents[{idx}] = {nth};", val.val);
+						inf_writeln!(into, "{}{}->contents[{}] = {};",
+							indent, val.val, idx, nth);
 
 						idx += 1;
 					}
@@ -1576,7 +1597,8 @@ impl<'a> Codegen<'a> {
 				let val = self.new_val_typed(index.typ);
 
 				// TODO: Generate bounds checks
-				define_val!(self, into, val, " = {arr_val}->contents[{idx_val}];\n");
+				define_val!(self, into, val, " = {}->contents[{}];\n",
+					arr_val, idx_val);
 
 				val
 			}
@@ -1593,7 +1615,8 @@ impl<'a> Codegen<'a> {
 				let val = self.new_val_typed(set.typ);
 
 				// TODO: Generate bounds checks
-				define_val!(self, into, val, " = {arr_val}->contents[{idx_val}] = {rhs_val};\n");
+				define_val!(self, into, val, " = {}->contents[{}] = {};\n"
+					arr_val, idx_val, rhs_val);
 
 				val
 			}
@@ -1610,7 +1633,8 @@ impl<'a> Codegen<'a> {
 						let inner = self.expr(ast, *expr, into);
 
 						assert!(inner.typ == subtypes[idx]);
-						inf_writeln!(into, "{indent}{}.v_{idx} = {inner};", val.val);
+						inf_writeln!(into, "{}{}.v_{} = {};",
+							indent, val.val, idx, inner);
 					}
 				}
 
@@ -1651,13 +1675,15 @@ impl<'a> Codegen<'a> {
 
 		// Helper function for doing the promotions
 		let do_promote = |the_fn: &'static str, into: &mut String| {
-			inf_writeln!(into, "{indent}{to}{to_post} = {the_fn}{from}{from_post});");
+			inf_writeln!(into, "{}{}{} = {}{}{});",
+				indent, to, to_post, the_fn, from, from_post);
 		};
 
 		// If we end up promoting a type to itself, that is just a no-op.
 		// May happen with certain tuple values.
 		if to_typ == from_typ {
-			inf_writeln!(into, "{indent}{to}{to_post} = {from}{from_post};");
+			inf_writeln!(into, "{}{}{} = {}{};",
+				indent, to, to_post, from, from_post);
 			return;
 		}
 
@@ -1830,7 +1856,7 @@ impl<'a> Codegen<'a> {
 				Some(self.expr(ast, expression.expression, into))
 			},
 			Stmt::Return(ret) => {
-				inf_writeln!(into, "{indent}ctx->frame = gc_frame.prev;");
+				inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
 
 				match &ret.expression {
 					Some(value) => {
@@ -1843,11 +1869,12 @@ impl<'a> Codegen<'a> {
 							// If it's not bottom, check the typechecker's work.
 							assert!(val.typ == needed_type);
 
-							inf_writeln!(into, "{indent}return {val};");
+							inf_writeln!(into, "{}return {};",
+								indent, val);
 						}
 					},
 					None => {
-						inf_writeln!(into, "{indent}return;");
+						inf_writeln!(into, "{}return;", indent);
 					}
 				}
 
@@ -1899,7 +1926,8 @@ impl<'a> Codegen<'a> {
 
 		let indent = self.indent();
 		// Discard type as we can't meaningfully promote it.
-		inf_writeln!(into, "{indent}{declaration}{space}{} = {value};", var_lvalue.val);
+		inf_writeln!(into, "{}{}{}{} = {};",
+			indent, declaration, space, var_lvalue.val, value);
 
 		var_lvalue
 	}
@@ -1943,7 +1971,8 @@ impl<'a> Codegen<'a> {
 		}
 
 		if let Some(class) = self.db.get(fun).class {
-			inf_writeln!(own_buffer, "{indent}struct {} *const this = closure;", self.db.get_class_cname(class));
+			inf_writeln!(own_buffer, "{}struct {} *const this = closure;",
+				indent, self.db.get_class_cname(class));
 		}
 
 		// Same idea as in codegen()
@@ -1953,28 +1982,28 @@ impl<'a> Codegen<'a> {
 		let val = self.expr(ast, body, &mut own_buffer);
 
 		// Generate unconditional GC-frame pop
-		inf_writeln!(own_buffer, "{indent}ctx->frame = gc_frame.prev;");
+		inf_writeln!(own_buffer, "{}ctx->frame = gc_frame.prev;", indent);
 
 		if val.needs_storage() {
 			assert!(val.typ == own_return_type);
 			// If it does have a value, then we write it as a default
 			// return value.
-			inf_writeln!(own_buffer, "{indent}return {val};");
+			inf_writeln!(own_buffer, "{}return {};", indent, val);
 		}
 
 		// Now that we have generated the inner expression, we know how big
 		// of a GC frame we need. TODO: Actually generate the GC frame.
 		let gc_frame_count = self.gc_frame.next_alloc_slot.get();
-		inf_writeln!(own_buffer_beginning, "{indent}// gc frame count: {}", gc_frame_count);
+		inf_writeln!(own_buffer_beginning, "{}// gc frame count: {}", indent, gc_frame_count);
 
-		inf_writeln!(own_buffer_beginning, "{indent}struct {{");
-		inf_writeln!(own_buffer_beginning, "{indent}\tstruct poni_gc_frame *prev;");
-		inf_writeln!(own_buffer_beginning, "{indent}\tuint64_t ptr_count;");
-		inf_writeln!(own_buffer_beginning, "{indent}\tvoid *ptrs[{}];", gc_frame_count);
-		inf_writeln!(own_buffer_beginning, "{indent}}} gc_frame = {{0}};");
-		inf_writeln!(own_buffer_beginning, "{indent}gc_frame.ptr_count = {};", gc_frame_count);
-		inf_writeln!(own_buffer_beginning, "{indent}gc_frame.prev = ctx->frame;");
-		inf_writeln!(own_buffer_beginning, "{indent}ctx->frame = (void*)&gc_frame;");
+		inf_writeln!(own_buffer_beginning, "{}struct {{", indent);
+		inf_writeln!(own_buffer_beginning, "{}\tstruct poni_gc_frame *prev;", indent);
+		inf_writeln!(own_buffer_beginning, "{}\tuint64_t ptr_count;", indent);
+		inf_writeln!(own_buffer_beginning, "{}\tvoid *ptrs[{}];", indent, gc_frame_count);
+		inf_writeln!(own_buffer_beginning, "{}}} gc_frame = {{0}};", indent);
+		inf_writeln!(own_buffer_beginning, "{}gc_frame.ptr_count = {};", indent, gc_frame_count);
+		inf_writeln!(own_buffer_beginning, "{}gc_frame.prev = ctx->frame;", indent);
+		inf_writeln!(own_buffer_beginning, "{}ctx->frame = (void*)&gc_frame;", indent);
 		
 		// Pop type value
 		self.return_types.pop();
@@ -2066,7 +2095,7 @@ poni_get_type_stride(uint64_t tag) {
 
 				// Build up one big set of pointer types.
 				Type::Class(_) => {
-					inf_writeln!(ptr_types, "\t\tcase {tag}:");
+					inf_writeln!(ptr_types, "\t\tcase {}:", tag);
 				}
 
 				Type::Option(id) => {
@@ -2079,12 +2108,12 @@ poni_get_type_stride(uint64_t tag) {
 					}
 				}
 
-				Type::Fun(_) => { inf_writeln!(fun_types, "\t\tcase {tag}:"); }
-				Type::FunRaw(_) => { inf_writeln!(funraw_types, "\t\tcase {tag}:"); }
+				Type::Fun(_) => { inf_writeln!(fun_types, "\t\tcase {}:", tag); }
+				Type::FunRaw(_) => { inf_writeln!(funraw_types, "\t\tcase {}:", tag); }
 
 				// Value types should each return their sizeof.
 				Type::Tuple(_) => {
-					inf_writeln!(type_stride, "\t\tcase {tag}: return sizeof({});", self.db.get_ctype(typ));
+					inf_writeln!(type_stride, "\t\tcase {}: return sizeof({});", tag, self.db.get_ctype(typ));
 				}
 
 				Type::AssumeFloat | Type::AssumeInt | Type::Unassigned
@@ -2103,7 +2132,7 @@ poni_get_type_stride(uint64_t tag) {
 			inf_writeln!(funraw_types, "\t\t\treturn sizeof(void (*)(void))")
 		}
 
-		inf_write!(type_stride, "{ptr_types}{fun_types}{funraw_types}");
+		inf_write!(type_stride, "{}{}{}", ptr_types, fun_types, funraw_types);
 
 		inf_writeln!(type_stride, "\t}}\n}}");
 		type_stride
@@ -2197,7 +2226,7 @@ poni_gc_get_allocation_size(void *object) {
 			let tag = self.db.get_type_ctag(typ);
 			match self.db.get(typ) {
 				Type::Class(id) => {
-					inf_writeln!(visit_object, "\tcase {tag}: {{");
+					inf_writeln!(visit_object, "\tcase {}: {{", tag);
 					inf_writeln!(visit_object, "\t\tstruct {} *self = object;", self.db.get_class_cname(*id));
 					for field in &self.db.get(*id).vars {
 						let field_ty = self.db.get(*field).typ;
@@ -2229,8 +2258,9 @@ poni_gc_get_allocation_size(void *object) {
 
 							Type::Fun(_) | Type::Tuple(_) => {
 								let inner_tag = self.db.get_type_ctag(field_ty);
-								inf_writeln!(visit_object, "\t\tponi_gc_visit_valuetype(gc, &self->{}, {inner_tag});",
-									self.db.get_cname(*field));
+								inf_writeln!(visit_object, "\t\tponi_gc_visit_valuetype(gc, &self->{}, {});",
+									self.db.get_cname(*field),
+									inner_tag);
 							}
 
 							Type::Unassigned | Type::AssumeFloat | Type::AssumeInt | Type::UnboundIdent(_) | Type::UnboundCStructPtr(_) => {}
@@ -2242,7 +2272,7 @@ poni_gc_get_allocation_size(void *object) {
 				},
 
 				Type::Tuple(typs) => {
-					inf_writeln!(valuetype, "\tcase {tag}: {{");
+					inf_writeln!(valuetype, "\tcase {}: {{", tag);
 					inf_writeln!(valuetype, "\t\t{} *self = object;", self.db.get_ctype(typ));
 
 					for (idx, typ) in typs.iter().enumerate() {
@@ -2275,8 +2305,8 @@ poni_gc_get_allocation_size(void *object) {
 
 							Type::Fun(_) | Type::Tuple(_) => {
 								let inner_tag = self.db.get_type_ctag(*typ);
-								inf_writeln!(valuetype, "\t\tponi_gc_visit_valuetype(gc, &self->v_{}, {inner_tag});",
-									idx);
+								inf_writeln!(valuetype, "\t\tponi_gc_visit_valuetype(gc, &self->v_{}, {});",
+									idx, inner_tag);
 							}
 
 							Type::Unassigned | Type::AssumeFloat | Type::AssumeInt | Type::UnboundIdent(_) | Type::UnboundCStructPtr(_) => {}
@@ -2293,7 +2323,7 @@ poni_gc_get_allocation_size(void *object) {
 					// be needed anyway.
 					if !self.db.is_sig_used(*sig) { continue; }
 
-					inf_writeln!(valuetype, "\tcase {tag}: {{");
+					inf_writeln!(valuetype, "\tcase {}: {{", tag);
 					inf_writeln!(valuetype, "\t\t{} *self = object;", self.db.get_ctype(typ));
 					// Visit the closure for each fun.
 					// We could make this particular bit of code some sort of
@@ -2369,7 +2399,8 @@ poni_gc_get_allocation_size(void *object) {
 			// 2. Initialize it, if it *didn't* already exist.
 			if args.hot {
 				let indent = self.indent();
-				inf_writeln!(outputs.global_init, "{indent}{} = poni_hot_lookup(\"{} {};\", sizeof({}), &existed);",
+				inf_writeln!(outputs.global_init, "{}{} = poni_hot_lookup(\"{} {};\", sizeof({}), &existed);",
+					indent,
 					// HACK: Chop off the * (the () have already been chopped)
 					&global_name[1..],
 					// Replicate the initializer
@@ -2377,7 +2408,7 @@ poni_gc_get_allocation_size(void *object) {
 					// For sizeof() we do want the * cause that tells us the
 					// real size
 					self.db.get_cname(global));
-				inf_writeln!(outputs.global_init, "{indent}if(!existed) {{");
+				inf_writeln!(outputs.global_init, "{}if(!existed) {{", indent);
 
 				self.indent_level += 1;
 			}
@@ -2394,7 +2425,7 @@ poni_gc_get_allocation_size(void *object) {
 				self.indent_level -= 1;
 
 				let indent = self.indent();
-				inf_writeln!(outputs.global_init, "{indent}}}");
+				inf_writeln!(outputs.global_init, "{}}}", indent);
 			}
 		}
 

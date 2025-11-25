@@ -10,4 +10,4 @@ anstyle = "1.0.7"
 clap = { workspace = true }
 log = "0.4.28"
 rustc-hash = "2.0.0"
-tfmt = "0.4.0"
+ufmt = { version = "0.2.0", features = ["std"] }
