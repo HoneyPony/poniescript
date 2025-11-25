@@ -640,7 +640,8 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 		match self.db.get(cur_typ) {
 			Type::Int | Type::Float => {
-				inf_writeln!(into, "{indent}{result_val}{postfix} = {lhs_val}{postfix} {op} {rhs_val}{postfix};");
+				inf_writeln!(into, "{}{}{} = {}{} {} {}{};",
+					indent, result_val, postfix, lhs_val, postfix, op, rhs_val, postfix);
 			}
 			Type::Tuple(typ_ids) => {
 				// Iterate over each tuple member and perform the operator.
@@ -681,7 +682,8 @@ impl<'a> Codegen<'a> {
 		// For simple binary expressions, write them out as one line & make them
 		// a constant value
 		if binary.typ == self.db.types.int || binary.typ == self.db.types.float {
-			inf_writeln!(into, "{indent}const {ctype} {val} = {left} {op} {right};");
+			inf_writeln!(into, "{}const {} {} = {} {} {};",
+				indent, ctype, val, left, op, right);
 		}
 		else {
 			// Otherwise, we have to generate them through a tree, so we can't
@@ -706,7 +708,8 @@ impl<'a> Codegen<'a> {
 		match self.db.get(cur_typ) {
 			Type::Int => {
 				// TODO: What is the best way to lerp ints based on a float?
-				inf_writeln!(into, "{indent}{target_val}{postfix} = (ps_int)({from_val}{postfix} * {one_minus_val} + {to_val}{postfix} * {float_val});")
+				inf_writeln!(into, "{}{}{} = (ps_int)({}{} * {} + {}{} * {});",
+					indent, target_val, postfix, from_val, postfix, one_minus_val, to_val, postfix, float_val)
 			},
 			Type::Float => {
 				// TODO: What is the best way to lerp ints based on a float?
@@ -815,7 +818,8 @@ impl<'a> Codegen<'a> {
 
 		let indent = self.indent();
 
-		inf_writeln!(into, "{indent}const ps_bool {val} = (ps_bool)({left} {op} {right});");
+		inf_writeln!(into, "{}const ps_bool {} = (ps_bool)({} {} {});",
+			indent, val, left, op, right);
 
 		// Bool: No gc slot
 		val.typed(self.db.types.bool, None)
@@ -833,26 +837,26 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 
 		match typ {
-			Type::Int => inf_writeln!(into, "{indent}ps_print_int({val});"),
-			Type::Float => inf_writeln!(into, "{indent}ps_print_float({val});"),
-			Type::Bool => inf_writeln!(into, "{indent}ps_print_bool({val});"),
-			Type::Void => inf_writeln!(into, "{indent}/* ps_print_void */"),
-			Type::StrConst | Type::Str => inf_writeln!(into, "{indent}ps_print_str({val});"),
-			Type::StrBuf => inf_writeln!(into, "{indent}ps_print_str({val}->buffer);"),
+			Type::Int => inf_writeln!(into, "{}ps_print_int({});", indent, val),
+			Type::Float => inf_writeln!(into, "{}ps_print_float({});", indent, val),
+			Type::Bool => inf_writeln!(into, "{}ps_print_bool({});", indent, val),
+			Type::Void => inf_writeln!(into, "{}/* ps_print_void */", indent),
+			Type::StrConst | Type::Str => inf_writeln!(into, "{}ps_print_str({});", indent, val),
+			Type::StrBuf => inf_writeln!(into, "{}ps_print_str({}->buffer);", indent, val),
 			Type::Bottom => { },
-			Type::Fun(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun\", (uintptr_t){val}.fun);"),
-			Type::FunRaw(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"fun*\", (uintptr_t){val});"),
-			Type::Class(_) => inf_writeln!(into, "{indent}ps_print_ptr(\"object\", (uintptr_t){val});"),
+			Type::Fun(_) => inf_writeln!(into, "{}ps_print_ptr(\"fun\", (uintptr_t){}.fun);", indent, val),
+			Type::FunRaw(_) => inf_writeln!(into, "{}ps_print_ptr(\"fun*\", (uintptr_t){});", indent, val),
+			Type::Class(_) => inf_writeln!(into, "{}ps_print_ptr(\"object\", (uintptr_t){});", indent, val),
 			
 			Type::Option(_) => todo!("print() for Option"),
 			Type::ArrayOf(_) => todo!("print() for Array"),
 			Type::Tuple(tup) => {
-				inf_writeln!(into, "{indent}ps_print_const(\"(\");");
+				inf_writeln!(into, "{}ps_print_const(\"(\");", indent);
 				for (idx, ty) in tup.iter().enumerate() {
 					if idx > 0 {
-						inf_writeln!(into, "{indent}ps_print_const(\", \");");
+						inf_writeln!(into, "{}ps_print_const(\", \");", indent);
 					}
-					// TODO: We can probably optimize the niceness of the code
+					inf_writeln!(into, "{}ps_print_const(\")\");", indent);
 					// generated here by splitting compile_partial_print into 
 					// another helper function that just prints *any* value
 					// of a given type.
@@ -891,12 +895,12 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 
 		match typ {
-			Type::Int => inf_writeln!(into, "{indent}ps_strfmt_int(ctx, {buf_val}, {val});"),
-			Type::Float => inf_writeln!(into, "{indent}ps_strfmt_float(ctx, {buf_val}, {val});"),
-			Type::Void => inf_writeln!(into, "{indent}/* ps_strfmt_void */"),
-			Type::Bool => inf_writeln!(into, "{indent}ps_strfmt_bool(ctx, {buf_val}, {val});"),
-			Type::StrConst | Type::Str => inf_writeln!(into, "{indent}ps_strfmt_str(ctx, {buf_val}, {val});"),
-			Type::StrBuf => inf_writeln!(into, "{indent}ps_strfmt_strbuf(ctx, {buf_val}, {val});"),
+			Type::Int => inf_writeln!(into, "{}ps_strfmt_int(ctx, {}, {});", indent, buf_val, val),
+			Type::Float => inf_writeln!(into, "{}ps_strfmt_float(ctx, {}, {});", indent, buf_val, val),
+			Type::Void => inf_writeln!(into, "{}/* ps_strfmt_void */", indent),
+			Type::Bool => inf_writeln!(into, "{}ps_strfmt_bool(ctx, {}, {});", indent, buf_val, val),
+			Type::StrConst | Type::Str => inf_writeln!(into, "{}ps_strfmt_str(ctx, {}, {});", indent, buf_val, val),
+			Type::StrBuf => inf_writeln!(into, "{}ps_strfmt_strbuf(ctx, {}, {});", indent, buf_val, val),
 			Type::Bottom => { },
 			
 			Type::Fun(_) => todo!("str() for Fun"),
