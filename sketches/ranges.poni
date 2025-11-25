@@ -48,4 +48,16 @@
 //
 // which I guess is fine.
 //
-// 
+// Ultimately probably something like a..b for =< is a decent enough syntax.
+// I'm not really sure.
+//
+// Another question is whether there should be range types that count downwards.
+// Something like a.\.b? Or just
+//
+//    for i in a..b.countdown()
+//
+// or something?
+//
+// Yeah, prolly ultimately for certain fancier use cases it should just be a
+// method on the range that returns something else. E.g. a..b.by(3) returns a
+// new object or iterator that counts by 3.
