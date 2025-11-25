@@ -1,4 +1,5 @@
 use rustc_hash::FxHashSet;
+use tfmt::uwrite;
 
 use crate::arena::ArenaKey;
 use crate::{db::*, Args};
@@ -279,33 +280,63 @@ impl Val {
 #[macro_export]
 macro_rules! inf_write {
 	($into:expr, $($arg:tt)*) => {
-		match write!($into, $($arg)*) {
-			Ok(_) => {},
-			Err(_) => {
-				#[cfg(debug_assertions)]
-				panic!("ICE: Codegen: 'infallible' write to buffer failed");
-				#[cfg(not(debug_assertions))]
-				unsafe { std::hint::unreachable_unchecked() }
-			}
-		}
+		tfmt::uwrite!($into, $($arg)*);
 	}
 }
 
 #[macro_export]
 macro_rules! inf_writeln {
 	($into:expr, $($arg:tt)*) => {
-		match writeln!($into, $($arg)*) {
-			Ok(_) => {},
-			Err(_) => {
-				#[cfg(debug_assertions)]
-				panic!("ICE: Codegen: 'infallible' writeln to buffer failed");
-				#[cfg(not(debug_assertions))]
-				unsafe { std::hint::unreachable_unchecked() }
-			}
-		}
+		tfmt::uwriteln!($into, $($arg)*);
 	}
 }
 
+impl tfmt::uDisplay for Val {
+	fn fmt<W>(&self, f: &mut tfmt::Formatter<'_, W>) -> Result<(), W::Error>
+	where
+		W: tfmt::uWrite + ?Sized {
+		match self {
+			Val::Tmp(idx) => uwrite!(f, "t{}", idx),
+			Val::DirectLit {ctype, lit } => uwrite!(f, "(({}){})", ctype, lit),
+			Val::DirectVar { this_val, name, depth } => {
+				if *depth > 0 {
+					if let Some(idx) = this_val {
+						let val = Val::Tmp(*idx);
+						uwrite!(f, "{}->", val)?;
+					}
+					else {
+						// TODO: The problem with this system is it doesn't seem
+						// like it can meaningfully support static variables in a
+						// clean way. We probably do want to change into synthesizing
+						// AST nodes of some sort.
+						uwrite!(f, "this->")?;
+					}
+					let depth_loop = depth - 1;
+					while depth_loop > 0 {
+						todo!("nested class support");
+						depth_loop -= 1;
+					}
+				}
+				uwrite!(f, "{}", name)
+			}
+			Val::DirectSelf => {
+				uwrite!(f, "this")
+			}
+
+			// String literals are always stored in variables with a consistent naming scheme.
+			Val::StringLit { id } => uwrite!(f, "ps_str_const{}", id.to_index()),
+			Val::BoolLit { val } => match val {
+				true => uwrite!(f, "((ps_bool)1)"),
+				false => uwrite!(f, "((ps_bool)0)"),
+			}
+			Val::Bottom => panic!("ICE: Tried to codegen Val::Bottom"),
+
+			// Void values have no representation.
+			Val::Void => Ok(())
+		}
+		
+	}
+}
 
 impl std::fmt::Display for Val {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -352,16 +383,41 @@ impl std::fmt::Display for Val {
 	}
 }
 
+impl tfmt::uDisplay for TypedVal {
+	fn fmt<W>(&self, f: &mut tfmt::Formatter<'_, W>) -> Result<(), W::Error>
+	where
+		W: tfmt::uWrite + ?Sized {
+		uwrite!(f, "{}", self.val)
+	}
+}
+
 // Now that we no longer have promote() in the compiler, we can directly
 // write TypedVals into the output stream.
 impl std::fmt::Display for TypedVal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		 write!(f, "{}", self.val)
+		write!(f, "{}", self.val)
 	}
 }
 
 struct Indenter {
 	level: usize,
+}
+
+impl tfmt::uDisplay for Indenter {
+	fn fmt<W>(&self, f: &mut tfmt::Formatter<'_, W>) -> Result<(), W::Error>
+	where
+		W: tfmt::uWrite + ?Sized {
+		// In order to keep this "somewhat" fast, instead of looping, use a
+		// maximum allocation size.
+		//
+		// I think, however, that the main overhead from Indenter likely comes
+		// from the fact that it exists at all...
+		let len = match self.level {
+			l @ 0..16 => 16 - l,
+			_ => 0,
+		};
+		f.write_str(&"\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t"[len..16])
+	}
 }
 
 impl std::fmt::Display for Indenter {
@@ -575,7 +631,7 @@ impl<'a> Codegen<'a> {
 			// Use the 'mark' functionality of GCFrame to make sure we don't
 			// do redundant writes of the same pointer.
 			if self.gc_frame.mark(*k) {
-				inf_writeln!(into, "{indent}gc_frame.ptrs[{k}] = {v};");
+				inf_writeln!(into, "{}gc_frame.ptrs[{}] = {};", indent, k, v);
 			}
 		}
 	}
