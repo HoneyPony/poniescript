@@ -213,6 +213,7 @@ pub fn generate(tests_file: &mut File) {
 		("misc/", "simple_var_exprs_and_infer"),
 		("misc/", "test_init"),
 		("misc/", "unused_expr"),
+		("misc/", "big5_smaller"),
 
 		("parser/", "err_fun_missing_brace"),
 		("parser/", "err_missing_expr_paren"),
