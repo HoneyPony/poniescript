@@ -1524,9 +1524,9 @@ impl Db {
 		
 		use crate::inf_writeln;
 
-		inf_writeln!(self.arr_declare_code, "struct ps_arr_{};", elem_ty.to_index());
+		inf_writeln!(self.arr_declare_code, "struct ps_arr_{};", elem_ty.0);
 
-		inf_writeln!(self.arr_define_code, "struct ps_arr_{} {{", elem_ty.to_index());
+		inf_writeln!(self.arr_define_code, "struct ps_arr_{} {{", elem_ty.0);
 		inf_writeln!(self.arr_define_code, "\tstruct ps_array_header header;");
 		inf_writeln!(self.arr_define_code, "\t{} contents[];", self.get_ctype(elem_ty));
 		inf_writeln!(self.arr_define_code, "}};");
