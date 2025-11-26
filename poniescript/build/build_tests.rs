@@ -157,6 +157,7 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "if_no_else"),
 		("if/", "if_no_else_in_print"),
 		("if/", "if_fun_calls"),
+		("if/", "if_with_prints"),
 
 		("if/", "err_if_bad_condition"),
 		("if/", "err_if_incompat_types"),
@@ -213,6 +214,7 @@ pub fn generate(tests_file: &mut File) {
 		("misc/", "simple_var_exprs_and_infer"),
 		("misc/", "test_init"),
 		("misc/", "unused_expr"),
+		("misc/", "big5_smaller"),
 
 		("parser/", "err_fun_missing_brace"),
 		("parser/", "err_missing_expr_paren"),

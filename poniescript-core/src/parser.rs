@@ -481,9 +481,7 @@ impl<'b> Parser<'b> {
 			condition, 
 			then_branch,
 			else_branch,
-
-			// We have to start at bottom, which is a little bit weird.
-			self.db.types.bottom
+			self.db.types.unassigned
 		)
 	}
 
