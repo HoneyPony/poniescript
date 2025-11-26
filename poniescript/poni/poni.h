@@ -339,4 +339,14 @@ static inline
 float
 ps_promote_int_to_float(ps_int v) { return (ps_float)v; }
 
+#define PONI_GC_FRAME(in_ptr_count) \
+struct { \
+	struct poni_gc_frame *prev; \
+	uint64_t ptr_count; \
+	void *ptrs[in_ptr_count]; \
+} gc_frame = {0}; \
+gc_frame.ptr_count = in_ptr_count; \
+gc_frame.prev = ctx->frame; \
+ctx->frame = (void*)&gc_frame
+
 #endif

@@ -1994,16 +1994,20 @@ impl<'a> Codegen<'a> {
 		// Now that we have generated the inner expression, we know how big
 		// of a GC frame we need. TODO: Actually generate the GC frame.
 		let gc_frame_count = self.gc_frame.next_alloc_slot.get();
-		inf_writeln!(own_buffer_beginning, "{}// gc frame count: {}", indent, gc_frame_count);
+		// inf_writeln!(own_buffer_beginning, "{}// gc frame count: {}", indent, gc_frame_count);
 
-		inf_writeln!(own_buffer_beginning, "{}struct {{", indent);
-		inf_writeln!(own_buffer_beginning, "{}\tstruct poni_gc_frame *prev;", indent);
-		inf_writeln!(own_buffer_beginning, "{}\tuint64_t ptr_count;", indent);
-		inf_writeln!(own_buffer_beginning, "{}\tvoid *ptrs[{}];", indent, gc_frame_count);
-		inf_writeln!(own_buffer_beginning, "{}}} gc_frame = {{0}};", indent);
-		inf_writeln!(own_buffer_beginning, "{}gc_frame.ptr_count = {};", indent, gc_frame_count);
-		inf_writeln!(own_buffer_beginning, "{}gc_frame.prev = ctx->frame;", indent);
-		inf_writeln!(own_buffer_beginning, "{}ctx->frame = (void*)&gc_frame;", indent);
+		// inf_writeln!(own_buffer_beginning, "{}struct {{", indent);
+		// inf_writeln!(own_buffer_beginning, "{}\tstruct poni_gc_frame *prev;", indent);
+		// inf_writeln!(own_buffer_beginning, "{}\tuint64_t ptr_count;", indent);
+		// inf_writeln!(own_buffer_beginning, "{}\tvoid *ptrs[{}];", indent, gc_frame_count);
+		// inf_writeln!(own_buffer_beginning, "{}}} gc_frame = {{0}};", indent);
+		// inf_writeln!(own_buffer_beginning, "{}gc_frame.ptr_count = {};", indent, gc_frame_count);
+		// inf_writeln!(own_buffer_beginning, "{}gc_frame.prev = ctx->frame;", indent);
+		// inf_writeln!(own_buffer_beginning, "{}ctx->frame = (void*)&gc_frame;", indent);
+
+		// Instead of generating the code directly, use a macro.
+		inf_writeln!(own_buffer_beginning, "{}PONI_GC_FRAME({});",
+			indent ,gc_frame_count);
 		
 		// Pop type value
 		self.return_types.pop();
