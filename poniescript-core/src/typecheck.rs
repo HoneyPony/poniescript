@@ -920,6 +920,8 @@ impl<'db> TypeChecker<'db> {
 				// call it a day. This is so if branches can have differing types in
 				// some cases.
 				if !value_used {
+					// In this case, the type of the if itself must also be void.
+					if_.typ = self.db.types.void;
 					return Ok(self.db.types.void);
 				}
 
