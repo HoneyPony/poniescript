@@ -157,6 +157,7 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "if_no_else"),
 		("if/", "if_no_else_in_print"),
 		("if/", "if_fun_calls"),
+		("if/", "if_with_prints"),
 
 		("if/", "err_if_bad_condition"),
 		("if/", "err_if_incompat_types"),

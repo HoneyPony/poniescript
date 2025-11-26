@@ -1,0 +1,21 @@
+fun test(b: bool) {
+    if(b) {
+        print("yes");
+    }
+    else {
+        print("no");
+    }
+
+    // When this test was first written, this line was not being executed.
+    // Bad dead code elimination, etc.
+    print("ok");
+}
+
+fun init() {
+    //! yes
+    //! ok
+    test(true);
+    //! no
+    //! ok
+    test(false);
+}
