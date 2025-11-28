@@ -288,6 +288,14 @@ impl<'b> Parser<'b> {
 		return Ok(None)
 	}
 
+	fn match_is_some(&mut self, ty: Tok) -> Result<bool> {
+		if self.peek_typ() == ty {
+			self.advance()?;
+			return Ok(true);
+		}
+		return Ok(false);
+	}
+
 	fn at(&mut self, ty: Tok) -> bool {
 		return self.peek_typ() == ty;
 	}
@@ -323,7 +331,7 @@ impl<'b> Parser<'b> {
 		expected!(self, Tok::RightParen, "')' after argument list")?;
 
 		// Note: This is handled by expr_prefix() now.
-		//if self.match_(Tok::LeftParen)?.is_some() {
+		//if self.match_is_some(Tok::LeftParen)? {
 		//	todo!("calling the return value of a call");
 		//}
 
@@ -369,7 +377,7 @@ impl<'b> Parser<'b> {
 		let location = self.start();
 		let ident = expected!(self, Tok::Identifier, "identifier")?;
 
-		if self.match_(Tok::LeftParen)?.is_some() {
+		if self.match_is_some(Tok::LeftParen)? {
 			// We're not dotted, so we have no object.
 			return self.expr_call_finish(location, ident, None);
 		}
@@ -386,7 +394,7 @@ impl<'b> Parser<'b> {
 			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
 		};
 
-		if self.match_(Tok::Equal)?.is_some() {
+		if self.match_is_some(Tok::Equal)? {
 			let rhs = self.expression()?;
 
 			// Assignment
@@ -461,7 +469,7 @@ impl<'b> Parser<'b> {
 		let then_branch = self.block()?;
 
 		// Now we are at the point where there might be an else.
-		let else_branch = if self.match_(Tok::Else)?.is_some() {
+		let else_branch = if self.match_is_some(Tok::Else)? {
 			// If there's an immediate 'if', then parse another if/else, and
 			// make that our else branch.
 			if self.at(Tok::If) {
@@ -569,7 +577,7 @@ impl<'b> Parser<'b> {
 	fn eat_comma(&mut self, terminator: Tok) -> Result<()> {
 		if self.at(terminator) { return Ok(()); }
 		if self.is_at_end() { return Ok(()); }
-		if self.match_(Tok::Comma)?.is_some() { return Ok(()); }
+		if self.match_is_some(Tok::Comma)? { return Ok(()); }
 
 		got!(self, "','");
 	}
@@ -628,7 +636,7 @@ impl<'b> Parser<'b> {
 				let mut inner = self.expr_prefix_callable()?;
 
 				while self.at(Tok::LeftParen) || self.at(Tok::LeftSquare) || self.at(Tok::Dot) {
-					while self.match_(Tok::LeftParen)?.is_some() {
+					while self.match_is_some(Tok::LeftParen)? {
 						// Parse args
 						let mut args = Vec::new();
 
@@ -643,12 +651,12 @@ impl<'b> Parser<'b> {
 						expected!(self, Tok::RightParen, "')' after argument list")?;
 						inner = Expr::put_valcall(self.ast, self.end(location.clone()), inner, args, self.db.sig_unassigned);
 					}
-					while self.match_(Tok::LeftSquare)?.is_some() {
+					while self.match_is_some(Tok::LeftSquare)? {
 						// TODO: Can the index take multiple args?
 						let index = self.expression()?;
 						expected!(self, Tok::RightSquare, "']' after index expression")?;
 
-						if self.match_(Tok::Equal)?.is_some() {
+						if self.match_is_some(Tok::Equal)? {
 							let rhs = self.expression()?;
 							// TODO: Should this be moved to expr_ident as well...????????
 
@@ -663,7 +671,7 @@ impl<'b> Parser<'b> {
 
 						inner = Expr::put_index(self.ast, self.end(location.clone()), inner, index, self.db.types.unassigned);
 					}
-					while self.match_(Tok::Dot)?.is_some() {
+					while self.match_is_some(Tok::Dot)? {
 						// For get expressions, we can have '.0' and so forth
 						// for tuples.
 						if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
@@ -673,7 +681,7 @@ impl<'b> Parser<'b> {
 
 						// TODO: Do we want to move this logic into expr_ident to go
 						// with the other ones?
-						if self.match_(Tok::Equal)?.is_some() {
+						if self.match_is_some(Tok::Equal)? {
 							let value = self.expression()?;
 							return Expr::put_set_ok(self.ast, self.end(location), identifier, inner, self.db.var_unassigned, value);
 						}
@@ -688,7 +696,7 @@ impl<'b> Parser<'b> {
 						// 
 						// Same logic as above with arrays--we return early
 						// if we end up making an assignment.
-						else if self.match_(Tok::LeftParen)?.is_some() {
+						else if self.match_is_some(Tok::LeftParen)? {
 							// We have to finish the call right now because
 							// it is a call on this particular idenitifer, not
 							// really a call on the previous property.
@@ -716,7 +724,7 @@ impl<'b> Parser<'b> {
 				let location = self.start();
 				self.advance()?;
 				// If there's an immediate Semicolon, it's an empty break.
-				if self.match_(Tok::Semicolon)?.is_some() {
+				if self.match_is_some(Tok::Semicolon)? {
 					return Expr::put_break_ok(self.ast, self.end(location), None);
 				}
 
@@ -831,7 +839,7 @@ impl<'b> Parser<'b> {
 
 				// TODO: Do we want to move this logic into expr_ident to go
 				// with the other ones?
-				if self.match_(Tok::Equal)?.is_some() {
+				if self.match_is_some(Tok::Equal)? {
 					let value = self.expression()?;
 					return Expr::put_set_ok(self.ast, self.end(location), identifier, lhs, self.db.var_unassigned, value);
 				}
@@ -846,7 +854,7 @@ impl<'b> Parser<'b> {
 				// 
 				// Same logic as above with arrays--we return early
 				// if we end up making an assignment.
-				else if self.match_(Tok::LeftParen)?.is_some() {
+				else if self.match_is_some(Tok::LeftParen)? {
 					// We have to finish the call right now because
 					// it is a call on this particular idenitifer, not
 					// really a call on the previous property.
@@ -888,7 +896,7 @@ impl<'b> Parser<'b> {
 		// call typ() again, and we don't need this typ_prefix function.
 
 		let typ = self.typ_prefix()?;
-		if self.match_(Tok::Question)?.is_some() {
+		if self.match_is_some(Tok::Question)? {
 			return Ok(self.db.put_type(Type::Option(typ)));
 		}
 		Ok(typ)
@@ -941,7 +949,7 @@ impl<'b> Parser<'b> {
 				let mut sig = Sig { parameters: vec![], return_type: self.db.types.void };
 				
 				// fun* means a "raw" function.
-				let raw = self.match_(Tok::Star)?.is_some();
+				let raw = self.match_is_some(Tok::Star)?;
 
 				expected!(self, Tok::LeftParen, "'(' after 'fun' in type name")?;
 
@@ -956,7 +964,7 @@ impl<'b> Parser<'b> {
 
 				expected!(self, Tok::RightParen, "')' after parameter list for fun type")?;
 
-				if self.match_(Tok::LeftArrow)?.is_some() {
+				if self.match_is_some(Tok::LeftArrow)? {
 					sig.return_type = self.typ()?;
 				}
 
@@ -1004,7 +1012,7 @@ impl<'b> Parser<'b> {
 		let mut typ = self.db.types.unassigned;
 		let mut has_explicit_type = false;
 
-		if self.match_(Tok::Colon)?.is_some() {
+		if self.match_is_some(Tok::Colon)? {
 			typ = self.typ()?;
 			has_explicit_type = true;
 		}
@@ -1102,7 +1110,7 @@ impl<'b> Parser<'b> {
 			Tok::Return => {
 				self.advance()?;
 				// If there's an immediate Semicolon, it's an empty return.
-				if self.match_(Tok::Semicolon)?.is_some() {
+				if self.match_is_some(Tok::Semicolon)? {
 					return Stmt::put_return_ok(self.ast, self.end(location), None);
 				}
 
@@ -1204,7 +1212,7 @@ impl<'b> Parser<'b> {
 
 		let mut return_type = self.db.types.void;
 
-		if self.match_(Tok::LeftArrow)?.is_some() {
+		if self.match_is_some(Tok::LeftArrow)? {
 			// Parse return type
 			return_type = self.typ()?;
 		}
