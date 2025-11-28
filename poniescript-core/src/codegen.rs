@@ -452,7 +452,7 @@ poni_gc_get_allocation_size(void *object) {
 		// In the future, probably what we will want to do is use a smaller capacity,
 		// especially when writing to e.g. a piped compiler, so that it can start
 		// receiving input faster.
-		let mut output = BufWriter::with_capacity(1024 * 1024 * 8, output);
+		let mut output = BufWriter::with_capacity(1024 * 1024, output);
 		let mut outputs = CodegenOutputs::new();
 
 		// Generate global variables in one pass as their ordering is a global
