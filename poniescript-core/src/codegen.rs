@@ -7,9 +7,6 @@ use crate::codegen::single_codegen::Codegen;
 use crate::{db::*, Args};
 use crate::typ::Type;
 
-
-use crate::arena::IndexCell;
-
 use std::io::BufWriter;
 use std::sync::Arc;
 
@@ -17,10 +14,6 @@ use crate::{inf_write, inf_writeln};
 
 enum CodegenTask {
 	CompileFunction(FunId),
-}
-
-enum CodegenResult {
-	Function((FunId, String)),
 }
 
 pub struct CodegenCoordinator {

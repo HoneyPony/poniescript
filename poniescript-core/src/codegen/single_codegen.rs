@@ -11,8 +11,6 @@ use crate::{inf_write, inf_writeln};
 
 use crate::expr::*;
 
-use crate::arena::IndexCell;
-
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -1785,7 +1783,7 @@ impl<'a> Codegen<'a> {
 
 				None
 			},
-			Stmt::ClassDeclare(class_declare) => {
+			Stmt::ClassDeclare(_) => {
 				// We don't actually have anything to do for class declares any more.
 				None
 			}
