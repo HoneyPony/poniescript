@@ -1766,6 +1766,15 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
+	fn compile_class_declare(&mut self, class: ClassId) {
+		// Write the struct declaration. These must come before signature declarations
+		// in case the signature needs to use the struct; The signature declarations
+		// must then come before structs in case the struct needs to use the signature.
+		let mut struc_declare = String::new();
+		inf_writeln!(struc_declare, "struct {};", self.db.get_class_cname(class));
+		self.struct_declares.push(struc_declare);
+	}
+
 	fn compile_class(&mut self, ast: &Ast, class_declare: &ClassDeclare) {
 		// For the class, it does not generate any direct code.
 		// But, we do have to generate a struct for the class,
@@ -1781,12 +1790,7 @@ impl<'a> Codegen<'a> {
 		let mut struc = String::new();
 		inf_writeln!(struc, "struct {} {{", self.db.get_class_cname(class_declare.identity));
 
-		// Write the struct declaration. These must come before signature declarations
-		// in case the signature needs to use the struct; The signature declarations
-		// must then come before structs in case the struct needs to use the signature.
-		let mut struc_declare = String::new();
-		inf_writeln!(struc_declare, "struct {};", self.db.get_class_cname(class_declare.identity));
-		self.struct_declares.push(struc_declare);
+		self.compile_class_declare(class_declare.identity);
 
 		// Simultaneously write the variable generator. 
 		let enclosing_indent = self.indent_level;
@@ -2029,6 +2033,12 @@ impl<'a> Codegen<'a> {
 			self.functions.push(own_buffer_beginning);
 			self.functions.push(own_buffer);
 		}
+
+		self.compile_fundeclare(fun);
+	}
+
+	fn compile_fundeclare(&mut self, fun: FunId) {
+		let is_init = self.db.fun_init == Some(fun);
 
 		// Don't write declaration for the init() function.
 		if !is_init {
