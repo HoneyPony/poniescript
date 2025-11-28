@@ -295,6 +295,13 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
         }
     }
 
+    pub fn into_readonly(self) -> Arena<Ty, Key> {
+        Arena {
+            objects: self.objects.into_inner(),
+            phantom: PhantomData,
+        }
+    }
+
     pub fn push(&mut self, object: Ty) -> Key {
         self.objects.get_mut().push(object);
         

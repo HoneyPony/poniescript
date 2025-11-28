@@ -19,6 +19,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{exit, Child, Command, Stdio};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use clap::Parser as _;
@@ -339,7 +340,12 @@ fn main() {
 	let compile_mode = CompileMode::parse(&args.output_path);
 	let (mut output, cc) = compile_mode.get_output(&args);
 
-	if let Err(err) = codegen::codegen(&args, &mut db, &mut ast, &mut output) {
+	let ast = Arc::new(ast.into_readonly());
+	// Awkward, but necessary until we figure out a nicer way to deal with
+	// the Db
+	let db = Box::leak(Box::new(db));
+
+	if let Err(err) = codegen::codegen(&args, db, ast, &mut output) {
 		eprintln!("Unable to write output file: {err}");
 		exit(6);
 	}
