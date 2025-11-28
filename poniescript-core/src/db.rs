@@ -91,6 +91,12 @@ pub struct AstReadonly {
 	// For now this doesn't include the Sources because they have a RefCell.
 }
 
+pub struct AstReadonlySources {
+	pub exprs: Arena<Expr, ExprId>,
+	pub stmts: Arena<Stmt, StmtId>,
+	pub sources: Arena<Source, SourceId>,
+}
+
 pub struct AstProxy<'ar> {
 	pub exprs: ArenaCellProxy<'ar, Expr, ExprId>,
 	pub stmts: ArenaCellProxy<'ar, Stmt, StmtId>,
@@ -121,10 +127,19 @@ impl Ast {
 		}
 	}
 
-	pub fn into_readonly(self) -> AstReadonly {
-		AstReadonly {
+	pub fn into_readonly(self) -> (AstReadonly, Arena<Source, SourceId>) {
+		(AstReadonly {
 			exprs: self.exprs.into_readonly(),
 			stmts: self.stmts.into_readonly(),
+		},
+			self.sources.into_readonly())
+	}
+
+	pub fn from_readonly(ast: AstReadonly, sources: Arena<Source, SourceId>) -> Self {
+		Ast {
+			exprs: ast.exprs.into_cell(),
+			stmts: ast.stmts.into_cell(),
+			sources: sources.into_cell(),
 		}
 	}
 

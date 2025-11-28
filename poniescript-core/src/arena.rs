@@ -107,6 +107,15 @@ impl<Ty, Key: ArenaKey> Arena<Ty, Key> {
         self.objects.len()
     }
 
+    pub fn into_cell(self) -> ArenaCell<Ty, Key> {
+        // TODO: Make this less inefficient? Oh well.
+        let mut cell: ArenaCell<Ty, Key> = ArenaCell::new();
+        for obj in self.objects.into_iter() {
+            cell.push(obj);
+        }
+        cell
+    }
+
     #[cfg(debug_assertions)]
     pub fn get(&self, key: Key) -> &Ty {
         self.objects.get(key.to_index()).unwrap()

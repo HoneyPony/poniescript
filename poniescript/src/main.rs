@@ -340,7 +340,7 @@ fn main() {
 	let compile_mode = CompileMode::parse(&args.output_path);
 	let (mut output, cc) = compile_mode.get_output(&args);
 
-	let ast = Arc::new(ast.into_readonly());
+	let ast = Arc::new(ast.into_readonly().0);
 	// Awkward, but necessary until we figure out a nicer way to deal with
 	// the Db
 	let db = Box::leak(Box::new(db));

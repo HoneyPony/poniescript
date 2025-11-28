@@ -115,13 +115,13 @@ impl SourceProvider for LSPSource {
     }
 }
 
-fn do_finish_compile(db: &mut Db, ast: &mut Ast, output: &PathBuf, args: &Args) {
-    poniescript_core::dead_code::eliminate_dead_code(db, ast);
+fn do_finish_compile(db: &mut Db, mut ast: Ast, output: &PathBuf, args: &Args) -> Ast {
+    poniescript_core::dead_code::eliminate_dead_code(db, &mut ast);
 
     // Sort value types.
     if db.sort_value_types().is_err() {
         // TODO: Report these errors
-        return;
+        return ast;
     }
 
     // Pass 5: Codegen
@@ -131,12 +131,18 @@ fn do_finish_compile(db: &mut Db, ast: &mut Ast, output: &PathBuf, args: &Args) 
     // TODO: Figure out how to make this async correctly...?
     let Ok(mut output) = std::fs::File::create(output) else {
         eprintln!("Warning: Unable to create output C file");
-        return;
+        return ast;
     };
 
-    if let Err(err) = poniescript_core::codegen::codegen(&args, db, ast, &mut output) {
+    let (ast, sources) = ast.into_readonly();
+    let ast = Arc::new(ast);
+
+    if let Err(err) = poniescript_core::codegen::codegen(&args, db, Arc::clone(&ast), &mut output) {
         eprintln!("Warning: Unable to write C file: {err}");
     }
+
+    let Ok(ast) = Arc::try_unwrap(ast) else { unreachable!() };
+    Ast::from_readonly(ast, sources)
 }
 
 fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics, HashMap<Url, SourceId>, HashMap<SourceId, Url>) {
@@ -193,7 +199,7 @@ fn do_handle_files(store: &DocumentStore) -> (Db, Ast, Diagnostics, HashMap<Url,
         args.engine = true;
 
         if let Some(output) = &store.c_output {
-            do_finish_compile(&mut db, &mut ast, output, &args);
+            ast = do_finish_compile(&mut db, ast, output, &args);
         }
     }
     
