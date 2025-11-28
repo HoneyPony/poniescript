@@ -33,9 +33,8 @@ enum CodegenResult {
 
 pub struct CodegenCoordinator {
 	db: &'static Db,
-	recv: channel::Receiver<CodegenResult>,
+	recv: channel::Receiver<String>,
 
-	
 	struct_declares: Vec<String>,
 	fun_declares: Vec<String>,
 	structs: Vec<String>,
@@ -410,7 +409,7 @@ poni_gc_get_allocation_size(void *object) {
 		format!("{type_stride}{is_valuetype}{valuetype}{visit_object}{visit_roots}{allocation_size}")
 	}
 
-	fn codegen(&mut self, args: &Args, ast: Arc<AstReadonly>, send: channel::Sender<CodegenResult>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
+	fn codegen(&mut self, args: &Args, ast: Arc<AstReadonly>, send: channel::Sender<String>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 		let thread_count = 8;
 
 		let mut task_sets: Vec<_> = std::iter::repeat_with(|| Vec::new())
@@ -586,20 +585,22 @@ poni_gc_get_allocation_size(void *object) {
 		writeln!(output, "// --- function definitions ---")?;
 		loop {
 			let Ok(next) = self.recv.recv() else { break; };
-			match next {
-				CodegenResult::Function((id, body)) => {
-					// TODO: We can probably simplify this and not do this
-					// song and dance.
-					if self.db.fun_init == Some(id) {
-						writeln!(output, "void poni_init(struct poni_gc_context *ctx) {{")?;
-						writeln!(output, "{}", body)?;
-						writeln!(output, "}}")?;
-					}
-					else {
-						writeln!(output, "{}", body);
-					}
-				},
-			}
+			// Just blit buffers of text as we receive them.
+			writeln!(output, "{}", next);
+			// match next {
+			// 	CodegenResult::Function((id, body)) => {
+			// 		// TODO: We can probably simplify this and not do this
+			// 		// song and dance.
+			// 		if self.db.fun_init == Some(id) {
+			// 			writeln!(output, "void poni_init(struct poni_gc_context *ctx) {{")?;
+			// 			writeln!(output, "{}", body)?;
+			// 			writeln!(output, "}}")?;
+			// 		}
+			// 		else {
+			// 			writeln!(output, "{}", body);
+			// 		}
+			// 	},
+			// }
 		}
 
 		// Because we're using a BufWriter, it is important to flush it.

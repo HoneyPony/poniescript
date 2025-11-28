@@ -400,8 +400,6 @@ pub struct Codegen<'a> {
 
 	pub indent_level: usize,
 
-	fun_init_buffer: String,
-
 	/// For now, when we are generated values that are referencing 'this', and
 	/// we need the this_val to be something other than what it is, we can
 	/// store a Tmp(usize) here.
@@ -423,11 +421,15 @@ pub struct Codegen<'a> {
 
 	db: &'a Db,
 
-    send: channel::Sender<CodegenResult>,
+    send: channel::Sender<String>,
+
+	/// In order to keep parallelism decent, we build up a single buffer of
+	/// stuff and send it when it is a reasonable size.
+	current_buffer: String,
 }
 
 impl<'a> Codegen<'a> {
-	pub fn new(db: &'a Db, send: channel::Sender<CodegenResult>) -> Self {
+	pub fn new(db: &'a Db, send: channel::Sender<String>) -> Self {
 		return Codegen {
 			return_types: Vec::new(),
 
@@ -439,8 +441,6 @@ impl<'a> Codegen<'a> {
 
 			this_val: None,
 
-			fun_init_buffer: String::new(),
-
 			inside_class: Vec::new(),
 
 			gc_frame: Arc::new(GCFrame::new()),
@@ -450,6 +450,8 @@ impl<'a> Codegen<'a> {
 
 			loop_val: None,
             send,
+
+			current_buffer: String::new(),
 		}
 	}
 
@@ -1971,17 +1973,42 @@ impl<'a> Codegen<'a> {
 		// init() fun has no surrounding scope
 		if !is_init { inf_writeln!(own_buffer, "}}"); }
 
-        let result = format!("{}{}", own_buffer_beginning, own_buffer);
-        let _ = self.send.send(CodegenResult::Function((fun, result)));
+		if is_init {
+			// TODO: Less bad this
+			inf_writeln!(self.current_buffer, "void poni_init(struct poni_gc_context *ctx) {{");
+		}
+
+		inf_write!(self.current_buffer, "{}{}", own_buffer_beginning, own_buffer);
+
+		if is_init {
+			inf_writeln!(self.current_buffer, "}}");
+		}
+
+        //let result = format!("{}{}", own_buffer_beginning, own_buffer);
+        //let _ = self.send.send(CodegenResult::Function((fun, result)));
     }
 
 	pub fn handle_tasks(&mut self, ast: Arc<AstReadonly>, my_tasks: Vec<CodegenTask>) {
+		const CHUNK_SIZE: usize = 8192 * 4;
+
 		for task in my_tasks {
             match task {
                 CodegenTask::CompileFunction(fun) => {
                     self.compile_function(&ast, fun);
                 }
             }
+
+			if self.current_buffer.len() >= CHUNK_SIZE {
+				// Note that the buffer, no matter the chunk size, is still
+				// going to be only valid C code, because we build entire
+				// correct things at a time.
+				let _ = self.send.send(std::mem::take(&mut self.current_buffer));
+			}
         }
+
+		// After completing the tasks, send one final buffer.
+		if self.current_buffer.len() > 0 {
+			let _ = self.send.send(std::mem::take(&mut self.current_buffer));
+		}
     }
 }
