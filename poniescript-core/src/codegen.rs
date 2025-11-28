@@ -36,6 +36,8 @@ struct CodegenOutputs {
 	string_const_init: String,
 
 	fun_declare: String,
+	struct_declare: String,
+	struct_define: String,
 }
 
 impl CodegenOutputs {
@@ -48,49 +50,43 @@ impl CodegenOutputs {
 			string_const_init: String::new(),
 
 			fun_declare: String::new(),
+			struct_declare: String::new(),
+			struct_define: String::new(),
 		}
 	}
 }
 
-type Output<'w> = BufWriter<&'w mut dyn std::io::Write>;
-
 impl CodegenCoordinator {
-	fn compile_class_declare(&mut self, class: ClassId, output: &mut Output) -> std::io::Result<()> {
+	fn compile_class_declare(&mut self, class: ClassId, out: &mut CodegenOutputs) {
 		// Write the struct declaration. These must come before signature declarations
 		// in case the signature needs to use the struct; The signature declarations
 		// must then come before structs in case the struct needs to use the signature.
-		writeln!(output, "struct {};", self.db.get_class_cname(class))?;
-
-		Ok(())
+		inf_writeln!(out.struct_declare, "struct {};", self.db.get_class_cname(class));
 	}
 
-	fn compile_class_define(&mut self, class: ClassId, output: &mut Output) -> std::io::Result<()>  {
+	fn compile_class_define(&mut self, class: ClassId, out: &mut CodegenOutputs) {
 		// Write the struct definition.
-		writeln!(output, "struct {} {{", self.db.get_class_cname(class))?;
+		inf_writeln!(out.struct_define, "struct {} {{", self.db.get_class_cname(class));
 
 		for var in &self.db.get(class).vars {
 			// Compile the variable declaration into the struct.
-			writeln!(output, "\t{} {};", self.db.get_var_ctype(*var), self.db.get_cname(*var))?;
+			inf_writeln!(out.struct_define, "\t{} {};", self.db.get_var_ctype(*var), self.db.get_cname(*var));
 		}
 
-		writeln!(output, "}};")?;
-
-		Ok(())
+		inf_writeln!(out.struct_define, "}};");
 	}
 
-	fn compile_fun_declare(&mut self, fun: FunId, output: &mut Output) -> std::io::Result<()>  {
+	fn compile_fun_declare(&mut self, fun: FunId, out: &mut CodegenOutputs) {
 		let is_init = self.db.fun_init == Some(fun);
 
 		// Don't write declaration for the init() function.
 		if !is_init {
 			// TODO: Possibly write directly to Out::FunDeclare
-			writeln!(output, "{} {}({});",
+			inf_writeln!(out.fun_declare, "{} {}({});",
 				self.db.get_fun_ret_ctype(fun),
 				self.db.get_fun_cname(fun),
-				self.db.get_fun_cparams(fun))?;
+				self.db.get_fun_cparams(fun));
 		}
-
-		Ok(())
 	}
 
 	fn compile_string_constant_init(&mut self, define: &mut String, init: &mut String) {
@@ -539,8 +535,9 @@ poni_gc_get_allocation_size(void *object) {
 		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
 		writeln!(output, "// --- struct declarations ---\n")?;
 		for class in self.db.iter_class() {
-			self.compile_class_declare(class, &mut output)?;
+			self.compile_class_declare(class, &mut outputs);
 		}
+		output.write_all(outputs.struct_declare.as_bytes())?;
 		writeln!(output, "// --- struct declarations (ps_tuple) ---\n{}", self.db.valty_declare_code)?;
 		writeln!(output, "// --- struct declarations (ps_array) ---\n{}", self.db.arr_declare_code)?;
 		writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
@@ -552,14 +549,16 @@ poni_gc_get_allocation_size(void *object) {
 		// refer to tuples.
 		writeln!(output, "// --- struct definitions ---")?;
 		for class in self.db.iter_class() {
-			self.compile_class_define(class, &mut output)?;
+			self.compile_class_define(class, &mut outputs);
 		}
+		output.write_all(outputs.struct_define.as_bytes())?;
 
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
-		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
+		writeln!(output, "// --- function declarations ---")?;
 		for fun in self.db.iter_fun() {
-			self.compile_fun_declare(fun, &mut output)?;
+			self.compile_fun_declare(fun, &mut outputs);
 		}
+		output.write_all(outputs.fun_declare.as_bytes())?;
 		writeln!(output, "{}", outputs.string_const_init)?;
 
 		writeln!(output, "// --- gc support ---")?;
