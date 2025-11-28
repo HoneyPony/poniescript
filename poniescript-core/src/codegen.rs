@@ -601,6 +601,13 @@ poni_gc_get_allocation_size(void *object) {
 		writeln!(output, "}}")?;
 
 		writeln!(output, "// --- function definitions ---")?;
+
+		if self.db.fun_init.is_none() {
+			// For now, if there is no init function, we still have to define
+			// an empty body of it to avoid a link error.
+			writeln!(output, "void poni_init(struct poni_gc_context *ctx) {{}}")?;
+		}
+
 		loop {
 			let Ok(next) = self.recv.recv() else { break; };
 			// Just blit buffers of text as we receive them.
