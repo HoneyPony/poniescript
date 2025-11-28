@@ -1,25 +1,17 @@
 mod single_codegen;
 
 use crossbeam::channel;
-use crossbeam::queue::ArrayQueue;
-use rustc_hash::FxHashSet;
-use ufmt::uwrite;
 
 use crate::arena::ArenaKey;
 use crate::codegen::single_codegen::Codegen;
 use crate::{db::*, Args};
-use crate::lexer::Tok;
-use crate::module::Module;
 use crate::typ::Type;
 
-use crate::expr::*;
 
 use crate::arena::IndexCell;
 
-use std::cell::{Cell, RefCell};
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::io::BufWriter;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::Arc;
 
 use crate::{inf_write, inf_writeln};
 

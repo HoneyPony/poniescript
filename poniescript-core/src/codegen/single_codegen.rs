@@ -3,9 +3,8 @@ use ufmt::uwrite;
 
 use crate::arena::ArenaKey;
 use crate::codegen::*;
-use crate::{db::*, Args};
+use crate::db::*;
 use crate::lexer::Tok;
-use crate::module::Module;
 use crate::typ::Type;
 
 use crate::{inf_write, inf_writeln};
@@ -16,7 +15,6 @@ use crate::arena::IndexCell;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::BufWriter;
 use std::sync::Arc;
 
 /// The Val is the way that we make generating code much easier.
