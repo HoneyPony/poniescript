@@ -390,7 +390,8 @@ poni_gc_get_allocation_size(void *object) {
 	}
 
 	fn codegen(&mut self, args: &Args, ast: Arc<AstReadonly>, send: channel::Sender<String>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
-		let thread_count = 8;
+		// Default to 8 if no value specified.
+		let thread_count = if args.codegen_threads > 0 { args.codegen_threads } else { 8 };
 
 		let mut task_sets: Vec<_> = std::iter::repeat_with(|| Vec::new())
 			.take(thread_count)

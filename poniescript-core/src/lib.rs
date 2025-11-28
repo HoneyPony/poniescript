@@ -67,6 +67,11 @@ pub struct Args {
 	/// Whether to run the compiler in check mode. In this mode, it does not
 	/// output any C code, it merely runs the semantic analysis.
 	pub check_mode: bool,
+
+	#[arg(long = "codegen-threads", default_value_t = 0)]
+	/// The number of threads to use for codegen. Note that high numbers can
+	/// result in a panic.
+	pub codegen_threads: usize,
 }
 
 #[cfg(test)]
