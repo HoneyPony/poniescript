@@ -419,12 +419,30 @@ poni_gc_get_allocation_size(void *object) {
 			task_sets[n % thread_count].push(CodegenTask::CompileFunction(fun));
 		}
 		
-		for task_set in task_sets {
+		{
+			// In order to improve upon the overhead of starting threads, we
+			// start the first thread, then have it start the rest, as we move on
+			// to other codegen tasks.
 			let send = send.clone();
 			let ast = Arc::clone(&ast);
-			std::thread::spawn(|| {
-				let mut cg = Codegen::new(self.db, send);
-				cg.handle_tasks(ast, task_set);
+			let db = self.db;
+			std::thread::spawn(move || {
+				for (idx, task_set) in task_sets.into_iter().enumerate() {
+					// For the last task, we will just handle it ourselves.
+					if idx == thread_count - 1 {
+						let mut cg = Codegen::new(db, send.clone());
+						cg.handle_tasks(Arc::clone(&ast), task_set);
+					}
+					// Otherwise, spawn more threads.
+					else {
+						let send = send.clone();
+						let ast = Arc::clone(&ast);
+						std::thread::spawn(|| {
+							let mut cg = Codegen::new(db, send);
+							cg.handle_tasks(ast, task_set);
+						});
+					}
+				}
 			});
 		}
 
