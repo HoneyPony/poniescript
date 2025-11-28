@@ -423,11 +423,11 @@ pub struct Codegen<'a> {
 
 	db: &'a Db,
 
-    send: mpsc::Sender<CodegenResult>,
+    send: channel::Sender<CodegenResult>,
 }
 
 impl<'a> Codegen<'a> {
-	pub fn new(db: &'a Db, send: mpsc::Sender<CodegenResult>) -> Self {
+	pub fn new(db: &'a Db, send: channel::Sender<CodegenResult>) -> Self {
 		return Codegen {
 			return_types: Vec::new(),
 
@@ -1975,9 +1975,8 @@ impl<'a> Codegen<'a> {
         let _ = self.send.send(CodegenResult::Function((fun, result)));
     }
 
-	pub fn handle_tasks(&mut self, ast: Arc<AstReadonly>, queue: Arc<Mutex<Vec<CodegenTask>>>) {
+	pub fn handle_tasks(&mut self, ast: Arc<AstReadonly>, queue: Arc<ArrayQueue<CodegenTask>>) {
         loop {
-            let mut queue = queue.lock().unwrap();
             let Some(task) = queue.pop() else { return; };
             match task {
                 CodegenTask::CompileFunction(fun) => {

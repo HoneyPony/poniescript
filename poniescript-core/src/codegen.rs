@@ -1,5 +1,7 @@
 mod single_codegen;
 
+use crossbeam::channel;
+use crossbeam::queue::ArrayQueue;
 use rustc_hash::FxHashSet;
 use ufmt::uwrite;
 
@@ -31,15 +33,9 @@ enum CodegenResult {
 
 pub struct CodegenCoordinator {
 	db: &'static Db,
-	recv: mpsc::Receiver<CodegenResult>,
+	recv: channel::Receiver<CodegenResult>,
 
-	/// The queue of tasks to do.
-	/// 
-	/// Note that we don't need to have the ability to add new tasks to the
-	/// queue over time, because we can just generate everything we need to do
-	/// up-front by iterating the Db.
-	queue: Arc<Mutex<Vec<CodegenTask>>>,
-
+	
 	struct_declares: Vec<String>,
 	fun_declares: Vec<String>,
 	structs: Vec<String>,
@@ -414,7 +410,7 @@ poni_gc_get_allocation_size(void *object) {
 		format!("{type_stride}{is_valuetype}{valuetype}{visit_object}{visit_roots}{allocation_size}")
 	}
 
-	fn codegen(&mut self, args: &Args, ast: Arc<AstReadonly>, send: mpsc::Sender<CodegenResult>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
+	fn codegen(&mut self, args: &Args, ast: Arc<AstReadonly>, send: channel::Sender<CodegenResult>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
 		let mut fun_queue = Vec::new();
 		// Before doing anything else, spin up the worker threads for compiling
 		// the functions. That way, they can work on that while this thread works
@@ -423,14 +419,19 @@ poni_gc_get_allocation_size(void *object) {
 			fun_queue.push(CodegenTask::CompileFunction(fun));
 		}
 
-		{
-			let mut lock = self.queue.lock().unwrap();
-			*lock = fun_queue;
+		// The queue of tasks to do.
+		// 
+		// Note that we don't need to have the ability to add new tasks to the
+		// queue over time, because we can just generate everything we need to do
+		// up-front by iterating the Db.
+		let queue = Arc::new(ArrayQueue::new(fun_queue.len()));
+		for fun in fun_queue {
+			let _ = queue.push(fun);
 		}
 
 		for _ in 0..8 {
 			let send = send.clone();
-			let queue = Arc::clone(&self.queue);
+			let queue = Arc::clone(&queue);
 			let ast = Arc::clone(&ast);
 			std::thread::spawn(|| {
 				let mut cg = Codegen::new(self.db, send);
@@ -623,12 +624,11 @@ pub fn codegen(args: &Args, db: &'static Db, ast: Arc<AstReadonly>, output: &mut
 
 	//codegen.codegen(args, ast, output)
 
-	let (send, recv) = mpsc::channel();
+	let (send, recv) = channel::unbounded();
 
 	let mut coordinator = CodegenCoordinator {
 		db,
 		recv,
-		queue: Arc::new(Mutex::new(Vec::new())),
 		struct_declares: Vec::new(),
 		fun_declares: Vec::new(),
 		structs: Vec::new(),
