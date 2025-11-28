@@ -411,31 +411,21 @@ poni_gc_get_allocation_size(void *object) {
 	}
 
 	fn codegen(&mut self, args: &Args, ast: Arc<AstReadonly>, send: channel::Sender<CodegenResult>, output: &mut dyn std::io::Write) -> std::io::Result<()> {
-		let mut fun_queue = Vec::new();
-		// Before doing anything else, spin up the worker threads for compiling
-		// the functions. That way, they can work on that while this thread works
-		// on the declarations and eventually reading functions.
-		for fun in self.db.iter_fun() {
-			fun_queue.push(CodegenTask::CompileFunction(fun));
-		}
+		let thread_count = 8;
 
-		// The queue of tasks to do.
-		// 
-		// Note that we don't need to have the ability to add new tasks to the
-		// queue over time, because we can just generate everything we need to do
-		// up-front by iterating the Db.
-		let queue = Arc::new(ArrayQueue::new(fun_queue.len()));
-		for fun in fun_queue {
-			let _ = queue.push(fun);
+		let mut task_sets: Vec<_> = std::iter::repeat_with(|| Vec::new())
+			.take(thread_count)
+			.collect();
+		for (n, fun) in self.db.iter_fun().enumerate() {
+			task_sets[n % thread_count].push(CodegenTask::CompileFunction(fun));
 		}
-
-		for _ in 0..8 {
+		
+		for task_set in task_sets {
 			let send = send.clone();
-			let queue = Arc::clone(&queue);
 			let ast = Arc::clone(&ast);
 			std::thread::spawn(|| {
 				let mut cg = Codegen::new(self.db, send);
-				cg.handle_tasks(ast, queue);
+				cg.handle_tasks(ast, task_set);
 			});
 		}
 

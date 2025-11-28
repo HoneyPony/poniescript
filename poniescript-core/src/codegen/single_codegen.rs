@@ -1975,9 +1975,8 @@ impl<'a> Codegen<'a> {
         let _ = self.send.send(CodegenResult::Function((fun, result)));
     }
 
-	pub fn handle_tasks(&mut self, ast: Arc<AstReadonly>, queue: Arc<ArrayQueue<CodegenTask>>) {
-        loop {
-            let Some(task) = queue.pop() else { return; };
+	pub fn handle_tasks(&mut self, ast: Arc<AstReadonly>, my_tasks: Vec<CodegenTask>) {
+		for task in my_tasks {
             match task {
                 CodegenTask::CompileFunction(fun) => {
                     self.compile_function(&ast, fun);
