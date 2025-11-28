@@ -297,7 +297,10 @@ impl ufmt::uDisplay for Val {
 		W: ufmt::uWrite + ?Sized {
 		match self {
 			Val::Tmp(idx) => uwrite!(f, "t{}", idx),
-			Val::DirectLit {ctype, lit } => uwrite!(f, "(({}){})", ctype, lit),
+			Val::DirectLit {ctype: _, lit } => {
+				uwrite!(f, "{}", lit)
+				//uwrite!(f, "(({}){})", ctype, lit),
+			}
 			Val::DirectVar { this_val, name, depth } => {
 				if *depth > 0 {
 					if let Some(idx) = this_val {
