@@ -1,6 +1,7 @@
 mod single_codegen;
 
 use crossbeam::channel;
+use std::io::Write;
 
 use crate::arena::ArenaKey;
 use crate::codegen::single_codegen::Codegen;
@@ -19,10 +20,6 @@ enum CodegenTask {
 pub struct CodegenCoordinator {
 	db: &'static Db,
 	recv: channel::Receiver<String>,
-
-	struct_declares: Vec<String>,
-	fun_declares: Vec<String>,
-	structs: Vec<String>,
 }
 
 /// Some of the output buffers used for code generation. Separate from
@@ -55,43 +52,45 @@ impl CodegenOutputs {
 	}
 }
 
+type Output<'w> = BufWriter<&'w mut dyn std::io::Write>;
+
 impl CodegenCoordinator {
-	fn compile_class_declare(&mut self, class: ClassId) {
+	fn compile_class_declare(&mut self, class: ClassId, output: &mut Output) -> std::io::Result<()> {
 		// Write the struct declaration. These must come before signature declarations
 		// in case the signature needs to use the struct; The signature declarations
 		// must then come before structs in case the struct needs to use the signature.
-		let mut struc_declare = String::new();
-		inf_writeln!(struc_declare, "struct {};", self.db.get_class_cname(class));
-		self.struct_declares.push(struc_declare);
+		writeln!(output, "struct {};", self.db.get_class_cname(class))?;
+
+		Ok(())
 	}
 
-	fn compile_class_define(&mut self, class: ClassId) {
+	fn compile_class_define(&mut self, class: ClassId, output: &mut Output) -> std::io::Result<()>  {
 		// Write the struct definition.
-		let mut struc = String::new();
-		inf_writeln!(struc, "struct {} {{", self.db.get_class_cname(class));
+		writeln!(output, "struct {} {{", self.db.get_class_cname(class))?;
 
 		for var in &self.db.get(class).vars {
 			// Compile the variable declaration into the struct.
-			inf_writeln!(struc, "\t{} {};", self.db.get_var_ctype(*var), self.db.get_cname(*var));
+			writeln!(output, "\t{} {};", self.db.get_var_ctype(*var), self.db.get_cname(*var))?;
 		}
 
-		inf_writeln!(struc, "}};");
-		self.structs.push(struc);
+		writeln!(output, "}};")?;
+
+		Ok(())
 	}
 
-	fn compile_fundeclare(&mut self, fun: FunId) {
+	fn compile_fun_declare(&mut self, fun: FunId, output: &mut Output) -> std::io::Result<()>  {
 		let is_init = self.db.fun_init == Some(fun);
 
 		// Don't write declaration for the init() function.
 		if !is_init {
-			let mut declare = String::new();
 			// TODO: Possibly write directly to Out::FunDeclare
-			inf_writeln!(declare, "{} {}({});",
+			writeln!(output, "{} {}({});",
 				self.db.get_fun_ret_ctype(fun),
 				self.db.get_fun_cname(fun),
-				self.db.get_fun_cparams(fun));
-			self.fun_declares.push(declare);
+				self.db.get_fun_cparams(fun))?;
 		}
+
+		Ok(())
 	}
 
 	fn compile_string_constant_init(&mut self, define: &mut String, init: &mut String) {
@@ -519,15 +518,7 @@ poni_gc_get_allocation_size(void *object) {
 
 		self.compile_string_constant_init(&mut outputs.string_const_define, &mut outputs.string_const_init);
 
-		// For now, we will do this as a separate pass, but we can probably write
-		// directly to the BufWriter in the future.
-		for fun in self.db.iter_fun() {
-			self.compile_fundeclare(fun);
-		}
-		for class in self.db.iter_class() {
-			self.compile_class_declare(class);
-			self.compile_class_define(class);
-		}
+		
 
 		writeln!(output, "#include \"poni/poni.h\"")?;
 		// Engine code does not include poni_standalone.h.
@@ -547,8 +538,8 @@ poni_gc_get_allocation_size(void *object) {
 
 		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
 		writeln!(output, "// --- struct declarations ---\n")?;
-		for struc_declare in &self.struct_declares {
-			writeln!(output, "{}", struc_declare)?;
+		for class in self.db.iter_class() {
+			self.compile_class_declare(class, &mut output)?;
 		}
 		writeln!(output, "// --- struct declarations (ps_tuple) ---\n{}", self.db.valty_declare_code)?;
 		writeln!(output, "// --- struct declarations (ps_array) ---\n{}", self.db.arr_declare_code)?;
@@ -560,14 +551,14 @@ poni_gc_get_allocation_size(void *object) {
 		// I believe these have to come after the ps_tuple, because they might
 		// refer to tuples.
 		writeln!(output, "// --- struct definitions ---")?;
-		for struc in &self.structs {
-			writeln!(output, "{}", struc)?;
+		for class in self.db.iter_class() {
+			self.compile_class_define(class, &mut output)?;
 		}
 
 		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
 		writeln!(output, "// --- function declarations ---\n{}", outputs.fun_declare)?;
-		for dec in &self.fun_declares {
-			writeln!(output, "{}", dec)?;
+		for fun in self.db.iter_fun() {
+			self.compile_fun_declare(fun, &mut output)?;
 		}
 		writeln!(output, "{}", outputs.string_const_init)?;
 
@@ -630,9 +621,6 @@ pub fn codegen(args: &Args, db: &'static Db, ast: Arc<AstReadonly>, output: &mut
 	let mut coordinator = CodegenCoordinator {
 		db,
 		recv,
-		struct_declares: Vec::new(),
-		fun_declares: Vec::new(),
-		structs: Vec::new(),
 	};
 
 	coordinator.codegen(args, ast, send, output)
