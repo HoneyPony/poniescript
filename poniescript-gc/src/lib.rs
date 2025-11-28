@@ -1,4 +1,4 @@
-use std::{alloc::{self, Layout}, collections::VecDeque, ptr::{self, null}, sync::{atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering}, Condvar, Mutex}, thread::{self, JoinHandle}, time::Instant};
+use std::{alloc::{self, Layout}, collections::VecDeque, ptr::null, sync::{atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering}, Condvar, Mutex}, thread::{self, JoinHandle}};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -423,8 +423,6 @@ impl<'a> Gc<'a> {
     }
 
     pub fn collect(&mut self) {
-        let start_time = Instant::now();
-
         GC_ALLOCATE_MARKED.store(true, Ordering::Relaxed);
 
         self.handshake(GC_FLAG_HANDOFF_ALLOCS);
@@ -470,9 +468,6 @@ impl<'a> Gc<'a> {
         GC_ALLOCATE_MARKED.store(false, Ordering::Relaxed);
 
         self.sweep();
-        let end_time = Instant::now();
-
-        //eprintln!("poni-gc: collect start-to-finish: {:?}", end_time.duration_since(start_time))
     }
 
     pub fn process_queue(&mut self) {
@@ -553,7 +548,7 @@ impl<'a> GcHandle<'a> {
     }
 
     #[export_name = "poni_gc_create_context_for_existing"]
-    pub fn create_context_for_existing(&mut self) -> Box<GcContext> {
+    pub fn create_context_for_existing(&mut self) -> Box<GcContext<'_>> {
         let mut avail = self.shared.available_threads.lock().unwrap();
         *avail += 1;
 
