@@ -604,7 +604,7 @@ poni_gc_get_allocation_size(void *object) {
 		loop {
 			let Ok(next) = self.recv.recv() else { break; };
 			// Just blit buffers of text as we receive them.
-			writeln!(output, "{}", next)?;
+			output.write_all(next.as_bytes())?;
 			// match next {
 			// 	CodegenResult::Function((id, body)) => {
 			// 		// TODO: We can probably simplify this and not do this
