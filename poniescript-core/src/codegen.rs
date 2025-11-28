@@ -13,7 +13,6 @@ use crate::arena::IndexCell;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::Write as _;
 use std::io::BufWriter;
 use std::sync::Arc;
 

@@ -571,7 +571,7 @@ impl<'db> TypeChecker<'db> {
 					}
 				}
 			}
-			Expr::WhileLoop(while_) => {
+			Expr::WhileLoop(_) => {
 				// For now, there is nothing to promote.
 			}
 			Expr::Break(_) => {
