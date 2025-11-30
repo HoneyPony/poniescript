@@ -663,6 +663,38 @@ impl<'a> Codegen<'a> {
 
 	fn compile_partial_lerp(&mut self, bool_val: &TypedVal, float_val: &TypedVal, one_minus_val: &TypedVal, from_val: &TypedVal, to_val: &TypedVal, target_val: &TypedVal, cur_typ: TypId, postfix: &String, into: &mut String) {
 		let indent = self.indent();
+
+		let mut do_vec = |vec_lerp| {
+			inf_writeln!(into, "{}{}{} = {}({}{}, {}{}, {});",
+				indent, target_val, postfix, vec_lerp, from_val, postfix, to_val, postfix, float_val);
+		};
+
+		// Generate special cases for vector lerps, to make the generated code
+		// nicer.
+		if cur_typ == self.db.types.vec2 {
+			do_vec("ps_lerp_vec2");
+			return;
+		}
+		if cur_typ == self.db.types.vec3 {
+			do_vec("ps_lerp_vec3");
+			return;
+		}
+		if cur_typ == self.db.types.vec4 {
+			do_vec("ps_lerp_vec4");
+			return;
+		}
+		if cur_typ == self.db.types.vec2i {
+			do_vec("ps_lerp_vec2i");
+			return;
+		}
+		if cur_typ == self.db.types.vec3i {
+			do_vec("ps_lerp_vec3i");
+			return;
+		}
+		if cur_typ == self.db.types.vec4i {
+			do_vec("ps_lerp_vec4i");
+			return;
+		}
 		
 		// IMPORTANT:
 		// To walk down the tree of tuple types, we must start at the root

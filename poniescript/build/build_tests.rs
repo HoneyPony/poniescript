@@ -359,6 +359,7 @@ pub fn generate(tests_file: &mut File) {
 
 		("vec/", "vec_types"),
 		("vec/", "vec_ret"),
+		("vec/", "vec_lerp"),
 	];
 
 	let mut bt = BuiltTests {

@@ -39,6 +39,16 @@ typedef struct ps_vec2 {
 	};
 } ps_vec2;
 
+static inline
+ps_vec2
+ps_lerp_vec2(ps_vec2 a, ps_vec2 b, ps_float t) {
+	ps_float s = 1.0 - t; 
+	return (ps_vec2){
+		.x = s * a.x + t * b.x,
+		.y = s * a.y + t * b.y,
+	};
+}
+
 typedef struct ps_vec3 {
 	union {
 		struct {
@@ -54,6 +64,17 @@ typedef struct ps_vec3 {
 		ps_float at[3];
 	};
 } ps_vec3;
+
+static inline
+ps_vec3
+ps_lerp_vec3(ps_vec3 a, ps_vec3 b, ps_float t) {
+	ps_float s = 1.0 - t; 
+	return (ps_vec3){
+		.x = s * a.x + t * b.x,
+		.y = s * a.y + t * b.y,
+		.z = s * a.z + t * b.z,
+	};
+}
 
 typedef struct ps_vec4 {
 	union {
@@ -73,6 +94,18 @@ typedef struct ps_vec4 {
 	};
 } ps_vec4;
 
+static inline
+ps_vec4
+ps_lerp_vec4(ps_vec4 a, ps_vec4 b, ps_float t) {
+	ps_float s = 1.0 - t; 
+	return (ps_vec4){
+		.x = s * a.x + t * b.x,
+		.y = s * a.y + t * b.y,
+		.z = s * a.z + t * b.z,
+		.w = s * a.w + t * b.w,
+	};
+}
+
 typedef struct ps_vec2i {
 	union {
 		struct {
@@ -86,6 +119,16 @@ typedef struct ps_vec2i {
 		ps_int at[2];
 	};
 } ps_vec2i;
+
+static inline
+ps_vec2i
+ps_lerp_vec2i(ps_vec2i a, ps_vec2i b, ps_float t) {
+	ps_float s = 1.0 - t; 
+	return (ps_vec2i){
+		.x = (ps_int)(s * a.x + t * b.x),
+		.y = (ps_int)(s * a.y + t * b.y),
+	};
+}
 
 typedef struct ps_vec3i {
 	union {
@@ -102,6 +145,17 @@ typedef struct ps_vec3i {
 		ps_int at[3];
 	};
 } ps_vec3i;
+
+static inline
+ps_vec3i
+ps_lerp_vec3i(ps_vec3i a, ps_vec3i b, ps_float t) {
+	ps_float s = 1.0 - t; 
+	return (ps_vec3i){
+		.x = (ps_int)(s * a.x + t * b.x),
+		.y = (ps_int)(s * a.y + t * b.y),
+		.z = (ps_int)(s * a.z + t * b.z),
+	};
+}
 
 typedef struct ps_vec4i {
 	union {
@@ -120,6 +174,18 @@ typedef struct ps_vec4i {
 		ps_int at[4];
 	};
 } ps_vec4i;
+
+static inline
+ps_vec4i
+ps_lerp_vec4i(ps_vec4i a, ps_vec4i b, ps_float t) {
+	ps_float s = 1.0 - t; 
+	return (ps_vec4i){
+		.x = (ps_int)(s * a.x + t * b.x),
+		.y = (ps_int)(s * a.y + t * b.y),
+		.z = (ps_int)(s * a.z + t * b.z),
+		.w = (ps_int)(s * a.w + t * b.w),
+	};
+}
 
 typedef struct ps_object {
 	uint64_t todo;
