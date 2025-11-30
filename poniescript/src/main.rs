@@ -81,11 +81,11 @@ impl CompileOutputs {
 		Some(total)
 	}
 
-	pub fn get_output(&self, args: &Args) -> (Vec<Box<dyn std::io::Write>>, Vec<Child>) {
+	pub fn get_output(&self, args: &Args) -> (Vec<Box<dyn std::io::Write + Send + 'static>>, Vec<Child>) {
 		let mut writers = Vec::new();
 		let mut childs = Vec::new();
 
-		let mut push = |arg: (Box<dyn std::io::Write>, Option<Child>)| {
+		let mut push = |arg: (Box<dyn std::io::Write + Send + 'static>, Option<Child>)| {
 			writers.push(arg.0);
 			if let Some(child) = arg.1 {
 				childs.push(child);
@@ -135,7 +135,7 @@ impl CompileMode {
 		return CompileMode::ToExeFile;
 	}
 
-	pub fn get_output(&self, args: &Args, path: &Path) -> (Box<dyn std::io::Write>, Option<Child>) {
+	pub fn get_output(&self, args: &Args, path: &Path) -> (Box<dyn std::io::Write + Send + 'static>, Option<Child>) {
 		match self {
 			CompileMode::ToCFile => {
 				// Don't let us run in test mode if we're trying to output a C
@@ -431,13 +431,12 @@ fn main() {
 	// the Db
 	let db = Box::leak(Box::new(db));
 
-	if let Err(err) = codegen::codegen(&args, db, ast, &mut writers) {
+	if let Err(err) = codegen::codegen(&args, db, ast, writers) {
 		eprintln!("Unable to write output file: {err}");
 		exit(6);
 	}
 
 	// Wait for the C compiler and exit with an error if it failed.
-	drop(writers); // Ensure all the writers are closed.
 	for mut cc in ccs {
 		match cc.wait() {
 			Ok(status) => {

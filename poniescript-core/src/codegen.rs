@@ -19,7 +19,6 @@ enum CodegenTask {
 
 pub struct CodegenCoordinator {
 	db: &'static Db,
-	recv: channel::Receiver<String>,
 }
 
 /// Some of the output buffers used for code generation. Separate from
@@ -99,7 +98,7 @@ impl CodegenCoordinator {
 		inf_writeln!(init, "}}");
 	}
 
-	fn codegen_gc_stride(&mut self) -> String {
+	fn codegen_gc_stride(&self) -> String {
 		let mut type_stride = "static inline size_t
 poni_get_type_stride(uint64_t tag) {
 	switch(tag) {
@@ -178,7 +177,7 @@ poni_get_type_stride(uint64_t tag) {
 	}
 
 
-	fn codegen_gc_functions(&mut self) -> String {
+	fn codegen_gc_functions(&self) -> String {
 		let type_stride = self.codegen_gc_stride();
 
 		let is_valuetype = "static inline ps_bool
@@ -389,7 +388,96 @@ poni_gc_get_allocation_size(void *object) {
 		format!("{type_stride}{is_valuetype}{valuetype}{visit_object}{visit_roots}{allocation_size}")
 	}
 
-	fn codegen(&mut self, args: &Args, ast: Arc<AstReadonly>, send: channel::Sender<String>, outputs: &mut Vec<Box<dyn std::io::Write>>) -> std::io::Result<()> {
+	fn per_writer_codegen(
+		&self,
+		writer: BufWriter<Box<dyn std::io::Write + Send + 'static>>,
+		recv: channel::Receiver<String>,
+		outputs: &CodegenOutputs,
+		args: &Args,
+		do_support_fns: bool,
+	) -> std::io::Result<()> {
+		let mut output = writer;
+		// Every output file needs the prelude.
+		writeln!(output, "#include \"poni/poni.h\"")?;
+		// Engine code does not include poni_standalone.h.
+		if !args.engine {
+			writeln!(output, "#include \"poni/poni_standalone.h\"")?;
+		}
+		if args.hot {
+			writeln!(output, "#include \"poni/poni_hot.h\"")?;
+		}
+
+		writeln!(output, "// --- imports ---\n")?;
+		for path in &args.imports {
+			writeln!(output, "#include \"{}\"", path.display())?;
+		}
+
+		writeln!(output, "// --- tag definitions ---\n{}", self.db.tag_define_code)?;
+
+		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
+		writeln!(output, "// --- struct declarations ---\n")?;
+		
+		output.write_all(outputs.struct_declare.as_bytes())?;
+		writeln!(output, "// --- struct declarations (ps_tuple) ---\n{}", self.db.valty_declare_code)?;
+		writeln!(output, "// --- struct declarations (ps_array) ---\n{}", self.db.arr_declare_code)?;
+		writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
+		
+		writeln!(output, "// --- struct definitions (ps_tuple) ---\n{}", self.db.valty_define_code)?;
+		writeln!(output, "// --- struct definitions (ps_array) ---\n{}", self.db.arr_define_code)?;
+
+		// I believe these have to come after the ps_tuple, because they might
+		// refer to tuples.
+		writeln!(output, "// --- struct definitions ---")?;
+		
+		output.write_all(outputs.struct_define.as_bytes())?;
+
+		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
+		writeln!(output, "// --- function declarations ---")?;
+		
+		output.write_all(outputs.fun_declare.as_bytes())?;
+		
+		if do_support_fns {
+			writeln!(output, "{}", outputs.string_const_init)?;
+
+			writeln!(output, "// --- gc support ---")?;
+			writeln!(output, "{}", self.codegen_gc_functions())?;
+
+			// The various poni initializer functions are split into several pieces,
+			// so as to enable hot code reloading.
+			writeln!(output, "void poni_init_globals(struct poni_gc_context *ctx) {{")?;
+			if args.hot {
+				// For hot-code reloading, we need the bool flag 'existed' to decide
+				// whether to run each initializer
+				writeln!(output, "\tbool existed = false;")?;
+			}
+			writeln!(output, "{}", outputs.global_init)?;
+			writeln!(output, "}}")?;
+
+			if self.db.fun_init.is_none() {
+				// For now, if there is no init function, we still have to define
+				// an empty body of it to avoid a link error.
+				writeln!(output, "void poni_init(struct poni_gc_context *ctx) {{}}")?;
+			}
+		}
+
+		writeln!(output, "// --- function definitions ---")?;
+
+		let mut writer_idx = 0;
+
+		loop {
+			let Ok(next) = recv.recv() else { break; };
+			// Just blit buffers of text as we receive them. Round robin them
+			// to the different writers, to keep the load about equal.
+			output.write_all(next.as_bytes())?;
+		}
+
+		// Because we're using a BufWriter, it is important to flush it.
+		output.flush();
+
+		Ok(())
+	}
+
+	fn codegen(&mut self, args: &Args, ast: Arc<AstReadonly>, outputs: Vec<Box<dyn std::io::Write + Send + 'static>>) -> std::io::Result<()> {
 		// Default to 8 if no value specified.
 		let thread_count = if args.codegen_threads > 0 { args.codegen_threads } else { 8 };
 
@@ -399,15 +487,29 @@ poni_gc_get_allocation_size(void *object) {
 		for (n, fun) in self.db.iter_fun().enumerate() {
 			task_sets[n % thread_count].push(CodegenTask::CompileFunction(fun));
 		}
+
+		let mut sends = Vec::new();
+		let mut recvs = Vec::new();
+		for _ in &outputs {
+			let (send, recv) = channel::unbounded();
+			sends.push(send);
+			recvs.push(recv);
+		}
+
+		let send0 = sends[0].clone();
 		
 		{
 			// In order to improve upon the overhead of starting threads, we
 			// start the first thread, then have it start the rest, as we move on
 			// to other codegen tasks.
-			let send = send.clone();
+			let send = sends[0].clone();
 			let ast = Arc::clone(&ast);
 			let db = self.db;
 			std::thread::spawn(move || {
+				// Distribute senders to the main codegen threads in a round-robin
+				// fashion. This should work decently well.
+				let mut send_idx = 1 % sends.len();
+
 				for (idx, task_set) in task_sets.into_iter().enumerate() {
 					// For the last task, we will just handle it ourselves.
 					if idx == thread_count - 1 {
@@ -416,7 +518,8 @@ poni_gc_get_allocation_size(void *object) {
 					}
 					// Otherwise, spawn more threads.
 					else {
-						let send = send.clone();
+						let send = sends[send_idx].clone();
+						send_idx = (send_idx + 1) % sends.len();
 						let ast = Arc::clone(&ast);
 						std::thread::spawn(|| {
 							let mut cg = Codegen::new(db, send);
@@ -427,7 +530,6 @@ poni_gc_get_allocation_size(void *object) {
 			});
 		}
 
-		use std::io::Write;
 		// Use a big capacity for our BufWriter, at least for now.
 		//
 		// In the future, probably what we will want to do is use a smaller capacity,
@@ -445,7 +547,8 @@ poni_gc_get_allocation_size(void *object) {
 		// Disable GC frame for now; we don't bother with one in the globals
 		// initializer (it shouldn't be able to GC).
 
-		let mut cg = Codegen::new(&self.db, send.clone());
+		// For any extras in the globals code, just send it to the 0th channel.
+		let mut cg = Codegen::new(&self.db, send0);
 
 		cg.disable_gc_frames = true;
 
@@ -514,7 +617,6 @@ poni_gc_get_allocation_size(void *object) {
 
 		// Ensure there's no extra open senders.
 		drop(cg);
-		drop(send);
 
 		self.compile_string_constant_init(&mut outputs.string_const_define, &mut outputs.string_const_init);
 
@@ -526,124 +628,37 @@ poni_gc_get_allocation_size(void *object) {
 			self.compile_class_define(class, &mut outputs);
 		}
 
-		let mut do_support_fns = true;
+		for fun in self.db.iter_fun() {
+			self.compile_fun_declare(fun, &mut outputs);
+		}
 
-		// Every output file needs the prelude.
-		for output in &mut writers {
-			writeln!(output, "#include \"poni/poni.h\"")?;
-			// Engine code does not include poni_standalone.h.
-			if !args.engine {
-				writeln!(output, "#include \"poni/poni_standalone.h\"")?;
-			}
-			if args.hot {
-				writeln!(output, "#include \"poni/poni_hot.h\"")?;
-			}
-
-			writeln!(output, "// --- imports ---\n")?;
-			for path in &args.imports {
-				writeln!(output, "#include \"{}\"", path.display())?;
-			}
-
-			writeln!(output, "// --- tag definitions ---\n{}", self.db.tag_define_code)?;
-
-			writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
-			writeln!(output, "// --- struct declarations ---\n")?;
-			
-			output.write_all(outputs.struct_declare.as_bytes())?;
-			writeln!(output, "// --- struct declarations (ps_tuple) ---\n{}", self.db.valty_declare_code)?;
-			writeln!(output, "// --- struct declarations (ps_array) ---\n{}", self.db.arr_declare_code)?;
-			writeln!(output, "// --- sig types ---\n{}", self.db.sig_declare_code)?;
-			
-			writeln!(output, "// --- struct definitions (ps_tuple) ---\n{}", self.db.valty_define_code)?;
-			writeln!(output, "// --- struct definitions (ps_array) ---\n{}", self.db.arr_define_code)?;
-
-			// I believe these have to come after the ps_tuple, because they might
-			// refer to tuples.
-			writeln!(output, "// --- struct definitions ---")?;
-			
-			output.write_all(outputs.struct_define.as_bytes())?;
-
-			writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
-			writeln!(output, "// --- function declarations ---")?;
-			for fun in self.db.iter_fun() {
-				self.compile_fun_declare(fun, &mut outputs);
-			}
-			output.write_all(outputs.fun_declare.as_bytes())?;
-			
-			if do_support_fns {
-				writeln!(output, "{}", outputs.string_const_init)?;
-
-				writeln!(output, "// --- gc support ---")?;
-				writeln!(output, "{}", self.codegen_gc_functions())?;
-
-				// The various poni initializer functions are split into several pieces,
-				// so as to enable hot code reloading.
-				writeln!(output, "void poni_init_globals(struct poni_gc_context *ctx) {{")?;
-				if args.hot {
-					// For hot-code reloading, we need the bool flag 'existed' to decide
-					// whether to run each initializer
-					writeln!(output, "\tbool existed = false;")?;
+		std::thread::scope(|s| {
+			let mut do_support_fns = true;
+			for (writer, recv) in writers.into_iter().zip(recvs.into_iter()) {
+				{
+					let do_support_fns = do_support_fns;
+					let outputs = &outputs;
+					let the_self = &self;
+					s.spawn(move || {
+						Self::per_writer_codegen(the_self, writer, recv, &outputs, args, do_support_fns)
+					});
 				}
-				writeln!(output, "{}", outputs.global_init)?;
-				writeln!(output, "}}")?;
-
-				if self.db.fun_init.is_none() {
-					// For now, if there is no init function, we still have to define
-					// an empty body of it to avoid a link error.
-					writeln!(output, "void poni_init(struct poni_gc_context *ctx) {{}}")?;
-				}
-
-				// Only write the support fns once.
 				do_support_fns = false;
 			}
-
-			writeln!(output, "// --- function definitions ---")?;
-		}
-
-		let mut writer_idx = 0;
-
-		loop {
-			let Ok(next) = self.recv.recv() else { break; };
-			// Just blit buffers of text as we receive them. Round robin them
-			// to the different writers, to keep the load about equal.
-			writers[writer_idx].write_all(next.as_bytes())?;
-			writer_idx = (writer_idx + 1) % writers.len();
-			// match next {
-			// 	CodegenResult::Function((id, body)) => {
-			// 		// TODO: We can probably simplify this and not do this
-			// 		// song and dance.
-			// 		if self.db.fun_init == Some(id) {
-			// 			writeln!(output, "void poni_init(struct poni_gc_context *ctx) {{")?;
-			// 			writeln!(output, "{}", body)?;
-			// 			writeln!(output, "}}")?;
-			// 		}
-			// 		else {
-			// 			writeln!(output, "{}", body);
-			// 		}
-			// 	},
-			// }
-		}
-
-		// Because we're using a BufWriter, it is important to flush it.
-		for writer in &mut writers {
-			writer.flush()?;
-		}
+		});
 
 		Ok(())
 	}
 }
 
-pub fn codegen(args: &Args, db: &'static Db, ast: Arc<AstReadonly>, output: &mut Vec<Box<dyn std::io::Write>>) -> std::io::Result<()> {
+pub fn codegen(args: &Args, db: &'static Db, ast: Arc<AstReadonly>, output: Vec<Box<dyn std::io::Write + Send>>) -> std::io::Result<()> {
 	//let mut codegen = Codegen::new(db);
 
 	//codegen.codegen(args, ast, output)
 
-	let (send, recv) = channel::unbounded();
-
 	let mut coordinator = CodegenCoordinator {
 		db,
-		recv,
 	};
 
-	coordinator.codegen(args, ast, send, output)
+	coordinator.codegen(args, ast, output)
 }
