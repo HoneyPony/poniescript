@@ -73,6 +73,54 @@ typedef struct ps_vec4 {
 	};
 } ps_vec4;
 
+typedef struct ps_vec2i {
+	union {
+		struct {
+			ps_int x;
+			ps_int y;
+		};
+		struct {
+			ps_int v_0;
+			ps_int v_1;
+		};
+		ps_int at[2];
+	};
+} ps_vec2i;
+
+typedef struct ps_vec3i {
+	union {
+		struct {
+			ps_int x;
+			ps_int y;
+			ps_int z;
+		};
+		struct {
+			ps_int v_0;
+			ps_int v_1;
+			ps_int v_2;
+		};
+		ps_int at[3];
+	};
+} ps_vec3i;
+
+typedef struct ps_vec4i {
+	union {
+		struct {
+			ps_int x;
+			ps_int y;
+			ps_int z;
+			ps_int w;
+		};
+		struct {
+			ps_int v_0;
+			ps_int v_1;
+			ps_int v_2;
+			ps_int v_3;
+		};
+		ps_int at[4];
+	};
+} ps_vec4i;
+
 typedef struct ps_object {
 	uint64_t todo;
 } ps_object;
