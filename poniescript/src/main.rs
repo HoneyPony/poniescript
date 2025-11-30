@@ -33,6 +33,89 @@ enum CompileMode {
 	// ToSharedLibrary,
 }
 
+enum CompileOutputs {
+	CFiles(Vec<PathBuf>),
+	ExeFile(PathBuf),
+	ObjectFiles(Vec<PathBuf>),
+	SharedLibrary(PathBuf)
+}
+
+impl CompileOutputs {
+	pub fn parse(outputs: &Vec<PathBuf>) -> Option<Self> {
+		if outputs.is_empty() {
+			eprintln!("error: Expected at least one output file");
+			return None;
+		}
+
+		let mut total = match CompileMode::parse(&outputs[0]) {
+			CompileMode::ToCFile => CompileOutputs::CFiles(vec![outputs[0].clone()]),
+			CompileMode::ToExeFile => CompileOutputs::ExeFile(outputs[0].clone()),
+			CompileMode::ToObjectFile => CompileOutputs::ObjectFiles(vec![outputs[0].clone()]),
+			CompileMode::ToSharedLibary => CompileOutputs::SharedLibrary(outputs[0].clone()),
+		};
+
+		for file in &outputs[1..] {
+			let next = CompileMode::parse(file);
+			match (&mut total, next) {
+				(CompileOutputs::CFiles(vec), CompileMode::ToCFile) => {
+					vec.push(file.clone());
+				}
+				(CompileOutputs::ObjectFiles(vec), CompileMode::ToObjectFile) => {
+					vec.push(file.clone());
+				}
+				(CompileOutputs::ExeFile(_), _) => {
+					eprintln!("error: Expected only one output argument for executable file.");
+					return None;
+				}
+				(CompileOutputs::SharedLibrary(_), _) => {
+					eprintln!("error: Expected only one output argument for shared library.");
+					return None;
+				}
+				_ => {
+					eprintln!("error: Mismatch between output arguments.");
+					return None;
+				}
+			}
+		}
+
+		Some(total)
+	}
+
+	pub fn get_output(&self, args: &Args) -> (Vec<Box<dyn std::io::Write>>, Vec<Child>) {
+		let mut writers = Vec::new();
+		let mut childs = Vec::new();
+
+		let mut push = |arg: (Box<dyn std::io::Write>, Option<Child>)| {
+			writers.push(arg.0);
+			if let Some(child) = arg.1 {
+				childs.push(child);
+			}
+		};
+
+		match self {
+			// TODO: Simplify this repeated logic somehow?
+			CompileOutputs::CFiles(paths) => {
+				for path in paths {
+					push(CompileMode::ToCFile.get_output(args, path))
+				}
+			},
+			CompileOutputs::ObjectFiles(paths) => {
+				for path in paths {
+					push(CompileMode::ToObjectFile.get_output(args, path))
+				}
+			}
+			CompileOutputs::ExeFile(path) => {
+				push(CompileMode::ToExeFile.get_output(args, path))
+			}
+			CompileOutputs::SharedLibrary(path) => {
+				push(CompileMode::ToSharedLibary.get_output(args, path))
+			}
+		}
+
+		(writers, childs)
+	}
+}
+
 impl CompileMode {
 	pub fn parse(output_path: &PathBuf) -> CompileMode {
 		// By default, return ToExeFile. This corresponds to, for example,
@@ -52,7 +135,7 @@ impl CompileMode {
 		return CompileMode::ToExeFile;
 	}
 
-	pub fn get_output(&self, args: &Args) -> (Box<dyn std::io::Write>, Option<Child>) {
+	pub fn get_output(&self, args: &Args, path: &Path) -> (Box<dyn std::io::Write>, Option<Child>) {
 		match self {
 			CompileMode::ToCFile => {
 				// Don't let us run in test mode if we're trying to output a C
@@ -62,10 +145,10 @@ impl CompileMode {
 					exit(10);
 				}
 
-				match File::create(&args.output_path) {
+				match File::create(path) {
 					Ok(f) => (Box::new(f), None),
 					Err(err) => {
-						eprintln!("Unable to create output file {}: {}", args.output_path.display(), err);
+						eprintln!("Unable to create output file {}: {}", path.display(), err);
 						exit(3);
 					}
 				}
@@ -89,7 +172,7 @@ impl CompileMode {
 				};
 					
 				let mut cc = cc.arg("-o")
-					.arg(&args.output_path)
+					.arg(path)
 					.arg("-I.")
 					.arg("-x")
 					.arg("c")
@@ -337,23 +420,25 @@ fn main() {
 	// Generate any caches that require type checking info.
 	db.generate_codegen_caches(&args);
 
-	let compile_mode = CompileMode::parse(&args.output_path);
-	let (mut output, cc) = compile_mode.get_output(&args);
+	let Some(compile_output) = CompileOutputs::parse(&args.output_paths) else {
+		// Oops.
+		exit(5);
+	};
+	let (mut writers, ccs) = compile_output.get_output(&args);
 
 	let ast = Arc::new(ast.into_readonly().0);
 	// Awkward, but necessary until we figure out a nicer way to deal with
 	// the Db
 	let db = Box::leak(Box::new(db));
 
-	if let Err(err) = codegen::codegen(&args, db, ast, &mut output) {
+	if let Err(err) = codegen::codegen(&args, db, ast, &mut writers) {
 		eprintln!("Unable to write output file: {err}");
 		exit(6);
 	}
 
 	// Wait for the C compiler and exit with an error if it failed.
-	if let Some(mut cc) = cc {
-		drop(output);
-
+	drop(writers); // Ensure all the writers are closed.
+	for mut cc in ccs {
 		match cc.wait() {
 			Ok(status) => {
 				if !status.success() {
@@ -388,7 +473,7 @@ fn main() {
 		}
 		// We've already checked the output is an Exe, so just run it at
 		// that path.
-		match test_compiled(&args.output_path, &db) {
+		match test_compiled(&args.output_paths[0], &db) {
 			Ok(_) => { eprintln!("Test succeeded"); },
 			Err(err) => { 
 				eprintln!("Test encountered IO error: {err}");

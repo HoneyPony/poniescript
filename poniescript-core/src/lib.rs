@@ -23,7 +23,7 @@ use std::path::PathBuf;
 pub struct Args {
 	#[arg(short = 'o', long = "output")]
 	/// Where the output file should be written.
-	pub output_path: PathBuf,
+	pub output_paths: Vec<PathBuf>,
 
 	#[arg(long = "no-timing")]
 	/// Whether to hide the timing information.
