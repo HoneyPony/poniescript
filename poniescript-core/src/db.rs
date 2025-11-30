@@ -218,6 +218,15 @@ pub struct DbTypes {
 	pub assume_float: TypId,
 
 	pub fun_sig_unassigned: TypId,
+
+	// TODO: Consider making these less hard-coded and more "generated" in some
+	// way (could allow us to have vec5, vec6, etc..)
+	pub vec2: TypId,
+	pub vec3: TypId,
+	pub vec4: TypId,
+	pub vec2i: TypId,
+	pub vec3i: TypId,
+	pub vec4i: TypId,
 }
 
 /// The Db stores all of the arena-allocated objects that can be referenced
@@ -403,6 +412,13 @@ impl Db {
 				assume_float: TypId::invalid(),
 
 				fun_sig_unassigned: TypId::invalid(),
+
+				vec2: TypId::invalid(),
+				vec3: TypId::invalid(),
+				vec4: TypId::invalid(),
+				vec2i: TypId::invalid(),
+				vec3i: TypId::invalid(),
+				vec4i: TypId::invalid(),
 			},
 
 			synthetic: SourceId::invalid(),
@@ -450,6 +466,18 @@ impl Db {
 		db.types.float      = db.put_type(Type::Float);
 		db.types.bool       = db.put_type(Type::Bool);
 		db.types.bottom     = db.put_type(Type::Bottom);
+
+		{
+			let f = db.types.float;
+			let i = db.types.int;
+			db.types.vec2 = db.put_type(Type::Tuple(Arc::from([f, f])));
+			db.types.vec3 = db.put_type(Type::Tuple(Arc::from([f, f, f])));
+			db.types.vec4 = db.put_type(Type::Tuple(Arc::from([f, f, f, f])));
+
+			db.types.vec2i = db.put_type(Type::Tuple(Arc::from([i, i])));
+			db.types.vec3i = db.put_type(Type::Tuple(Arc::from([i, i, i])));
+			db.types.vec4i = db.put_type(Type::Tuple(Arc::from([i, i, i, i])));
+		}
 
 		db.types.assume_float = db.put_type(Type::AssumeFloat);
 		db.types.assume_int = db.put_type(Type::AssumeInt);

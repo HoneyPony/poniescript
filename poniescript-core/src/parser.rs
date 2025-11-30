@@ -908,6 +908,27 @@ impl<'b> Parser<'b> {
 				if tok.lexeme == self.db.put_str("bool") {
 					return Ok(self.db.types.bool)
 				}
+
+				// TODO: SHould these also be resolved at binding?
+				if tok.lexeme == self.db.put_str("vec2") {
+					return Ok(self.db.types.vec2);
+				}
+				if tok.lexeme == self.db.put_str("vec3") {
+					return Ok(self.db.types.vec3);
+				}
+				if tok.lexeme == self.db.put_str("vec4") {
+					return Ok(self.db.types.vec4);
+				}
+				if tok.lexeme == self.db.put_str("vec2i") {
+					return Ok(self.db.types.vec2i);
+				}
+				if tok.lexeme == self.db.put_str("vec3i") {
+					return Ok(self.db.types.vec3i);
+				}
+				if tok.lexeme == self.db.put_str("vec4i") {
+					return Ok(self.db.types.vec4i);
+				}
+
 				// TODO: These names should probably be resolved at the binding
 				// pass, otherwise we cannot shadow them...
 				if tok.lexeme == self.db.put_str("StrBuf") {

@@ -356,6 +356,9 @@ pub fn generate(tests_file: &mut File) {
 		("optional/", "optional_string_tuple"),
 		("optional/", "tree"),
 		("optional/", "tree2"),
+
+		("vec/", "vec_types"),
+		("vec/", "vec_ret"),
 	];
 
 	let mut bt = BuiltTests {
