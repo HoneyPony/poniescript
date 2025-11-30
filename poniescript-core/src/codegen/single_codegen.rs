@@ -661,6 +661,20 @@ impl<'a> Codegen<'a> {
 		val
 	}
 
+	/// Converts a type into a tuple of length, inner type, if the given type
+	/// is a 'vec' type; otherwise returns None.
+	fn get_vec_params(&self, typ: TypId) -> Option<(usize, TypId)> {
+		match typ {
+			typ if typ == self.db.types.vec2 => Some((2, self.db.types.float)),
+			typ if typ == self.db.types.vec3 => Some((3, self.db.types.float)),
+			typ if typ == self.db.types.vec4 => Some((4, self.db.types.float)),
+			typ if typ == self.db.types.vec2i => Some((2, self.db.types.int)),
+			typ if typ == self.db.types.vec3i => Some((3, self.db.types.int)),
+			typ if typ == self.db.types.vec4i => Some((4, self.db.types.int)),
+			_ => None
+		}
+	}
+
 	/// Converts a type into a str such as 'vec3', 'vec3i', or into nothing
 	/// if it is not a vector type.
 	fn get_vec_cstr(&self, typ: TypId) -> Option<&'static str> {
@@ -1620,6 +1634,38 @@ impl<'a> Codegen<'a> {
 			Expr::MakeTuple(tuple) => {
 				let val = self.new_val_typed_tmp(tuple.typ);
 				let Type::Tuple(subtypes) = self.db.get(tuple.typ) else { unreachable!() };
+
+				// Because vector types are very widely used, generate a bit
+				// nicer initializer for them.
+				if let Some(_) = self.get_vec_params(tuple.typ) {
+					if val.needs_storage() {
+						// For the "nicer" inner values, we have to generate the
+						// values first, so that they can appear before the compound
+						// initializer.
+						let mut inners = Vec::new();
+						for (idx, expr) in tuple.values.iter().enumerate() {
+							let inner = self.expr(ast, *expr, into);
+							assert!(inner.typ == subtypes[idx]);
+							inners.push(inner);
+						}
+
+						define_val!(self, into, val, " = {{");
+
+						// It should be the case that this is exactly the same
+						// as the vec type.
+						let mut comma = false;
+						for (idx, inner) in inners.iter().enumerate() {
+							if comma { inf_write!(into, ", "); }
+
+							inf_write!(into, ".v_{} = {}",
+								idx, inner);
+
+							comma = true;
+						}
+						inf_writeln!(into, "}};");
+					}
+					return self.tmp_to_used_val(val);
+				}
 
 				define_val!(self, into, val, ";\n");
 				if val.needs_storage() {
