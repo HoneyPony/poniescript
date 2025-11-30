@@ -1367,6 +1367,15 @@ impl Db {
 				panic!("ICE: Db.value_types contained non-cgen-safe type");
 			}
 
+			// Don't generate anything for these. That said, this seems a bit
+			// inefficient or something. It would be nice to improve this.
+			// TODO: improve this
+			if *ty == self.types.vec2 || *ty == self.types.vec3 || *ty == self.types.vec4
+				|| *ty == self.types.vec2i || *ty == self.types.vec3i || *ty == self.types.vec4i
+			{
+				continue;
+			}
+
 			// Go through the arena to avoid borrow checker error.
 			match self.arenas.arena_typ.get(*ty) {
 				Type::Tuple(members) => {
@@ -1405,7 +1414,15 @@ impl Db {
 
 			if let Type::Tuple(_) = &ty {
 				// For tuples, first generate the tuple type.
-				let ctype = format!("struct ps_tuple_{}", id.to_nonzero_usize()).leak();
+				let ctype = match id {
+					id if id == self.types.vec2 => format!("ps_vec2"),
+					id if id == self.types.vec3 => format!("ps_vec3"),
+					id if id == self.types.vec4 => format!("ps_vec4"),
+					id if id == self.types.vec2i => format!("ps_vec2i"),
+					id if id == self.types.vec3i => format!("ps_vec3i"),
+					id if id == self.types.vec4i => format!("ps_vec4i"),
+					_ => format!("struct ps_tuple_{}", id.to_nonzero_usize())
+				}.leak();
 
 				// TODO: Maybe Db should just handle all the logic here instead
 				// of having the gen_ctype() function on Type?
