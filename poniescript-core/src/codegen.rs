@@ -25,12 +25,18 @@ pub struct CodegenCoordinator {
 /// Codegen so that we can pass them to self.methods() without borrow checker
 /// errors.
 struct CodegenOutputs {
-	/// Buffer containing the declarations for all global variables.
+	/// Buffer containing the declarations (e.g. extern ...) for all global variables.
+	global_declare: String,
+
+	/// Buffer containing the definitions for all global variables.
 	global_define: String,
 			
 	/// Buffer containing the initialization code for all global variables.
 	global_init: String,
 
+	/// Declarations of string constants (e.g. extern const char*)
+	string_const_declare: String,
+	/// Definitions of string constants (e.g. const char * = NULL)
 	string_const_define: String,
 	string_const_init: String,
 
@@ -42,9 +48,11 @@ struct CodegenOutputs {
 impl CodegenOutputs {
 	pub fn new() -> Self {
 		CodegenOutputs {
+			global_declare: String::new(),
 			global_define: String::new(),
 			global_init: String::new(),
 
+			string_const_declare: String::new(),
 			string_const_define: String::new(),
 			string_const_init: String::new(),
 
@@ -88,9 +96,10 @@ impl CodegenCoordinator {
 		}
 	}
 
-	fn compile_string_constant_init(&mut self, define: &mut String, init: &mut String) {
+	fn compile_string_constant_init(&mut self, declare: &mut String, define: &mut String, init: &mut String) {
 		inf_writeln!(init, "void poni_init_strings(struct poni_gc_context *ctx) {{");
 		for id in self.db.iter_strconst() {
+			inf_writeln!(declare, "extern const ps_str *ps_str_const{};", id.to_index());
 			inf_writeln!(define, "const ps_str* ps_str_const{} = NULL;", id.to_index());
 			inf_writeln!(init, "\tps_str_const{} = ps_str_from_literal(ctx, {});",
 				id.to_index(), self.db.get(id));
@@ -401,7 +410,10 @@ poni_gc_get_allocation_size(void *object) {
 		writeln!(output, "#include \"poni/poni.h\"")?;
 		// Engine code does not include poni_standalone.h.
 		if !args.engine {
-			writeln!(output, "#include \"poni/poni_standalone.h\"")?;
+			// Only one .c/o file should include poni_standalone.
+			if do_support_fns {
+				writeln!(output, "#include \"poni/poni_standalone.h\"")?;
+			}
 		}
 		if args.hot {
 			writeln!(output, "#include \"poni/poni_hot.h\"")?;
@@ -414,7 +426,8 @@ poni_gc_get_allocation_size(void *object) {
 
 		writeln!(output, "// --- tag definitions ---\n{}", self.db.tag_define_code)?;
 
-		writeln!(output, "// --- string constants ---\n{}", outputs.string_const_define)?;
+		writeln!(output, "// --- string constants ---\n{}", if do_support_fns { &outputs.string_const_define }
+			else { &outputs.string_const_declare })?;
 		writeln!(output, "// --- struct declarations ---\n")?;
 		
 		output.write_all(outputs.struct_declare.as_bytes())?;
@@ -431,7 +444,8 @@ poni_gc_get_allocation_size(void *object) {
 		
 		output.write_all(outputs.struct_define.as_bytes())?;
 
-		writeln!(output, "// --- global variables ---\n{}", outputs.global_define)?;
+		writeln!(output, "// --- global variables ---\n{}", if do_support_fns { &outputs.global_define }
+			else { &outputs.global_declare })?;
 		writeln!(output, "// --- function declarations ---")?;
 		
 		output.write_all(outputs.fun_declare.as_bytes())?;
@@ -461,8 +475,6 @@ poni_gc_get_allocation_size(void *object) {
 		}
 
 		writeln!(output, "// --- function definitions ---")?;
-
-		let mut writer_idx = 0;
 
 		loop {
 			let Ok(next) = recv.recv() else { break; };
@@ -573,6 +585,8 @@ poni_gc_get_allocation_size(void *object) {
 				// Note that we leave the * on, because it does stuff for us.
 				global_name = &global_name[1..global_name.len() - 1];
 			}
+			inf_writeln!(outputs.global_declare, "extern {} {};",
+				self.db.get_var_ctype(global), global_name);
 			inf_writeln!(outputs.global_define, "{} {};",
 				self.db.get_var_ctype(global), global_name);
 
@@ -618,7 +632,11 @@ poni_gc_get_allocation_size(void *object) {
 		// Ensure there's no extra open senders.
 		drop(cg);
 
-		self.compile_string_constant_init(&mut outputs.string_const_define, &mut outputs.string_const_init);
+		self.compile_string_constant_init(
+			&mut outputs.string_const_declare,
+			&mut outputs.string_const_define,
+			&mut outputs.string_const_init
+		);
 
 		for class in self.db.iter_class() {
 			self.compile_class_declare(class, &mut outputs);
