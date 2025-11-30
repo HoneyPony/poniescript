@@ -661,41 +661,31 @@ impl<'a> Codegen<'a> {
 		val
 	}
 
+	/// Converts a type into a str such as 'vec3', 'vec3i', or into nothing
+	/// if it is not a vector type.
+	fn get_vec_cstr(&self, typ: TypId) -> Option<&'static str> {
+		match typ {
+			typ if typ == self.db.types.vec2 => Some("vec2"),
+			typ if typ == self.db.types.vec3 => Some("vec3"),
+			typ if typ == self.db.types.vec4 => Some("vec4"),
+			typ if typ == self.db.types.vec2i => Some("vec2i"),
+			typ if typ == self.db.types.vec3i => Some("vec3i"),
+			typ if typ == self.db.types.vec4i => Some("vec4i"),
+			_ => None
+		}
+	}
+
 	fn compile_partial_lerp(&mut self, bool_val: &TypedVal, float_val: &TypedVal, one_minus_val: &TypedVal, from_val: &TypedVal, to_val: &TypedVal, target_val: &TypedVal, cur_typ: TypId, postfix: &String, into: &mut String) {
 		let indent = self.indent();
 
-		let mut do_vec = |vec_lerp| {
-			inf_writeln!(into, "{}{}{} = {}({}{}, {}{}, {});",
-				indent, target_val, postfix, vec_lerp, from_val, postfix, to_val, postfix, float_val);
-		};
-
 		// Generate special cases for vector lerps, to make the generated code
 		// nicer.
-		if cur_typ == self.db.types.vec2 {
-			do_vec("ps_lerp_vec2");
+		if let Some(vec_cstr) = self.get_vec_cstr(cur_typ) {
+			inf_writeln!(into, "{}{}{} = ps_lerp_{}({}{}, {}{}, {});",
+				indent, target_val, postfix, vec_cstr, from_val, postfix, to_val, postfix, float_val);
 			return;
 		}
-		if cur_typ == self.db.types.vec3 {
-			do_vec("ps_lerp_vec3");
-			return;
-		}
-		if cur_typ == self.db.types.vec4 {
-			do_vec("ps_lerp_vec4");
-			return;
-		}
-		if cur_typ == self.db.types.vec2i {
-			do_vec("ps_lerp_vec2i");
-			return;
-		}
-		if cur_typ == self.db.types.vec3i {
-			do_vec("ps_lerp_vec3i");
-			return;
-		}
-		if cur_typ == self.db.types.vec4i {
-			do_vec("ps_lerp_vec4i");
-			return;
-		}
-		
+
 		// IMPORTANT:
 		// To walk down the tree of tuple types, we must start at the root
 		// result TypId, but then walk through different TypIds, so that
@@ -754,8 +744,18 @@ impl<'a> Codegen<'a> {
 		let amount_val = self.expr(ast, lerp.amount, into);
 		assert!(amount_val.typ == self.db.types.float || amount_val.typ == self.db.types.bool);
 
+		let result = self.new_val_typed(lerp.typ);
+
 		// Decide the bool_val and float_val based on amount_val
 		let (bool_val, float_val) = if amount_val.typ == self.db.types.float {
+			// If the amount_val is a float, we can generate a couple special
+			// cases to keep the generated code simpler.
+			if let Some(vec_cstr) = self.get_vec_cstr(lerp.typ) {
+				define_val!(self, into, result, " = ps_lerp_{}({}, {}, {});\n",
+					vec_cstr, from_val, to_val, amount_val);
+				return result;
+			}
+
 			let bool_val = self.new_val_typed(self.db.types.bool);
 			// EXTREMELY IMPORTANT SEMANTIC DECISION:
 			// What exactly counts as true?
@@ -780,7 +780,6 @@ impl<'a> Codegen<'a> {
 		let one_minus_val = self.new_val_typed(self.db.types.float);
 		define_val!(self, into, one_minus_val, " = 1.0 - {};\n", float_val);
 
-		let result = self.new_val_typed(lerp.typ);
 		// The result val will be defined through compile_partial_lerp.
 		//
 		// Again, maybe we can simplify in some cases. (TODO)
