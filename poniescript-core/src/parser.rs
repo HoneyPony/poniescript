@@ -559,6 +559,14 @@ impl<'b> Parser<'b> {
 			Tok::Loop => self.expr_loop(),
 			Tok::While => self.expr_while(),
 
+			Tok::StringSimple => {
+				let lit = self.advance()?;
+				let id = self.db.put_str_const_simple(self.db.get(lit.lexeme));
+				// TODO: Make sure the contents of the string literal are
+				// what we expect...
+				Expr::put_strliteral_ok(self.ast, lit.location, id)
+			}
+
 			Tok::Fun => {
 				let fun = self.fun_declaration(false)?;
 				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
@@ -625,7 +633,7 @@ impl<'b> Parser<'b> {
 
 	fn expr_prefix(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
-			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::While | Tok::Fun => {
+			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::While | Tok::Fun | Tok::StringSimple => {
 				let location = self.start();
 				let mut inner = self.expr_prefix_callable()?;
 
@@ -736,14 +744,6 @@ impl<'b> Parser<'b> {
 				Expr::put_boolliteral_ok(self.ast, location, false)
 			}
 
-			Tok::StringSimple => {
-				let lit = self.advance()?;
-				let id = self.db.put_str_const_simple(self.db.get(lit.lexeme));
-				// TODO: Make sure the contents of the string literal are
-				// what we expect...
-				Expr::put_strliteral_ok(self.ast, lit.location, id)
-			}
-
 			Tok::New => {
 				self.new_()
 			}
@@ -772,7 +772,7 @@ impl<'b> Parser<'b> {
 			// Or has lower precedence than And.
 			Tok::Or => (3, 4),
 			Tok::And => (5, 6),
-			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual => (7, 8),
+			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual | Tok::EqualEqual => (7, 8),
 
 			Tok::Plus | Tok::Minus => (9, 10),
 			Tok::Star | Tok::Slash => (11, 12),
@@ -809,7 +809,7 @@ impl<'b> Parser<'b> {
 				return Expr::put_binary_ok(self.ast, self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
 			},
 
-			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual => {
+			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual | Tok::EqualEqual => {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::put_comparison_ok(self.ast, self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);

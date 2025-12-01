@@ -861,6 +861,8 @@ impl<'a> Codegen<'a> {
 			Tok::LessEqual => "<=",
 			Tok::Greater => ">",
 			Tok::GreaterEqual => ">=",
+			// TODO: How does this work for strings...
+			Tok::EqualEqual => "==",
 			_ => panic!("ICE: Tried to codegen unknown comparison operator"),
 		};
 
@@ -1724,6 +1726,15 @@ impl<'a> Codegen<'a> {
 
 				let idx_val = self.expr(ast, index.index, into);
 				assert!(idx_val.typ == self.db.types.int);
+
+				if arr_val.typ == self.db.types.str || arr_val.typ == self.db.types.str_const {
+					return inline_expr!(self, index.typ, "(ps_int)({}->contents[{}])",
+						arr_val, idx_val);
+				}
+				if arr_val.typ == self.db.types.str_buf {
+					return inline_expr!(self, index.typ, "(ps_int)({}->buffer->contents[{}])",
+						arr_val, idx_val);
+				}
 
 				// TODO: Generate bounds checks...
 				if self.db.is_cheap_re_eval_type(index.typ) {

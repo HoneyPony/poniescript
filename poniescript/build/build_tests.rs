@@ -108,7 +108,7 @@ pub fn generate(tests_file: &mut File) {
 		("typecheck/", "err_try_return_float_for_int_short"),
 		("typecheck/", "err_try_return_float_for_int"),
 
-	
+		("string/", "simple_idx"),
 		("string/", "simple_str"),
 		("string/", "str_of_strbuf"),
 		("string/", "very_simple_str"),

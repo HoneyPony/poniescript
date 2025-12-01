@@ -1142,7 +1142,10 @@ impl<'db> TypeChecker<'db> {
 
 				let elem_ty = match self.db.get(arr_ty).clone() {
 					Type::ArrayOf(elem) => elem,
-					_ => type_error!(self, &index.location, "Can only index an array.")
+					// We don't have a good string indexing strategy yet. For now,
+					// treat strings as essentially arrays of integers.
+					Type::Str | Type::StrBuf | Type::StrConst => self.db.types.int,
+					_ => type_error!(self, &index.location, "Can only index a string or array.")
 				};
 
 				let index_ty = self.check_expr(ast, index.index, true)?;

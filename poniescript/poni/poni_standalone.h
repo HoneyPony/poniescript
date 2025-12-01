@@ -1,6 +1,7 @@
 #ifndef PONI_STANDALONE_H
 #define PONI_STANDALONE_H
 
+#include "poni.h"
 #include "poni_gc.h"
 
 // "standalone" refers to poniescripts that are compiled without the addition
