@@ -336,7 +336,9 @@ impl<'b> Parser<'b> {
 			// It may seem in poor taste to have a specific Expr for function
 			// calls all throughout the syntax tree. But, the hope is that this
 			// makes it easier to generate reasonable code in the common cases.
-			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, location, ident.location, fun, args),
+			// I guess we don't have FunCalls that are on an object right now?
+			// Unsure...
+			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, location, ident.location, fun, args, None),
 			ScopeEntry::Class(_) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), self.current.location.clone()));
 

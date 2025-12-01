@@ -1421,19 +1421,18 @@ impl<'db> TypeChecker<'db> {
 				if let Expr::FunCapture(capt) = inner_bind.as_mut() {
 					// TODO: FunCall on an Object. Until then, we still have to use
 					// ValCall(FunCapture).
-					if capt.object.is_none() {
-						let as_funcall = FunCall {
-							location: call.location.clone(),
-							fn_name: capt.location.clone(),
-							identity: capt.identity,
-							args: std::mem::take(&mut call.args),
-						};
+					let as_funcall = FunCall {
+						location: call.location.clone(),
+						fn_name: capt.location.clone(),
+						identity: capt.identity,
+						args: std::mem::take(&mut call.args),
+						object: capt.object
+					};
 
-						*expr = Expr::FunCall(as_funcall);
-						// There should be no need to re-typecheck the FunCall
-						// in this case.
-						return Ok(ret_type);
-					}
+					*expr = Expr::FunCall(as_funcall);
+					// There should be no need to re-typecheck the FunCall
+					// in this case.
+					return Ok(ret_type);
 				}
 
 				ret_type

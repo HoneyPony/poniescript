@@ -1306,6 +1306,13 @@ impl<'a> Codegen<'a> {
 					vals.push(val);
 				}
 
+				let object = match call.object {
+					Some(object) => {
+						Some(self.expr(ast, object, into))
+					}
+					None => None,
+				};
+
 				// We must save values at this time.
 				self.save_gc_values(into);
 
@@ -1325,7 +1332,12 @@ impl<'a> Codegen<'a> {
 					inf_write!(into, "{}{}", comma, val);
 				}
 				// TODO: Implement closure, gc scoping, etc
-				inf_writeln!(into, "{}NULL);", comma);
+				if let Some(object) = object {
+					inf_writeln!(into, "{}{});", comma, object);
+				}
+				else {
+					inf_writeln!(into, "{}NULL);", comma);
+				}
 
 				val
 			},

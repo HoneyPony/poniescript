@@ -342,7 +342,7 @@ pub fn generate(file: &mut File) {
 	Comparison    : Tok op, Expr left, Expr right, TypId compare_as
 	Variable      : VarId identity
 	Logical       : Tok op, Expr left, Expr right
-	FunCall       : SourceLocation fn_name, FunId identity, Vec<Expr> args
+	FunCall       : SourceLocation fn_name, FunId identity, Vec<Expr> args, Option<Expr> object
 	FunDeclare    : FunId identity, Expr value, TypId typ
 	ValCall       : Expr value, Vec<Expr> args, SigId sig
 	FunCapture    : SourceLocation fn_name, FunId identity, TypId typ, Option<Expr> object
