@@ -476,4 +476,10 @@ gc_frame.ptr_count = in_ptr_count; \
 gc_frame.prev = ctx->frame; \
 ctx->frame = (void*)&gc_frame
 
+#ifdef __TINYC__
+	#define PONI_ABI(...) struct poni_gc_context *ctx, ##__VA_ARGS__  ,void *closure
+#else
+	#define PONI_ABI(...) struct poni_gc_context *ctx, __VA_ARGS__ __VA_OPT__(,) void *closure
+#endif
+
 #endif

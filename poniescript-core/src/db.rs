@@ -1565,18 +1565,19 @@ impl Db {
 		for id in self.arenas.arena_fun.iter() {
 			let mut buffer = String::new();
 
-			buffer.push_str("struct poni_gc_context *ctx");
-
+			buffer.push_str("PONI_ABI(");
+			
+			let mut comma = false;
 			for param in &self.get(id).parameters {
-				// Always comma thanks to first param
-				buffer.push_str(", ");
+				if comma { buffer.push_str(", "); }
+				comma = true;
 
 				buffer.push_str(self.get_var_ctype(*param));
 				buffer.push(' ');
 				buffer.push_str(self.get_cname(*param));
 			}
 
-			buffer.push_str(", void* closure");
+			buffer.push_str(")");
 
 			self.fun_cparams_cache.push(buffer.leak());
 		}
