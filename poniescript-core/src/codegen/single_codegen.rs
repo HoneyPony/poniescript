@@ -635,6 +635,10 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
+	fn inline_expr(&mut self, buf: String, typ: TypId) -> TypedVal {
+		self.val_alloc_slots(Val::InlineExpr { expr: buf }, typ)
+	}
+
 	fn compile_partial_binary(&mut self, result_val: &TypedVal, lhs_val: &TypedVal, rhs_val: &TypedVal, op: char, cur_typ: TypId, postfix: &String, into: &mut String) {
 		let indent = self.indent();
 		match self.db.get(cur_typ) {
@@ -1755,40 +1759,35 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::MakeTuple(tuple) => {
-				let val = self.new_val_typed_tmp(tuple.typ);
 				let Type::Tuple(subtypes) = self.db.get(tuple.typ) else { unreachable!() };
 
 				// Because vector types are very widely used, generate a bit
 				// nicer initializer for them.
-				if let Some(_) = self.get_vec_params(tuple.typ) {
-					if val.needs_storage() {
-						// For the "nicer" inner values, we have to generate the
-						// values first, so that they can appear before the compound
-						// initializer.
-						let mut inners = Vec::new();
-						for (idx, expr) in tuple.values.iter().enumerate() {
-							let inner = self.expr(ast, *expr, into);
-							assert!(inner.typ == subtypes[idx]);
-							inners.push(inner);
-						}
+				if let Some(cstr) = self.get_vec_cstr(tuple.typ) {
+					let mut buf = String::new();
 
-						define_val!(self, into, val, " = {{");
-
-						// It should be the case that this is exactly the same
-						// as the vec type.
-						let mut comma = false;
-						for (idx, inner) in inners.iter().enumerate() {
-							if comma { inf_write!(into, ", "); }
-
-							inf_write!(into, ".v_{} = {}",
-								idx, inner);
-
-							comma = true;
-						}
-						inf_writeln!(into, "}};");
+					let mut inners = Vec::new();
+					for (idx, expr) in tuple.values.iter().enumerate() {
+						let inner = self.expr(ast, *expr, into);
+						assert!(inner.typ == subtypes[idx]);
+						inners.push(inner);
 					}
-					return self.tmp_to_used_val(val);
+
+					inf_write!(buf, "ps_mk_{}(", cstr);
+					let mut comma = false;
+					for inner in inners.iter() {
+						if comma { inf_write!(buf, ", "); }
+
+						inf_write!(buf, "{}", inner);
+
+						comma = true;
+					}
+					inf_write!(buf, ")");
+					
+					return self.inline_expr(buf, tuple.typ);
 				}
+
+				let val = self.new_val_typed_tmp(tuple.typ);
 
 				define_val!(self, into, val, ";\n");
 				if val.needs_storage() {

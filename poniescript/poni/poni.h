@@ -49,6 +49,12 @@ ps_lerp_vec2(ps_vec2 a, ps_vec2 b, ps_float t) {
 	};
 }
 
+static inline
+ps_vec2
+ps_mk_vec2(ps_float a, ps_float b) {
+	return (ps_vec2){.x = a, .y = b};
+}
+
 typedef struct ps_vec3 {
 	union {
 		struct {
@@ -74,6 +80,12 @@ ps_lerp_vec3(ps_vec3 a, ps_vec3 b, ps_float t) {
 		.y = s * a.y + t * b.y,
 		.z = s * a.z + t * b.z,
 	};
+}
+
+static inline
+ps_vec3
+ps_mk_vec3(ps_float a, ps_float b, ps_float c) {
+	return (ps_vec3){.x = a, .y = b, .z = c};
 }
 
 typedef struct ps_vec4 {
@@ -106,6 +118,12 @@ ps_lerp_vec4(ps_vec4 a, ps_vec4 b, ps_float t) {
 	};
 }
 
+static inline
+ps_vec4
+ps_mk_vec4(ps_float a, ps_float b, ps_float c, ps_float d) {
+	return (ps_vec4){.x = a, .y = b, .z = c, .w = d};
+}
+
 typedef struct ps_vec2i {
 	union {
 		struct {
@@ -129,6 +147,13 @@ ps_lerp_vec2i(ps_vec2i a, ps_vec2i b, ps_float t) {
 		.y = (ps_int)(s * a.y + t * b.y),
 	};
 }
+
+static inline
+ps_vec2i
+ps_mk_vec2i(ps_int a, ps_int b) {
+	return (ps_vec2i){.x = a, .y = b};
+}
+
 
 typedef struct ps_vec3i {
 	union {
@@ -155,6 +180,12 @@ ps_lerp_vec3i(ps_vec3i a, ps_vec3i b, ps_float t) {
 		.y = (ps_int)(s * a.y + t * b.y),
 		.z = (ps_int)(s * a.z + t * b.z),
 	};
+}
+
+static inline
+ps_vec3i
+ps_mk_vec3i(ps_int a, ps_int b, ps_int c) {
+	return (ps_vec3i){.x = a, .y = b, .z = c};
 }
 
 typedef struct ps_vec4i {
@@ -185,6 +216,12 @@ ps_lerp_vec4i(ps_vec4i a, ps_vec4i b, ps_float t) {
 		.z = (ps_int)(s * a.z + t * b.z),
 		.w = (ps_int)(s * a.w + t * b.w),
 	};
+}
+
+static inline
+ps_vec4i
+ps_mk_vec4i(ps_int a, ps_int b, ps_int c, ps_int d) {
+	return (ps_vec4i){.x = a, .y = b, .z = c, .w = d};
 }
 
 typedef struct ps_object {
