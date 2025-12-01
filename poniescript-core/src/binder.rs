@@ -188,6 +188,11 @@ impl<'db> Binder<'db> {
 				return None;
 			},
 
+			Expr::Unary(unary) => {
+				self.visit_expr(ast, unary.inner);
+				return None;
+			}
+
 			Expr::Lerp(lerp) => {
 				// TODO: Is there some way to make this less tedious?
 				self.visit_expr(ast, lerp.from);

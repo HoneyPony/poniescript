@@ -757,6 +757,14 @@ impl<'b> Parser<'b> {
 				Expr::put_makesumtype_ok(self.ast, tok.location, self.db.put_type(Type::Option(self.db.types.unassigned)))
 			}
 
+			Tok::Plus | Tok::Minus => {
+				let location = self.start();
+				let op = self.advance()?;
+
+				let inner = self.expression()?;
+				Expr::put_unary_ok(self.ast, self.end(location), op.typ, inner, self.db.types.unassigned)
+			}
+
 			_ => {
 				got!(self, "Expected expression")
 			}

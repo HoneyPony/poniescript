@@ -360,6 +360,9 @@ pub fn generate(tests_file: &mut File) {
 		("vec/", "vec_types"),
 		("vec/", "vec_ret"),
 		("vec/", "vec_lerp"),
+
+		("unary/", "unary_int_float"),
+		("unary/", "unary_vec"),
 	];
 
 	let mut bt = BuiltTests {

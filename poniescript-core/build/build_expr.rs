@@ -339,6 +339,7 @@ pub fn generate(file: &mut File) {
 	let expr_spec = r#"
 
 	Binary        : Tok op, Expr left, Expr right, TypId typ
+	Unary         : Tok op, Expr inner, TypId typ
 	Comparison    : Tok op, Expr left, Expr right, TypId compare_as
 	Variable      : VarId identity
 	Logical       : Tok op, Expr left, Expr right

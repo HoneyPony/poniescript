@@ -487,6 +487,13 @@ impl<'db> TypeChecker<'db> {
 				self.do_promote_expr(ast, &mut binary.left, binary.typ);
 				self.do_promote_expr(ast, &mut binary.right, binary.typ);
 			},
+			Expr::Unary(unary) => {
+				if self.db.is_not_concrete(unary.typ) {
+					unary.typ = promote_to;
+				}
+
+				self.do_promote_expr(ast, &mut unary.inner, unary.typ);
+			}
 			Expr::OptionElse(opt_else) => {
 				log::trace!("promote_expr: OptionElse: promote_to = {}", self.db.repr_type(promote_to));
 
@@ -776,6 +783,21 @@ impl<'db> TypeChecker<'db> {
 				
 				computed
 			},
+			Expr::Unary(unary) => {
+				let inner = self.check_expr(ast, unary.inner, value_used)?;
+				
+				if !self.is_numeric_or_vec(inner) {
+					type_error!(self,
+						unary.location,
+						"Invalid operand to unary operator: Type is not numerical"
+					);
+				}
+
+				// PROMOTION: occurs in promote_expr
+
+				unary.typ = inner;
+				unary.typ
+			}
 			Expr::Lerp(lerp) => {
 				let left = self.check_expr(ast, lerp.from, true)?;
 				let right = self.check_expr(ast, lerp.to, true)?;

@@ -72,6 +72,7 @@ impl Expr {
 			Expr::Binary(binary) => {
 				binary.typ
 			},
+			Expr::Unary(unary) => unary.typ,
 			Expr::If(if_) => {
 				// Note that ifs are similar to binary expressions.
 				if_.typ

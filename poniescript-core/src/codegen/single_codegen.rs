@@ -700,6 +700,56 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
+	fn compile_partial_unary(&mut self, result_val: &TypedVal, inner_val: &TypedVal, op: char, cur_typ: TypId, postfix: &String, into: &mut String) {
+		let indent = self.indent();
+		match self.db.get(cur_typ) {
+			Type::Int | Type::Float => {
+				inf_writeln!(into, "{}{}{} = {}{}{};",
+					indent, result_val, postfix, op, inner_val, postfix);
+			}
+			Type::Tuple(typ_ids) => {
+				// Iterate over each tuple member and perform the operator.
+				for i in 0..typ_ids.len() {
+					let postfix = format!("{postfix}.v_{i}");
+					self.compile_partial_unary(result_val, inner_val,
+						op,
+							typ_ids[i],
+						&postfix,
+						into);
+				}
+			},
+			_ => {
+				panic!("ICE: Trying to codegen binary operator for invalid types")
+			}
+		}
+	}
+
+	fn compile_unary(&mut self, ast: &AstReadonly, unary: &Unary, into: &mut String) -> TypedVal {
+		let inner = self.expr(ast, unary.inner, into);
+
+		let op = match unary.op {
+			Tok::Plus => '+',
+			Tok::Minus => '-',
+			_ => panic!("ICE: Tried to codegen unknown unary operator")
+		};
+
+		if unary.typ == self.db.types.int || unary.typ == self.db.types.float {
+			return inline_expr!(self, unary.typ, "({}{})", op, inner);
+		}
+		else {
+			// No need to worry about GC slots for now, as the type won't
+			// ever have slots.
+			let val = self.new_val_typed(unary.typ);
+			define_val!(self, into, val, ";\n");
+
+			let postfix = "".to_string();
+			self.compile_partial_unary(&val, &inner, 
+				op, val.typ, &postfix, into);
+
+			return val;
+		}
+	}
+
 	/// Converts a type into a tuple of length, inner type, if the given type
 	/// is a 'vec' type; otherwise returns None.
 	fn get_vec_params(&self, typ: TypId) -> Option<(usize, TypId)> {
@@ -1160,6 +1210,7 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 		match ast.exprs.get(expr) {
 			Expr::Binary(binary) => self.compile_binary(ast, binary, into),
+			Expr::Unary(unary) => self.compile_unary(ast, unary, into),
 			Expr::Lerp(lerp) => self.compile_lerp(ast, lerp, into),
 			Expr::Comparison(compare) => self.compile_comparison(ast, compare, into),
 			Expr::If(if_) => self.compile_if(ast, if_, into),

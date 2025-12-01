@@ -106,6 +106,14 @@ impl<'db> DeadCodeElim<'db> {
                 //     *expr = left;
                 // }
             },
+            Expr::Unary(unary) => {
+                // The unary does nothing if the inner is dead.
+                if self.elim_expr(ast, &mut unary.inner) {
+                    return true;
+                }
+
+                false
+            }
             Expr::OptionElse(opt_else) => {
                 // If the value is dead, the whole expression is dead. If the
                 // otherwise is dead, then the expression is just the value.
