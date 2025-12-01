@@ -223,6 +223,11 @@ struct ps_array_header {
 	#define PONI_NORETURN _Noreturn
 #endif
 
+#define PONI_INIT_ARRAY(arr, elem_sz, elem_cnt, elem_tag) \
+	arr = poni_gc_alloc_tagged(ctx, sizeof(struct ps_array_header) + elem_sz * elem_cnt, PONI_TAG_ARRAY); \
+	arr->header.length = elem_cnt; \
+	arr->header.type   = elem_tag;
+
 static inline
 PONI_NORETURN void
 ps_fatal_error(const char *message) {

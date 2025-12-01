@@ -1621,15 +1621,13 @@ impl<'a> Codegen<'a> {
 			Expr::ArrayLit(lit) => {
 				let val = self.new_val_typed_tmp(lit.arr_typ);
 
-				define_val!(self, into, val, " =  poni_gc_alloc_tagged(ctx, sizeof(struct ps_array_header) + sizeof({}) * {}, PONI_TAG_ARRAY);\n",
+				define_val!(self, into, val, "; PONI_INIT_ARRAY({}, sizeof({}), {}, {})\n",
+					val,
 					self.db.get_ctype(lit.elem_typ),
-					lit.values.len());
+					lit.values.len(),
+					self.db.get_type_ctag(lit.elem_typ));
 
 				if val.needs_storage() {
-					inf_writeln!(into, "{}{}->header.length = {};\n", indent, val.val, lit.values.len());
-					// Arrays keep track of their type at runtime, for the GC.
-					inf_writeln!(into, "{}{}->header.type = {};\n", indent, val.val, self.db.get_type_ctag(lit.elem_typ));
-
 					let mut idx = 0;
 					for value in &lit.values {
 						let nth = self.expr(ast, *value, into);
