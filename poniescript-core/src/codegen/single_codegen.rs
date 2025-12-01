@@ -913,12 +913,9 @@ impl<'a> Codegen<'a> {
 			Tok::GreaterEqual => ">=",
 			// TODO: How does this work for strings...
 			Tok::EqualEqual => "==",
+			Tok::BangEqual => "!=",
 			_ => panic!("ICE: Tried to codegen unknown comparison operator"),
 		};
-
-		let val = self.new_val();
-
-		let indent = self.indent();
 
 		inline_expr!(self, self.db.types.bool, "(ps_bool)({} {} {})", left, op, right)
 		// inf_writeln!(into, "{}const ps_bool {} = (ps_bool)({} {} {});",

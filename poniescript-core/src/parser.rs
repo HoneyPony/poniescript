@@ -780,7 +780,8 @@ impl<'b> Parser<'b> {
 			// Or has lower precedence than And.
 			Tok::Or => (3, 4),
 			Tok::And => (5, 6),
-			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual | Tok::EqualEqual => (7, 8),
+			Tok::Less | Tok::LessEqual | Tok::Greater | 
+				Tok::GreaterEqual | Tok::EqualEqual | Tok::BangEqual => (7, 8),
 
 			Tok::Plus | Tok::Minus => (9, 10),
 			Tok::Star | Tok::Slash => (11, 12),
@@ -817,7 +818,8 @@ impl<'b> Parser<'b> {
 				return Expr::put_binary_ok(self.ast, self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
 			},
 
-			Tok::Less | Tok::LessEqual | Tok::Greater | Tok::GreaterEqual | Tok::EqualEqual => {
+			Tok::Less | Tok::LessEqual | Tok::Greater | 
+				Tok::GreaterEqual | Tok::EqualEqual | Tok::BangEqual => {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::put_comparison_ok(self.ast, self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
