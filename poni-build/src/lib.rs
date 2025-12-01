@@ -32,7 +32,7 @@ pub struct Project {
 
 impl BuildConfig {
     pub fn generate_ninja_file(&self, file: &mut File, env: &EnvironmentConfig) -> std::io::Result<()> {
-        writeln!(file, "builddir .build\n")?;
+        writeln!(file, "builddir = .build\n")?;
 
         // TODO: Make all the Paths Strings instead?
         writeln!(file, "poni_h_path = {}", env.poni_h_path.display())?;
@@ -68,7 +68,7 @@ impl BuildConfig {
 
         write!(file, "default")?;
         for (name, _) in &self.projects {
-            write!(file, " {name}")?;
+            write!(file, " {name}-debug")?;
         }
         write!(file, "\n")?;
 
@@ -79,22 +79,24 @@ impl BuildConfig {
 pub enum ConfigReadError {
     NoPoniesToml,
     BadPoniesToml(String),
-    NoEnvironmentToml,
+    NoEnvironmentToml(PathBuf),
     BadEnvironmentToml(String),
-    XdgError,
+    XdgError(String),
 }
 
 impl From<XdgError> for ConfigReadError {
-    fn from(_: XdgError) -> Self {
-        ConfigReadError::XdgError
+    fn from(err: XdgError) -> Self {
+        ConfigReadError::XdgError(err.to_string())
     }
 }
 
 pub fn read_configs(build_config_search_path: &Path) -> Result<(BuildConfig, EnvironmentConfig), ConfigReadError> {
     let app = XdgApp::new("poniescript")?;
 
-    let config_str = fs::read_to_string(app.config_file("build-config.toml")?)
-        .map_err(|_| ConfigReadError::NoEnvironmentToml)?;
+    let build_cfg_path = app.app_config_file("build-config.toml")?;
+
+    let config_str = fs::read_to_string(&build_cfg_path)
+        .map_err(|_| ConfigReadError::NoEnvironmentToml(build_cfg_path))?;
 
     let env: EnvironmentConfig = toml::from_str(&config_str)
         .map_err(|err| ConfigReadError::BadEnvironmentToml(err.to_string()))?;

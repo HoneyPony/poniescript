@@ -52,7 +52,8 @@ fn do_build(build: &BuildConfig, env: &EnvironmentConfig, project: Option<&Strin
 
     // If we're only building one project, then pass that as an argument.
     if let Some(project) = project {
-        process.arg(project);
+        // TODO: Make this less, like, stringly typed or whatever...
+        process.arg(format!("{project}-debug"));
     }
     
     // Spawn the process.
@@ -69,9 +70,9 @@ fn show_error(err: ConfigReadError) -> ! {
         ConfigReadError::BadPoniesToml(err) => eprintln!("error: couldn't parse 'ponies.toml':\n{err}"),
 
         // TODO: These errors should include their path with them, if possible.
-        ConfigReadError::NoEnvironmentToml => eprintln!("error: couldn't open build-config.toml (in $XDG_CONFIG_HOME)"),
+        ConfigReadError::NoEnvironmentToml(tried_path) => eprintln!("error: couldn't open {}", tried_path.display()),
         ConfigReadError::BadEnvironmentToml(err) => eprintln!("error: couldn't parse build-config.toml:\n{err}"),
-        ConfigReadError::XdgError => eprintln!("error: couldn't read XDG environment"),
+        ConfigReadError::XdgError(err) => eprintln!("error: couldn't read XDG environment: {err}"),
     }
 
     std::process::exit(1);
@@ -107,7 +108,7 @@ fn main() {
 
             // Now run that specific project.
             // TODO: Support arguments to the project?
-            let mut child = Command::new(project)
+            let mut child = Command::new(format!("./{project}-debug"))
                 .spawn()
                 .unwrap_or_else(|_| show_error_msg("couldn't spawn child process."));
 
