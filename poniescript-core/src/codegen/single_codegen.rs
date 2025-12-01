@@ -1722,8 +1722,8 @@ impl<'a> Codegen<'a> {
 				assert!(idx_val.typ == self.db.types.int);
 
 				// TODO: Generate bounds checks...
-				if self.db.is_cheap_re_eval_type(idx_val.typ) {
-					return inline_expr!(self, idx_val.typ, "{}->contents[{}]", arr_val, idx_val);
+				if self.db.is_cheap_re_eval_type(index.typ) {
+					return inline_expr!(self, index.typ, "{}->contents[{}]", arr_val, idx_val);
 				}
 
 				// Generate own val after inner expressions, for GC
