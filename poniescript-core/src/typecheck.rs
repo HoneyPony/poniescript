@@ -1413,7 +1413,30 @@ impl<'db> TypeChecker<'db> {
 
 				// TODO: Should ValCall's use_sig their sig?
 
-				self.db.get(call.sig).return_type
+				let ret_type = self.db.get(call.sig).return_type;
+
+				// Optimization: if we are a ValCall of a FunCapture, replace
+				// us with a FunCall.
+				let mut inner_bind = ast.exprs.get_mut(call.value);
+				if let Expr::FunCapture(capt) = inner_bind.as_mut() {
+					// TODO: FunCall on an Object. Until then, we still have to use
+					// ValCall(FunCapture).
+					if capt.object.is_none() {
+						let as_funcall = FunCall {
+							location: call.location.clone(),
+							fn_name: capt.location.clone(),
+							identity: capt.identity,
+							args: std::mem::take(&mut call.args),
+						};
+
+						*expr = Expr::FunCall(as_funcall);
+						// There should be no need to re-typecheck the FunCall
+						// in this case.
+						return Ok(ret_type);
+					}
+				}
+
+				ret_type
 			},
 
 			Expr::FunCapture(capt) => {
