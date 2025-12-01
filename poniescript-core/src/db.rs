@@ -1188,7 +1188,7 @@ impl Db {
 	// Then, we would explicitly add a copy operation whenever a value type
 	// is assigned somewhere (i.e. assigned or passed in a function).
 	pub fn get_c_member_lookup(&self, typ: TypId) -> &'static str {
-		if self.is_value_type(typ) { "." } else { "-> "}
+		if self.is_value_type(typ) { "." } else { "->" }
 	}
 
 	pub fn lookup_member_fn(&self, typ: TypId, propname: StrId) -> Option<FunId> {
