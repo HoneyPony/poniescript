@@ -45,6 +45,8 @@ pub enum Val {
 		depth: usize,
 	},
 	DirectSelf,
+	/// A directly generated NULL literal.
+	DirectNull,
 	StringLit {
 		id: StrConstId,
 	},
@@ -173,6 +175,9 @@ impl ufmt::uDisplay for Val {
 			Val::DirectSelf => {
 				uwrite!(f, "this")
 			}
+			Val::DirectNull => {
+				uwrite!(f, "NULL")
+			}
 
 			// String literals are always stored in variables with a consistent naming scheme.
 			Val::StringLit { id } => uwrite!(f, "ps_str_const{}", id.to_index()),
@@ -217,6 +222,9 @@ impl std::fmt::Display for Val {
 			}
 			Val::DirectSelf => {
 				write!(f, "this")
+			}
+			Val::DirectNull => {
+				write!(f, "NULL")
 			}
 
 			// String literals are always stored in variables with a consistent naming scheme.
@@ -1771,12 +1779,8 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::MakeSumType(sum) => {
-				let val = self.new_val_typed_tmp(sum.typ);
-
-				// Right now, this is nothing but nil.
-				define_val!(self, into, val, " = NULL;\n");
-
-				self.tmp_to_used_val(val)
+				// Right now, this is nothing but nil, which cannot need a GC frame.
+				Val::DirectNull.typed(sum.typ, None) 
 			}
 		}
 	}
