@@ -442,6 +442,14 @@ ps_print_str(const ps_str *str) {
 	}
 }
 
+static inline void ps_print_vec2(ps_vec2 v) { printf("(%f, %f)", v.x, v.y); }
+static inline void ps_print_vec3(ps_vec3 v) { printf("(%f, %f, %f)", v.x, v.y, v.z); }
+static inline void ps_print_vec4(ps_vec4 v) { printf("(%f, %f, %f, %f)", v.x, v.y, v.z, v.w); }
+
+static inline void ps_print_vec2i(ps_vec2i v) { printf("(%d, %d)", v.x, v.y); }
+static inline void ps_print_vec3i(ps_vec3i v) { printf("(%d, %d, %d)", v.x, v.y, v.z); }
+static inline void ps_print_vec4i(ps_vec4i v) { printf("(%d, %d, %d, %d)", v.x, v.y, v.z, v.w); }
+
 static inline
 void
 ps_print_const(const char *what) {

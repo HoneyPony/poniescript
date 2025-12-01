@@ -847,6 +847,12 @@ impl<'a> Codegen<'a> {
 
 		let indent = self.indent();
 
+		if let Some(vec_str) = self.get_vec_cstr(typid) {
+			// Special case for vecs, to make them generate cleaner code.
+			inf_writeln!(into, "{}ps_print_{}({});", indent, vec_str, val);
+			return;
+		}
+
 		match typ {
 			Type::Int => inf_writeln!(into, "{}ps_print_int({});", indent, val),
 			Type::Float => inf_writeln!(into, "{}ps_print_float({});", indent, val),
