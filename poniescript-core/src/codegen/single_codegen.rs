@@ -946,7 +946,8 @@ impl<'a> Codegen<'a> {
 		inf_writeln!(into, "{}if ({}) {{",
 			indent, cond);
 		self.indent_level += 1;
-		let then_val = self.expr(ast, if_.then_branch, into);
+		// If exprs are always blocks
+		let then_val = self.block_unwrapped(ast, if_.then_branch, into);
 		
 		// Save the value, if relevant.
 		// IMPORTANT: set_val will only call promote() if the value is needed.
@@ -959,7 +960,7 @@ impl<'a> Codegen<'a> {
 			inf_writeln!(into, "{}else {{", indent);
 			self.indent_level += 1;
 
-			let else_val = self.expr(ast, *else_branch, into);
+			let else_val = self.block_unwrapped(ast, *else_branch, into);
 			// Save the value, if relevant.
 			set_val!(self, into, own_val, " = {};\n", else_val);
 			self.indent_level -= 1;
@@ -976,6 +977,117 @@ impl<'a> Codegen<'a> {
 		let scope = self.block_scopes.pop().expect("unmatched push/pop pair");
 		// When we leave a block scope, free the slots that we had stored for it.
 		self.gc_frame.free_slots(&scope);
+	}
+
+	/// Allocates a Val for usage with block_into.
+	fn block_begin(&mut self, typ: TypId, into: &mut String) -> Val {
+		let val = if self.db.type_generates_value(typ) {
+			let val = self.new_val();
+
+			inf_writeln!(into, "{}{} {};",
+				self.indent(),
+				self.db.get_ctype(typ),
+				val);
+
+			val
+		} else { if typ == self.db.types.void { Val::Void } else { Val::Bottom } };
+
+		val
+	}
+
+	/// Compiles an Expr::Block into the given value, using fewer braces. The idea
+	/// here is to use fewer temporaries and fewer braces/indentation for nested
+	/// blocks.
+	fn block_into(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String, val: Val, do_own_block: bool) -> TypedVal {
+		let binding = ast.exprs.get(expr);
+		let Expr::Block(block) = binding else { unreachable!() };
+		let indent = self.indent();
+
+		let all_but_last = match block.stmts.len() {
+			0 => 0,
+			n => n - 1,
+		};
+		if do_own_block {
+			inf_writeln!(into, "{}{{", indent);
+			self.indent_level += 1;
+		}
+
+		// Each block contains its own list of var GC scopes. This
+		// somewhat helps us have a more conservative GC frame. We
+		// really need a more powerful IR to have an ideal GC frame
+		// system.
+		self.push_block_scope();
+
+		for stmt in &block.stmts[0..all_but_last] {
+			let val = self.compile_stmt(ast, *stmt, into);
+			if let Some(val) = val {
+				if val.is_bottom() {
+					// If we see a Bottom val inside a block, we have
+					// found an unconditional return. So, we can
+					// immediately stop processing further code (which
+					// will be relevant to avoid e.g. generating accesses
+					// to nonexistent variables).		
+					self.pop_block_scope();
+					if do_own_block {
+						self.indent_level -= 1;
+						inf_writeln!(into, "{}}}", indent);
+					}
+					return val;
+				}
+			}
+		}
+
+		let val = match (block.stmts.last(), val) {
+			// If the block has no val, then generate a statement
+			// and return Val::Void.
+			(last, Val::Void) => {
+				last.map(|last| self.compile_stmt(ast, *last, into));
+				Val::Void
+			},
+
+			// Simmilar case for Val::Bottom
+			(last, Val::Bottom) => {
+				last.map(|last| self.compile_stmt(ast, *last, into));
+				Val::Bottom
+			},
+
+			// If the block has a val, then last MUST exist
+			// (otherwise the type checker is broken)
+			// so return its value.
+			(last, val) => {
+				let last = self.compile_stmt(ast, *last.unwrap(), into);
+				let last = last.unwrap();
+				if last.needs_storage() && val.needs_storage() {
+					// Grab fresh copy of indent() because we're in the block,
+					// and may or may not have +1'd it
+					inf_writeln!(into, "{}{} = {};",
+						self.indent(), val, last);
+				}
+
+				val
+			}
+		};
+
+		self.pop_block_scope();
+
+		if do_own_block {
+			self.indent_level -= 1;
+			inf_writeln!(into, "{}}}", indent);
+		}
+		self.val_alloc_slots(val, block.typ)
+	}
+
+	/// Assumes that the given ExprId is a Block, and then compiles it into the
+	/// `into`, assuming that it does not need to generate its own C-level block
+	/// (usually because we have already generated a block, e.g. in an if
+	/// statement).
+	fn block_unwrapped(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String) -> TypedVal {
+		// TODO: No need to unwrap the binding multiple times. We should probably
+		// make block_into take an &Block.
+		let binding = ast.exprs.get(expr);
+		let Expr::Block(block) = binding else { unreachable!(); };
+		let val = self.block_begin(block.typ, into);
+		self.block_into(ast, expr, into, val, false)
 	}
 
 	fn expr(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String) -> TypedVal {
@@ -1000,7 +1112,7 @@ impl<'a> Codegen<'a> {
 
 				inf_writeln!(into, "{}for(;;) {{", indent);
 				self.indent_level += 1;
-				self.expr(ast, loop_.inner, into);
+				self.block_unwrapped(ast, loop_.inner, into);
 				self.indent_level -= 1;
 				inf_writeln!(into, "{}}}", indent);
 
@@ -1021,7 +1133,7 @@ impl<'a> Codegen<'a> {
 				let cond = self.expr(ast, while_.condition, into);
 				inf_writeln!(into, "{}\tif(!{}) {{ break; }}",
 					indent, cond);
-				let _inner = self.expr(ast, while_.inner, into);
+				let _inner = self.block_unwrapped(ast, while_.inner, into);
 				self.indent_level -= 1;
 				inf_writeln!(into, "{}}}", indent);
 
@@ -1068,7 +1180,7 @@ impl<'a> Codegen<'a> {
 				inf_writeln!(into, "{}else {{", indent);
 				self.indent_level += 1;
 
-				let otherwise_val = self.expr(ast, opt_else.otherwise, into);
+				let otherwise_val = self.block_unwrapped(ast, opt_else.otherwise, into);
 				// If the otherwise value is bottom, that means that we do NOT write
 				// it into our own value, because the else branch should have diverged.
 				if own_val.needs_storage() && !otherwise_val.is_bottom() {
@@ -1209,82 +1321,8 @@ impl<'a> Codegen<'a> {
 				return Val::BoolLit { val: lit.value }.typed(self.db.types.bool, None);
 			}
 			Expr::Block(block) => {
-				let val = if self.db.type_generates_value(block.typ) {
-					let val = self.new_val();
-
-					inf_writeln!(into, "{}{} {};",
-						indent,
-						self.db.get_ctype(block.typ),
-						val);
-
-					val
-				} else { if block.typ == self.db.types.void { Val::Void } else { Val::Bottom } };
-
-				let all_but_last = match block.stmts.len() {
-					0 => 0,
-					n => n - 1,
-				};
-				inf_writeln!(into, "{}{{", indent);
-				self.indent_level += 1;
-
-				// Each block contains its own list of var GC scopes. This
-				// somewhat helps us have a more conservative GC frame. We
-				// really need a more powerful IR to have an ideal GC frame
-				// system.
-				self.push_block_scope();
-
-				for stmt in &block.stmts[0..all_but_last] {
-					let val = self.compile_stmt(ast, *stmt, into);
-					if let Some(val) = val {
-						if val.is_bottom() {
-							// If we see a Bottom val inside a block, we have
-							// found an unconditional return. So, we can
-							// immediately stop processing further code (which
-							// will be relevant to avoid e.g. generating accesses
-							// to nonexistent variables).
-							self.indent_level -= 1;
-							self.pop_block_scope();
-							inf_writeln!(into, "{}}}", indent);
-							return val;
-						}
-					}
-				}
-
-				let val = match (block.stmts.last(), val) {
-					// If the block has no val, then generate a statement
-					// and return Val::Void.
-					(last, Val::Void) => {
-						last.map(|last| self.compile_stmt(ast, *last, into));
-						Val::Void
-					},
-
-					// Simmilar case for Val::Bottom
-					(last, Val::Bottom) => {
-						last.map(|last| self.compile_stmt(ast, *last, into));
-						Val::Bottom
-					},
-
-					// If the block has a val, then last MUST exist
-					// (otherwise the type checker is broken)
-					// so return its value.
-					(last, val) => {
-						let last = self.compile_stmt(ast, *last.unwrap(), into);
-						let last = last.unwrap();
-						if last.needs_storage() && val.needs_storage() {
-							// Add one to indent because we're in the block
-							inf_writeln!(into, "{}\t{} = {};",
-								indent, val, last);
-						}
-
-						val
-					}
-				};
-
-				self.pop_block_scope();
-
-				self.indent_level -= 1;
-				inf_writeln!(into, "{}}}", indent);
-				self.val_alloc_slots(val, block.typ)
+				let val = self.block_begin(block.typ, into);
+				self.block_into(ast, expr, into, val, true)
 			},
 			Expr::Print(print) => {
 				let mut vals = Vec::new();
@@ -2004,7 +2042,9 @@ impl<'a> Codegen<'a> {
 		let own_return_type = self.db.get_fun_return_typid(fun);
 		self.return_types.push(own_return_type);
 
-		let val = self.expr(ast, body, &mut own_buffer);
+		//let val = self.block_begin(own_return_type, &mut own_buffer);//self.expr(ast, body, &mut own_buffer);
+		//let val = self.block_into(ast, body, &mut own_buffer, val, false);
+		let val = self.block_unwrapped(ast, body, &mut own_buffer);
 
 		// Generate unconditional GC-frame pop
 		inf_writeln!(own_buffer, "{}ctx->frame = gc_frame.prev;", indent);
