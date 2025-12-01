@@ -274,8 +274,8 @@ impl<'b> Parser<'b> {
         let c_name = expected!(self, GlueTok::Identifier, "Function name")?;
 
         expected!(self, GlueTok::LeftParen, "'(' after function name")?;
-        expected!(self, GlueTok::AnnotateAbi, "PS_ABI in function signature")?;
-        expected!(self, GlueTok::LeftParen, "'(' after PS_ABI")?;
+        expected!(self, GlueTok::AnnotateAbi, "PONI_ABI in function signature")?;
+        expected!(self, GlueTok::LeftParen, "'(' after PONI_ABI")?;
 
         let mut sig = Sig { parameters: vec![], return_type: c_ret_type };
         let mut params: Vec<VarId> = vec![];
@@ -297,7 +297,7 @@ impl<'b> Parser<'b> {
             }
         }
 
-        expected!(self, GlueTok::RightParen, "')' after PS_ABI")?;
+        expected!(self, GlueTok::RightParen, "')' after PONI_ABI")?;
         expected!(self, GlueTok::RightParen, "')' after parameter list")?;
 
         let fun_name = match name_override {
@@ -367,6 +367,10 @@ impl<'b> Parser<'b> {
         }
         if id.lexeme == self.db.put_str("ps_bool") {
             return Ok(self.db.types.bool)
+        }
+        if id.lexeme == self.db.put_str("ps_strbuf") {
+            expected!(self, GlueTok::Star, "'*' after ps_strbuf");
+            return Ok(self.db.types.str_buf);
         }
 
         parse_error!(self, "Unknown C type");

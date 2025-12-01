@@ -71,7 +71,7 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, GlueTok> {
     add("PS_VAR"   , GlueTok::AnnotateVar);
 	add("PS_CLASS" , GlueTok::AnnotateClass);
     add("PS_MEMBER", GlueTok::AnnotateMember);
-	add("PS_ABI"   , GlueTok::AnnotateAbi);
+	add("PONI_ABI"   , GlueTok::AnnotateAbi);
 	add("struct"   , GlueTok::Struct);
 
 	return map;

@@ -392,6 +392,19 @@ ps_strfmt_bool(struct poni_gc_context *ctx, ps_strbuf *buf, ps_bool b) {
 
 static inline
 void
+ps_strfmt_char(struct poni_gc_context *ctx, ps_strbuf *buf, char c) {
+	// TODO: Do we need a +1 here?
+	ps_strbuf_reserve(ctx, buf, 1 + 1);
+
+	// Copy the string and NUL terminator
+	buf->buffer->contents[buf->length] = c;
+	buf->buffer->contents[buf->length + 1] = '\0';
+
+	buf->length += 1;
+}
+
+static inline
+void
 ps_strfmt_str(struct poni_gc_context *ctx, ps_strbuf *buf, const ps_str *str) {
 	// TODO: Do we need the +1 here for the nul terminator?
 	ps_strbuf_reserve(ctx, buf, str->length + 1);
