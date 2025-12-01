@@ -1177,6 +1177,18 @@ impl Db {
 		}
 	}
 
+	/// Returns whether it is likely inconsequential if we re-evaluate the
+	/// given type. This is mostly used for generating InlineExpr when possible.
+	/// 
+	/// The ideal thing to do would be to have a way to promote InlineExpr's
+	/// into real temporaries if they are used more than once.
+	pub fn is_cheap_re_eval_type(&self, typ: TypId) -> bool {
+		match self.get(typ) {
+			Type::Int | Type::Float | Type::Bool | Type::Void => true,
+			_ => false,
+		}
+	}
+
 	// TODO: This is not going to cut it.
 	// Things like nested set expressions need to be able to actually hit the
 	// value that they are referring to.

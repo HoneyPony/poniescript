@@ -54,6 +54,12 @@ pub enum Val {
 		val: bool,
 	},
 
+	/// An inline compiled expression. Used for compiling expressions such as
+	/// binary operators and comparisons in a nicer way.
+	InlineExpr {
+		expr: String,
+	},
+
 	/// Equivalent to Type::Bottom, sort of.
 	Bottom,
 
@@ -144,6 +150,16 @@ macro_rules! inf_writeln {
 	}
 }
 
+macro_rules! inline_expr {
+	($self:expr, $typ:expr, $($arg:tt)*) => {
+		{
+			let mut buf = String::new();
+			ufmt::uwrite!(buf, $($arg)*).unwrap();
+			$self.val_alloc_slots(Val::InlineExpr { expr: buf }, $typ)
+		}
+	}
+}
+
 impl ufmt::uDisplay for Val {
 	fn fmt<W>(&self, f: &mut ufmt::Formatter<'_, W>) -> Result<(), W::Error>
 	where
@@ -177,6 +193,10 @@ impl ufmt::uDisplay for Val {
 			}
 			Val::DirectNull => {
 				uwrite!(f, "NULL")
+			}
+
+			Val::InlineExpr { expr } => {
+				uwrite!(f, "{}", expr)
 			}
 
 			// String literals are always stored in variables with a consistent naming scheme.
@@ -225,6 +245,10 @@ impl std::fmt::Display for Val {
 			}
 			Val::DirectNull => {
 				write!(f, "NULL")
+			}
+
+			Val::InlineExpr { expr } => {
+				write!(f, "{expr}")
 			}
 
 			// String literals are always stored in variables with a consistent naming scheme.
@@ -534,6 +558,10 @@ impl<'a> Codegen<'a> {
 			return val.typed(typ, None);
 		}
 
+		// It is not valid to alloc_slots for certain kinds of Val, if we
+		// have that we have a bug.
+		assert!(! matches!(val, Val::InlineExpr { .. }));
+
 		let mut slots = vec![];
 		let prefix = format!("{val}");
 		self.val_alloc_slots_recurse(&prefix, typ, &mut slots);
@@ -646,27 +674,26 @@ impl<'a> Codegen<'a> {
 			_ => panic!("ICE: Tried to codegen unknown binary operator")
 		};
 
-		let val = self.new_val_typed(binary.typ);
-		let ctype = self.db.get_ctype(binary.typ);
-		let indent = self.indent();
-
 		// For simple binary expressions, write them out as one line & make them
 		// a constant value
 		if binary.typ == self.db.types.int || binary.typ == self.db.types.float {
-			inf_writeln!(into, "{}const {} {} = {} {} {};",
-				indent, ctype, val, left, op, right);
+			return inline_expr!(self, binary.typ, "({} {} {})", left, op, right);
 		}
 		else {
 			// Otherwise, we have to generate them through a tree, so we can't
 			// make them const. But that's OK
+			let val = self.new_val_typed(binary.typ);
+			//let ctype = self.db.get_ctype(binary.typ);
+			//let indent = self.indent();
+
 			define_val!(self, into, val, ";\n");
 
 			let postfix = "".to_string();
 			self.compile_partial_binary(&val, &left, &right, 
 				op, val.typ, &postfix, into);
-		}
 
-		val
+			return val;
+		}
 	}
 
 	/// Converts a type into a tuple of length, inner type, if the given type
@@ -837,11 +864,12 @@ impl<'a> Codegen<'a> {
 
 		let indent = self.indent();
 
-		inf_writeln!(into, "{}const ps_bool {} = (ps_bool)({} {} {});",
-			indent, val, left, op, right);
+		inline_expr!(self, self.db.types.bool, "(ps_bool)({} {} {})", left, op, right)
+		// inf_writeln!(into, "{}const ps_bool {} = (ps_bool)({} {} {});",
+		// 	indent, val, left, op, right);
 
-		// Bool: No gc slot
-		val.typed(self.db.types.bool, None)
+		// // Bool: No gc slot
+		// val.typed(self.db.types.bool, None)
 	}
 
 	fn compile_partial_print(&mut self, val: &TypedVal, into: &mut String) {
@@ -1614,6 +1642,16 @@ impl<'a> Codegen<'a> {
 				// Don't define our own val until we've evaluated inner expr,
 				// for GC.
 				let typ = self.db.get_var_type(get.var);
+
+				// For integer, float members, etc, we don't care if we generate
+				// something like t1->x t1->x multiple times. Technically this
+				// could change the semantic, but I don't think there's any
+				// cases where that will pop up for these types? E.g. there's
+				// no OptionElse for plain integers.
+				if self.db.is_cheap_re_eval_type(typ) {
+					return inline_expr!(self, typ, "{}{}{}", lhs.val, arrow, varname);
+				}
+
 				let val = self.new_val_typed(typ);
 
 				// TODO: Should lhs be promoted...??
@@ -1682,6 +1720,11 @@ impl<'a> Codegen<'a> {
 
 				let idx_val = self.expr(ast, index.index, into);
 				assert!(idx_val.typ == self.db.types.int);
+
+				// TODO: Generate bounds checks...
+				if self.db.is_cheap_re_eval_type(idx_val.typ) {
+					return inline_expr!(self, idx_val.typ, "{}->contents[{}]", arr_val, idx_val);
+				}
 
 				// Generate own val after inner expressions, for GC
 				let val = self.new_val_typed(index.typ);
