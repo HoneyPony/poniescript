@@ -360,6 +360,7 @@ pub fn generate(tests_file: &mut File) {
 		("vec/", "vec_types"),
 		("vec/", "vec_ret"),
 		("vec/", "vec_lerp"),
+		("vec/", "vec_product"),
 
 		("unary/", "unary_int_float"),
 		("unary/", "unary_vec"),
