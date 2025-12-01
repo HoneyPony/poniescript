@@ -25,6 +25,12 @@ pub struct Args {
 	/// Where the output file should be written.
 	pub output_paths: Vec<PathBuf>,
 
+	#[arg(long)]
+	/// Optionally, write the compiled prelude code as a header file, before
+	/// starting other compilation. This could potentially speed up codegen
+	/// in some cases (when using multiple output paths).
+	pub prelude_h: Option<PathBuf>,
+
 	#[arg(long = "no-timing")]
 	/// Whether to hide the timing information.
 	pub no_timing: bool,

@@ -1,6 +1,7 @@
 mod single_codegen;
 
 use crossbeam::channel;
+use std::fs::File;
 use std::io::Write;
 
 use crate::arena::ArenaKey;
@@ -397,24 +398,15 @@ poni_gc_get_allocation_size(void *object) {
 		format!("{type_stride}{is_valuetype}{valuetype}{visit_object}{visit_roots}{allocation_size}")
 	}
 
-	fn per_writer_codegen(
+	fn write_prelude(
 		&self,
-		writer: BufWriter<Box<dyn std::io::Write + Send + 'static>>,
-		recv: channel::Receiver<String>,
+		output: &mut BufWriter<Box<dyn std::io::Write + Send + 'static>>,
 		outputs: &CodegenOutputs,
 		args: &Args,
 		do_support_fns: bool,
 	) -> std::io::Result<()> {
-		let mut output = writer;
 		// Every output file needs the prelude.
-		writeln!(output, "#include \"poni/poni.h\"")?;
-		// Engine code does not include poni_standalone.h.
-		if !args.engine {
-			// Only one .c/o file should include poni_standalone.
-			if do_support_fns {
-				writeln!(output, "#include \"poni/poni_standalone.h\"")?;
-			}
-		}
+		writeln!(output, "#include \"poni/poni.h\"")?;		
 		if args.hot {
 			writeln!(output, "#include \"poni/poni_hot.h\"")?;
 		}
@@ -449,6 +441,40 @@ poni_gc_get_allocation_size(void *object) {
 		writeln!(output, "// --- function declarations ---")?;
 		
 		output.write_all(outputs.fun_declare.as_bytes())?;
+
+		Ok(())
+	}
+
+	fn per_writer_codegen(
+		&self,
+		writer: BufWriter<Box<dyn std::io::Write + Send + 'static>>,
+		recv: channel::Receiver<String>,
+		outputs: &CodegenOutputs,
+		args: &Args,
+		do_support_fns: bool,
+	) -> std::io::Result<()> {
+		let mut output = writer;
+
+		// Engine code does not include poni_standalone.h.
+		if !args.engine {
+			// Only one .c/o file should include poni_standalone.
+			if do_support_fns {
+				writeln!(output, "#include \"poni/poni_standalone.h\"")?;
+			}
+		}
+
+		if let Some(prelude_h) = &args.prelude_h {
+			writeln!(output, "#include \"{}\"", prelude_h.display())?;
+			if do_support_fns {
+				// THe support-fns writer in this case has to write the initializers
+				// for various globals.
+				writeln!(output, "// --- string constant definitions ---\n{}", outputs.string_const_define)?;
+				writeln!(output, "// --- global variable definitions ---\n{}", outputs.global_define)?;
+			}
+		}
+		else {
+			self.write_prelude(&mut output, outputs, args, do_support_fns)?;
+		}
 		
 		if do_support_fns {
 			writeln!(output, "{}", outputs.string_const_init)?;
@@ -648,6 +674,14 @@ poni_gc_get_allocation_size(void *object) {
 
 		for fun in self.db.iter_fun() {
 			self.compile_fun_declare(fun, &mut outputs);
+		}
+
+		// If we're writing a prelude_h, we have to do that before any of
+		// the other codegen threads.
+		if let Some(prelude_h) = &args.prelude_h {
+			let prelude = File::create(prelude_h)?;
+			let mut writer = BufWriter::new(Box::new(prelude) as _);
+			self.write_prelude(&mut writer, &outputs, args, false)?;
 		}
 
 		std::thread::scope(|s| {
