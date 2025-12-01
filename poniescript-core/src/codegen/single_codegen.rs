@@ -947,7 +947,7 @@ impl<'a> Codegen<'a> {
 			indent, cond);
 		self.indent_level += 1;
 		// If exprs are always blocks
-		let then_val = self.block_unwrapped(ast, if_.then_branch, into);
+		let then_val = self.expr_block_unwrapped(ast, if_.then_branch, into);
 		
 		// Save the value, if relevant.
 		// IMPORTANT: set_val will only call promote() if the value is needed.
@@ -960,7 +960,7 @@ impl<'a> Codegen<'a> {
 			inf_writeln!(into, "{}else {{", indent);
 			self.indent_level += 1;
 
-			let else_val = self.block_unwrapped(ast, *else_branch, into);
+			let else_val = self.expr_block_unwrapped(ast, *else_branch, into);
 			// Save the value, if relevant.
 			set_val!(self, into, own_val, " = {};\n", else_val);
 			self.indent_level -= 1;
@@ -1081,13 +1081,31 @@ impl<'a> Codegen<'a> {
 	/// `into`, assuming that it does not need to generate its own C-level block
 	/// (usually because we have already generated a block, e.g. in an if
 	/// statement).
-	fn block_unwrapped(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String) -> TypedVal {
+	/// 
+	/// Should only be called by expr_block_unwrapped, as that makes sure that
+	/// e.g. the DCE pass which can change the AST structure doesn't do anything
+	/// weird.
+	fn __block_unwrapped(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String) -> TypedVal {
 		// TODO: No need to unwrap the binding multiple times. We should probably
 		// make block_into take an &Block.
 		let binding = ast.exprs.get(expr);
 		let Expr::Block(block) = binding else { unreachable!(); };
 		let val = self.block_begin(block.typ, into);
 		self.block_into(ast, expr, into, val, false)
+	}
+
+	/// If the given expr is a Block, generates it in an unwrapped fashion,
+	/// otherwise generates it normally.
+	fn expr_block_unwrapped(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String) -> TypedVal {
+		let binding = ast.exprs.get(expr);
+		match binding {
+			Expr::Block(_) => {
+				self.__block_unwrapped(ast, expr, into)
+			}
+			_ => {
+				self.expr(ast, expr, into)
+			}
+		}
 	}
 
 	fn expr(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String) -> TypedVal {
@@ -1112,7 +1130,7 @@ impl<'a> Codegen<'a> {
 
 				inf_writeln!(into, "{}for(;;) {{", indent);
 				self.indent_level += 1;
-				self.block_unwrapped(ast, loop_.inner, into);
+				self.expr_block_unwrapped(ast, loop_.inner, into);
 				self.indent_level -= 1;
 				inf_writeln!(into, "{}}}", indent);
 
@@ -1133,7 +1151,7 @@ impl<'a> Codegen<'a> {
 				let cond = self.expr(ast, while_.condition, into);
 				inf_writeln!(into, "{}\tif(!{}) {{ break; }}",
 					indent, cond);
-				let _inner = self.block_unwrapped(ast, while_.inner, into);
+				let _inner = self.expr_block_unwrapped(ast, while_.inner, into);
 				self.indent_level -= 1;
 				inf_writeln!(into, "{}}}", indent);
 
@@ -1180,7 +1198,7 @@ impl<'a> Codegen<'a> {
 				inf_writeln!(into, "{}else {{", indent);
 				self.indent_level += 1;
 
-				let otherwise_val = self.block_unwrapped(ast, opt_else.otherwise, into);
+				let otherwise_val = self.expr_block_unwrapped(ast, opt_else.otherwise, into);
 				// If the otherwise value is bottom, that means that we do NOT write
 				// it into our own value, because the else branch should have diverged.
 				if own_val.needs_storage() && !otherwise_val.is_bottom() {
@@ -2044,7 +2062,7 @@ impl<'a> Codegen<'a> {
 
 		//let val = self.block_begin(own_return_type, &mut own_buffer);//self.expr(ast, body, &mut own_buffer);
 		//let val = self.block_into(ast, body, &mut own_buffer, val, false);
-		let val = self.block_unwrapped(ast, body, &mut own_buffer);
+		let val = self.expr_block_unwrapped(ast, body, &mut own_buffer);
 
 		// Generate unconditional GC-frame pop
 		inf_writeln!(own_buffer, "{}ctx->frame = gc_frame.prev;", indent);
