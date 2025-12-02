@@ -51,7 +51,7 @@ impl BuildConfig {
         writeln!(file, "rule poni-debug\n  command = $poniescript -o $out $in $imports --no-timing\n  description = poniescript\n")?;
         
         for (name, project) in &self.projects {
-            writeln!(file, "build {}-debug: link .build/{}-debug.o", name, name)?;
+            writeln!(file, "build .build/{}-debug: link .build/{}-debug.o", name, name)?;
             writeln!(file, "build .build/{}-debug.o: cc .build/{}-debug.c", name, name)?;
             write!(file, "build .build/{}-debug.c: poni-debug", name)?;
             
@@ -68,7 +68,7 @@ impl BuildConfig {
 
         write!(file, "default")?;
         for (name, _) in &self.projects {
-            write!(file, " {name}-debug")?;
+            write!(file, " .build/{name}-debug")?;
         }
         write!(file, "\n")?;
 

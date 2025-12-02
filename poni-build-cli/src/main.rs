@@ -53,7 +53,7 @@ fn do_build(build: &BuildConfig, env: &EnvironmentConfig, project: Option<&Strin
     // If we're only building one project, then pass that as an argument.
     if let Some(project) = project {
         // TODO: Make this less, like, stringly typed or whatever...
-        process.arg(format!("{project}-debug"));
+        process.arg(format!(".build/{project}-debug"));
     }
     
     // Spawn the process.
@@ -108,7 +108,7 @@ fn main() {
 
             // Now run that specific project.
             // TODO: Support arguments to the project?
-            let mut child = Command::new(format!("./{project}-debug"))
+            let mut child = Command::new(format!(".build/{project}-debug"))
                 .spawn()
                 .unwrap_or_else(|_| show_error_msg("couldn't spawn child process."));
 
