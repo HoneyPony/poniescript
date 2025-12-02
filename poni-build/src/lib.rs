@@ -70,6 +70,12 @@ pub struct GeneratedNinjaInfo {
     default_toolchain: Option<String>,
 }
 
+const MAGENTA: &'static str = "\x1b[0;35m";
+const GREEN  : &'static str = "\x1b[0;32m";
+const BLUE   : &'static str = "\x1b[0;34m";
+const DIM    : &'static str = "\x1b[2m";
+const RESET  : &'static str = "\x1b[0m";
+
 impl BuildConfig {
     fn generate_toolchain(&self, ninja: &mut File, name: &String, profile: &String, toolchain: &Toolchain, info: &mut GeneratedNinjaInfo) -> std::io::Result<()> {
         if toolchain.default {
@@ -87,13 +93,13 @@ impl BuildConfig {
         writeln!(ninja, "rule link-{name}-{profile}")?;
         writeln!(ninja, "  command = {} $in -o $out -L$poni_gc_path -lponiescript_gc",
             toolchain.linker)?;
-        writeln!(ninja, "  description = link.{name}.{profile}")?;
+        writeln!(ninja, "  description = {BLUE}link{RESET}{DIM}.{name}.{profile}{RESET}")?;
 
         writeln!(ninja, "rule cc-{name}-{profile}")?;
         writeln!(ninja, "  command = {} -c $in -o $out -MD -MF $out.d -I$poni_h_path -I.", toolchain.cc)?;
         writeln!(ninja, "  depfile = $out.d")?;
         writeln!(ninja, "  deps = gcc")?;
-        writeln!(ninja, "  description = cc  .{name}.{profile}")?;
+        writeln!(ninja, "  description = {GREEN}cc  {RESET}{DIM}.{name}.{profile}{RESET}")?;
 
         writeln!(ninja, "rule poni-{name}-{profile}")?;
         if toolchain.piped {
@@ -105,7 +111,7 @@ impl BuildConfig {
         else {
             writeln!(ninja, "  command = $poniescript $outputargs $in $imports --no-timing")?;
         }
-        writeln!(ninja, "  description = poni.{name}.{profile}")?;
+        writeln!(ninja, "  description = {MAGENTA}poni{RESET}{DIM}.{name}.{profile}{RESET}")?;
 
         // Now, we generate the rules for building each project with this toolchain.
         let dir = format!(".build/{name}-{profile}");
