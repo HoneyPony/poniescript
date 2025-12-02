@@ -1,0 +1,127 @@
+var ZERO = "0"[0];
+var NINE = "9"[0];
+var DASH = "-"[0];
+var COMMA = ","[0];
+
+fun is_digit(char: int) -> bool {
+    char >= ZERO and char <= NINE
+}
+
+fun is_sneaky(val: int) -> bool {
+    var s = str(val);
+    var i = 0;
+    var j = s.length / 2;
+    while j < s.length {
+        if s[i] != s[j] { return false; }
+        i = i + 1;
+        j = j + 1;
+    }
+
+    true
+}
+
+// For the lows, we want to *underestimate* the size. This is done by nudging
+// j forward by 1. For the highs, we want to *overeestimate*. This is done by
+// nudging j backward by 1.
+fun get_split_vals(val: int, nudge: int) -> (int, int) {
+    var s = str(val);
+    var i = 0;
+    var j = s.length / 2;
+
+    // Way to check for even
+    if j + j != s.length {
+        j = j + nudge;
+    }
+
+    var num0 = 0;
+    var num1 = 0;
+    while j < s.length {
+        num0 = num0 * 10;
+        num1 = num1 * 10;
+
+        num0 = num0 + s[i] - ZERO;
+        num1 = num1 + s[j] - ZERO;
+
+        i = i + 1;
+        j = j + 1;
+    };
+
+    (num0, num1)
+}
+
+fun min(tup: (int, int)) -> int {
+    lerp(tup.0, tup.1, tup.1 < tup.0)
+}
+
+fun max(tup: (int, int)) -> int {
+    lerp(tup.0, tup.1, tup.1 > tup.0)
+}
+
+fun init() {
+    var contents = read_file("input.txt");
+
+    var i = 0;
+    var sum = 0;
+    while i < contents.length {
+        var num1 = 0;
+        while contents[i] != DASH {
+            num1 = num1 * 10;
+            num1 = num1 + contents[i] - ZERO;
+            i = i + 1;
+        }
+        i = i + 1;
+        var num2 = 0;
+        while i < contents.length and contents[i] != COMMA {
+            num2 = num2 * 10;
+            num2 = num2 + contents[i] - ZERO;
+            i = i + 1;
+        }
+        i = i + 1;
+
+        print(num1, " -> ", num2);
+        
+        var lows = get_split_vals(num1, 1);
+        var highs = get_split_vals(num2, 0);
+
+        print("lows: ", lows, " highs: ", highs);
+
+        var start = min(lows);
+        var end = max(highs);
+
+        var check = start;
+        while check <= end {
+            var val = check;
+            var pow = str(check).length;
+            
+            var halfpow = pow / 2;
+
+            // Pow must be even, otherwise it's not a candidate.
+            if halfpow * 2 == pow {
+                while pow > 0 {
+                    val = val * 10;
+                    pow = pow - 1;
+                }
+                val = val + check;
+
+                if val >= num1 and val <= num2 {
+                    //print("meow: ", val);
+                    sum = sum + val;
+                }
+            }
+            check = check + 1;
+        };
+
+        //print("lows: ", lows.0, " ", lows.1);
+        //print("highs: ", highs.0, " ", highs.1);
+        //var check = num1;
+        //while check <= num2 {
+        //    if is_sneaky(check) {
+                //print("sneaky: ", check);
+        //        sum = sum + check;
+        //    }
+        //    check = check + 1;
+        //}
+    }
+
+    print("sum: ", sum);
+}
