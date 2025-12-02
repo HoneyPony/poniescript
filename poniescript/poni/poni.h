@@ -18,7 +18,7 @@
 #define PONI_TAG_ARRAY    14
 
 typedef float   ps_float;
-typedef int32_t ps_int;
+typedef int64_t ps_int;
 typedef int8_t  ps_bool;
 
 struct ps_object;
@@ -337,7 +337,7 @@ ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
 	// because snprintf() returns the length of everything BUT the NUL
 	// terminator.
 	size_t rem = (buf->buffer->length - buf->length) - 1;
-	int needed = snprintf(buf->buffer->contents + buf->length, rem, "%d", i);
+	int needed = snprintf(buf->buffer->contents + buf->length, rem, "%" PRId64, i);
 
 	if(rem < needed) {
 		// If we didn't have enough room, we will reallocate and do the
@@ -348,7 +348,7 @@ ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
 		// We will recompute rem, although it should be the case that
 		// there's always enough room.
 		rem = (buf->buffer->length - buf->length) - 1;
-		snprintf(buf->buffer->contents + buf->length, rem, "%d", i);
+		snprintf(buf->buffer->contents + buf->length, rem, "%" PRId64, i);
 	}
 
 	// Finally, the length of the string should increase by needed.
@@ -454,7 +454,7 @@ ps_promote_str_const_to_str(struct poni_gc_context *ctx, const ps_str* input) {
 static inline
 void
 ps_print_int(ps_int i) {
-	printf("%d", i);
+	printf("%" PRId64, i);
 }
 
 static inline

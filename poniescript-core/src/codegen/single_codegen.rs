@@ -1433,6 +1433,11 @@ impl<'a> Codegen<'a> {
 			},
 			// TODO: Consider using a different Expr type for string literals
 			Expr::NumLiteral(lit) => {
+				// if lit.typ == self.db.types.int {
+				// 	return inline_expr!(self, lit.typ,
+				// 		"({}LL)", self.db.get(lit.contents.lexeme))
+				// }
+
 				Val::DirectLit {
 					ctype: self.db.get_ctype(lit.typ),
 					lit: self.db.get(lit.contents.lexeme),
