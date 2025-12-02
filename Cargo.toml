@@ -4,3 +4,6 @@ members = [ "poniescript","poniescript-core", "poniescript-lsp", "poniescript-gc
 
 [workspace.dependencies]
 clap = { version = "4.5.8", features = ["derive"] }
+
+[profile.release]
+lto = true
