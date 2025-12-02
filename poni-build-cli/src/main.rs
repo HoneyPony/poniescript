@@ -29,7 +29,7 @@ fn show_error_msg(msg: &str) -> ! {
     std::process::exit(1);
 }
 
-fn try_run_ninja(project: Option<&String>) -> Result<(), &'static str> {
+fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<(), &'static str> {
     // Now, spawn the ninja process.
     // TODO: Configurable ninja path?
     let mut process = Command::new("ninja");
@@ -39,7 +39,7 @@ fn try_run_ninja(project: Option<&String>) -> Result<(), &'static str> {
     // If we're only building one project, then pass that as an argument.
     if let Some(project) = project {
         // TODO: Make this less, like, stringly typed or whatever...
-        process.arg(format!(".build/{project}-debug"));
+        process.arg(format!(".build/{toolchain}/{project}"));
     }
     
     // Spawn the process.
@@ -65,7 +65,7 @@ fn do_regenerate(build: &BuildConfig, env: &EnvironmentConfig) {
         .unwrap_or_else(|_| show_error_msg("couldn't write .build/build.ninja file"));
 }
 
-fn do_build(build: &BuildConfig, env: &EnvironmentConfig, project: Option<&String>) {
+fn do_build(build: &BuildConfig, env: &EnvironmentConfig, toolchain: &String, project: Option<&String>) {
     // Check the project before doing anything else.
     if let Some(project) = project {
         if !build.projects.contains_key(project) {
@@ -83,13 +83,13 @@ fn do_build(build: &BuildConfig, env: &EnvironmentConfig, project: Option<&Strin
     if fs::exists(".build/build.ninja")
         .unwrap_or_else(|_| show_error_msg("couldn't check if .build/build.ninja exists")) {
         
-        try_run_ninja(project).unwrap_or_else(|err| show_error_msg(err));
+        try_run_ninja(project, toolchain).unwrap_or_else(|err| show_error_msg(err));
         return;
     }
 
     do_regenerate(build, env);
 
-    try_run_ninja(project).unwrap_or_else(|err| show_error_msg(err));
+    try_run_ninja(project, toolchain).unwrap_or_else(|err| show_error_msg(err));
 }
 
 fn show_error(err: ConfigReadError) -> ! {
@@ -128,18 +128,27 @@ fn main() {
             do_regenerate(&build, &env);
         }
         CliCommand::Build { project } => {
-            do_build(&build, &env, project.as_ref());
+            let Some(toolchain) = env.lookup_default_toolchain() else {
+                show_error_msg("no default toolchain found");
+            };
+
+            do_build(&build, &env, &toolchain, project.as_ref());
         },
         CliCommand::Run { project } => {
             if !build.projects.contains_key(&project) {
                 eprintln!("error: no such project '{}'", project);
                 std::process::exit(1);
             }
-            do_build(&build, &env, Some(&project));
+
+            let Some(toolchain) = env.lookup_default_toolchain() else {
+                show_error_msg("no default toolchain found");
+            };
+
+            do_build(&build, &env, &toolchain, Some(&project));
 
             // Now run that specific project.
             // TODO: Support arguments to the project?
-            let mut child = Command::new(format!(".build/{project}-debug"))
+            let mut child = Command::new(format!(".build/{toolchain}/{project}"))
                 .spawn()
                 .unwrap_or_else(|_| show_error_msg("couldn't spawn child process."));
 

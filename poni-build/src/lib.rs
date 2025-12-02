@@ -4,14 +4,50 @@ use microxdg::{XdgApp, XdgError};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
+pub struct Toolchain {
+    /// The command to use for compiling C files.
+    pub cc: String,
+
+    /// The command to use for linking. This is often an invocation of a C
+    /// compiler.
+    pub linker: String,
+
+    /// Whether the PonieScript compiler directly invokes the C compiler through
+    /// a pipe. This can reduce latency of compilation.
+    pub piped: bool,
+
+    /// The number of object files that the compilation is split into.
+    pub ways: usize,
+
+    #[serde(default)]
+    /// Whether this is the default toolchain.
+    pub default: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ToolchainSet(HashMap<String, Toolchain>);
+
+#[derive(Serialize, Deserialize)]
 pub struct EnvironmentConfig {
     pub poni_h_path: PathBuf,
     pub poni_gc_path: PathBuf,
     pub poniescript_path: PathBuf,
 
-    // TODO: We probably want these per-platform in some way.
-    pub cc: String,
-    pub linker: String,
+    pub toolchain: HashMap<String, ToolchainSet>,
+}
+
+impl EnvironmentConfig {
+    pub fn lookup_default_toolchain(&self) -> Option<String> {
+        for (name, set) in &self.toolchain {
+            for (profile, chain) in &set.0 {
+                if chain.default {
+                    return Some(format!("{name}-{profile}"));
+                }
+            }
+        }
+
+        return None;
+    }
 }
 
 /// The top-level configuration for the build, described by a .toml file,
@@ -30,25 +66,134 @@ pub struct Project {
     pub imports: Vec<PathBuf>,
 }
 
+pub struct GeneratedNinjaInfo {
+    default_toolchain: Option<String>,
+}
+
 impl BuildConfig {
-    pub fn generate_ninja_file(&self, file: &mut File, env: &EnvironmentConfig) -> std::io::Result<()> {
+    fn generate_toolchain(&self, ninja: &mut File, name: &String, profile: &String, toolchain: &Toolchain, info: &mut GeneratedNinjaInfo) -> std::io::Result<()> {
+        if toolchain.default {
+            info.default_toolchain = Some(format!("{name}-{profile}"));
+        }
+        
+        // TODO: What we will end up wanting is a bunch of different cc/linkers,
+        // used for debug/release, and used for different target platforms.
+        // (e.g. ideally you should be able to, from Linux, easily compile for
+        // Linux, Windows, Web, and Android)
+        //
+        // This profile setup mostly accomplishes this, but we will need
+        // a different compile of poniescript_gc and any other supporting libraries,
+        // on each targeted platform.
+        writeln!(ninja, "rule link-{name}-{profile}")?;
+        writeln!(ninja, "  command = {} $in -o $out -L$poni_gc_path -lponiescript_gc",
+            toolchain.linker)?;
+        writeln!(ninja, "  description = link.{name}.{profile}")?;
+
+        writeln!(ninja, "rule cc-{name}-{profile}")?;
+        writeln!(ninja, "  command = {} -c $in -o $out -I$poni_h_path -I.", toolchain.cc)?;
+        writeln!(ninja, "  description = cc  .{name}.{profile}")?;
+
+        writeln!(ninja, "rule poni-{name}-{profile}")?;
+        if toolchain.piped {
+            // For the piped toolchain, we have to tell PonieScript what compiler
+            // to use, and also pass a few command line arguments.
+            writeln!(ninja, "  command = $poniescript $outputargs $in $imports --no-timing -c {} -C-I$poni_h_path -C-I.",
+                toolchain.cc)?;
+        }
+        else {
+            writeln!(ninja, "  command = $poniescript $outputargs $in $imports --no-timing")?;
+        }
+        writeln!(ninja, "  description = poni.{name}.{profile}")?;
+
+        // Now, we generate the rules for building each project with this toolchain.
+        let dir = format!(".build/{name}-{profile}");
+        
+        for (project_name, project) in &self.projects {
+            // Create a vector of object & C file names based on the number of 'ways'.
+            let mut object_files = Vec::new();
+            let mut c_files = Vec::new();
+            for i in 0..toolchain.ways {
+                object_files.push(format!("{project_name}-{i}.o"));
+                c_files.push(format!("{project_name}-{i}.c"));
+            }
+
+            // Link rule: Based on object files. The executable is just called
+            // based on the project name.
+            write!(ninja, "build {dir}/{project_name}: link-{name}-{profile}")?;
+            for obj in &object_files {
+                write!(ninja, " {dir}/{obj}")?;
+            }
+            write!(ninja, "\n")?;
+
+            // The object file rule depends on whether or not the output is piped.
+            // If the output is not piped, we invoke the C compiler separately.
+            //
+            // In that case, generate one rule for each object file.
+            if !toolchain.piped {
+                for (c, obj) in c_files.iter().zip(object_files.iter()) {
+                    writeln!(ninja, "build {dir}/{obj}: cc-{name}-{profile} {dir}/{c}")?;
+                }
+            }
+
+            // Now generate the PonieScript rule. If the output is piped, then
+            // the PonieScript command generates all of the .o files; otherwise,
+            // it generates all of the .c files.
+            let outputs = if toolchain.piped { &object_files } else { &c_files };
+            write!(ninja, "build")?;
+            for output in outputs {
+                write!(ninja, " {dir}/{output}")?;
+            }
+            write!(ninja, ": poni-{name}-{profile}")?;
+            
+            // TODO: Escape spaces in paths
+
+            // Pass all the PonieScript files to the PonieScript compiler.
+            for poni in &project.files {
+                write!(ninja, " {}", poni.display())?;
+            }
+
+            // Create the imports variable.
+            write!(ninja, "\n  imports =")?;
+            for import in &project.imports {
+                write!(ninja, " -i {}", import.display())?;
+            }
+
+            // Create the outputargs variable. This is similar to outputs,
+            // except with -o in front of each one.
+            write!(ninja, "\n  outputargs =")?;
+            for output in outputs {
+                write!(ninja, " -o {dir}/{output}")?;
+            }
+            write!(ninja, "\n\n")?;
+        }
+
+        Ok(())
+    }
+
+    fn generate_toolchain_set(&self, ninja: &mut File, name: &String, set: &ToolchainSet, info: &mut GeneratedNinjaInfo) -> std::io::Result<()> {
+        // Generate the following for each toolchain:
+        // - Rules 'link', 'cc', and 'poni'
+        // - The build rules for that toolchain
+
+        for (profile, toolchain) in &set.0 {
+            self.generate_toolchain(ninja, name, profile, toolchain, info)?;
+        }
+
+        Ok(())
+    }
+
+    // Returns the default toolchain name, if any.
+    pub fn generate_ninja_file(&self, file: &mut File, env: &EnvironmentConfig) -> std::io::Result<GeneratedNinjaInfo> {
+        let mut result = GeneratedNinjaInfo {
+            default_toolchain: None,
+        };
+
         writeln!(file, "builddir = .build\n")?;
 
         // TODO: Make all the Paths Strings instead?
         writeln!(file, "poni_h_path = {}", env.poni_h_path.display())?;
         writeln!(file, "poni_gc_path = {}", env.poni_gc_path.display())?;
         writeln!(file, "poniescript = {}\n", env.poniescript_path.display())?;
-
-        // TODO: What we will end up wanting is a bunch of different cc/linkers,
-        // used for debug/release, and used for different target platforms.
-        // (e.g. ideally you should be able to, from Linux, easily compile for
-        // Linux, Windows, Web, and Android)
-        writeln!(file, "rule link\n  command = {} $in -o $out -L$poni_gc_path -lponiescript_gc\n  description = link\n",
-            env.linker)?;
-        writeln!(file, "rule cc\n  command = {} -c $in -o $out -I$poni_h_path -I.\n  description = cc\n",
-            env.cc)?;
-
-        writeln!(file, "rule poni-debug\n  command = $poniescript -o $out $in $imports --no-timing\n  description = poniescript\n")?;
 
         writeln!(file, "rule poni-regenerate\n  command = ponies regenerate\n  description = ponies regenerate\n")?;
 
@@ -57,29 +202,20 @@ impl BuildConfig {
         // TODO: Make this also depend on the EnvironmentConfig's path
         writeln!(file, "build .build/build.ninja: poni-regenerate ponies.toml")?;
         
-        for (name, project) in &self.projects {
-            writeln!(file, "build .build/{}-debug: link .build/{}-debug.o", name, name)?;
-            writeln!(file, "build .build/{}-debug.o: cc .build/{}-debug.c", name, name)?;
-            write!(file, "build .build/{}-debug.c: poni-debug", name)?;
-            
-            // TODO: Escape spaces in paths
-            for poni in &project.files {
-                write!(file, " {}", poni.display())?;
-            }
-            write!(file, "\n  imports =")?;
-            for import in &project.imports {
-                write!(file, " -i {}", import.display())?;
-            }
-            write!(file, "\n\n")?;
+        for (name, set) in &env.toolchain {
+            self.generate_toolchain_set(file, name, set, &mut result)?;
         }
 
-        write!(file, "default")?;
-        for (name, _) in &self.projects {
-            write!(file, " .build/{name}-debug")?;
+        // Write a default rule if we have a default toolchain
+        if let Some(default) = &result.default_toolchain {
+            write!(file, "default")?;
+            for (name, _) in &self.projects {
+                write!(file, " .build/{default}/{name}")?;
+            }
+            write!(file, "\n")?;
         }
-        write!(file, "\n")?;
 
-        Ok(())
+        Ok(result)
     }
 }
 
