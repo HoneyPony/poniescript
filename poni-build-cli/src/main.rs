@@ -1,4 +1,4 @@
-use std::{fs::{self, File}, path::Path, process::Command};
+use std::{fs::{self, File}, path::Path, process::{Command, ExitStatus}};
 
 use clap::{Parser, Subcommand};
 use poni_build::{BuildConfig, ConfigReadError, EnvironmentConfig, read_configs};
@@ -29,7 +29,7 @@ fn show_error_msg(msg: &str) -> ! {
     std::process::exit(1);
 }
 
-fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<(), &'static str> {
+fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<ExitStatus, &'static str> {
     // Now, spawn the ninja process.
     // TODO: Configurable ninja path?
     let mut process = Command::new("ninja");
@@ -47,9 +47,7 @@ fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<(), &'s
         .map_err(|_| "couldn't spawn 'ninja' process")?;
 
     child.wait()
-        .map_err(|_| "couldn't wait for 'ninja' process")?;
-
-    Ok(())
+        .map_err(|_| "couldn't wait for 'ninja' process")
 }
 
 fn do_regenerate(build: &BuildConfig, env: &EnvironmentConfig) {
@@ -65,7 +63,8 @@ fn do_regenerate(build: &BuildConfig, env: &EnvironmentConfig) {
         .unwrap_or_else(|_| show_error_msg("couldn't write .build/build.ninja file"));
 }
 
-fn do_build(build: &BuildConfig, env: &EnvironmentConfig, toolchain: &String, project: Option<&String>) {
+/// Returns the exit status of the ninja process.
+fn do_build(build: &BuildConfig, env: &EnvironmentConfig, toolchain: &String, project: Option<&String>) -> ExitStatus {
     // Check the project before doing anything else.
     if let Some(project) = project {
         if !build.projects.contains_key(project) {
@@ -83,13 +82,12 @@ fn do_build(build: &BuildConfig, env: &EnvironmentConfig, toolchain: &String, pr
     if fs::exists(".build/build.ninja")
         .unwrap_or_else(|_| show_error_msg("couldn't check if .build/build.ninja exists")) {
         
-        try_run_ninja(project, toolchain).unwrap_or_else(|err| show_error_msg(err));
-        return;
+        return try_run_ninja(project, toolchain).unwrap_or_else(|err| show_error_msg(err));
     }
 
     do_regenerate(build, env);
 
-    try_run_ninja(project, toolchain).unwrap_or_else(|err| show_error_msg(err));
+    return try_run_ninja(project, toolchain).unwrap_or_else(|err| show_error_msg(err));
 }
 
 fn show_error(err: ConfigReadError) -> ! {
@@ -144,16 +142,18 @@ fn main() {
                 show_error_msg("no default toolchain found");
             };
 
-            do_build(&build, &env, &toolchain, Some(&project));
+            let status = do_build(&build, &env, &toolchain, Some(&project));
+            // Only execute the child process if it successfully built.
+            if status.success() {
+                // Now run that specific project.
+                // TODO: Support arguments to the project?
+                let mut child = Command::new(format!(".build/{toolchain}/{project}"))
+                    .spawn()
+                    .unwrap_or_else(|_| show_error_msg("couldn't spawn child process."));
 
-            // Now run that specific project.
-            // TODO: Support arguments to the project?
-            let mut child = Command::new(format!(".build/{toolchain}/{project}"))
-                .spawn()
-                .unwrap_or_else(|_| show_error_msg("couldn't spawn child process."));
-
-            child.wait()
-                .unwrap_or_else(|_| show_error_msg("couldn't wait for child process."));
+                child.wait()
+                    .unwrap_or_else(|_| show_error_msg("couldn't wait for child process."));
+            }
         },
     }
 }
