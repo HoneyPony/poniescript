@@ -74,10 +74,16 @@ fn do_build(build: &BuildConfig, env: &EnvironmentConfig, project: Option<&Strin
         }
     }
 
-    // For speed, what we want to try to do is attempt running ninja *first*,
-    // and do the creation process if that fails. This also prevents us from
-    // needing to re-generate the files if they already exist.
-    if try_run_ninja(project).is_ok() {
+    // For speed, what we would like to do is attempt running ninja *first*,
+    // and do the creation process if that fails. However, this doesn't quite
+    // work because ninja will print errors and so forth.
+    //
+    // So instead, check if the build.ninja file exists, and if so, *then*
+    // run ninja without thinking about it.
+    if fs::exists(".build/build.ninja")
+        .unwrap_or_else(|_| show_error_msg("couldn't check if .build/build.ninja exists")) {
+        
+        try_run_ninja(project).unwrap_or_else(|err| show_error_msg(err));
         return;
     }
 
