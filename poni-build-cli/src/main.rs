@@ -11,9 +11,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum CliCommand {
+    /// Regenerate the ninja file for the projects. Mostly invoked from the
+    /// ninja file to keep itself up to date.
+    Regenerate,
+    /// Build all projects, or build a single project if a name is passed.
     Build {
         project: Option<String>,
     },
+    /// Build and run the project with the given name.
     Run {
         project: String,
     }
@@ -47,6 +52,19 @@ fn try_run_ninja(project: Option<&String>) -> Result<(), &'static str> {
     Ok(())
 }
 
+fn do_regenerate(build: &BuildConfig, env: &EnvironmentConfig) {
+    // First, create the .build folder and the build.ninja file.
+    fs::create_dir_all(".build")
+        .unwrap_or_else(|_| show_error_msg("couldn't create .build directory"));
+
+    // TODO: Don't rebuild .ninja file when nothing has changed... :/
+    let mut file = File::create(".build/build.ninja")
+        .unwrap_or_else(|_| show_error_msg("couldn't create .build/build.ninja file"));
+
+    build.generate_ninja_file(&mut file, env)
+        .unwrap_or_else(|_| show_error_msg("couldn't write .build/build.ninja file"));
+}
+
 fn do_build(build: &BuildConfig, env: &EnvironmentConfig, project: Option<&String>) {
     // Check the project before doing anything else.
     if let Some(project) = project {
@@ -63,16 +81,7 @@ fn do_build(build: &BuildConfig, env: &EnvironmentConfig, project: Option<&Strin
         return;
     }
 
-    // First, create the .build folder and the build.ninja file.
-    fs::create_dir_all(".build")
-        .unwrap_or_else(|_| show_error_msg("couldn't create .build directory"));
-
-    // TODO: Don't rebuild .ninja file when nothing has changed... :/
-    let mut file = File::create(".build/build.ninja")
-        .unwrap_or_else(|_| show_error_msg("couldn't create .build/build.ninja file"));
-
-    build.generate_ninja_file(&mut file, env)
-        .unwrap_or_else(|_| show_error_msg("couldn't write .build/build.ninja file"));
+    do_regenerate(build, env);
 
     try_run_ninja(project).unwrap_or_else(|err| show_error_msg(err));
 }
@@ -109,6 +118,9 @@ fn main() {
 
     // Now do stuff, depending on what the command was.
     match cli.command {
+        CliCommand::Regenerate => {
+            do_regenerate(&build, &env);
+        }
         CliCommand::Build { project } => {
             do_build(&build, &env, project.as_ref());
         },

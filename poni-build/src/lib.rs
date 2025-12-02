@@ -49,6 +49,11 @@ impl BuildConfig {
             env.cc)?;
 
         writeln!(file, "rule poni-debug\n  command = $poniescript -o $out $in $imports --no-timing\n  description = poniescript\n")?;
+
+        writeln!(file, "rule poni-regenerate\n  command = ponies regenerate\n  description = ponies regenerate\n")?;
+
+        // Project regeneration is based on the ponies.toml file
+        writeln!(file, "build .build/build.ninja: poni-regenerate ponies.toml")?;
         
         for (name, project) in &self.projects {
             writeln!(file, "build .build/{}-debug: link .build/{}-debug.o", name, name)?;
