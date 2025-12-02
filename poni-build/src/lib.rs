@@ -90,7 +90,9 @@ impl BuildConfig {
         writeln!(ninja, "  description = link.{name}.{profile}")?;
 
         writeln!(ninja, "rule cc-{name}-{profile}")?;
-        writeln!(ninja, "  command = {} -c $in -o $out -I$poni_h_path -I.", toolchain.cc)?;
+        writeln!(ninja, "  command = {} -c $in -o $out -MD -MF $out.d -I$poni_h_path -I.", toolchain.cc)?;
+        writeln!(ninja, "  depfile = $out.d")?;
+        writeln!(ninja, "  deps = gcc")?;
         writeln!(ninja, "  description = cc  .{name}.{profile}")?;
 
         writeln!(ninja, "rule poni-{name}-{profile}")?;
@@ -125,13 +127,15 @@ impl BuildConfig {
             }
             write!(ninja, "\n")?;
 
+            let c_file_deps = "$poni_h_path/poni/poni.h $poni_h_path/poni/poni_standalone.h $poni_h_path/poni/poni_gc.h";
+
             // The object file rule depends on whether or not the output is piped.
             // If the output is not piped, we invoke the C compiler separately.
             //
             // In that case, generate one rule for each object file.
             if !toolchain.piped {
                 for (c, obj) in c_files.iter().zip(object_files.iter()) {
-                    writeln!(ninja, "build {dir}/{obj}: cc-{name}-{profile} {dir}/{c}")?;
+                    writeln!(ninja, "build {dir}/{obj}: cc-{name}-{profile} {dir}/{c} | {c_file_deps}")?;
                 }
             }
 
@@ -150,6 +154,10 @@ impl BuildConfig {
             // Pass all the PonieScript files to the PonieScript compiler.
             for poni in &project.files {
                 write!(ninja, " {}", poni.display())?;
+            }
+
+            if toolchain.piped {
+                write!(ninja, " | {c_file_deps}")?;
             }
 
             // Create the imports variable.
@@ -195,7 +203,7 @@ impl BuildConfig {
         writeln!(file, "poni_gc_path = {}", env.poni_gc_path.display())?;
         writeln!(file, "poniescript = {}\n", env.poniescript_path.display())?;
 
-        writeln!(file, "rule poni-regenerate\n  command = ponies regenerate\n  description = ponies regenerate\n")?;
+        writeln!(file, "rule poni-regenerate\n  command = ponies regenerate\n  generator = true\n  description = ponies regenerate\n")?;
 
         // Project regeneration is based on the ponies.toml file
         //
