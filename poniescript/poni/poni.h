@@ -381,6 +381,21 @@ ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
 
 	char table[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
 
+	while(i > 10000) {
+		ps_int rem = (i % 10000);
+		i /= 10000;
+
+		ps_int idx1 = (rem / 100) << 1;
+		ps_int idx2 = (rem % 100) << 1;
+
+		str -= 4;
+		str[0] = table[idx1];
+		str[1] = table[idx1 + 1];
+		str[2] = table[idx2];
+		str[3] = table[idx2 + 1];
+		len += 4;
+	}
+
 	while(i > 100) {
 		ps_int idx = i % 100;
 		str -= 2;
