@@ -53,6 +53,8 @@ impl BuildConfig {
         writeln!(file, "rule poni-regenerate\n  command = ponies regenerate\n  description = ponies regenerate\n")?;
 
         // Project regeneration is based on the ponies.toml file
+        //
+        // TODO: Make this also depend on the EnvironmentConfig's path
         writeln!(file, "build .build/build.ninja: poni-regenerate ponies.toml")?;
         
         for (name, project) in &self.projects {
