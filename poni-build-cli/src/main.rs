@@ -1,7 +1,7 @@
-use std::{fs::{self, File}, path::Path, process::{Command, ExitStatus}};
+use std::{fs::{self, File}, io::Write, path::{Path, PathBuf}, process::{Command, ExitStatus}};
 
 use clap::{Parser, Subcommand};
-use poni_build::{BuildConfig, ConfigReadError, EnvironmentConfig, read_configs};
+use poni_build::{BuildConfig, ConfigReadError, ConfigWriteError, EnvironmentConfig, Project, read_configs, write_build_config};
 
 #[derive(Parser)]
 struct Cli {
@@ -21,12 +21,26 @@ enum CliCommand {
     /// Build and run the project with the given name.
     Run {
         project: String,
+    },
+
+    /// Create a new project in the current directory's ponies.toml, or
+    /// create a new ponies.toml if there is none. Generates a single file to
+    /// begin with that includes the project's name.
+    New {
+        name: String,
     }
 }
 
 fn show_error_msg(msg: &str) -> ! {
     eprintln!("error: {msg}");
     std::process::exit(1);
+}
+
+macro_rules! exit_with_error {
+    ($($arg:tt)*) => {
+        let msg = format!($($arg)*);
+		show_error_msg(&msg);
+	}
 }
 
 fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<ExitStatus, &'static str> {
@@ -99,6 +113,7 @@ fn show_error(err: ConfigReadError) -> ! {
         ConfigReadError::NoEnvironmentToml(tried_path) => eprintln!("error: couldn't open {}", tried_path.display()),
         ConfigReadError::BadEnvironmentToml(err) => eprintln!("error: couldn't parse build-config.toml:\n{err}"),
         ConfigReadError::XdgError(err) => eprintln!("error: couldn't read XDG environment: {err}"),
+        ConfigReadError::FsError => eprintln!("error: problem reading filesystem."),
     }
 
     std::process::exit(1);
@@ -114,14 +129,14 @@ fn read_files() -> (BuildConfig, EnvironmentConfig) {
     }
 }
 
-fn main() {
-    let cli = Cli::parse();
-
+/// Handles any task that requires both the BuildConfig and EnvironmentConfig
+/// and fails if they don't exist.
+fn handle_build_cmd(cmd: CliCommand) {
     // Right now, all the commands require all the configuration files.
     let (build, env) = read_files();
 
     // Now do stuff, depending on what the command was.
-    match cli.command {
+    match cmd {
         CliCommand::Regenerate => {
             do_regenerate(&build, &env);
         }
@@ -155,5 +170,68 @@ fn main() {
                     .unwrap_or_else(|_| show_error_msg("couldn't wait for child process."));
             }
         },
+        _ => unreachable!()
+    }
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    match &cli.command {
+        CliCommand::Regenerate | CliCommand::Build { .. } | CliCommand::Run { .. } => {
+            handle_build_cmd(cli.command);
+        },
+        CliCommand::New { name } => {
+            let the_path = Path::new("./");
+
+            // Depending on the error, it might not be a real error.
+            let cfg = poni_build::read_build_config_precise(the_path);
+            let mut cfg = match cfg {
+                Ok(cfg) => cfg,
+                // If there is not a ponies.toml, we can start from scratch.
+                Err(ConfigReadError::NoPoniesToml) => {
+                    BuildConfig::empty()
+                },
+                Err(err) => show_error(err),
+            };
+
+            // Now, add the new project to the config.
+            if cfg.projects.contains_key(name) {
+                exit_with_error!("project '{name}' already exists");
+            }
+
+            // Create a new project that contains a file based on the project
+            // name.
+            let project = Project {
+                files: vec![PathBuf::from(format!("{name}.poni"))],
+                imports: vec![],
+            };
+
+            cfg.projects.insert(name.clone(), project);
+            let res = write_build_config(the_path, &cfg);
+            match res {
+                Ok(_) => {
+                    eprintln!("success: created project '{}'", name);
+                },
+                Err(ConfigWriteError::CantSerialize(s) | ConfigWriteError::Io(s)) => {
+                    eprintln!("error: couldn't write ponies.toml: {}", s);
+                    std::process::exit(1);
+                }
+            }
+
+            // Now, if the {name}.poni file doesn't exist, create it with some
+            // default contents.
+            let poni_path = format!("{name}.poni");
+            if let Ok(mut f) = File::create_new(&poni_path) {
+                match f.write_all(include_bytes!("template.poni")) {
+                    Ok(_) => {
+                        eprintln!("success: wrote template file to {}", poni_path);
+                    },
+                    Err(e) => {
+                        eprintln!("error: couldn't write {}: {}", poni_path, e);
+                    },
+                }
+            }
+        }
     }
 }

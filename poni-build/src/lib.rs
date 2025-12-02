@@ -77,6 +77,10 @@ const DIM    : &'static str = "\x1b[2m";
 const RESET  : &'static str = "\x1b[0m";
 
 impl BuildConfig {
+    pub fn empty() -> Self {
+        BuildConfig { projects: HashMap::new() }
+    }
+
     fn generate_toolchain(&self, ninja: &mut File, name: &String, profile: &String, toolchain: &Toolchain, info: &mut GeneratedNinjaInfo) -> std::io::Result<()> {
         if toolchain.default {
             info.default_toolchain = Some(format!("{name}-{profile}"));
@@ -239,12 +243,45 @@ pub enum ConfigReadError {
     NoEnvironmentToml(PathBuf),
     BadEnvironmentToml(String),
     XdgError(String),
+    FsError,
+}
+
+pub enum ConfigWriteError {
+    CantSerialize(String),
+    Io(String),
 }
 
 impl From<XdgError> for ConfigReadError {
     fn from(err: XdgError) -> Self {
         ConfigReadError::XdgError(err.to_string())
     }
+}
+
+pub fn write_build_config(build_config_search_path: &Path, cfg: &BuildConfig) -> Result<(), ConfigWriteError> {
+    let serialize = toml::to_string_pretty(cfg)
+        .map_err(|e| ConfigWriteError::CantSerialize(e.to_string()))?;
+
+    fs::write(build_config_search_path.join("ponies.toml"), serialize)
+        .map_err(|e| ConfigWriteError::Io(e.to_string()))?;
+
+    Ok(())
+}
+
+pub fn read_build_config_precise(build_config_search_path: &Path) -> Result<BuildConfig, ConfigReadError> {
+    let file_path = build_config_search_path.join("ponies.toml");
+
+    // In this case, only return NoPoniesToml if the file literally does not exist.
+    if !fs::exists(&file_path).map_err(|_| ConfigReadError::FsError)? {
+        return Err(ConfigReadError::NoPoniesToml);
+    }
+
+    let build_str = fs::read_to_string(&file_path)
+        .map_err(|err| ConfigReadError::BadPoniesToml(err.to_string()))?;
+
+    let build: BuildConfig = toml::from_str(&build_str)
+        .map_err(|err| ConfigReadError::BadPoniesToml(err.to_string()))?;
+
+    Ok(build)
 }
 
 pub fn read_configs(build_config_search_path: &Path) -> Result<(BuildConfig, EnvironmentConfig), ConfigReadError> {
