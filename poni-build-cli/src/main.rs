@@ -24,26 +24,7 @@ fn show_error_msg(msg: &str) -> ! {
     std::process::exit(1);
 }
 
-fn do_build(build: &BuildConfig, env: &EnvironmentConfig, project: Option<&String>) {
-    // Check the project before doing anything else.
-    if let Some(project) = project {
-        if !build.projects.contains_key(project) {
-            eprintln!("error: no such project '{}'", project);
-            std::process::exit(1);
-        }
-    }
-
-    // First, create the .build folder and the build.ninja file.
-    fs::create_dir_all(".build")
-        .unwrap_or_else(|_| show_error_msg("couldn't create .build directory"));
-
-    // TODO: Don't rebuild .ninja file when nothing has changed... :/
-    let mut file = File::create(".build/build.ninja")
-        .unwrap_or_else(|_| show_error_msg("couldn't create .build/build.ninja file"));
-
-    build.generate_ninja_file(&mut file, env)
-        .unwrap_or_else(|_| show_error_msg("couldn't write .build/build.ninja file"));
-
+fn try_run_ninja(project: Option<&String>) -> Result<(), &'static str> {
     // Now, spawn the ninja process.
     // TODO: Configurable ninja path?
     let mut process = Command::new("ninja");
@@ -58,10 +39,42 @@ fn do_build(build: &BuildConfig, env: &EnvironmentConfig, project: Option<&Strin
     
     // Spawn the process.
     let mut child = process.spawn()
-        .unwrap_or_else(|_| show_error_msg("couldn't spawn 'ninja' process"));
+        .map_err(|_| "couldn't spawn 'ninja' process")?;
 
     child.wait()
-        .unwrap_or_else(|_| show_error_msg("couldn't wait for 'ninja' process"));
+        .map_err(|_| "couldn't wait for 'ninja' process")?;
+
+    Ok(())
+}
+
+fn do_build(build: &BuildConfig, env: &EnvironmentConfig, project: Option<&String>) {
+    // Check the project before doing anything else.
+    if let Some(project) = project {
+        if !build.projects.contains_key(project) {
+            eprintln!("error: no such project '{}'", project);
+            std::process::exit(1);
+        }
+    }
+
+    // For speed, what we want to try to do is attempt running ninja *first*,
+    // and do the creation process if that fails. This also prevents us from
+    // needing to re-generate the files if they already exist.
+    if try_run_ninja(project).is_ok() {
+        return;
+    }
+
+    // First, create the .build folder and the build.ninja file.
+    fs::create_dir_all(".build")
+        .unwrap_or_else(|_| show_error_msg("couldn't create .build directory"));
+
+    // TODO: Don't rebuild .ninja file when nothing has changed... :/
+    let mut file = File::create(".build/build.ninja")
+        .unwrap_or_else(|_| show_error_msg("couldn't create .build/build.ninja file"));
+
+    build.generate_ninja_file(&mut file, env)
+        .unwrap_or_else(|_| show_error_msg("couldn't write .build/build.ninja file"));
+
+    try_run_ninja(project).unwrap_or_else(|err| show_error_msg(err));
 }
 
 fn show_error(err: ConfigReadError) -> ! {
