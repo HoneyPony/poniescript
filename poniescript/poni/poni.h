@@ -332,30 +332,101 @@ ps_strbuf_reserve(struct poni_gc_context *ctx, ps_strbuf *buf, size_t needed) {
 
 static inline
 void
+ps_strfmt_cstr(struct poni_gc_context *ctx, ps_strbuf *buf, const char *str, size_t len) {
+	// TODO: Do we need the +1 here for the nul terminator?
+	ps_strbuf_reserve(ctx, buf, len + 1);
+
+	// Copy the string and NUL terminator
+	memcpy(buf->buffer->contents + buf->length, str, len + 1);
+
+	buf->length += len;
+}
+
+static inline
+void
+ps_strfmt_char(struct poni_gc_context *ctx, ps_strbuf *buf, char c) {
+	// TODO: Do we need a +1 here?
+	ps_strbuf_reserve(ctx, buf, 1 + 1);
+
+	// Copy the string and NUL terminator
+	buf->buffer->contents[buf->length] = c;
+	buf->buffer->contents[buf->length + 1] = '\0';
+
+	buf->length += 1;
+}
+
+// Just for fun, this is a version of ps_strfmt_int that doesn't go through
+// snprintf. I want to see if it is any faster...
+static inline
+void
 ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
-	// We will compare the snprintf() result against the total chars -1,
-	// because snprintf() returns the length of everything BUT the NUL
-	// terminator.
-	size_t rem = (buf->buffer->length - buf->length) - 1;
-	int needed = snprintf(buf->buffer->contents + buf->length, rem, "%" PRId64, i);
-
-	if(rem < needed) {
-		// If we didn't have enough room, we will reallocate and do the
-		// snprintf() again. Reserve needed + 1 so that we include the NUL terminator.
-		ps_strbuf_reserve(ctx, buf, needed + 1);
-
-		// Do the snprintf again. The output should not change.
-		// We will recompute rem, although it should be the case that
-		// there's always enough room.
-		rem = (buf->buffer->length - buf->length) - 1;
-		snprintf(buf->buffer->contents + buf->length, rem, "%" PRId64, i);
+	if(i < 0) {
+		if(i == INT64_MIN) {
+			char val[] = "-9223372036854775808";
+			ps_strfmt_cstr(ctx, buf, val, sizeof(val) - 1);
+			return;
+		}
+		ps_strfmt_char(ctx, buf, '-');
+		i = -i;
 	}
 
-	// Finally, the length of the string should increase by needed.
-	// Then, we should write a NUL terminator.
-	buf->length += needed;
-	buf->buffer->contents[buf->length] = '\0';
+	if(i == 0) {
+		ps_strfmt_char(ctx, buf, '0');
+		return;
+	}
+
+	char digits[24] = {0};
+	char *str = &digits[23];
+	size_t len = 0;
+
+	char table[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+
+	while(i > 100) {
+		ps_int idx = i % 100;
+		str -= 2;
+		str[0] = table[idx * 2];
+		str[1] = table[idx * 2 + 1];
+		len += 2;
+		i /= 100;
+	}
+
+	while(i > 0) {
+		ps_int digit = i % 10;
+		str--;
+		*str = (char)(digit + '0');		
+		len += 1;
+		i /= 10;
+	}
+
+	ps_strfmt_cstr(ctx, buf, str, len);
 }
+
+// static inline
+// void
+// ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
+// 	// We will compare the snprintf() result against the total chars -1,
+// 	// because snprintf() returns the length of everything BUT the NUL
+// 	// terminator.
+// 	size_t rem = (buf->buffer->length - buf->length) - 1;
+// 	int needed = snprintf(buf->buffer->contents + buf->length, rem, "%" PRId64, i);
+
+// 	if(rem < needed) {
+// 		// If we didn't have enough room, we will reallocate and do the
+// 		// snprintf() again. Reserve needed + 1 so that we include the NUL terminator.
+// 		ps_strbuf_reserve(ctx, buf, needed + 1);
+
+// 		// Do the snprintf again. The output should not change.
+// 		// We will recompute rem, although it should be the case that
+// 		// there's always enough room.
+// 		rem = (buf->buffer->length - buf->length) - 1;
+// 		snprintf(buf->buffer->contents + buf->length, rem, "%" PRId64, i);
+// 	}
+
+// 	// Finally, the length of the string should increase by needed.
+// 	// Then, we should write a NUL terminator.
+// 	buf->length += needed;
+// 	buf->buffer->contents[buf->length] = '\0';
+// }
 
 static inline
 void
@@ -388,19 +459,6 @@ ps_strfmt_bool(struct poni_gc_context *ctx, ps_strbuf *buf, ps_bool b) {
 		memcpy(buf->buffer->contents + buf->length, "false", sizeof("false"));
 		buf->length += sizeof("false");
 	}
-}
-
-static inline
-void
-ps_strfmt_char(struct poni_gc_context *ctx, ps_strbuf *buf, char c) {
-	// TODO: Do we need a +1 here?
-	ps_strbuf_reserve(ctx, buf, 1 + 1);
-
-	// Copy the string and NUL terminator
-	buf->buffer->contents[buf->length] = c;
-	buf->buffer->contents[buf->length + 1] = '\0';
-
-	buf->length += 1;
 }
 
 static inline
