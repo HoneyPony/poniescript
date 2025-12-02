@@ -112,6 +112,10 @@ impl CodegenCoordinator {
 		let mut type_stride = "static inline size_t
 poni_get_type_stride(uint64_t tag) {
 	switch(tag) {
+		// Memory safety: Don't let us access an invalid size.
+		default:
+			abort();
+			return 0;
 		case PONI_TAG_STRCONST:
 		case PONI_TAG_STR:
 		case PONI_TAG_STRBUF:
@@ -252,6 +256,10 @@ poni_gc_visit_roots(struct poni_gc *gc) {
 poni_gc_get_allocation_size(void *object) {
 	uint64_t tag = *(uint64_t*)object;
 	switch(tag) {
+		// Memory safety: Don't let us access an invalid size.
+		default:
+			abort();
+			return 0;
 		case PONI_TAG_STRCONST:
 		case PONI_TAG_STR:
 		{
