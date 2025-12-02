@@ -27,16 +27,24 @@ main(int argc, char **argv) {
 	poni_init_globals(ctx);
 	poni_init(ctx);
 
+#ifdef PONI_CLEAN_EXIT
 	// For testing purposes, we would like to:
 	// 1) Trigger a GC
 	// 2) Wait for everything to be collected
 	//
 	// This should make sure that GC integration at least basically works.
+	//
+	// This can be done by defining the PONI_CLEAN_EXIT define, above.
 	poni_gc_send_request(gc_handle, PONI_GC_REQUEST_COLLECT);
 	poni_gc_join(gc_handle, ctx);
 
 	poni_gc_free_context(ctx);
 	poni_gc_free_handle(gc_handle);
+#else
+	// For practical purposes, there is no reason to free everything in the GC.
+	// It is literally a waste of time. So, instead just exit.
+	return 0;
+#endif
 }
 
 #endif

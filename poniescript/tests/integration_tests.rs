@@ -78,6 +78,8 @@ fn do_run_valgrind(input_file: &str, exe_path: &str) -> std::io::Result<()> {
 		.arg("-C-lponiescript_gc")
 		.arg(input_file)
 		.arg("--no-timing")
+		// Ensure the garbage collector is cleaning stuff up
+		.arg("-C-DPONI_CLEAN_EXIT")
 		.spawn()?;
 	let code = poniescript.wait()?;
 
