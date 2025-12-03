@@ -51,7 +51,7 @@ fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<ExitSta
     // TODO: Configurable ninja path?
     let mut process = Command::new("ninja");
     process.arg("-f").arg(".build/build.ninja")
-        .env("NINJA_STATUS", format!("{DIM}[{RESET}%f{DIM}/{RESET}%t %e{DIM}]{RESET} 🦄 "));
+        .env("NINJA_STATUS", format!("{DIM}%e{RESET} %f{DIM}/{RESET}%t 🦄 "));
 
     // If we're only building one project, then pass that as an argument.
     if let Some(project) = project {
