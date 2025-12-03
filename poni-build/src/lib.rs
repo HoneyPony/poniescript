@@ -12,9 +12,17 @@ pub struct Toolchain {
     /// The command to use for compiling C files.
     pub cc: String,
 
+    /// Arguments to apply to the end of the compiler command line.
+    #[serde(default)]
+    pub cc_args_extra: String,
+
     /// The command to use for linking. This is often an invocation of a C
     /// compiler.
     pub linker: String,
+
+    /// Arguments to apply to the end of the linker command line.
+    #[serde(default)]
+    pub linker_args_extra: String,
 
     /// Whether the PonieScript compiler directly invokes the C compiler through
     /// a pipe. This can reduce latency of compilation.
@@ -147,12 +155,12 @@ impl BuildConfig {
         //writeln!(ninja, "  command = {} $in -o $out -L$poni_gc_path -lponiescript_gc",
         //    toolchain.linker)?;
         //writeln!(ninja, "  poni_gc_path = {}", poni_gc_path.display())?;
-        writeln!(ninja, "  command = {} $in -o $out -L{} -lponiescript_gc",
-            toolchain.linker, poni_gc_path.display())?;
+        writeln!(ninja, "  command = {} $in -o $out -L{} -lponiescript_gc {}",
+            toolchain.linker, poni_gc_path.display(), toolchain.linker_args_extra)?;
         writeln!(ninja, "  description = {BLUE}link{RESET}{DIM}.{name}.{profile}{RESET} -> $outdesc")?;
 
         writeln!(ninja, "rule cc-{name}-{profile}")?;
-        writeln!(ninja, "  command = {} -c $in -o $out -MD -MF $out.d -I$poni_h_path -I.", toolchain.cc)?;
+        writeln!(ninja, "  command = {} -c $in -o $out -MD -MF $out.d -I$poni_h_path -I. {}", toolchain.cc, toolchain.cc_args_extra)?;
         writeln!(ninja, "  depfile = $out.d")?;
         writeln!(ninja, "  deps = gcc")?;
         writeln!(ninja, "  description = {GREEN}cc  {RESET}{DIM}.{name}.{profile}{RESET} $indesc")?;
