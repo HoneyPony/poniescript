@@ -43,12 +43,15 @@ macro_rules! exit_with_error {
 	}
 }
 
+use poni_build::DIM;
+use poni_build::RESET;
+
 fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<ExitStatus, &'static str> {
     // Now, spawn the ninja process.
     // TODO: Configurable ninja path?
     let mut process = Command::new("ninja");
     process.arg("-f").arg(".build/build.ninja")
-        .env("NINJA_STATUS", "%e /) ");
+        .env("NINJA_STATUS", format!("{DIM}[%f{DIM}/{RESET}%t %e{DIM}]{RESET} 🦄 "));
 
     // If we're only building one project, then pass that as an argument.
     if let Some(project) = project {

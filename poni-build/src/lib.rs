@@ -70,11 +70,11 @@ pub struct GeneratedNinjaInfo {
     default_toolchain: Option<String>,
 }
 
-const MAGENTA: &'static str = "\x1b[0;35m";
-const GREEN  : &'static str = "\x1b[0;32m";
-const BLUE   : &'static str = "\x1b[0;34m";
-const DIM    : &'static str = "\x1b[2m";
-const RESET  : &'static str = "\x1b[0m";
+pub const MAGENTA: &'static str = "\x1b[0;35m";
+pub const GREEN  : &'static str = "\x1b[0;32m";
+pub const BLUE   : &'static str = "\x1b[0;34m";
+pub const DIM    : &'static str = "\x1b[2m";
+pub const RESET  : &'static str = "\x1b[0m";
 
 impl BuildConfig {
     pub fn empty() -> Self {
