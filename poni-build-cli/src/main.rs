@@ -76,6 +76,11 @@ fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<ExitSta
         // TODO: Make this less, like, stringly typed or whatever...
         process.arg(format!(".build/{toolchain}/{project}"));
     }
+    else {
+        // If we are building all projects, we still only want to use the default
+        // toolchain.
+        process.arg(toolchain);
+    }
     
     // Spawn the process.
     let mut child = process.spawn()

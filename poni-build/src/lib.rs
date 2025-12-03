@@ -273,6 +273,14 @@ impl BuildConfig {
             }
         }
 
+        // Finally, generate a phony rule that lets us build all the projects
+        // with this particular toolchain. This is helpful for the CLI.
+        write!(ninja, "build {name}-{profile}: phony")?;
+        for (project_name, _) in &self.projects {
+            write!(ninja, " {dir}/{project_name}")?;
+        }
+        writeln!(ninja, "\n")?;
+
         Ok(())
     }
 
