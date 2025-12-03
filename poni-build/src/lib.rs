@@ -97,13 +97,13 @@ impl BuildConfig {
         writeln!(ninja, "rule link-{name}-{profile}")?;
         writeln!(ninja, "  command = {} $in -o $out -L$poni_gc_path -lponiescript_gc",
             toolchain.linker)?;
-        writeln!(ninja, "  description = {BLUE}link{RESET}{DIM}.{name}.{profile}{RESET}")?;
+        writeln!(ninja, "  description = {BLUE}link{RESET}{DIM}.{name}.{profile}{RESET} -> $outdesc")?;
 
         writeln!(ninja, "rule cc-{name}-{profile}")?;
         writeln!(ninja, "  command = {} -c $in -o $out -MD -MF $out.d -I$poni_h_path -I.", toolchain.cc)?;
         writeln!(ninja, "  depfile = $out.d")?;
         writeln!(ninja, "  deps = gcc")?;
-        writeln!(ninja, "  description = {GREEN}cc  {RESET}{DIM}.{name}.{profile}{RESET}")?;
+        writeln!(ninja, "  description = {GREEN}cc  {RESET}{DIM}.{name}.{profile}{RESET} $indesc")?;
 
         writeln!(ninja, "rule poni-{name}-{profile}")?;
         if toolchain.piped {
@@ -115,7 +115,7 @@ impl BuildConfig {
         else {
             writeln!(ninja, "  command = $poniescript $outputargs $in $imports --no-timing")?;
         }
-        writeln!(ninja, "  description = {MAGENTA}poni{RESET}{DIM}.{name}.{profile}{RESET}")?;
+        writeln!(ninja, "  description = {MAGENTA}poni{RESET}{DIM}.{name}.{profile}{RESET} $indesc")?;
 
         // Now, we generate the rules for building each project with this toolchain.
         let dir = format!(".build/{name}-{profile}");
@@ -136,6 +136,7 @@ impl BuildConfig {
                 write!(ninja, " {dir}/{obj}")?;
             }
             write!(ninja, "\n")?;
+            writeln!(ninja, "  outdesc = {project_name}")?;
 
             let c_file_deps = "$poni_h_path/poni/poni.h $poni_h_path/poni/poni_standalone.h $poni_h_path/poni/poni_gc.h";
 
@@ -146,6 +147,7 @@ impl BuildConfig {
             if !toolchain.piped {
                 for (c, obj) in c_files.iter().zip(object_files.iter()) {
                     writeln!(ninja, "build {dir}/{obj}: cc-{name}-{profile} {dir}/{c} | {c_file_deps}")?;
+                    writeln!(ninja, "  indesc = {c}")?;
                 }
             }
 
@@ -182,6 +184,7 @@ impl BuildConfig {
             for output in outputs {
                 write!(ninja, " -o {dir}/{output}")?;
             }
+            write!(ninja, "\n  indesc = {project_name}")?;
             write!(ninja, "\n\n")?;
         }
 
