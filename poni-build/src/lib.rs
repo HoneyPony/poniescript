@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::{self, File}, io::Write, path::{Path, PathBuf}};
+use std::{collections::{HashMap, HashSet}, fs::{self, File}, hash::Hash, io::Write, path::{Path, PathBuf}};
 
 use microxdg::{XdgApp, XdgError};
 use serde::{Deserialize, Serialize};
@@ -91,6 +91,13 @@ pub struct Project {
 
 pub struct GeneratedNinjaInfo {
     default_toolchain: Option<String>,
+
+    /// Contains a list of target files that we have already generated ninja
+    /// rules for. This is mostly used in case we have more than one setup that
+    /// is using the same Rust toolchain configuration, in which case duplicate
+    /// `build: /path/to/rust-binary` rules would otherwise be generated, which
+    /// is invalid in ninja.
+    generated_rust_rules: HashSet<PathBuf>,
 }
 
 pub const MAGENTA: &'static str = "\x1b[0;35m";
@@ -151,7 +158,7 @@ impl BuildConfig {
         writeln!(ninja, "  description = {GREEN}cc  {RESET}{DIM}.{name}.{profile}{RESET} $indesc")?;
 
         writeln!(ninja, "rule cargo-{name}-{profile}")?;
-        write!(ninja, "  command = cargo --manifest-path $cargotoml -p $package")?;
+        write!(ninja, "  command = cargo build --manifest-path $cargotoml -p $package")?;
         if let Some(name) = &toolchain.rust_name {
             write!(ninja, " --target {name}")?;
         }
@@ -161,7 +168,7 @@ impl BuildConfig {
             s => { write!(ninja, "--profile {s}")?; }
         }
         write!(ninja, "\n")?;
-        writeln!(ninja, "  description = {RED}rust{RESET}{DIM}.{name}.{profile}{RESET} $indesc")?;
+        writeln!(ninja, "  description = {RED}rust{RESET}{DIM}.{name}.{profile}{RESET} $package")?;
 
         writeln!(ninja, "rule poni-{name}-{profile}")?;
         if toolchain.piped {
@@ -197,7 +204,8 @@ impl BuildConfig {
             // way, if they change, we will automatically rebuild. (Or we can
             // build the Rust library if it hasn't been built yet).
 
-            let poni_gc_bin_path = poni_gc_path.join("poniescript_gc");
+            // TODO: Is this the same on windows? :)
+            let poni_gc_bin_path = poni_gc_path.join("libponiescript_gc.a");
             write!(ninja, " | {}", poni_gc_bin_path.display())?;
 
             write!(ninja, "\n")?;
@@ -253,10 +261,16 @@ impl BuildConfig {
             write!(ninja, "\n\n")?;
 
             // Generate rules for building Rust dependencies.
-            writeln!(ninja, "build {} : cargo-{name}-{profile}", poni_gc_bin_path.display())?;
-            writeln!(ninja, "  package = poniescript-gc")?;
-            writeln!(ninja, "  cargotoml = {}", poni_src_path.join("Cargo.toml").display())?;
-            writeln!(ninja, "")?;
+            if info.generated_rust_rules.insert(poni_gc_bin_path.clone()) {
+                let cargotoml = poni_src_path.join("Cargo.toml");
+                writeln!(ninja, "build {} : cargo-{name}-{profile}", poni_gc_bin_path.display())?;
+                    // We could depend on the cargo.toml path... seems a bit
+                    // silly...
+                    //cargotoml.display())?;
+                writeln!(ninja, "  package = poniescript-gc")?;
+                writeln!(ninja, "  cargotoml = {}", cargotoml.display())?;
+                writeln!(ninja, "")?;
+            }
         }
 
         Ok(())
@@ -278,6 +292,7 @@ impl BuildConfig {
     pub fn generate_ninja_file(&self, file: &mut File, env: &EnvironmentConfig) -> std::io::Result<GeneratedNinjaInfo> {
         let mut result = GeneratedNinjaInfo {
             default_toolchain: None,
+            generated_rust_rules: HashSet::new(),
         };
 
         writeln!(file, "builddir = .build\n")?;
