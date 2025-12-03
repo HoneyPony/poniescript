@@ -18,10 +18,6 @@ pub struct Toolchain {
 
     /// The number of object files that the compilation is split into.
     pub ways: usize,
-
-    #[serde(default)]
-    /// Whether this is the default toolchain.
-    pub default: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -34,19 +30,24 @@ pub struct EnvironmentConfig {
     pub poniescript_path: PathBuf,
 
     pub toolchain: HashMap<String, ToolchainSet>,
+
+    pub default_profile: String,
+    pub default_target: String,
 }
 
 impl EnvironmentConfig {
-    pub fn lookup_default_toolchain(&self) -> Option<String> {
-        for (name, set) in &self.toolchain {
-            for (profile, chain) in &set.0 {
-                if chain.default {
-                    return Some(format!("{name}-{profile}"));
-                }
-            }
-        }
+    /// Returns the toolchain name, and a boolean of whether it is actually defined.
+    pub fn lookup_toolchain(&self, profile: Option<&String>, target: Option<&String>) -> (String, bool) {
+        let profile = profile.unwrap_or(&self.default_profile);
+        let target = target.unwrap_or(&self.default_target);
 
-        return None;
+        let name = format!("{target}-{profile}");
+
+        let Some(set) = self.toolchain.get(target) else {
+            return (name, false);
+        };
+
+        (name, set.0.contains_key(profile))
     }
 }
 
@@ -82,10 +83,6 @@ impl BuildConfig {
     }
 
     fn generate_toolchain(&self, ninja: &mut File, name: &String, profile: &String, toolchain: &Toolchain, info: &mut GeneratedNinjaInfo) -> std::io::Result<()> {
-        if toolchain.default {
-            info.default_toolchain = Some(format!("{name}-{profile}"));
-        }
-        
         // TODO: What we will end up wanting is a bunch of different cc/linkers,
         // used for debug/release, and used for different target platforms.
         // (e.g. ideally you should be able to, from Linux, easily compile for

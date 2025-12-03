@@ -17,10 +17,18 @@ enum CliCommand {
     /// Build all projects, or build a single project if a name is passed.
     Build {
         project: Option<String>,
+
+        /// The profile to use (e.g. debug, release).
+        #[arg(short, long)]
+        profile: Option<String>,
     },
     /// Build and run the project with the given name.
     Run {
         project: String,
+
+        /// The profile to use (e.g. debug, release).
+        #[arg(short, long)]
+        profile: Option<String>,
     },
 
     /// Create a new project in the current directory's ponies.toml, or
@@ -132,6 +140,10 @@ fn read_files() -> (BuildConfig, EnvironmentConfig) {
     }
 }
 
+fn show_toolchain_error(toolchain: String) -> ! {
+    exit_with_error!("no toolchain '{toolchain}' is defined.");
+}
+
 /// Handles any task that requires both the BuildConfig and EnvironmentConfig
 /// and fails if they don't exist.
 fn handle_build_cmd(cmd: CliCommand) {
@@ -143,21 +155,23 @@ fn handle_build_cmd(cmd: CliCommand) {
         CliCommand::Regenerate => {
             do_regenerate(&build, &env);
         }
-        CliCommand::Build { project } => {
-            let Some(toolchain) = env.lookup_default_toolchain() else {
-                show_error_msg("no default toolchain found");
+        CliCommand::Build { project, profile } => {
+            let (toolchain, exists) = env.lookup_toolchain(profile.as_ref(), None);
+            if !exists {
+                show_toolchain_error(toolchain);
             };
 
             do_build(&build, &env, &toolchain, project.as_ref());
         },
-        CliCommand::Run { project } => {
+        CliCommand::Run { project, profile } => {
             if !build.projects.contains_key(&project) {
                 eprintln!("error: no such project '{}'", project);
                 std::process::exit(1);
             }
 
-            let Some(toolchain) = env.lookup_default_toolchain() else {
-                show_error_msg("no default toolchain found");
+            let (toolchain, exists) = env.lookup_toolchain(profile.as_ref(), None);
+            if !exists {
+                show_toolchain_error(toolchain);
             };
 
             let status = do_build(&build, &env, &toolchain, Some(&project));
