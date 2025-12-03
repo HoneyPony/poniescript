@@ -21,6 +21,11 @@ enum CliCommand {
         /// The profile to use (e.g. debug, release).
         #[arg(short, long)]
         profile: Option<String>,
+
+        /// The target platform, which should correspond with one of your
+        /// defined toolchains (e.g. 'local', 'windows', 'web')
+        #[arg(short, long)]
+        target: Option<String>
     },
     /// Build and run the project with the given name.
     Run {
@@ -29,6 +34,11 @@ enum CliCommand {
         /// The profile to use (e.g. debug, release).
         #[arg(short, long)]
         profile: Option<String>,
+
+        /// The target platform, which should correspond with one of your
+        /// defined toolchains (e.g. 'local', 'windows', 'web')
+        #[arg(short, long)]
+        target: Option<String>
     },
 
     /// Create a new project in the current directory's ponies.toml, or
@@ -155,21 +165,21 @@ fn handle_build_cmd(cmd: CliCommand) {
         CliCommand::Regenerate => {
             do_regenerate(&build, &env);
         }
-        CliCommand::Build { project, profile } => {
-            let (toolchain, exists) = env.lookup_toolchain(profile.as_ref(), None);
+        CliCommand::Build { project, profile, target } => {
+            let (toolchain, exists) = env.lookup_toolchain(profile.as_ref(), target.as_ref());
             if !exists {
                 show_toolchain_error(toolchain);
             };
 
             do_build(&build, &env, &toolchain, project.as_ref());
         },
-        CliCommand::Run { project, profile } => {
+        CliCommand::Run { project, profile, target } => {
             if !build.projects.contains_key(&project) {
                 eprintln!("error: no such project '{}'", project);
                 std::process::exit(1);
             }
 
-            let (toolchain, exists) = env.lookup_toolchain(profile.as_ref(), None);
+            let (toolchain, exists) = env.lookup_toolchain(profile.as_ref(), target.as_ref());
             if !exists {
                 show_toolchain_error(toolchain);
             };
