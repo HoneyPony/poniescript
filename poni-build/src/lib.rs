@@ -3,6 +3,10 @@ use std::{collections::HashMap, fs::{self, File}, io::Write, path::{Path, PathBu
 use microxdg::{XdgApp, XdgError};
 use serde::{Deserialize, Serialize};
 
+fn default_rust_profile() -> String {
+    "debug".into()
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Toolchain {
     /// The command to use for compiling C files.
@@ -18,6 +22,16 @@ pub struct Toolchain {
 
     /// The number of object files that the compilation is split into.
     pub ways: usize,
+
+    /// The name of the corresponding Rust toolchain, if any. If none is specified,
+    /// we will simply invoke `cargo` without a --target argument.
+    #[serde(default)]
+    pub rust_name: Option<String>,
+
+    /// The name of the Rust profile to use ('debug', 'release', something 
+    /// else.)
+    #[serde(default = "default_rust_profile")]
+    pub rust_profile: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -25,8 +39,16 @@ pub struct ToolchainSet(HashMap<String, Toolchain>);
 
 #[derive(Serialize, Deserialize)]
 pub struct EnvironmentConfig {
-    pub poni_h_path: PathBuf,
-    pub poni_gc_path: PathBuf,
+    /// Path to the PonieScript source code, on this system. We currently assume
+    /// Cargo is using its default configuration and putting everything inside
+    /// target/. If this is not true, well, that's unfortunate.
+    pub poni_src_path: PathBuf,
+
+    /// Path to the PonieScript executable. This is probably inside the src
+    /// directory, but you may want to choose between debug/release, etc.
+    /// 
+    /// In the future, maybe we will have the build system automatically
+    /// rebuild PonieScript as well...
     pub poniescript_path: PathBuf,
 
     pub toolchain: HashMap<String, ToolchainSet>,
@@ -72,17 +94,38 @@ pub struct GeneratedNinjaInfo {
 }
 
 pub const MAGENTA: &'static str = "\x1b[0;35m";
+pub const RED    : &'static str = "\x1b[0;31m";
 pub const GREEN  : &'static str = "\x1b[0;32m";
 pub const BLUE   : &'static str = "\x1b[0;34m";
 pub const DIM    : &'static str = "\x1b[2m";
 pub const RESET  : &'static str = "\x1b[0m";
+
+struct RustLibraryDep {
+    src_path: PathBuf,
+    package_name: String,
+}
 
 impl BuildConfig {
     pub fn empty() -> Self {
         BuildConfig { projects: HashMap::new() }
     }
 
-    fn generate_toolchain(&self, ninja: &mut File, name: &String, profile: &String, toolchain: &Toolchain, info: &mut GeneratedNinjaInfo) -> std::io::Result<()> {
+    fn generate_toolchain(&self, ninja: &mut File, poni_src_path: &PathBuf, name: &String, profile: &String, toolchain: &Toolchain, info: &mut GeneratedNinjaInfo) -> std::io::Result<()> {
+        // TODO: Ask cargo for where build artifacts are, or something?
+        let poni_target_path = poni_src_path.join("target");
+
+        // let gc_dep = RustLibraryDep {
+        //     src_path: poni_src_path.clone(),
+        //     package_name: "poniescript-gc".into(),
+        // };
+        
+        let poni_gc_path = match &toolchain.rust_name {
+            // E.g. target/x86_64-pc-windows-gnu/debug
+            Some(name) => poni_target_path.join(name).join(&toolchain.rust_profile),
+            // E.g. target/debug
+            None => poni_target_path.join(&toolchain.rust_profile)
+        };
+        
         // TODO: What we will end up wanting is a bunch of different cc/linkers,
         // used for debug/release, and used for different target platforms.
         // (e.g. ideally you should be able to, from Linux, easily compile for
@@ -92,8 +135,13 @@ impl BuildConfig {
         // a different compile of poniescript_gc and any other supporting libraries,
         // on each targeted platform.
         writeln!(ninja, "rule link-{name}-{profile}")?;
-        writeln!(ninja, "  command = {} $in -o $out -L$poni_gc_path -lponiescript_gc",
-            toolchain.linker)?;
+        // NOTE: Apparently we can't do this with a variable like this, so 
+        // just encode it directly for now.
+        //writeln!(ninja, "  command = {} $in -o $out -L$poni_gc_path -lponiescript_gc",
+        //    toolchain.linker)?;
+        //writeln!(ninja, "  poni_gc_path = {}", poni_gc_path.display())?;
+        writeln!(ninja, "  command = {} $in -o $out -L{} -lponiescript_gc",
+            toolchain.linker, poni_gc_path.display())?;
         writeln!(ninja, "  description = {BLUE}link{RESET}{DIM}.{name}.{profile}{RESET} -> $outdesc")?;
 
         writeln!(ninja, "rule cc-{name}-{profile}")?;
@@ -101,6 +149,19 @@ impl BuildConfig {
         writeln!(ninja, "  depfile = $out.d")?;
         writeln!(ninja, "  deps = gcc")?;
         writeln!(ninja, "  description = {GREEN}cc  {RESET}{DIM}.{name}.{profile}{RESET} $indesc")?;
+
+        writeln!(ninja, "rule cargo-{name}-{profile}")?;
+        write!(ninja, "  command = cargo --manifest-path $cargotoml -p $package")?;
+        if let Some(name) = &toolchain.rust_name {
+            write!(ninja, " --target {name}")?;
+        }
+        match toolchain.rust_profile.as_str() {
+            "debug" => { /* cargo doesn't accept --debug as an argument */ },
+            "release" => { write!(ninja, " --release")?; }
+            s => { write!(ninja, "--profile {s}")?; }
+        }
+        write!(ninja, "\n")?;
+        writeln!(ninja, "  description = {RED}rust{RESET}{DIM}.{name}.{profile}{RESET} $indesc")?;
 
         writeln!(ninja, "rule poni-{name}-{profile}")?;
         if toolchain.piped {
@@ -132,6 +193,13 @@ impl BuildConfig {
             for obj in &object_files {
                 write!(ninja, " {dir}/{obj}")?;
             }
+            // Include a dependency on any of the Rust runtime libraries. That
+            // way, if they change, we will automatically rebuild. (Or we can
+            // build the Rust library if it hasn't been built yet).
+
+            let poni_gc_bin_path = poni_gc_path.join("poniescript_gc");
+            write!(ninja, " | {}", poni_gc_bin_path.display())?;
+
             write!(ninja, "\n")?;
             writeln!(ninja, "  outdesc = {project_name}")?;
 
@@ -183,18 +251,24 @@ impl BuildConfig {
             }
             write!(ninja, "\n  indesc = {project_name}")?;
             write!(ninja, "\n\n")?;
+
+            // Generate rules for building Rust dependencies.
+            writeln!(ninja, "build {} : cargo-{name}-{profile}", poni_gc_bin_path.display())?;
+            writeln!(ninja, "  package = poniescript-gc")?;
+            writeln!(ninja, "  cargotoml = {}", poni_src_path.join("Cargo.toml").display())?;
+            writeln!(ninja, "")?;
         }
 
         Ok(())
     }
 
-    fn generate_toolchain_set(&self, ninja: &mut File, name: &String, set: &ToolchainSet, info: &mut GeneratedNinjaInfo) -> std::io::Result<()> {
+    fn generate_toolchain_set(&self, ninja: &mut File, poni_src_path: &PathBuf, name: &String, set: &ToolchainSet, info: &mut GeneratedNinjaInfo) -> std::io::Result<()> {
         // Generate the following for each toolchain:
         // - Rules 'link', 'cc', and 'poni'
         // - The build rules for that toolchain
 
         for (profile, toolchain) in &set.0 {
-            self.generate_toolchain(ninja, name, profile, toolchain, info)?;
+            self.generate_toolchain(ninja, poni_src_path, name, profile, toolchain, info)?;
         }
 
         Ok(())
@@ -208,9 +282,10 @@ impl BuildConfig {
 
         writeln!(file, "builddir = .build\n")?;
 
+        let poni_h_path = env.poni_src_path.join("poniescript");
+
         // TODO: Make all the Paths Strings instead?
-        writeln!(file, "poni_h_path = {}", env.poni_h_path.display())?;
-        writeln!(file, "poni_gc_path = {}", env.poni_gc_path.display())?;
+        writeln!(file, "poni_h_path = {}", poni_h_path.display())?;
         writeln!(file, "poniescript = {}\n", env.poniescript_path.display())?;
 
         writeln!(file, "rule poni-regenerate\n  command = ponies regenerate\n  generator = true\n  description = ponies regenerate\n")?;
@@ -221,7 +296,7 @@ impl BuildConfig {
         writeln!(file, "build .build/build.ninja: poni-regenerate ponies.toml")?;
         
         for (name, set) in &env.toolchain {
-            self.generate_toolchain_set(file, name, set, &mut result)?;
+            self.generate_toolchain_set(file, &env.poni_src_path, name, set, &mut result)?;
         }
 
         // Write a default rule if we have a default toolchain
