@@ -164,6 +164,8 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "err_if_no_else_bad_type"),
 
 		("new/", "new_dotted"),
+		("new/", "new_bad_self_ints"),
+		("new/", "new_bad_self_str"),
 
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants"),
