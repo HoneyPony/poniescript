@@ -1,0 +1,108 @@
+var NEWLINE = "\n"[0];
+var AT      = "@"[0];
+var DOT     = "."[0];
+
+class Grid {
+    var grid  : StrBuf = "";
+    var width : int    = 0;
+    var height: int    = 0;
+
+    fun is_paper(x: int, y: int) -> bool {
+        if x < 0      or y < 0       { return false; }
+        if x >= width or y >= height { return false; }
+
+        return grid[y * (width + 1) + x] == AT;
+    }
+
+    fun clear_paper(x: int, y: int) {
+        if x < 0      or y < 0       { return; }
+        if x >= width or y >= height { return; }
+
+        grid[y * (width + 1) + x] = DOT;
+    }
+
+    fun clone_grid() -> Grid {
+        new Grid {
+            grid: str(grid),
+            width: width,
+            height: height,
+        }
+    }
+}
+
+fun make_grid(text: StrBuf) -> Grid {
+    // Compute width so we can treat text like a 2D array
+    var width = 0;
+    while text[width] != NEWLINE {
+        width = width + 1;
+    }
+
+    var height = 0;
+    while height * width < text.length {
+        height = height + 1;
+    }
+    height = height - 1;
+
+    new Grid {
+        grid: text,
+        width: width,
+        height: height,
+    }
+}
+
+fun init() {
+    var text = read_file("input.txt");
+
+    var grid = make_grid(text);
+    var next = grid.clone_grid();
+
+    //print(grid.width, " ", grid.height);
+ 
+    var total_sum = 0;
+    while(true) {
+        print("meow");
+        var sum = 0;
+        var x = 0;
+        while x < grid.width {
+            var y = 0;
+            while y < grid.height {
+                var this_cell_sum = 0;
+
+                if grid.is_paper(x, y) {
+                    if grid.is_paper(x - 1, y - 1) { this_cell_sum = this_cell_sum + 1; }
+                    if grid.is_paper(x - 1, y    ) { this_cell_sum = this_cell_sum + 1; }
+                    if grid.is_paper(x - 1, y + 1) { this_cell_sum = this_cell_sum + 1; }
+                    if grid.is_paper(x    , y - 1) { this_cell_sum = this_cell_sum + 1; }
+                    if grid.is_paper(x    , y + 1) { this_cell_sum = this_cell_sum + 1; }
+                    if grid.is_paper(x + 1, y - 1) { this_cell_sum = this_cell_sum + 1; }
+                    if grid.is_paper(x + 1, y    ) { this_cell_sum = this_cell_sum + 1; }
+                    if grid.is_paper(x + 1, y + 1) { this_cell_sum = this_cell_sum + 1; }
+
+                    // print("@ ", x, " ", y, " -> ", this_cell_sum);
+
+                    if this_cell_sum < 4 {
+                        sum = sum + 1;
+
+                        next.clear_paper(x, y);
+                    }
+
+                    0
+                }
+
+                y = y + 1;
+            }
+            x = x + 1;
+        }
+
+        print(sum);
+
+        if sum == 0 { break; }
+
+        total_sum = total_sum + sum;
+
+        grid = next;
+        next = next.clone_grid();
+    }
+
+    print(total_sum);
+}
