@@ -1653,10 +1653,6 @@ impl<'a> Codegen<'a> {
 						panic!("ICE: New class val wasn't a Tmp");
 					};
 
-					let enclosing_this_val = self.this_val;
-					self.this_val = Some(idx);
-					self.inside_class.push(new.class);
-
 					// Run all the initializers from the new{} first.
 					for init in &new.initializers {
 						let rhs = self.expr(ast, init.value, into);
@@ -1668,6 +1664,19 @@ impl<'a> Codegen<'a> {
 
 						dont_initialize.insert(init.var);
 					}
+
+					// We can't change the this val until we've run the new{}
+					// initializers. In particular, consider:
+					//
+					// class A { var x: int; fun copy() -> A { new A { x: x} } }
+					// when initializing the new A inside copy(), the x value
+					// we should be *reading* should be from the old A. We have
+					// no need to set the this_val until running the initializers
+					// that could possibly depend on it, which by definition
+					// are the default initializers.
+					let enclosing_this_val = self.this_val;
+					self.this_val = Some(idx);
+					self.inside_class.push(new.class);
 
 					// Run all the initializers from the class second.
 					for var in &self.db.get(new.class).vars {

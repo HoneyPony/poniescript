@@ -21,5 +21,5 @@ fun init() {
 
     var clone = grid.clone_grid();
     //! abc 10 20
-    print(clone.grid, " ", width, " ", height);
+    print(clone.grid, " ", clone.width, " ", clone.height);
 }
