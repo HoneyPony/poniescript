@@ -1815,9 +1815,21 @@ impl<'a> Codegen<'a> {
 				// Generate own val after inner expressions, for GC
 				let val = self.new_val_typed(set.typ);
 
-				// TODO: Generate bounds checks
-				define_val!(self, into, val, " = {}->contents[{}] = {};\n"
-					arr_val, idx_val, rhs_val);
+				if arr_val.typ == self.db.types.str || arr_val.typ == self.db.types.str_const {
+					// TODO: Generate bounds checks
+					define_val!(self, into, val, "= (ps_int)({}->contents[{}] = (char)({}));\n"
+						arr_val, idx_val, rhs_val);
+				}
+				else if arr_val.typ == self.db.types.str_buf {
+					// TODO: Generate bounds checks
+					define_val!(self, into, val, "= (ps_int)({}->buffer->contents[{}] = (char)({}));\n"
+						arr_val, idx_val, rhs_val);
+				}
+				else {
+					// TODO: Generate bounds checks
+					define_val!(self, into, val, " = {}->contents[{}] = {};\n"
+						arr_val, idx_val, rhs_val);
+				}
 
 				val
 			}

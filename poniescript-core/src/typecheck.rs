@@ -1193,7 +1193,10 @@ impl<'db> TypeChecker<'db> {
 
 				let elem_ty = match self.db.get(arr_ty).clone() {
 					Type::ArrayOf(elem) => elem,
-					_ => type_error!(self, &set.location, "Can only index an array.")
+					// We don't have a good string indexing strategy yet. For now,
+					// treat strings as essentially arrays of integers.
+					Type::Str | Type::StrBuf | Type::StrConst => self.db.types.int,
+					_ => type_error!(self, &set.location, "Can only index a string or array.")
 				};
 
 				// We can't check the variable just like an Assign, as that
@@ -1209,7 +1212,7 @@ impl<'db> TypeChecker<'db> {
 					computed,
 
 					&set.location,
-					"Invalid assignment to array: need {}, but value is {}",
+					"Invalid indexed assignment: need {}, but value is {}",
 					self.db.repr_type(elem_ty),
 					self.db.repr_type(rhs)
 				);
