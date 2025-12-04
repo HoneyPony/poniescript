@@ -30,7 +30,7 @@ struct Gc<'a> {
     shared: &'a GcShared,
 }
 
-struct GcHandle<'a> {
+pub struct GcHandle<'a> {
     join_handle: Option<JoinHandle<()>>,
     shared: &'a GcShared,
 }
@@ -81,7 +81,7 @@ struct GcFrame {
 }
 
 #[repr(C)]
-struct GcContext<'a> {
+pub struct GcContext<'a> {
     frame_list: *const GcFrame,
     shared: &'a GcShared,
     flag: u64,
@@ -557,7 +557,7 @@ impl<'a> GcHandle<'a> {
 }
 
 #[export_name = "poni_gc_spawn"]
-extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
+pub extern "C" fn gc_spawn() -> Box<GcHandle<'static>> {
     // TODO: This should not be in the GC crate at all, but it is convenient
     // for the time being.
     // env_logger::init();

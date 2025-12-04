@@ -1,0 +1,11 @@
+[package]
+name = "poniescript-rt"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+# Note: This might have to be cdylib, actually, for wasm. Unclear.
+crate-type = ["staticlib"]
+
+[dependencies]
+poniescript-gc = { path = "../poniescript-gc" }
