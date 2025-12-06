@@ -272,6 +272,14 @@ ps_fatal_error(const char *message) {
 	exit(1);
 }
 
+// It is currently unclear if this should essentially throw an exception somehow.
+static inline
+PONI_NORETURN void
+ps_panic(const char *message) {
+	printf("panic: %s\n", message);
+	exit(1);
+}
+
 static inline
 ps_str*
 ps_str_from_literal_size(struct poni_gc_context *ctx, const char *input, size_t length) {

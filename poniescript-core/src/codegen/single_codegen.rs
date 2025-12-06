@@ -1789,16 +1789,53 @@ impl<'a> Codegen<'a> {
 				let idx_val = self.expr(ast, index.index, into);
 				assert!(idx_val.typ == self.db.types.int);
 
+				// In order to generate bounds checks in a memory-safe way,
+				// we must read the length and the pointer from a single
+				// fixed temporary value. This is because length is (in theory)
+				// immutable, i.e. we can't realloc an individual Array, so
+				// if the check is in bounds ever, it will remain in bounds
+				// forever.
+				let arr_val = match &arr_val.val {
+					Val::Tmp(_) => arr_val,
+					_ => {
+						let tmp = self.new_val_typed(arr_val.typ);
+						define_val!(self, into, tmp, " = {};\n", arr_val);
+						tmp
+					}
+				};
+
+				
+
 				if arr_val.typ == self.db.types.str || arr_val.typ == self.db.types.str_const {
+					inf_writeln!(into, "{}if({} < 0 || {} > {}->length) {{ ps_panic(\"index out of bounds\"); }}",
+						indent, idx_val, idx_val, arr_val);
 					return inline_expr!(self, index.typ, "(ps_int)({}->contents[{}])",
 						arr_val, idx_val);
 				}
+
+				// TODO: Make str buf indexing memory safe (this requires 
+				// storing the ->buffer as a temporary and indexing that).
 				if arr_val.typ == self.db.types.str_buf {
+					// We do need to comapre against the strbuf->length for
+					// *correctness*, but not for *memory safety*.
+					//
+					// TODO: To make this memory safe, we will need to also
+					// compare against the str's length, and again, make it
+					// a temporary.
+					inf_writeln!(into, "{}if({} < 0 || {} > {}->length) {{ ps_panic(\"index out of bounds\"); }}",
+						indent, idx_val, idx_val, arr_val);
 					return inline_expr!(self, index.typ, "(ps_int)({}->buffer->contents[{}])",
 						arr_val, idx_val);
 				}
 
-				// TODO: Generate bounds checks...
+				// Bounds check
+				// This is actually safe even with the inline_expr! because
+				// we guaranteed that the array pointer was a temporary, so
+				// it shouldn't be able to be reassigned. (Although, I guess
+				// some temporaries are reassigned? Hmm..?)
+				inf_writeln!(into, "{}if({} < 0 || {} > {}->header.length) {{ ps_panic(\"index out of bounds\"); }}",
+					indent, idx_val, idx_val, arr_val);
+
 				if self.db.is_cheap_re_eval_type(index.typ) {
 					return inline_expr!(self, index.typ, "{}->contents[{}]", arr_val, idx_val);
 				}
@@ -1806,7 +1843,6 @@ impl<'a> Codegen<'a> {
 				// Generate own val after inner expressions, for GC
 				let val = self.new_val_typed(index.typ);
 
-				// TODO: Generate bounds checks
 				define_val!(self, into, val, " = {}->contents[{}];\n",
 					arr_val, idx_val);
 
