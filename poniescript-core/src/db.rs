@@ -88,7 +88,7 @@ pub struct Ast {
 pub struct AstReadonly {
 	pub exprs: Arena<Expr, ExprId>,
 	pub stmts: Arena<Stmt, StmtId>,
-	// For now this doesn't include the Sources because they have a RefCell.
+	pub sources: Arena<Source, SourceId>,
 }
 
 pub struct AstReadonlySources {
@@ -127,19 +127,19 @@ impl Ast {
 		}
 	}
 
-	pub fn into_readonly(self) -> (AstReadonly, Arena<Source, SourceId>) {
-		(AstReadonly {
+	pub fn into_readonly(self) -> AstReadonly {
+		AstReadonly {
 			exprs: self.exprs.into_readonly(),
 			stmts: self.stmts.into_readonly(),
-		},
-			self.sources.into_readonly())
+			sources: self.sources.into_readonly(),
+		}
 	}
 
-	pub fn from_readonly(ast: AstReadonly, sources: Arena<Source, SourceId>) -> Self {
+	pub fn from_readonly(ast: AstReadonly) -> Self {
 		Ast {
 			exprs: ast.exprs.into_cell(),
 			stmts: ast.stmts.into_cell(),
-			sources: sources.into_cell(),
+			sources: ast.sources.into_cell(),
 		}
 	}
 

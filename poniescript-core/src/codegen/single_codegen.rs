@@ -5,6 +5,7 @@ use crate::arena::ArenaKey;
 use crate::codegen::*;
 use crate::db::*;
 use crate::lexer::Tok;
+use crate::source::SourceLocation;
 use crate::typ::Type;
 
 use crate::{inf_write, inf_writeln};
@@ -776,6 +777,17 @@ impl<'a> Codegen<'a> {
 			typ if typ == self.db.types.vec4i => Some("vec4i"),
 			_ => None
 		}
+	}
+
+	fn make_panic(&self, ast: &AstReadonly, into: &mut String, message: &'static str, location: &SourceLocation) {
+		let src = ast.sources.get(location.source);
+		let path = src.repr_path();
+		let (line, col) = src.get_line_column(location);
+
+		// TODO: We need to carefully escape the 'path' string in case it contains e.g
+		// quotation marks and such.
+		inf_write!(into, "ps_panic(\"{}\", {}, {}, \"{}\");",
+			path, line, col, message)
 	}
 
 	fn compile_partial_lerp(&mut self, bool_val: &TypedVal, float_val: &TypedVal, one_minus_val: &TypedVal, from_val: &TypedVal, to_val: &TypedVal, target_val: &TypedVal, cur_typ: TypId, postfix: &String, into: &mut String) {
@@ -1807,8 +1819,10 @@ impl<'a> Codegen<'a> {
 				
 
 				if arr_val.typ == self.db.types.str || arr_val.typ == self.db.types.str_const {
-					inf_writeln!(into, "{}if({} < 0 || {} > {}->length) {{ ps_panic(\"index out of bounds\"); }}",
+					inf_write!(into, "{}if({} < 0 || {} > {}->length) {{ "
 						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &index.location);
+					inf_write!(into, " }};\n");
 					return inline_expr!(self, index.typ, "(ps_int)({}->contents[{}])",
 						arr_val, idx_val);
 				}
@@ -1822,8 +1836,10 @@ impl<'a> Codegen<'a> {
 					// TODO: To make this memory safe, we will need to also
 					// compare against the str's length, and again, make it
 					// a temporary.
-					inf_writeln!(into, "{}if({} < 0 || {} > {}->length) {{ ps_panic(\"index out of bounds\"); }}",
+					inf_write!(into, "{}if({} < 0 || {} > {}->length) {{ ",
 						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &index.location);
+					inf_write!(into, " }};\n");
 					return inline_expr!(self, index.typ, "(ps_int)({}->buffer->contents[{}])",
 						arr_val, idx_val);
 				}
@@ -1833,8 +1849,10 @@ impl<'a> Codegen<'a> {
 				// we guaranteed that the array pointer was a temporary, so
 				// it shouldn't be able to be reassigned. (Although, I guess
 				// some temporaries are reassigned? Hmm..?)
-				inf_writeln!(into, "{}if({} < 0 || {} > {}->header.length) {{ ps_panic(\"index out of bounds\"); }}",
+				inf_write!(into, "{}if({} < 0 || {} > {}->header.length) {{ ",
 					indent, idx_val, idx_val, arr_val);
+				self.make_panic(ast, into, "index out of bounds", &index.location);
+				inf_write!(into, " }};\n");
 
 				if self.db.is_cheap_re_eval_type(index.typ) {
 					return inline_expr!(self, index.typ, "{}->contents[{}]", arr_val, idx_val);

@@ -1,6 +1,7 @@
 #![allow(unexpected_cfgs)]
 
 use std::cell::RefCell;
+use std::sync::RwLock;
 use std::{fs::File, path::PathBuf};
 use std::io::{self, Read};
 use crate::db::*;
@@ -258,41 +259,50 @@ impl SourceProvider for SyntheticSource {
 }
 
 impl PathBufFileSource {
-	pub fn new(path: PathBuf) -> Box<dyn SourceProvider + Send> {
+	pub fn new(path: PathBuf) -> Box<dyn SourceProvider + Send + Sync> {
 		Box::new(PathBufFileSource { path })
 	}
 }
 
 impl SyntheticSource {
-	pub fn new() -> Box<dyn SourceProvider + Send> {
+	pub fn new() -> Box<dyn SourceProvider + Send + Sync> {
 		Box::new(SyntheticSource {})
 	}
 }
 
 pub struct Source {
-	provider: Box<dyn SourceProvider + Send>,
-	source_map: RefCell<SourceMap>,
+	provider: Box<dyn SourceProvider + Send + Sync>,
+	source_map: RwLock<SourceMap>,
 
 	// TODO: Consider moving everything out of Module into Source directly.
 	pub module: Module,
 }
 
 impl Source {
-	pub fn new(provider: Box<dyn SourceProvider + Send>) -> Source {
-		Source { provider, source_map: RefCell::new(SourceMap::empty()), module: Module::new_empty() }
+	pub fn new(provider: Box<dyn SourceProvider + Send + Sync>) -> Source {
+		Source { provider, source_map: RwLock::new(SourceMap::empty()), module: Module::new_empty() }
 	}
 
 	pub fn to_reader(&self) -> io::Result<Box<dyn Read>> {
 		self.provider.to_reader()
 	}
 
-	fn cache_map(provider: &dyn SourceProvider, source_map: &RefCell<SourceMap>) -> bool {
-		if source_map.borrow().created { return true; }
+	pub fn repr_path(&self) -> String {
+		self.provider.repr_path()
+	}
+
+	fn cache_map(provider: &dyn SourceProvider, source_map: &RwLock<SourceMap>) -> bool {
+		{
+			let source_map = source_map.read().unwrap();
+			if source_map.created { return true; }
+		}
+		
 
 		let reader = provider.to_reader();
 
 		if let Ok(mut reader) = reader {
-			return source_map.borrow_mut().generate(&mut reader).is_ok();
+			let mut source_map = source_map.write().unwrap();
+			return source_map.generate(&mut reader).is_ok();
 		}
 
 		false
@@ -301,18 +311,21 @@ impl Source {
 	pub fn show_underlined_location(&self, location: &SourceLocation) {
 		Self::cache_map(self.provider.as_ref(), &self.source_map);
 
-		self.source_map.borrow().show_underlined_location(location, self.provider.as_ref());
+		let source_map = self.source_map.read().unwrap();
+		source_map.show_underlined_location(location, self.provider.as_ref());
 	}
 
 	pub fn get_line_column(&self, location: &SourceLocation) -> (u64, u64) {
 		Self::cache_map(self.provider.as_ref(), &self.source_map);
 
-		self.source_map.borrow().get_line_column(location.offset)
+		let source_map = self.source_map.read().unwrap();
+		source_map.get_line_column(location.offset)
 	}
 
 	pub fn get_offset(&self, line: u64, column: u64) -> u64 {
 		Self::cache_map(self.provider.as_ref(), &self.source_map);
 
-		self.source_map.borrow().get_offset(line, column)
+		let source_map = self.source_map.read().unwrap();
+		source_map.get_offset(line, column)
 	}
 }

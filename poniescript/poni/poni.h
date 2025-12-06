@@ -275,8 +275,8 @@ ps_fatal_error(const char *message) {
 // It is currently unclear if this should essentially throw an exception somehow.
 static inline
 PONI_NORETURN void
-ps_panic(const char *message) {
-	printf("panic: %s\n", message);
+ps_panic(const char *src, ps_int line, ps_int column, const char *message) {
+	printf("%s:%" PRId64 ":%" PRId64 ": panic: %s\n", src, line, column, message);
 	exit(1);
 }
 

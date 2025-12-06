@@ -97,7 +97,7 @@ struct LSPSource {
 }
 
 impl LSPSource {
-    pub fn new(document: Arc<Document>) -> Box<dyn SourceProvider + Send> {
+    pub fn new(document: Arc<Document>) -> Box<dyn SourceProvider + Send + Sync> {
         Box::new(LSPSource { document })
     }
 }

@@ -426,7 +426,7 @@ fn main() {
 	};
 	let (mut writers, ccs) = compile_output.get_output(&args);
 
-	let ast = Arc::new(ast.into_readonly().0);
+	let ast = Arc::new(ast.into_readonly());
 	// Awkward, but necessary until we figure out a nicer way to deal with
 	// the Db
 	let db = Box::leak(Box::new(db));
