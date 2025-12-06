@@ -1816,10 +1816,8 @@ impl<'a> Codegen<'a> {
 					}
 				};
 
-				
-
 				if arr_val.typ == self.db.types.str || arr_val.typ == self.db.types.str_const {
-					inf_write!(into, "{}if({} < 0 || {} > {}->length) {{ "
+					inf_write!(into, "{}if({} < 0 || {} >= {}->length) {{ "
 						indent, idx_val, idx_val, arr_val);
 					self.make_panic(ast, into, "index out of bounds", &index.location);
 					inf_write!(into, " }};\n");
@@ -1836,7 +1834,7 @@ impl<'a> Codegen<'a> {
 					// TODO: To make this memory safe, we will need to also
 					// compare against the str's length, and again, make it
 					// a temporary.
-					inf_write!(into, "{}if({} < 0 || {} > {}->length) {{ ",
+					inf_write!(into, "{}if({} < 0 || {} >= {}->length) {{ ",
 						indent, idx_val, idx_val, arr_val);
 					self.make_panic(ast, into, "index out of bounds", &index.location);
 					inf_write!(into, " }};\n");
@@ -1849,7 +1847,7 @@ impl<'a> Codegen<'a> {
 				// we guaranteed that the array pointer was a temporary, so
 				// it shouldn't be able to be reassigned. (Although, I guess
 				// some temporaries are reassigned? Hmm..?)
-				inf_write!(into, "{}if({} < 0 || {} > {}->header.length) {{ ",
+				inf_write!(into, "{}if({} < 0 || {} >= {}->header.length) {{ ",
 					indent, idx_val, idx_val, arr_val);
 				self.make_panic(ast, into, "index out of bounds", &index.location);
 				inf_write!(into, " }};\n");
@@ -1875,21 +1873,42 @@ impl<'a> Codegen<'a> {
 
 				let rhs_val = self.expr(ast, set.rhs, into);
 
+				// Same idea as in Expr::Index
+				let arr_val = match &arr_val.val {
+					Val::Tmp(_) => arr_val,
+					_ => {
+						let tmp = self.new_val_typed(arr_val.typ);
+						define_val!(self, into, tmp, " = {};\n", arr_val);
+						tmp
+					}
+				};
+
 				// Generate own val after inner expressions, for GC
 				let val = self.new_val_typed(set.typ);
 
 				if arr_val.typ == self.db.types.str || arr_val.typ == self.db.types.str_const {
-					// TODO: Generate bounds checks
+					inf_write!(into, "{}if({} < 0 || {} >= {}->length) {{ ",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &set.location);
+					inf_write!(into, " }};\n");
 					define_val!(self, into, val, "= (ps_int)({}->contents[{}] = (char)({}));\n"
 						arr_val, idx_val, rhs_val);
 				}
 				else if arr_val.typ == self.db.types.str_buf {
-					// TODO: Generate bounds checks
+					// TODO: Just like with Expr::Index, this kind of needs to
+					// be a two-step thing, that involves a temporary.
+					inf_write!(into, "{}if({} < 0 || {} >= {}->length) {{ ",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &set.location);
+					inf_write!(into, " }};\n");
 					define_val!(self, into, val, "= (ps_int)({}->buffer->contents[{}] = (char)({}));\n"
 						arr_val, idx_val, rhs_val);
 				}
 				else {
-					// TODO: Generate bounds checks
+					inf_write!(into, "{}if({} < 0 || {} >= {}->header.length) {{ ",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &set.location);
+					inf_write!(into, " }};\n");
 					define_val!(self, into, val, " = {}->contents[{}] = {};\n"
 						arr_val, idx_val, rhs_val);
 				}
