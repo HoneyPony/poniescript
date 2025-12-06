@@ -275,8 +275,13 @@ ps_fatal_error(const char *message) {
 // It is currently unclear if this should essentially throw an exception somehow.
 static inline
 PONI_NORETURN void
-ps_panic(const char *src, ps_int line, ps_int column, const char *message) {
+ps_panic(struct poni_gc_context *ctx, const char *src, ps_int line, ps_int column, const char *message) {
 	printf("%s:%" PRId64 ":%" PRId64 ": panic: %s\n", src, line, column, message);
+	struct poni_gc_frame *frame = ctx->frame;
+	while(frame) {
+		printf("  in %s()\n", frame->fn_name);
+		frame = frame->prev;
+	}
 	exit(1);
 }
 
@@ -597,12 +602,14 @@ static inline
 float
 ps_promote_int_to_float(ps_int v) { return (ps_float)v; }
 
-#define PONI_GC_FRAME(in_ptr_count) \
+#define PONI_GC_FRAME(in_ptr_count, in_fn_name) \
 struct { \
 	struct poni_gc_frame *prev; \
+	const char *fn_name; \
 	uint64_t ptr_count; \
 	void *ptrs[in_ptr_count]; \
 } gc_frame = {0}; \
+gc_frame.fn_name = in_fn_name; \
 gc_frame.ptr_count = in_ptr_count; \
 gc_frame.prev = ctx->frame; \
 ctx->frame = (void*)&gc_frame

@@ -77,6 +77,7 @@ struct GcShared {
 #[repr(C)]
 struct GcFrame {
     prev: *const GcFrame,
+    fn_name: *const i8,
     pointer_count: u64,
 }
 

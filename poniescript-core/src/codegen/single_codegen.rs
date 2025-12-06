@@ -786,7 +786,7 @@ impl<'a> Codegen<'a> {
 
 		// TODO: We need to carefully escape the 'path' string in case it contains e.g
 		// quotation marks and such.
-		inf_write!(into, "ps_panic(\"{}\", {}, {}, \"{}\");",
+		inf_write!(into, "ps_panic(ctx, \"{}\", {}, {}, \"{}\");",
 			path, line, col, message)
 	}
 
@@ -1225,7 +1225,8 @@ impl<'a> Codegen<'a> {
 	/// (TODO: Can a Tmp change between evaluations? Hopefully not?)
 	fn ensure_is_tmp(&mut self, val: TypedVal, into: &mut String) -> TypedVal {
 		match &val.val {
-			Val::Tmp(_) => val,
+			// DirectLit is safe because it cannot change.
+			Val::Tmp(_) | Val::DirectLit { .. } => val,
 			_ => {
 				let tmp = self.new_val_typed(val.typ);
 				define_val!(self, into, tmp, " = {};\n", val);
@@ -2319,8 +2320,9 @@ impl<'a> Codegen<'a> {
 		// inf_writeln!(own_buffer_beginning, "{}ctx->frame = (void*)&gc_frame;", indent);
 
 		// Instead of generating the code directly, use a macro.
-		inf_writeln!(own_buffer_beginning, "{}PONI_GC_FRAME({});",
-			indent ,gc_frame_count);
+		inf_writeln!(own_buffer_beginning, "{}PONI_GC_FRAME({}, \"{}\");",
+			indent, gc_frame_count, self.db.get(
+				self.db.get(fun).name.unwrap_or(self.db.str_anonymous)));
 		
 		// Pop type value
 		self.return_types.pop();
