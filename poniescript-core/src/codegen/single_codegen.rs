@@ -1215,6 +1215,25 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
+	/// Takes a TypedVal and ensures it is a Val::Tmp. This is necessary for 
+	/// certain memory-safety related reasons.
+	/// 
+	/// That said, this actually doesn't ensure a value is a Tmp; it just
+	/// ensures that it is a value that can't change between evaluations.
+	/// That is the importat property.
+	/// 
+	/// (TODO: Can a Tmp change between evaluations? Hopefully not?)
+	fn ensure_is_tmp(&mut self, val: TypedVal, into: &mut String) -> TypedVal {
+		match &val.val {
+			Val::Tmp(_) => val,
+			_ => {
+				let tmp = self.new_val_typed(val.typ);
+				define_val!(self, into, tmp, " = {};\n", val);
+				tmp
+			}
+		}
+	}
+
 	fn expr(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String) -> TypedVal {
 		let indent = self.indent();
 		match ast.exprs.get(expr) {
@@ -1807,14 +1826,11 @@ impl<'a> Codegen<'a> {
 				// immutable, i.e. we can't realloc an individual Array, so
 				// if the check is in bounds ever, it will remain in bounds
 				// forever.
-				let arr_val = match &arr_val.val {
-					Val::Tmp(_) => arr_val,
-					_ => {
-						let tmp = self.new_val_typed(arr_val.typ);
-						define_val!(self, into, tmp, " = {};\n", arr_val);
-						tmp
-					}
-				};
+
+				// This is also true of the idx_val, because we don't want
+				// e.g. it to be object->field, as that could change.
+				let arr_val = self.ensure_is_tmp(arr_val, into);
+				let idx_val = self.ensure_is_tmp(idx_val, into);
 
 				if arr_val.typ == self.db.types.str || arr_val.typ == self.db.types.str_const {
 					inf_write!(into, "{}if({} < 0 || {} >= {}->length) {{ "
@@ -1874,14 +1890,8 @@ impl<'a> Codegen<'a> {
 				let rhs_val = self.expr(ast, set.rhs, into);
 
 				// Same idea as in Expr::Index
-				let arr_val = match &arr_val.val {
-					Val::Tmp(_) => arr_val,
-					_ => {
-						let tmp = self.new_val_typed(arr_val.typ);
-						define_val!(self, into, tmp, " = {};\n", arr_val);
-						tmp
-					}
-				};
+				let arr_val = self.ensure_is_tmp(arr_val, into);
+				let idx_val = self.ensure_is_tmp(idx_val, into);
 
 				// Generate own val after inner expressions, for GC
 				let val = self.new_val_typed(set.typ);
