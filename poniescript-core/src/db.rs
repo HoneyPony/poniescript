@@ -12,6 +12,7 @@ use crate::expr::Fun;
 use crate::expr::Sig;
 use crate::expr::Class;
 use crate::expr::Var;
+use crate::typ::RangeEnd;
 use crate::typ::Type;
 use crate::source::{PathBufFileSource, Source, SourceLocation, SyntheticSource};
 use crate::{arena::*, inf_writeln, Args};
@@ -324,6 +325,9 @@ pub struct Db {
 	/// Maps tuple TypIds to their cname.
 	pub tuple_cname_cache: FxHashMap<TypId, &'static str>,
 
+	/// Maps range TypIds to their cname.
+	pub range_cname_cache: FxHashMap<TypId, &'static str>,
+
 	/// Maps StrIds representing '0', '1', etc into indexes into a tuple.
 	/// These are generated when a tuple type is created.
 	tuple_idxs: FxHashMap<StrId, u32>,
@@ -385,6 +389,7 @@ impl Db {
 			class_cname_cache: Vec::new(),
 
 			tuple_cname_cache: FxHashMap::default(),
+			range_cname_cache: FxHashMap::default(),
 
 			tuple_vars: FxHashMap::default(),
 			tuple_idxs: FxHashMap::default(),
@@ -1114,6 +1119,10 @@ impl Db {
 				}
 				sum
 			},
+			Type::RangeOf(.., typ) => {
+				// One slot for each item in the range, plus one.
+				self.type_gc_slots(*typ) * 2
+			}
 			Type::Option(id) => {
 				// It should require the same number of slots as its inner type
 				self.type_gc_slots(*id)
@@ -1173,6 +1182,7 @@ impl Db {
 			Type::Int | Type::Float | Type::Bool | Type::Void => true,
 			Type::Tuple(_) => true,
 			Type::Option(_) => true,
+			Type::RangeOf(..) => true,
 			_ => false
 		}
 	}
@@ -1312,7 +1322,7 @@ impl Db {
 					
 					self.tag_cname_cache.insert(typ, name.leak());
 				}
-				Type::FunRaw(_) | Type::Tuple(_) => {
+				Type::FunRaw(_) | Type::Tuple(_) | Type::RangeOf(..) => {
 					// This is very sad, but for now we'll just make their name
 					// the TypId. We really should make it some kind of relevant
 					// string instead.
@@ -1443,6 +1453,23 @@ impl Db {
 
 				// TODO: Right now we have to skip tuple gen_ctype this way.
 				// This really seems ugly.
+				continue;
+			}
+
+			if let Type::RangeOf(left, right, _) = &ty {
+				fn to_char(r: &RangeEnd) -> char {
+					match r {
+						RangeEnd::Inclusive => 'i',
+						RangeEnd::Exclusive => 'e',
+						RangeEnd::Unbounded => 'u',
+					}
+				}
+				let ctype = format!("struct ps_range_{}{}_{}",
+					to_char(left), to_char(right), id.to_nonzero_usize()).leak();
+
+				self.range_cname_cache.insert(id, ctype);
+				self.ctype_cache.push(ctype);
+
 				continue;
 			}
 

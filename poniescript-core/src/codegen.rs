@@ -164,7 +164,7 @@ poni_get_type_stride(uint64_t tag) {
 				Type::FunRaw(_) => { inf_writeln!(funraw_types, "\t\tcase {}:", tag); }
 
 				// Value types should each return their sizeof.
-				Type::Tuple(_) => {
+				Type::Tuple(_) | Type::RangeOf(..) => {
 					inf_writeln!(type_stride, "\t\tcase {}: return sizeof({});", tag, self.db.get_ctype(typ));
 				}
 
@@ -312,7 +312,7 @@ poni_gc_get_allocation_size(void *object) {
 							// Nothing to visit.
 							Type::FunRaw(_) => {}
 
-							Type::Fun(_) | Type::Tuple(_) => {
+							Type::Fun(_) | Type::Tuple(_) | Type::RangeOf(..) => {
 								let inner_tag = self.db.get_type_ctag(field_ty);
 								inf_writeln!(visit_object, "\t\tponi_gc_visit_valuetype(gc, &self->{}, {});",
 									self.db.get_cname(*field),
@@ -359,7 +359,7 @@ poni_gc_get_allocation_size(void *object) {
 							// Nothing to visit.
 							Type::FunRaw(_) => {}
 
-							Type::Fun(_) | Type::Tuple(_) => {
+							Type::Fun(_) | Type::Tuple(_) | Type::RangeOf(..) => {
 								let inner_tag = self.db.get_type_ctag(*typ);
 								inf_writeln!(valuetype, "\t\tponi_gc_visit_valuetype(gc, &self->v_{}, {});",
 									idx, inner_tag);

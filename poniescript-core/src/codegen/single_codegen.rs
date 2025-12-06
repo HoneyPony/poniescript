@@ -6,6 +6,7 @@ use crate::codegen::*;
 use crate::db::*;
 use crate::lexer::Tok;
 use crate::source::SourceLocation;
+use crate::typ::RangeEnd;
 use crate::typ::Type;
 
 use crate::{inf_write, inf_writeln};
@@ -544,6 +545,17 @@ impl<'a> Codegen<'a> {
 				}
 			},
 
+			Type::RangeOf(left, right, typ) => {
+				if matches!(*left, RangeEnd::Inclusive | RangeEnd::Exclusive) {
+					let prefix = format!("{prefix}.left");
+					self.val_alloc_slots_recurse(&prefix, *typ, slots);
+				}
+				if matches!(*right, RangeEnd::Inclusive | RangeEnd::Exclusive) {
+					let prefix = format!("{prefix}.right");
+					self.val_alloc_slots_recurse(&prefix, *typ, slots);
+				}
+			}
+
 			Type::Unassigned | Type::AssumeInt | Type::AssumeFloat => {}
 			Type::UnboundIdent(_) | Type::UnboundCStructPtr(_) => {}
 		}
@@ -968,6 +980,7 @@ impl<'a> Codegen<'a> {
 			
 			Type::Option(_) => todo!("print() for Option"),
 			Type::ArrayOf(_) => todo!("print() for Array"),
+			Type::RangeOf(..) => todo!("print() for RangeOf"),
 			Type::Tuple(tup) => {
 				inf_writeln!(into, "{}ps_print_const(\"(\");", indent);
 				for (idx, ty) in tup.iter().enumerate() {
@@ -1029,6 +1042,7 @@ impl<'a> Codegen<'a> {
 			Type::Class(_) => todo!("str() for Class"),
 			Type::ArrayOf(_) => todo!("str() for Array"),
 			Type::Tuple(_) => todo!("str() for Tuple"),
+			Type::RangeOf(..) => todo!("str() for RangeOf"),
 			Type::Option(_) => todo!("str() for Option"),
 
 			Type::AssumeFloat => panic!("ICE: Tried to codegen str(AssumeFloat)"),

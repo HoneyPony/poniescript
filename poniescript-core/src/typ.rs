@@ -3,6 +3,13 @@ use std::sync::Arc;
 use crate::db::*;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
+pub enum RangeEnd {
+	Inclusive,
+	Exclusive,
+	Unbounded
+}
+
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub enum Type {
 	Int,
 	Float,
@@ -45,6 +52,10 @@ pub enum Type {
 	ArrayOf(TypId),
 
 	Tuple(Arc<[TypId]>),
+
+	/// A Range type. These each have a unique name in the frontend. In the future
+	/// we'll also want a Range type that can represent any given range (?)
+	RangeOf(RangeEnd, RangeEnd, TypId),
 
 	Option(TypId),
 	
@@ -136,6 +147,20 @@ impl Type {
 			Type::Option(typ) => {
 				format!("{}?", db.get(*typ).to_string(db))
 			}
+			Type::RangeOf(left, right, typ) => {
+				let name = match (left, right) {
+					(RangeEnd::Inclusive, RangeEnd::Inclusive) => "Closed",
+					(RangeEnd::Inclusive, RangeEnd::Exclusive) => "ClosedOpen",
+					(RangeEnd::Inclusive, RangeEnd::Unbounded) => "ClosedInf",
+					(RangeEnd::Exclusive, RangeEnd::Inclusive) => "OpenClosed",
+					(RangeEnd::Exclusive, RangeEnd::Exclusive) => "Open",
+					(RangeEnd::Exclusive, RangeEnd::Unbounded) => "OpenInf",
+					(RangeEnd::Unbounded, RangeEnd::Inclusive) => "InfClosed",
+					(RangeEnd::Unbounded, RangeEnd::Exclusive) => "InfOpen",
+					(RangeEnd::Unbounded, RangeEnd::Unbounded) => "Every",
+				};
+				format!("{}[{}]", name, db.get(*typ).to_string(db))
+			}
 
 			Type::AssumeInt => "a number".to_string(),
 			Type::AssumeFloat => "a decimal number".to_string(),
@@ -157,6 +182,7 @@ impl Type {
 			Type::StrBuf => "ps_strbuf*".into(),
 
 			Type::Tuple(_) => { todo!("probably should move this whole thing into db?") }
+			Type::RangeOf(..) => { todo!("probably should move this whole thing into db?") }
 
 			// TODO: MAybe take &mut db, and then we can use format! and such
 			Type::FunRaw(sig) => String::from(db.gen_sig_raw_ctype(*sig)),
