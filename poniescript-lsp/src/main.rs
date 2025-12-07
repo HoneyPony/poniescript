@@ -1,6 +1,7 @@
 mod document;
 mod inlay_hint;
 mod goto;
+mod hover;
 
 use std::path::PathBuf;
 
@@ -122,21 +123,6 @@ struct Backend {
     store: Mutex<DocumentStore>,
 }
 
-fn build_hover(title: &str, contents: &str) -> Hover {
-    Hover {
-        contents: HoverContents::Array(
-            vec![
-                MarkedString::LanguageString(LanguageString {
-                    language: "poniescript".to_string(),
-                    value: title.to_string()
-                }),
-                MarkedString::String(contents.to_string())
-            ]
-        ),
-        range: None
-    }
-}
-
 fn supports_utf8_encoding(params: InitializeParams) -> bool {
     if let Some(general) = params.capabilities.general {
         if let Some(encodings) = general.position_encodings {
@@ -254,8 +240,10 @@ impl LanguageServer for Backend {
         ])))
     }
 
-    async fn hover(&self, _: HoverParams) -> Result<Option<Hover>> {
-        Ok(Some(build_hover("print(args: ...)", "Prints any series of expressions.")))
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        //Ok(Some(build_hover("print(args: ...)", "Prints any series of expressions.")))
+        let mut store = self.store.lock().await;
+        Ok(hover::hover(&mut store, params))
     }
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
