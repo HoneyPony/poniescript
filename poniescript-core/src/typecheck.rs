@@ -2,6 +2,7 @@
 use std::sync::Arc;
 
 use crate::db::*;
+use crate::lexer::Token;
 use crate::module::Module;
 use crate::source::SourceLocation;
 use crate::typ::Type;
@@ -625,6 +626,9 @@ impl<'db> TypeChecker<'db> {
 			}
 			Expr::WhileLoop(_) => {
 				// For now, there is nothing to promote.
+			}
+			Expr::ForLoop(_) => {
+				panic!("ICE: Tried to promote ForLoop: Should have been lowered before promotion")
 			}
 			Expr::Break(_) => {
 				// The inner expression of the break is promoted by the Loop,
@@ -1775,6 +1779,36 @@ impl<'db> TypeChecker<'db> {
 			Expr::MakeSumType(sum) => {
 				// Nothing to do yet.
 				sum.typ
+			}
+
+			Expr::ForLoop(for_) => {
+				// First, we check the iterable. This tells us how to desugar it.
+				let iterable = self.check_expr(ast, for_.iterator, true)?;
+
+				let iter_ty = self.db.get(iterable);
+				match iter_ty {
+					Type::RangeOf(a, b, typ) if *typ == self.db.types.int => {
+						// Desugar the for loop into the following:
+						// var <var> = <start>
+						// while <var> < <end> {
+						//    inner
+						//    var = var + 1;
+						// }
+						let initializer = Expr::push_get(ast, for_.location.clone(),
+							Token::synthesize_ident_from(self.db, "left"),
+							for_.iterator, self.db.get_range_left(iterable));
+						let declare = Stmt::push_declare(ast, for_.location.clone(),
+							for_.ident.clone(), for_.identity, initializer, for_.has_explicit_type);
+						
+						self.check_expr(ast, expr_id, value_used)?
+					},
+					_ => {
+						type_error!(self,
+							&for_.location,
+							"Don't know how to iterate over object of type {}",
+							self.db.repr_type(iterable));
+					}
+				}
 			}
 
 			// Promote should not be generated until we get to the TypeCheck stage.

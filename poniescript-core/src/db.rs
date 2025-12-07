@@ -874,6 +874,15 @@ impl Db {
 		}
 	}
 
+	/// Gets the VarId representing the 'left' property on a Range.
+	pub fn get_range_left(&self, range_ty: TypId) -> VarId {
+		self.range_vars.get(&(false, range_ty)).copied().unwrap()
+	}
+	/// Gets the VarId representing the 'right' property on a Range.
+	pub fn get_range_right(&self, range_ty: TypId) -> VarId {
+		self.range_vars.get(&(true, range_ty)).copied().unwrap()
+	}
+
 	/// Generates the ctype for a Sig. Note that this ctype might be nonsense,
 	/// but that's OK.
 	pub fn gen_sig_ctype(&mut self, sig: SigId) -> &'static str {

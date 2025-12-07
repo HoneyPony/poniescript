@@ -1572,6 +1572,9 @@ impl<'a> Codegen<'a> {
 			Expr::Undefined(_) => {
 				panic!("ICE: Tried to codegen an Undefined");
 			}
+			Expr::ForLoop(_) => {
+				panic!("ICE: Tried to codegen a ForLoop (should have been lowered in typecheck)");
+			}
 
 			Expr::FunCapture(capt) => {
 				// BIG TODO: Support closures. Not exactly clear how that will work.

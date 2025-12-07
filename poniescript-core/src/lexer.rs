@@ -58,6 +58,25 @@ pub struct Token {
 	pub location: SourceLocation,
 }
 
+impl Token {
+	pub fn synthesize_ident(db: &Db, str: StrId) -> Token {
+		Token {
+			typ: Tok::Identifier,
+			lexeme: str,
+			location: SourceLocation {
+				source: db.synthetic,
+				offset: 0,
+				length: 0,
+			}
+		}
+	}
+
+	pub fn synthesize_ident_from(db: &mut Db, str: &'static str) -> Token {
+		let str = db.put_str(str);
+		Token::synthesize_ident(db, str)
+	}
+}
+
 pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {
 	let mut map = FxHashMap::default();
 

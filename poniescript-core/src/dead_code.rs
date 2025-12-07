@@ -358,6 +358,8 @@ impl<'db> DeadCodeElim<'db> {
                 // Break is always Never.
                 true
             }
+
+            Expr::ForLoop(_) => panic!("ICE: Tried to DCE ForLoop (should have died in TypeCheck.)"),
         }
     }
 

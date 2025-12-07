@@ -234,6 +234,16 @@ impl<'db> Binder<'db> {
 				None
 			}
 
+			Expr::ForLoop(for_) => {
+				self.visit_expr(ast, for_.inner);
+				self.visit_expr(ast, for_.iterator);
+
+				// Anywhere where the parser might generate a Type::UnboundIdent,
+				// we need to try resolving that identifier.
+				self.visit_var_type(for_.identity);
+				None
+			}
+
 			Expr::Break(break_) => {
 				if let Some(value) = break_.value { self.visit_expr(ast, value); }
 				None

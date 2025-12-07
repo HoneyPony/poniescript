@@ -80,6 +80,8 @@ impl Expr {
 			}
 			Expr::Loop(loop_) => loop_.typ,
 			Expr::WhileLoop(while_) => while_.typ,
+			// A for loop can't have a type as it is replaced with a while loop.
+			Expr::ForLoop(_) => db.types.unassigned,
 			Expr::Break(_) => db.types.bottom,
 			Expr::Variable(var) => {
 				db.get_var_type(var.identity)
