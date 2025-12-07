@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::db::*;
 
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum RangeEnd {
 	Inclusive,
 	Exclusive,

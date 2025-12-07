@@ -336,6 +336,10 @@ pub struct Db {
 	/// synthesized for that tuple.
 	tuple_vars: FxHashMap<(u32, TypId), VarId>,
 
+	/// Maps RangeEnd-Type pairs to the associated variables synthesized for that
+	/// Range type.
+	range_vars: FxHashMap<(RangeEnd, TypId), VarId>,
+
 	/// TODO: Maybe have only one declare/define code?
 
 	/// Some C code to declare each Array type.
@@ -346,6 +350,9 @@ pub struct Db {
 	pub str_anonymous: StrId,
 	pub str_lambda: StrId,
 	pub str_lerp: StrId,
+
+	pub str_left: StrId,
+	pub str_right: StrId,
 
 	/// The list of globals. The initializer ordering pass will sort them.
 	pub globals: Vec<VarId>,
@@ -393,6 +400,7 @@ impl Db {
 
 			tuple_vars: FxHashMap::default(),
 			tuple_idxs: FxHashMap::default(),
+			range_vars: FxHashMap::default(),
 
 			value_types: Vec::new(),
 
@@ -452,6 +460,9 @@ impl Db {
 			str_lambda: StrId::invalid(),
 			str_lerp: StrId::invalid(),
 
+			str_left: StrId::invalid(),
+			str_right: StrId::invalid(),
+
 			prop_str: StrProperties {
 				length: VarId::invalid(),
 				length_key: StrId::invalid()
@@ -502,6 +513,9 @@ impl Db {
 		db.str_anonymous = db.put_str("<anonymous>");
 		db.str_lambda = db.put_str("lambda");
 		db.str_lerp = db.put_str("lerp");	
+
+		db.str_left = db.put_str("left");
+		db.str_right = db.put_str("right");
 
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,
@@ -596,6 +610,9 @@ impl Db {
 				}
 				return false;
 			}
+			Type::RangeOf(.., inner) => {
+				self.is_not_concrete(*inner)
+			}
 
 			_ => false
 		}
@@ -622,6 +639,9 @@ impl Db {
 				true
 			}
 			Type::Option(inner) => {
+				self.is_cgen_safe(*inner)
+			}
+			Type::RangeOf(.., inner) => {
 				self.is_cgen_safe(*inner)
 			}
 
@@ -677,6 +697,7 @@ impl Db {
 			// For array types, use any type we generate.
 			Type::ArrayOf(elem_ty) => self.use_array(*elem_ty),
 			Type::Tuple(inner) => self.use_tuple(&inner, id),
+			Type::RangeOf(left, right, inner) => self.use_rangeof(left, right, inner, id),
 			_ => { }
 		}
 
@@ -824,6 +845,24 @@ impl Db {
 			let (_, var) = self.synthesize_property(self.get(key), self.get(cname), *ty);
 
 			self.tuple_vars.insert(var_key, var);
+		}
+	}
+
+	fn use_rangeof(&mut self, left: &RangeEnd, right: &RangeEnd, inner: &TypId, range_ty: TypId) {
+		if !self.is_cgen_safe(range_ty) { return; }
+
+		self.value_types.push(range_ty);
+
+		if left.is_concrete() {
+			let (_, var) = self.synthesize_property("left", "left",
+				*inner);
+			self.range_vars.insert((*left, *inner), var);
+		}
+
+		if right.is_concrete() {
+			let (_, var) = self.synthesize_property("right", "right",
+				*inner);
+			self.range_vars.insert((*right, *inner), var);
 		}
 	}
 
@@ -1172,6 +1211,18 @@ impl Db {
 				// have been generated the first time we used the type.
 				self.tuple_vars.get(&(*which_prop, typs[*which_prop as usize])).copied()
 			}
+			Type::RangeOf(left, right, inner) => {
+				// If this particular Range type had these propreties, we would
+				// have generated them in use_rangeof, which happens the first
+				// time we used the type.
+				if propname == self.str_left {
+					return self.range_vars.get(&(*left, *inner)).copied();
+				}
+				if propname == self.str_right {
+					return self.range_vars.get(&(*right, *inner)).copied();
+				}
+				return None;
+			}
 
 			_ => None
 		}
@@ -1249,6 +1300,9 @@ impl Db {
 					self.visit_value_types(todo, visited, ordering, *inner)?;
 				}
 			},
+			Type::RangeOf(.., inner) => {
+				self.visit_value_types(todo, visited, ordering, *inner)?;
+			}
 			// Nothing to visit. Yet.
 			_ => {}
 		}
@@ -1430,11 +1484,11 @@ impl Db {
 					inf_writeln!(self.valty_define_code, "{} {{", cname);
 
 					if left.is_concrete() {
-						inf_writeln!(self.valty_define_code, "\t{} left",
+						inf_writeln!(self.valty_define_code, "\t{} left;",
 							self.get_ctype(*typ));
 					}
 					if right.is_concrete() {
-						inf_writeln!(self.valty_define_code, "\t{} right",
+						inf_writeln!(self.valty_define_code, "\t{} right;",
 							self.get_ctype(*typ));
 					}
 
