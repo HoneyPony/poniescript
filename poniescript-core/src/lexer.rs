@@ -370,15 +370,16 @@ impl Lexer {
 	fn number(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		while is_num(self.peek()) { self.advance(db)?; }
 
-		let ty = if self.peek() == '.' {
-			// Eat the dot
-			self.advance(db)?;
+		// No more dot. Numbers are now integers.
+		// let ty = if self.peek() == '.' {
+		// 	// Eat the dot
+		// 	self.advance(db)?;
 
-			while is_num(self.peek()) { self.advance(db)?; }
+		// 	while is_num(self.peek()) { self.advance(db)?; }
 
-			Tok::DecimalNumber
-		} else { Tok::WholeNumber };
-		return self.mk_token_res(db, ty);
+		// 	Tok::DecimalNumber
+		// } else { Tok::WholeNumber };
+		return self.mk_token_res(db, Tok::WholeNumber);
 	}
 
 	fn line_comment(&mut self, db: &mut Db) -> std::io::Result<()> {

@@ -354,15 +354,26 @@ impl<'b> Parser<'b> {
 	}
 
 	fn number(&mut self) -> Result<ExprId> {
-		let number = self.advance()?; // Eat numerical token... TODO expected! with multiple
+		let mut number = self.advance()?; // Eat numerical token... TODO expected! with multiple
+		let mut typ = Type::AssumeInt;
 		// types..?
 		//let number = expected!(self, Tok::Number, "number literal")?;
 
-		let typ = match number.typ {
-			Tok::DecimalNumber => Type::AssumeFloat,
-			Tok::WholeNumber => Type::AssumeInt,
-			_ => unreachable!()
-		};
+		// If we're at a single dot, followed by a number, we want to consume
+		// the dot and the number.
+		if self.match_(Tok::Dot)?.is_some() {
+			// If there's no number, that's also fine, e.g. 1. => 1.0.
+			// Find a tail if there is one.
+			let concat = match self.match_(Tok::WholeNumber)? {
+				Some(tail) => format!("{}.{}",
+					self.db.get(number.lexeme), self.db.get(tail.lexeme)),
+				None => format!("{}.0", self.db.get(number.lexeme))
+			};
+			// TODO: Maybe we should try to also change the location to include
+			// the whole span? This is fine for now...?
+			number.lexeme = self.db.put_str(&concat);
+			typ = Type::AssumeFloat;
+		}
 
 		return Expr::put_numliteral_ok(self.ast, number.location.clone(),
 			number,
