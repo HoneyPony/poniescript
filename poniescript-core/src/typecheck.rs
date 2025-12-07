@@ -1783,7 +1783,10 @@ impl<'db> TypeChecker<'db> {
 
 			Expr::ForLoop(for_) => {
 				// First, we check the iterable. This tells us how to desugar it.
-				let iterable = self.check_expr(ast, for_.iterator, true)?;
+				self.check_expr(ast, for_.iterator, true)?;
+				// We have to promote from unassigned, as this is where this value
+				// is used.
+				let iterable = self.promote_from_unassigned(ast, &mut for_.iterator);
 
 				let iter_ty = self.db.get(iterable);
 				match iter_ty {
@@ -1850,6 +1853,7 @@ impl<'db> TypeChecker<'db> {
 						drop(binding);
 						let mut binding = ast.get_expr_mut(expr_id);
 						*binding = Expr::Block(block);
+						drop(binding);
 						
 						return self.check_expr(ast, expr_id, value_used);
 					},
