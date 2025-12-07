@@ -15,36 +15,54 @@ struct HoverVisitor<'map> {
     id_to_url_map: &'map HashMap<SourceId, Url>
 }
 
-fn build_hover(title: &str, contents: &str) -> Hover {
-    Hover {
-        contents: HoverContents::Array(
-            vec![
-                MarkedString::LanguageString(LanguageString {
+fn build_hover(code: &str, doc: Option<&str>, range: Option<Range>) -> Hover {
+    match doc {
+        Some(doc) => {
+            Hover {
+                contents: HoverContents::Array(
+                    vec![
+                        MarkedString::LanguageString(LanguageString {
+                            language: "poniescript".to_string(),
+                            value: code.to_string()
+                        }),
+                        // Provide a horizontal rule before the documentation.
+                        MarkedString::String("---".into()),
+                        // This is markdown.
+                        MarkedString::String(doc.to_string())
+                    ]
+                ),
+                range
+            }
+        }
+        None => {
+            Hover {
+                contents: HoverContents::Scalar(MarkedString::LanguageString(LanguageString {
                     language: "poniescript".to_string(),
-                    value: title.to_string()
-                }),
-                MarkedString::String(contents.to_string())
-            ]
-        ),
-        range: None
+                    value: code.to_string()
+                })),
+                range
+            }
+        }
     }
+    
 }
 
 impl<'map> HoverVisitor<'map> {
-    fn build_hover(&mut self, title: &str, contents: &str) {
-        self.response = Some(build_hover(title, contents));
+    fn build_hover(&mut self, ast: &Ast, title: &str, doc: Option<&str>, range: Option<&SourceLocation>) {
+        let range = range.map(|r| convert_range(ast, r));
+        self.response = Some(build_hover(title, doc, range));
     }
 
-    fn hover_class(&mut self, ast: &Ast, db: &Db, class: ClassId) {
+    fn hover_class(&mut self, ast: &Ast, db: &Db, class: ClassId, range: Option<&SourceLocation>) {
         let class = db.get(class);
 
         let mut class_sig = String::new();
         inf_write!(class_sig, "class {}", db.get(class.name));
 
-        self.build_hover(&class_sig, "");
+        self.build_hover(ast, &class_sig, None, range);
     }
 
-    fn hover_fun(&mut self, ast: &Ast, db: &Db, fun: FunId) {
+    fn hover_fun(&mut self, ast: &Ast, db: &Db, fun: FunId, range: Option<&SourceLocation>) {
         // No unassigned funs...?
 
         let fun = db.get(fun);
@@ -73,16 +91,16 @@ impl<'map> HoverVisitor<'map> {
             inf_write!(fun_sig, " -> {}", db.repr_type(fun.return_type));
         }
 
-        self.build_hover(&fun_sig, "");
+        self.build_hover(ast, &fun_sig, None, range);
     }
 
-    fn hover_var(&mut self, ast: &Ast, db: &Db, var: VarId) {
+    fn hover_var(&mut self, ast: &Ast, db: &Db, var: VarId, range: Option<&SourceLocation>) {
         let var = db.get(var);
 
         let mut var_sig = String::new();
         inf_write!(var_sig, "var {}: {}", db.get(var.name), db.repr_type(var.typ));
 
-        self.build_hover(&var_sig, "");
+        self.build_hover(ast, &var_sig, None, range);
     }
 }
 
@@ -97,20 +115,20 @@ impl<'a> LocateAst for HoverVisitor<'a> {
         // TODO: We could just not even do an origin_selection_range here as the
         // default should be correct...?
         if cursor_on(_loc, &it.var_name) {
-            self.hover_var(ast, db, it.identity);
+            self.hover_var(ast, db, it.identity, Some(&it.var_name));
         }
     }
 
     fn locate_variable(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Variable) {
-        self.hover_var(ast, db, it.identity);
+        self.hover_var(ast, db, it.identity, Some(&it.location));
     }
 
     fn locate_get(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Get) {
-        self.hover_var(ast, db, it.var);
+        self.hover_var(ast, db, it.var, Some(&it.location));
     }
 
     fn locate_set(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Set) {
-        self.hover_var(ast, db, it.var);
+        self.hover_var(ast, db, it.var, Some(&it.identifier.location)); //?
     }
 
     fn locate_new(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &New) {
@@ -119,20 +137,45 @@ impl<'a> LocateAst for HoverVisitor<'a> {
             loc.offset,
             it.identifier.location.offset + it.identifier.location.length);
         if cursor_on(loc, &it.identifier.location) {
-            self.hover_class(ast, db, it.class);
+            self.hover_class(ast, db, it.class, Some(&it.identifier.location));
         }
     }
 
     fn locate_funcall(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCall) {
         if cursor_on(loc, &it.fn_name) {
-            self.hover_fun(ast, db, it.identity)
+            self.hover_fun(ast, db, it.identity, Some(&it.fn_name))
         }
     }
 
     fn locate_funcapture(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCapture) {
         if cursor_on(loc, &it.fn_name) {
-            self.hover_fun(ast, db, it.identity);
+            self.hover_fun(ast, db, it.identity, Some(&it.fn_name));
         }
+    }
+
+    fn locate_print(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &Print) {
+        self.build_hover(ast, "print(args: ...) -> <first>",
+Some("Prints out any series of expressions. Each expression is printed to the console
+in order. The print will be terminated by a newline.
+
+`print()` does not add any whitespace besides the terminating newline. If you wish
+to separate arguments, you should intersperse them manually. For example:
+```
+class Horse { name: StrBuf = \"Twilight\"; age: int = 30; }
+var horse = new Horse{};
+print(horse.name, \" \", horse.age); // prints \"Twilight 30\"
+```
+
+If you wish to convert a series of expressions into a `StrBuf`, use `str()` instead.
+
+### Returns
+print() always returns the result of its first argument. This allows you to
+intersperse print() with existing logic, such as:
+```poniescript
+if print(a > b) {
+    do_high_a_logic();
+}
+```"), Some(&it.location)); // TODO: Store only the print keyword location
     }
 }
 
