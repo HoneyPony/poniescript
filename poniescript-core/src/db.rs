@@ -336,9 +336,16 @@ pub struct Db {
 	/// synthesized for that tuple.
 	tuple_vars: FxHashMap<(u32, TypId), VarId>,
 
-	/// Maps RangeEnd-Type pairs to the associated variables synthesized for that
+	/// Maps End-Type pairs to the associated variables synthesized for that
 	/// Range type.
-	range_vars: FxHashMap<(RangeEnd, TypId), VarId>,
+	/// 
+	/// The boolean represents whether it's the left or right end of the range
+	/// (false left, true right).
+	/// 
+	/// Note that the key is keyed by *range* type, not by the inner type.
+	/// This is because different ranges with the same inner type have different
+	/// properties.
+	range_vars: FxHashMap<(bool, TypId), VarId>,
 
 	/// TODO: Maybe have only one declare/define code?
 
@@ -856,13 +863,14 @@ impl Db {
 		if left.is_concrete() {
 			let (_, var) = self.synthesize_property("left", "left",
 				*inner);
-			self.range_vars.insert((*left, *inner), var);
+			// Note that the type key has to be the range type.
+			self.range_vars.insert((false, range_ty), var);
 		}
 
 		if right.is_concrete() {
 			let (_, var) = self.synthesize_property("right", "right",
 				*inner);
-			self.range_vars.insert((*right, *inner), var);
+			self.range_vars.insert((true, range_ty), var);
 		}
 	}
 
@@ -1211,15 +1219,18 @@ impl Db {
 				// have been generated the first time we used the type.
 				self.tuple_vars.get(&(*which_prop, typs[*which_prop as usize])).copied()
 			}
-			Type::RangeOf(left, right, inner) => {
+			Type::RangeOf(..) => {
 				// If this particular Range type had these propreties, we would
 				// have generated them in use_rangeof, which happens the first
 				// time we used the type.
 				if propname == self.str_left {
-					return self.range_vars.get(&(*left, *inner)).copied();
+					// Note that it is important we use the *range* type (i.e.
+					// 'typ' here, not the inner type, because e.g. an OpenClosed[int]
+					// should have different properties than a ClosedInf[int]).
+					return self.range_vars.get(&(false, typ)).copied();
 				}
 				if propname == self.str_right {
-					return self.range_vars.get(&(*right, *inner)).copied();
+					return self.range_vars.get(&(true, typ)).copied();
 				}
 				return None;
 			}

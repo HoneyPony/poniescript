@@ -1,0 +1,17 @@
+fun ii(range: Closed[int])     -> int { range.left + range.right }
+fun ie(range: ClosedOpen[int]) -> int { range.left + range.right }
+fun ei(range: OpenClosed[int]) -> int { range.left + range.right }
+fun ee(range: Open[int])       -> int { range.left + range.right }
+
+fun iu(range: ClosedInf[int])  -> int { range.left }
+fun eu(range: OpenInf[int])    -> int { range.left }
+
+fun ui(range: InfClosed[int])  -> int { range.right }
+fun ue(range: InfOpen[int])    -> int { range.right }
+
+fun uu(range: Every[int])      -> int { 0 }
+
+fun init() {
+    //! success
+    print("success");
+}

@@ -369,6 +369,7 @@ pub fn generate(tests_file: &mut File) {
 		("unary/", "unary_vec"),
 
 		("range/", "basic_parse"),
+		("range/", "basic_parse_properties"),
 	];
 
 	let mut bt = BuiltTests {
