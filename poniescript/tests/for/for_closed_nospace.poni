@@ -1,0 +1,11 @@
+fun init() {
+    //! hi
+    //! hi
+    //! hi
+    //! hi
+    //! hi
+    //! hi
+    for i in 0..=5 {
+        print("hi");
+    }
+}

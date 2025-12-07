@@ -377,6 +377,10 @@ pub fn generate(tests_file: &mut File) {
 		("for/", "for_basic"),
 		("for/", "for_closed_i"),
 		("for/", "for_closed"),
+		("for/", "for_basic_i_nospace"),
+		("for/", "for_basic_nospace"),
+		("for/", "for_closed_i_nospace"),
+		("for/", "for_closed_nospace"),
 	];
 
 	let mut bt = BuiltTests {
