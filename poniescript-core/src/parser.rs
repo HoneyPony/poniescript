@@ -606,10 +606,11 @@ impl<'b> Parser<'b> {
 			got!(self, "'{{' after for loop iterable");
 		}
 
-		let inner = self.block()?;
-
-		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
-		
+		// Note that the var is added to the scope AFTER it is created, so it
+		// by nature can't refer to itself.
+		//
+		// For for loops, the variable must be in scope for the block, but not
+		// for the iterable.
 		let name_str = name.lexeme;
 		let name_loc = name.location.clone();
 		// When we create variables, don't set the class yet, as we don't
@@ -618,11 +619,12 @@ impl<'b> Parser<'b> {
 		//
 		// TODO: For classes, support variables that don't have an initializer?
 		let identity = self.db.new_var(name.lexeme, typ, None, None, true, None, name.location);
-
-		// Note that the var is added to the scope AFTER it is created, so it
-		// by nature can't refer to itself.
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
+		let inner = self.block()?;
+
+		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
+		
 		return Expr::put_forloop_ok(self.ast, self.end(location), name_loc, identity, iterable, has_explicit_type,
 			inner);
 	}
