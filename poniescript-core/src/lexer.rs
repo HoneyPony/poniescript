@@ -13,6 +13,11 @@ pub enum Tok {
 	LeftBrace, RightBrace,
 	LeftSquare, RightSquare,
 	Comma, Dot,
+
+	// Range types
+	// TODO: Also support DotDotLess, LessDotDot, LessDotDotEqual, etc? Might be
+	// unnecessary...
+	DotDot, DotDotEqual, EqualDotDot, EqualDotDotEqual,
 	
 	Minus, Plus, Slash, Star,
 	MinusEqual, PlusEqual, SlashEqual, StarEqual,
@@ -414,7 +419,19 @@ impl Lexer {
 			'[' => Tok::LeftSquare,
 			']' => Tok::RightSquare,
 			',' => Tok::Comma,
-			'.' => Tok::Dot,
+			'.' => {
+				if self.advance_if('.', db)? {
+					if self.advance_if('=', db)? {
+						Tok::DotDotEqual
+					}
+					else {
+						Tok::DotDot
+					}
+				}
+				else {
+					Tok::Dot
+				}
+			}
 
 			';' => Tok::Semicolon,
 			':' => Tok::Colon,
@@ -448,7 +465,30 @@ impl Lexer {
 			'*' => self.tok_eq(Tok::Star, Tok::StarEqual, db)?,
 
 			'!' => self.tok_eq(Tok::Bang, Tok::BangEqual, db)?,
-			'=' => self.tok_eq(Tok::Equal, Tok::EqualEqual, db)?,
+			'=' => {
+				if self.advance_if('=', db)? {
+					Tok::EqualEqual
+				}
+				else if self.advance_if('.', db)? {
+					if self.advance_if('.', db)? {
+						if self.advance_if('=', db)? {
+							Tok::EqualDotDotEqual
+						}
+						else {
+							Tok::EqualDotDot
+						}
+					}
+					else {
+						// TODO: Probably we want to handle some of this stuff
+						// in the parser, not the lexer.
+						self.error(db, "Invalid sequence '=.'".into());
+						return self.mk_token_res(db, Tok::Equal);
+					}
+				}
+				else {
+					Tok::Equal
+				}
+			}
 			'>' => self.tok_eq(Tok::Greater, Tok::GreaterEqual, db)?,
 			'<' => self.tok_eq(Tok::Less, Tok::LessEqual, db)?,
 
