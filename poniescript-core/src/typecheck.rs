@@ -179,6 +179,12 @@ impl<'db> TypeChecker<'db> {
 				let inner_promoted = self.promote_ty_from_unassigned(*inner);
 				self.db.put_type(Type::Option(inner_promoted))
 			}
+			Type::RangeOf(l, r, inner) => {
+				// Bindings for borrow checker
+				let l = *l; let r = *r;
+				let inner_promoted = self.promote_ty_from_unassigned(*inner);
+				self.db.put_type(Type::RangeOf(l, r, inner_promoted))
+			}
 			_ => ty
 		}
 	}
@@ -227,6 +233,19 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				return Ok(self.db.put_type(Type::Tuple(Arc::from(new_from))))
+			}
+
+			(Type::RangeOf(la, ra, left), Type::RangeOf(lb, rb, right)) => {
+				// Both ends of the range must be the same. We could eventually
+				// let e.g. int..=int be assignable to int..int, as there is
+				// a natural interpretation.
+				if *la != *lb { return Err(TypeComputeErr); }
+				if *ra != *rb { return Err(TypeComputeErr); }
+
+				let la = *la; let ra = *ra;
+
+				let inner = self.compute_assignable(*left, *right)?;
+				return Ok(self.db.put_type(Type::RangeOf(la, ra, inner)));
 			}
 
 			(Type::Option(lhs), Type::Option(rhs)) => {
@@ -392,6 +411,17 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				return Ok(self.db.put_type(Type::Tuple(Arc::from(inner))))
+			}
+
+			(Type::RangeOf(la, ra, left), Type::RangeOf(lb, rb, right)) => {
+				// Both ends of the range must be the same. We could eventually
+				// let e.g. int..=int be assignable to int..int, as there is
+				// a natural interpretation.
+				if la != lb { return Err(TypeComputeErr); }
+				if ra != rb { return Err(TypeComputeErr); }
+
+				let inner = self.compute_intersect(bottom_eats, left, right)?;
+				return Ok(self.db.put_type(Type::RangeOf(la, ra, inner)));
 			}
 
 			_ => return Err(TypeComputeErr)
