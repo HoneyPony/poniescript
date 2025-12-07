@@ -370,6 +370,8 @@ pub fn generate(tests_file: &mut File) {
 
 		("range/", "basic_parse"),
 		("range/", "basic_parse_properties"),
+		("range/", "basic_var"),
+		("range/", "two_main_types"),
 	];
 
 	let mut bt = BuiltTests {

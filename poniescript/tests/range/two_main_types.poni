@@ -1,0 +1,46 @@
+fun print_all1(range: ClosedOpen[int]) {
+    var i = range.left;
+    while i < range.right {
+        print(i);
+        i = i + 1;
+    }
+}
+
+fun print_all2(range: Closed[int]) {
+    var i = range.left;
+    while i <= range.right {
+        print(i);
+        i = i + 1;
+    }
+}
+
+fun init() {
+    //! 0
+    //! 1
+    //! 2
+    print_all1(0 .. 3);
+
+    //! 4
+    //! 5
+    //! 6
+    //! 7
+    //! 8
+    //! 9
+    print_all2(4 ..= 9);
+
+    var x = 23 .. 26;
+    //! 23
+    //! 24
+    //! 25
+    print_all1(x);
+
+    var y = 33 ..= 39;
+    //! 33
+    //! 34
+    //! 35
+    //! 36
+    //! 37
+    //! 38
+    //! 39
+    print_all2(y);
+}
