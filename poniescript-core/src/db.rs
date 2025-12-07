@@ -1420,6 +1420,26 @@ impl Db {
 
 					inf_writeln!(self.valty_define_code, "}};");
 				},
+				Type::RangeOf(left, right, typ) => {
+					let cname = self.range_cname_cache.get(ty).unwrap();
+
+					inf_writeln!(self.valty_declare_code, "{};", cname);
+
+					// TODO: We must sort all value types by the way that they are 
+					// used. This will also let us detect cycles in value types.
+					inf_writeln!(self.valty_define_code, "{} {{", cname);
+
+					if left.is_concrete() {
+						inf_writeln!(self.valty_define_code, "\t{} left",
+							self.get_ctype(*typ));
+					}
+					if right.is_concrete() {
+						inf_writeln!(self.valty_define_code, "\t{} right",
+							self.get_ctype(*typ));
+					}
+
+					inf_writeln!(self.valty_define_code, "}};");
+				}
 				// No other value types that need to be struct'd yet.
 				_ => {}
 			}

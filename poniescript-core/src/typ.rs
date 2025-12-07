@@ -9,6 +9,14 @@ pub enum RangeEnd {
 	Unbounded
 }
 
+impl RangeEnd {
+	/// Returns whether this RangeEnd is concrete, in the sense that it will
+	/// need to be stored as a variable.
+	pub fn is_concrete(&self) -> bool {
+		matches!(self, RangeEnd::Inclusive | RangeEnd::Exclusive)
+	}
+}
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum Type {
 	Int,

@@ -524,6 +524,14 @@ impl<'db> Binder<'db> {
 				}
 				return self.db.put_type(Type::Tuple(Arc::from(resolved)));
 			}
+			Type::RangeOf(left, right, inner_typ) => {
+				let inner = self.visit_type(inner_typ, location);
+				if inner != inner_typ {
+					return self.db.put_type(Type::RangeOf(left, right, inner));
+				}
+				// No change.
+				return typ;
+			}
 			Type::Option(inner_typ) => {
 				let inner = self.visit_type(inner_typ, location);
 				if inner != inner_typ {

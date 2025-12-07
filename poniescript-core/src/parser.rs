@@ -12,6 +12,7 @@ use crate::expr::*;
 use crate::error::Error;
 use crate::source::Source;
 use crate::source::SourceLocation;
+use crate::typ::RangeEnd;
 use crate::typ::Type;
 
 use crate::arena::IndexCell;
@@ -28,6 +29,59 @@ impl Scope {
 	}
 }
 
+struct RangeTypes {
+	key_ii: StrId,
+	key_ie: StrId,
+	key_ei: StrId,
+	key_ee: StrId,
+	key_iu: StrId,
+	key_eu: StrId,
+	key_ui: StrId,
+	key_ue: StrId,
+	key_uu: StrId,
+}
+
+impl RangeTypes {
+	pub fn build(db: &mut Db) -> Self {
+		Self {
+			key_ii: db.put_str("Closed"),
+			key_ie: db.put_str("ClosedOpen"),
+			key_ei: db.put_str("OpenClosed"),
+			key_ee: db.put_str("Open"),
+			key_iu: db.put_str("ClosedInf"),
+			key_eu: db.put_str("OpenInf"),
+			key_ui: db.put_str("InfClosed"),
+			key_ue: db.put_str("InfOpen"),
+			key_uu: db.put_str("Every"), // ?
+		}
+	}
+
+	pub fn is_any(&self, key: StrId) -> bool {
+		key == self.key_ii ||
+		key == self.key_ie ||
+		key == self.key_ei ||
+		key == self.key_ee ||
+		key == self.key_iu ||
+		key == self.key_eu ||
+		key == self.key_ui ||
+		key == self.key_ue ||
+		key == self.key_uu
+	}
+
+	pub fn into_type(&self, key: StrId, inner_typ: TypId) -> Type {
+		if key == self.key_ii { return Type::RangeOf(RangeEnd::Inclusive, RangeEnd::Inclusive, inner_typ); }
+		if key == self.key_ie { return Type::RangeOf(RangeEnd::Inclusive, RangeEnd::Exclusive, inner_typ); }
+		if key == self.key_ei { return Type::RangeOf(RangeEnd::Exclusive, RangeEnd::Inclusive, inner_typ); }
+		if key == self.key_ee { return Type::RangeOf(RangeEnd::Exclusive, RangeEnd::Exclusive, inner_typ); }
+		if key == self.key_iu { return Type::RangeOf(RangeEnd::Inclusive, RangeEnd::Unbounded, inner_typ); }
+		if key == self.key_eu { return Type::RangeOf(RangeEnd::Exclusive, RangeEnd::Unbounded, inner_typ); }
+		if key == self.key_ui { return Type::RangeOf(RangeEnd::Unbounded, RangeEnd::Inclusive, inner_typ); }
+		if key == self.key_ue { return Type::RangeOf(RangeEnd::Unbounded, RangeEnd::Exclusive, inner_typ); }
+		if key == self.key_uu { return Type::RangeOf(RangeEnd::Unbounded, RangeEnd::Unbounded, inner_typ); }
+		panic!("ICE: Called RangeTypes::into_type() when the key was not a valid Range type.")
+	}
+}
+
 pub struct Parser<'b> {
 	lexer: Lexer,
 	db: &'b mut Db,
@@ -37,6 +91,8 @@ pub struct Parser<'b> {
 
 	current: Token,
 	last_location: SourceLocation,
+
+	range_types: RangeTypes,
 
 	scopes: Vec<Scope>,
 	scope_name: String,
@@ -138,6 +194,8 @@ macro_rules! expected_after {
 
 impl<'b> Parser<'b> {
 	pub fn new(input: Box<dyn std::io::Read>, source_id: SourceId, db: &'b mut Db, ast: &'b mut Ast) -> std::io::Result<Self> {
+		// TODO: Technically we only need one of this, even with multiple parsers...
+		let range_types = RangeTypes::build(db);
 		let mut lexer = Lexer::new(input, source_id);
 
 		// TODO: Move File initialization to Lexer
@@ -152,6 +210,8 @@ impl<'b> Parser<'b> {
 			ast,
 
 			source_id,
+
+			range_types,
 
 			scopes: Vec::new(),
 			// TODO: Push and pop things from this name
@@ -961,6 +1021,16 @@ impl<'b> Parser<'b> {
 					expected!(self, Tok::RightSquare, "']' after inner type")?;
 
 					return Ok(self.db.put_type(Type::ArrayOf(inner)));
+				}
+
+				if self.range_types.is_any(tok.lexeme) {
+					expected!(self, Tok::LeftSquare, "'[' after '{}'", self.db.get(tok.lexeme))?;
+
+					let inner = self.typ()?;
+
+					expected!(self, Tok::RightSquare, "']' after inner type")?;
+
+					return Ok(self.db.put_type(self.range_types.into_type(tok.lexeme, inner)));
 				}
 
 				self.db.put_type(Type::UnboundIdent(tok.lexeme))

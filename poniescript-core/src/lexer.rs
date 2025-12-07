@@ -32,7 +32,7 @@ pub enum Tok {
 	Identifier, StringSimple, WholeNumber, DecimalNumber,
 
 	And, Class, Else, False, Fun, For, If, In, Null, Or,
-	Range, Return, Super, KeySelf, True, Using, Var, While,
+	Return, Super, KeySelf, True, Using, Var, While,
 	Loop, Break,
 
 	New,
@@ -70,7 +70,6 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {
 	add("in"    , Tok::In);
 	add("null"  , Tok::Null);
 	add("or"    , Tok::Or);
-	add("range" , Tok::Range);
 	add("return", Tok::Return);
 	add("super" , Tok::Super);
 	add("self"  , Tok::KeySelf);
