@@ -410,7 +410,7 @@ impl<'b> Parser<'b> {
 			// makes it easier to generate reasonable code in the common cases.
 			// I guess we don't have FunCalls that are on an object right now?
 			// Unsure...
-			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, location, ident.location, fun, args, None),
+			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, self.end(location), ident.location, fun, args, None),
 			ScopeEntry::Class(_) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), self.current.location.clone()));
 

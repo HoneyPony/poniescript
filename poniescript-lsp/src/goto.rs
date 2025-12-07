@@ -54,6 +54,16 @@ impl<'map> GotoDefinitionVisitor<'map> {
             &class.location);
     }
 
+    fn goto_fun(&mut self, ast: &Ast, db: &Db, fun: FunId, origin_selection_range: Option<&SourceLocation>) {
+        // No unassigned funs...?
+
+        let fun = db.get(fun);
+
+        self.set_link(ast, origin_selection_range,
+            &fun.location,
+            &fun.location);
+    }
+
     fn goto_var(&mut self, ast: &Ast, db: &Db, var: VarId, origin_selection_range: Option<&SourceLocation>) {
         if var == db.var_unassigned {
             return;
@@ -105,6 +115,18 @@ impl<'a> LocateAst for GotoDefinitionVisitor<'a> {
             it.identifier.location.offset + it.identifier.location.length);
         if cursor_on(loc, &it.identifier.location) {
             self.goto_class(ast, db, it.class, Some(&it.identifier.location));
+        }
+    }
+
+    fn locate_funcall(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCall) {
+        if cursor_on(loc, &it.fn_name) {
+            self.goto_fun(ast, db, it.identity, Some(&it.fn_name))
+        }
+    }
+
+    fn locate_funcapture(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCapture) {
+        if cursor_on(loc, &it.fn_name) {
+            self.goto_fun(ast, db, it.identity, Some(&it.fn_name));
         }
     }
 }
