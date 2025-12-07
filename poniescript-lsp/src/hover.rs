@@ -36,7 +36,12 @@ impl<'map> HoverVisitor<'map> {
     }
 
     fn hover_class(&mut self, ast: &Ast, db: &Db, class: ClassId) {
-        // TODO
+        let class = db.get(class);
+
+        let mut class_sig = String::new();
+        inf_write!(class_sig, "class {}", db.get(class.name));
+
+        self.build_hover(&class_sig, "");
     }
 
     fn hover_fun(&mut self, ast: &Ast, db: &Db, fun: FunId) {
@@ -55,7 +60,7 @@ impl<'map> HoverVisitor<'map> {
         let mut comma = false;
         for param in &fun.parameters {
             if comma { inf_write!(fun_sig, ", "); }
-            
+
             let param = db.get(*param);
             inf_write!(fun_sig, "{}: {}",
                 db.get(param.name), db.repr_type(param.typ));
@@ -72,7 +77,12 @@ impl<'map> HoverVisitor<'map> {
     }
 
     fn hover_var(&mut self, ast: &Ast, db: &Db, var: VarId) {
-       // TODO
+        let var = db.get(var);
+
+        let mut var_sig = String::new();
+        inf_write!(var_sig, "var {}: {}", db.get(var.name), db.repr_type(var.typ));
+
+        self.build_hover(&var_sig, "");
     }
 }
 
