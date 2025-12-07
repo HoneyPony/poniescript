@@ -843,10 +843,15 @@ impl<'b> Parser<'b> {
 			Tok::Less | Tok::LessEqual | Tok::Greater | 
 				Tok::GreaterEqual | Tok::EqualEqual | Tok::BangEqual => (7, 8),
 
-			Tok::Plus | Tok::Minus => (9, 10),
-			Tok::Star | Tok::Slash => (11, 12),
+			// The range-making operators should come below math so that you
+			// can do e.g. 1 + 2..3 * 4
+			Tok::DotDot | Tok::EqualDotDotEqual |
+				Tok::DotDotEqual | Tok::EqualDotDot => (9, 10),
 
-			Tok::Dot => (13, 14),
+			Tok::Plus | Tok::Minus => (11, 12),
+			Tok::Star | Tok::Slash => (13, 14),
+
+			Tok::Dot => (15, 16),
 
 			// Any other tokens should not be parsed as infix.
 			_ => (0, 0)
@@ -877,6 +882,37 @@ impl<'b> Parser<'b> {
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::put_binary_ok(self.ast, self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
 			},
+
+			typ @ (Tok::DotDot | Tok::DotDotEqual | Tok::EqualDotDot | Tok::EqualDotDotEqual) => {
+				let _op = self.advance()?;
+				let rhs = self.expr_precedence(cur_prec)?;
+
+				let left_end = match typ {
+					Tok::DotDot => RangeEnd::Inclusive,
+					Tok::DotDotEqual => RangeEnd::Inclusive,
+					// Oops.
+					Tok::EqualDotDot => RangeEnd::Inclusive,
+					Tok::EqualDotDotEqual => RangeEnd::Inclusive,
+					_ => unreachable!()
+				};
+
+				let right_end = match typ {
+					Tok::DotDot => RangeEnd::Exclusive,
+					Tok::DotDotEqual => RangeEnd::Inclusive,
+					Tok::EqualDotDot => RangeEnd::Exclusive,
+					Tok::EqualDotDotEqual => RangeEnd::Inclusive,
+					_ => unreachable!()
+				};
+
+				// Note that for the unbounded ranges, we will need
+				// both AST support and parser support. The AST will need
+				// to have e.g. Optional exprs, and then the parser will need
+				// to be able to find terminating expressions on the RHS
+				// of a .., e.g. ..), ..], ..}, ..;, and so forth.
+
+				return Expr::put_makerange_ok(self.ast, self.end(location),
+					 lhs, rhs, left_end, right_end, self.db.types.unassigned);
+			}
 
 			Tok::Less | Tok::LessEqual | Tok::Greater | 
 				Tok::GreaterEqual | Tok::EqualEqual | Tok::BangEqual => {

@@ -17,6 +17,8 @@ pub enum Tok {
 	// Range types
 	// TODO: Also support DotDotLess, LessDotDot, LessDotDotEqual, etc? Might be
 	// unnecessary...
+	//
+	// Also, EqualDotDot and EqualDotDotEqual are actually the wrong ones. Whoops!
 	DotDot, DotDotEqual, EqualDotDot, EqualDotDotEqual,
 	
 	Minus, Plus, Slash, Star,
