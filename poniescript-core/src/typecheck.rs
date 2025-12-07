@@ -5,7 +5,7 @@ use crate::db::*;
 use crate::lexer::{Tok, Token};
 use crate::module::Module;
 use crate::source::SourceLocation;
-use crate::typ::Type;
+use crate::typ::{RangeEnd, Type};
 
 use crate::expr::*;
 use crate::error::Error;
@@ -1791,6 +1791,7 @@ impl<'db> TypeChecker<'db> {
 				let iter_ty = self.db.get(iterable);
 				match iter_ty {
 					Type::RangeOf(a, b, typ) if *typ == self.db.types.int => {
+						let a = *a; let b = *b;
 						// Desugar the for loop into the following:
 						// var <var> = <start>
 						// while <var> < <end> {
@@ -1832,9 +1833,14 @@ impl<'db> TypeChecker<'db> {
 						let read = Expr::push_variable(ast, for_.location.clone(),
 							for_.identity);
 
-						// TODO: This will switch around based on the range end type.
+						// Switch comparison based on the range type.
+						let compare_type = match b {
+							RangeEnd::Inclusive => Tok::LessEqual,
+							RangeEnd::Exclusive => Tok::Less,
+							RangeEnd::Unbounded => todo!(),
+						};
 						let comparison = Expr::push_comparison(ast, for_.location.clone(),
-							Tok::Less, read, rhs, self.db.types.int);
+							compare_type, read, rhs, self.db.types.int);
 
 						let while_loop = Expr::push_whileloop(ast, for_.location.clone(),
 							comparison, inner_block, self.db.types.void, Vec::new());
@@ -1854,7 +1860,7 @@ impl<'db> TypeChecker<'db> {
 						let mut binding = ast.get_expr_mut(expr_id);
 						*binding = Expr::Block(block);
 						drop(binding);
-						
+
 						return self.check_expr(ast, expr_id, value_used);
 					},
 					_ => {
