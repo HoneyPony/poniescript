@@ -270,6 +270,7 @@ impl<'b> Parser<'b> {
 	}
 
 	fn scope_put_entry(&mut self, name: StrId, entry: ScopeEntry) {
+		log::trace!("scope: put entry with name {}", self.db.get(name));
 		match self.scopes.last_mut() {
 			Some(last) => {
 				// For local scopes, it is OK to redefine the name with a new
@@ -601,7 +602,9 @@ impl<'b> Parser<'b> {
 
 		let iterable = self.expression()?;
 
-		expected!(self, Tok::LeftBrace, "'{{' after for loop range")?;
+		if !self.at(Tok::LeftBrace) {
+			got!(self, "'{{' after for loop iterable");
+		}
 
 		let inner = self.block()?;
 
