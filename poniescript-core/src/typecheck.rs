@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use crate::db::*;
-use crate::lexer::Token;
+use crate::lexer::{Tok, Token};
 use crate::module::Module;
 use crate::source::SourceLocation;
 use crate::typ::Type;
@@ -1800,7 +1800,58 @@ impl<'db> TypeChecker<'db> {
 						let declare = Stmt::push_declare(ast, for_.location.clone(),
 							for_.ident.clone(), for_.identity, initializer, for_.has_explicit_type);
 						
-						self.check_expr(ast, expr_id, value_used)?
+						let read = Expr::push_variable(ast, for_.location.clone(),
+							for_.identity);
+						let one = Expr::push_numliteral(ast, for_.location.clone(),
+							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
+							self.db.types.int);
+						let add = Expr::push_binary(ast, for_.location.clone(),
+							Tok::Plus, read, one, self.db.types.int);
+						let assign = Expr::push_assign(ast, for_.location.clone(),
+							self.db.srcloc_dummy(), for_.identity, add);
+
+						let inner_stmt = Stmt::push_expression(ast, for_.location.clone(),
+							for_.inner);
+						let assign_stmt = Stmt::push_expression(ast, for_.location.clone(),
+							assign);
+							
+						// AWKWARD/TODO: Once we care about the value of the while block,
+						// this is not going to be it...?
+						let inner_block = Expr::push_block(ast, for_.location.clone(),
+							vec![inner_stmt, assign_stmt], self.db.types.void);
+
+						// Rhs of the comparison.
+						let rhs = Expr::push_get(ast, for_.location.clone(),
+							Token::synthesize_ident_from(self.db, "right"),
+							for_.iterator, self.db.get_range_right(iterable));
+						// TODO: Can we re-used the read above? For now, synthesize
+						// two nodes.
+						let read = Expr::push_variable(ast, for_.location.clone(),
+							for_.identity);
+
+						// TODO: This will switch around based on the range end type.
+						let comparison = Expr::push_comparison(ast, for_.location.clone(),
+							Tok::Less, read, rhs, self.db.types.int);
+
+						let while_loop = Expr::push_whileloop(ast, for_.location.clone(),
+							comparison, inner_block, self.db.types.void, Vec::new());
+						
+						let while_stmt = Stmt::push_expression(ast, for_.location.clone(),
+							while_loop);
+						
+						let block = Block {
+							location: for_.location.clone(),
+							stmts: vec![declare, while_stmt],
+							typ: self.db.types.void,
+						};
+
+						// Now, drop the binding, modify ourselves to be the
+						// new block, and re-check it.
+						drop(binding);
+						let mut binding = ast.get_expr_mut(expr_id);
+						*binding = Expr::Block(block);
+						
+						return self.check_expr(ast, expr_id, value_used);
 					},
 					_ => {
 						type_error!(self,

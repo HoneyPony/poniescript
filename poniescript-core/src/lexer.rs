@@ -75,6 +75,23 @@ impl Token {
 		let str = db.put_str(str);
 		Token::synthesize_ident(db, str)
 	}
+
+	pub fn synth_tok(db: &Db, str: StrId, typ: Tok) -> Token {
+		Token {
+			typ,
+			lexeme: str,
+			location: SourceLocation {
+				source: db.synthetic,
+				offset: 0,
+				length: 0,
+			}
+		}
+	}
+
+	pub fn synth_tok_from(db: &mut Db, str: &'static str, typ: Tok) -> Token {
+		let str = db.put_str(str);
+		Token::synth_tok(db, str, typ)
+	}
 }
 
 pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {

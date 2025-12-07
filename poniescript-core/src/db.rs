@@ -874,6 +874,10 @@ impl Db {
 		}
 	}
 
+	pub fn srcloc_dummy(&self) -> SourceLocation {
+		SourceLocation { source: self.synthetic, offset: 0, length: 0 }
+	}
+
 	/// Gets the VarId representing the 'left' property on a Range.
 	pub fn get_range_left(&self, range_ty: TypId) -> VarId {
 		self.range_vars.get(&(false, range_ty)).copied().unwrap()
