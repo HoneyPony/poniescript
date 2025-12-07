@@ -487,6 +487,21 @@ impl<'db> TypeChecker<'db> {
 				self.do_promote_expr(ast, &mut binary.left, binary.typ);
 				self.do_promote_expr(ast, &mut binary.right, binary.typ);
 			},
+			Expr::MakeRange(range) => {
+				if self.db.is_not_concrete(range.typ) {
+					// Ensure that we are actually getting a range type
+					assert!(matches!(self.db.get(promote_to), Type::RangeOf(..)));
+					range.typ = promote_to;
+				}
+
+				let inner = *match self.db.get(range.typ) {
+					Type::RangeOf(.., typ) => typ,
+					_ => panic!("ICE: MakeRange promotion has non-range type"),
+				};
+
+				self.do_promote_expr(ast, &mut range.left, inner);
+				self.do_promote_expr(ast, &mut range.right, inner);
+			}
 			Expr::Unary(unary) => {
 				if self.db.is_not_concrete(unary.typ) {
 					unary.typ = promote_to;
@@ -783,6 +798,29 @@ impl<'db> TypeChecker<'db> {
 				
 				computed
 			},
+
+			Expr::MakeRange(range) => {
+				let left = self.check_expr(ast, range.left, true)?;
+				let right = self.check_expr(ast, range.right, true)?;
+
+				let computed = maybe_type_error!(
+					self,
+					self.compute_intersect(true, left, right),
+
+					&range.location,
+					"Invalid operands for range: LHS is {}, RHS is {}",
+					self.db.repr_type(left),
+					self.db.repr_type(right)
+				);
+
+				// PROMOTION: occurs in promote_expr
+
+				range.typ = self.db.put_type(Type::RangeOf(range.left_end,
+					range.right_end, computed));
+
+				range.typ
+			}
+
 			Expr::Unary(unary) => {
 				let inner = self.check_expr(ast, unary.inner, value_used)?;
 				

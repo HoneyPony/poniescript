@@ -1941,6 +1941,27 @@ impl<'a> Codegen<'a> {
 				val
 			}
 
+			Expr::MakeRange(range) => {
+				let val = self.new_val_typed_tmp(range.typ);
+
+				define_val!(self, into, val, ";\n");
+				if val.needs_storage() {
+					// Hmm. The ast is going to be a bit weird here, as really
+					// we need an Option<> on each end which tells us whether
+					// it's unbounded. That will have to wait a minute.
+					if range.left_end.is_concrete() {
+						let left = self.expr(ast, range.left, into);
+						inf_writeln!(into, "{}{}.left = {};", indent, val, left);
+					}
+					if range.right_end.is_concrete() {
+						let left = self.expr(ast, range.left, into);
+						inf_writeln!(into, "{}{}.right = {};", indent, val, left);
+					}
+				}
+
+				self.tmp_to_used_val(val)
+			}
+
 			Expr::MakeTuple(tuple) => {
 				let Type::Tuple(subtypes) = self.db.get(tuple.typ) else { unreachable!() };
 

@@ -345,6 +345,10 @@ impl<'db> DeadCodeElim<'db> {
                 elim_sequence!(self, ast, expr,
                     MakeTuple, values)
             }
+            Expr::MakeRange(make_range) => {
+                // TODO eliminate...
+                false
+            }
 
             Expr::Break(break_) => {
                 if let Some(inner) = &mut break_.value {

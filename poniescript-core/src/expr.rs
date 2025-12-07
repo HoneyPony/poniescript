@@ -4,6 +4,7 @@ use rustc_hash::FxHashMap;
 
 use crate::arena::ArenaKey;
 use crate::{db::*, lexer::Token};
+use crate::typ::RangeEnd;
 use crate::source::SourceLocation;
 use crate::lexer::Tok;
 
@@ -134,6 +135,7 @@ impl Expr {
 			Expr::Index(index) => index.typ,
 			Expr::SetIndex(set) => set.typ,
 			Expr::MakeTuple(make_tuple) => make_tuple.typ,
+			Expr::MakeRange(make_range) => make_range.typ,
 			Expr::Promote(promote) => promote.promote_to,
 			Expr::Lerp(lerp) => lerp.typ,
 			Expr::MakeSumType(sum) => sum.typ,

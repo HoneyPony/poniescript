@@ -387,6 +387,12 @@ impl<'db> Binder<'db> {
 				return None;
 			}
 
+			Expr::MakeRange(make_range) => {
+				self.visit_expr(ast, make_range.left);
+				self.visit_expr(ast, make_range.right);
+				return None;
+			}
+
 			Expr::MakeSumType(_sum) => {
 				// Currently nothing to do. This will change...
 				return None;
