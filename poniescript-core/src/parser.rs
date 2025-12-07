@@ -581,6 +581,49 @@ impl<'b> Parser<'b> {
 			self.db.types.unassigned, Vec::new())
 	}
 
+	fn expr_for(&mut self) -> Result<ExprId> {
+		let location = self.start();
+		let key_for = expected!(self, Tok::For, "'for'")?;
+
+		let name = expected_after!(self, Tok::Identifier, key_for,
+			"variable name")?;
+
+		let mut typ = self.db.types.unassigned;
+		let mut has_explicit_type = false;
+
+		if self.match_(Tok::Colon)?.is_some() {
+			typ = self.typ()?;
+			has_explicit_type = true;
+		}
+
+		// TODO: This should be after the typ if we see a type declaration...
+		expected_after!(self, Tok::In, name, "'in' in for loop")?;
+
+		let iterable = self.expression()?;
+
+		expected!(self, Tok::LeftBrace, "'{{' after for loop range")?;
+
+		let inner = self.block()?;
+
+		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
+		
+		let name_str = name.lexeme;
+		let name_loc = name.location.clone();
+		// When we create variables, don't set the class yet, as we don't
+		// know what it is -- we wire it back in once we're done parsing a 
+		// class.
+		//
+		// TODO: For classes, support variables that don't have an initializer?
+		let identity = self.db.new_var(name.lexeme, typ, None, None, true, None, name.location);
+
+		// Note that the var is added to the scope AFTER it is created, so it
+		// by nature can't refer to itself.
+		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
+
+		return Expr::put_forloop_ok(self.ast, self.end(location), name_loc, identity, iterable, has_explicit_type,
+			inner);
+	}
+
 	fn expr_prefix_callable(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
 			Tok::LeftBrace => self.block(),
@@ -618,6 +661,7 @@ impl<'b> Parser<'b> {
 			Tok::If => self.expr_if(),
 			Tok::Loop => self.expr_loop(),
 			Tok::While => self.expr_while(),
+			Tok::For => self.expr_for(),
 
 			Tok::StringSimple => {
 				let lit = self.advance()?;
@@ -693,7 +737,7 @@ impl<'b> Parser<'b> {
 
 	fn expr_prefix(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
-			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::While | Tok::Fun | Tok::StringSimple => {
+			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::While | Tok::For | Tok::Fun | Tok::StringSimple => {
 				let location = self.start();
 				let mut inner = self.expr_prefix_callable()?;
 
