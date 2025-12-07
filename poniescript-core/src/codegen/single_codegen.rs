@@ -1954,8 +1954,8 @@ impl<'a> Codegen<'a> {
 						inf_writeln!(into, "{}{}.left = {};", indent, val, left);
 					}
 					if range.right_end.is_concrete() {
-						let left = self.expr(ast, range.left, into);
-						inf_writeln!(into, "{}{}.right = {};", indent, val, left);
+						let right = self.expr(ast, range.right, into);
+						inf_writeln!(into, "{}{}.right = {};", indent, val, right);
 					}
 				}
 
