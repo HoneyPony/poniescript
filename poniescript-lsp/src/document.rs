@@ -126,7 +126,7 @@ pub struct Document {
 pub struct ProjectCache {
     pub db: Db,
     pub ast: Ast,
-    diagnostics: Diagnostics,
+    pub diagnostics: Option<Diagnostics>,
 
      /// Maps SourceId's in this Project back to associated Urls.
     pub id_to_url_map: HashMap<SourceId, Url>,
@@ -219,7 +219,7 @@ impl Project {
         let cache = Arc::new(Mutex::new(ProjectCache {
             db,
             ast,
-            diagnostics: err,
+            diagnostics: Some(err),
             id_to_url_map,
             url_to_id_map,
         }));
@@ -263,7 +263,7 @@ impl DocumentStore {
         }
     }
 
-    pub fn update(&mut self, url: Url, text: String) {
+    pub fn update(&mut self, url: &Url, text: String) {
         let doc = self.documents.entry(url.clone())
             .or_insert_with(|| {
                 // For now, if we are getting a new Document, also create a new
@@ -312,12 +312,13 @@ impl DocumentStore {
         return Some(self.inlay_hints.get(&url).unwrap())
     }
 
-    pub fn steal_diagnostics(&mut self) -> Diagnostics {
-        //self.get_cached_stuff();
-        //let diagnostics = std::mem::replace(&mut self.cached_stuff.as_mut().unwrap().2, Diagnostics { all: vec![] });
-        //diagnostics
+    pub fn steal_diagnostics(&mut self, url: &Url) -> Option<Diagnostics> {
+         let Some(project) = self.projects.get(url) else {
+            return None;
+        };
+        let cache = project.get_cache(self);
+        let mut cache = cache.lock().unwrap();
 
-        // TODO: Reimplmement diagnostics
-        Diagnostics { all: vec![] }
+        cache.diagnostics.take()
     }
 }

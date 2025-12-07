@@ -312,7 +312,7 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri;
         let text = params.text_document.text;
 
-        self.store.lock().await.update(uri, text);
+        self.store.lock().await.update(&uri, text);
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -321,14 +321,16 @@ impl LanguageServer for Backend {
             let text = change.text;
 
             let mut lock = self.store.lock().await;
-            lock.update(uri, text);
+            lock.update(&uri, text);
 
-            let diag = lock.steal_diagnostics();
+            let diag = lock.steal_diagnostics(&uri);
             drop(lock);
 
-            for diag in diag.all {
-                self.client.publish_diagnostics(diag.0, diag.1, None).await;
-            }   
+            if let Some(diag) = diag {
+                for diag in diag.all {
+                    self.client.publish_diagnostics(diag.0, diag.1, None).await;
+                }
+            }
         }
     }
 
