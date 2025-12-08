@@ -1809,6 +1809,7 @@ impl<'a> Codegen<'a> {
 					Type::DynArrayOf(_, arr_ty) => {
 						
 						let buf_val = self.new_val_typed_tmp(*arr_ty);
+						define_val!(self, into, buf_val, ";\n");
 						define_val!(self, into, val, "; PONI_INIT_DYNARRAY({}, {}, sizeof({}), {}, {}, {})\n",
 							buf_val,
 							val,
