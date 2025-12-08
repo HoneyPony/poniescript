@@ -1191,7 +1191,7 @@ impl Db {
 			Type::Bottom => 0,
 			Type::Class(_) => 1,
 			Type::ArrayOf(_) => 1,
-			Type::DynArrayOf(_) => 1,
+			Type::DynArrayOf(..) => 1,
 			Type::Tuple(typ_ids) => {
 				// TODO: Given that we have to call this function for every
 				// single tuple Val that we create, we really should probably
@@ -1412,7 +1412,7 @@ impl Db {
 				// All arrays use the same tag.
 				Type::ArrayOf(_) => { self.tag_cname_cache.insert(typ, "PONI_TAG_ARRAY"); },
 				// All dynamic arrays use the same tag. (?)
-				Type::DynArrayOf(_) => { self.tag_cname_cache.insert(typ, "PONI_TAG_DYNARRAY"); },
+				Type::DynArrayOf(..) => { self.tag_cname_cache.insert(typ, "PONI_TAG_DYNARRAY"); },
 
 				Type::Fun(_) | Type::Class(_) => {
 					// This is very sad, but for now we'll just make their name

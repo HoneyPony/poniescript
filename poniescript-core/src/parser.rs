@@ -1119,6 +1119,17 @@ impl<'b> Parser<'b> {
 					return Ok(self.db.put_type(Type::ArrayOf(inner)));
 				}
 
+				if tok.lexeme == self.db.put_str("DynArray") {
+					expected!(self, Tok::LeftSquare, "'[' after 'DynArray'")?;
+
+					let inner = self.typ()?;
+
+					expected!(self, Tok::RightSquare, "']' after inner type")?;
+
+					let arr_ty = self.db.put_type(Type::ArrayOf(inner));
+					return Ok(self.db.put_type(Type::DynArrayOf(inner, arr_ty)));
+				}
+
 				if self.range_types.is_any(tok.lexeme) {
 					expected!(self, Tok::LeftSquare, "'[' after '{}'", self.db.get(tok.lexeme))?;
 

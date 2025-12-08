@@ -498,7 +498,7 @@ impl<'a> Codegen<'a> {
 			Type::Int | Type::Float | Type::Bool | Type::Void => {}
 			Type::StrConst => {}
 
-			Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(_) => {
+			Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(..) => {
 				slots.push(self.gc_frame.allocate_slot(prefix.to_string()));
 			}
 
@@ -980,7 +980,7 @@ impl<'a> Codegen<'a> {
 			
 			Type::Option(_) => todo!("print() for Option"),
 			Type::ArrayOf(_) => todo!("print() for Array"),
-			Type::DynArrayOf(_) => todo!("print() for DynArray"),
+			Type::DynArrayOf(..) => todo!("print() for DynArray"),
 			Type::RangeOf(..) => todo!("print() for RangeOf"),
 			Type::Tuple(tup) => {
 				inf_writeln!(into, "{}ps_print_const(\"(\");", indent);
@@ -1042,7 +1042,7 @@ impl<'a> Codegen<'a> {
 			Type::FunRaw(_) => todo!("str() for FunRaw"),
 			Type::Class(_) => todo!("str() for Class"),
 			Type::ArrayOf(_) => todo!("str() for Array"),
-			Type::DynArrayOf(_) => todo!("str() for DynArray"),
+			Type::DynArrayOf(..) => todo!("str() for DynArray"),
 			Type::Tuple(_) => todo!("str() for Tuple"),
 			Type::RangeOf(..) => todo!("str() for RangeOf"),
 			Type::Option(_) => todo!("str() for Option"),
@@ -1805,25 +1805,59 @@ impl<'a> Codegen<'a> {
 			Expr::ArrayLit(lit) => {
 				let val = self.new_val_typed_tmp(lit.arr_typ);
 
-				define_val!(self, into, val, "; PONI_INIT_ARRAY({}, sizeof({}), {}, {})\n",
-					val,
-					self.db.get_ctype(lit.elem_typ),
-					lit.values.len(),
-					self.db.get_type_ctag(lit.elem_typ));
+				match self.db.get(lit.arr_typ) {
+					Type::DynArrayOf(_, arr_ty) => {
+						
+						let buf_val = self.new_val_typed_tmp(*arr_ty);
+						define_val!(self, into, val, "; PONI_INIT_DYNARRAY({}, {}, sizeof({}), {}, {}, {})\n",
+							buf_val,
+							val,
+							self.db.get_ctype(lit.elem_typ),
+							// TODO: Allocate a number for the buffer that's a power
+							// of two?
+							lit.values.len(), // elem_cnt
+							lit.values.len(), // real_cnt
+							self.db.get_type_ctag(lit.elem_typ));
+						
+						// TODO: Move this duplicated code to a closure somehow?
+						// So far it isn't possible.
+						if buf_val.needs_storage() {
+							let mut idx = 0;
+							for value in &lit.values {
+								let nth = self.expr(ast, *value, into);
+								assert!(nth.typ == lit.elem_typ);
+								inf_writeln!(into, "{}{}->contents[{}] = {};",
+									indent, buf_val.val, idx, nth);
 
-				if val.needs_storage() {
-					let mut idx = 0;
-					for value in &lit.values {
-						let nth = self.expr(ast, *value, into);
-						assert!(nth.typ == lit.elem_typ);
-						inf_writeln!(into, "{}{}->contents[{}] = {};",
-							indent, val.val, idx, nth);
+								idx += 1;
+							}
+						}
 
-						idx += 1;
+						self.tmp_to_used_val(buf_val);
+						self.tmp_to_used_val(val)
+					},
+					_ => {
+						define_val!(self, into, val, "; PONI_INIT_ARRAY({}, sizeof({}), {}, {})\n",
+							val,
+							self.db.get_ctype(lit.elem_typ),
+							lit.values.len(),
+							self.db.get_type_ctag(lit.elem_typ));
+
+						if val.needs_storage() {
+							let mut idx = 0;
+							for value in &lit.values {
+								let nth = self.expr(ast, *value, into);
+								assert!(nth.typ == lit.elem_typ);
+								inf_writeln!(into, "{}{}->contents[{}] = {};",
+									indent, val.val, idx, nth);
+
+								idx += 1;
+							}
+						}
+
+						self.tmp_to_used_val(val)
 					}
-				}
-
-				self.tmp_to_used_val(val)
+				}			
 			}
 
 			Expr::SelfVal(selfval) => {

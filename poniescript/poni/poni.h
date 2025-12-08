@@ -285,6 +285,15 @@ struct ps_dynarray_header {
 	arr->header.length = elem_cnt; \
 	arr->header.type   = elem_tag;
 
+#define PONI_INIT_DYNARRAY(inner_arr, arr, elem_sz, elem_cnt, real_cnt, elem_tag) \
+	inner_arr = poni_gc_alloc_tagged(ctx, sizeof(struct ps_array_header) + elem_sz * elem_cnt, PONI_TAG_ARRAY); \
+	inner_arr->header.length = elem_cnt; \
+	inner_arr->header.type   = elem_tag; \
+	arr = poni_gc_alloc_tagged(ctx, sizeof(struct ps_dynarray_header), PONI_TAG_DYNARRAY); \
+	arr->header.length = real_cnt; \
+	arr->header.typ    = elem_tag; \
+	arr->header.buffer = inner_arr;
+
 static inline
 PONI_NORETURN void
 ps_fatal_error(const char *message) {

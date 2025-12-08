@@ -144,7 +144,7 @@ poni_get_type_stride(uint64_t tag) {
 				Type::Void | Type::Bottom => { continue; }
 
 				// Already done
-				Type::StrConst | Type::StrBuf | Type::Str | Type::ArrayOf(_) | Type::DynArrayOf(_) => { continue; }
+				Type::StrConst | Type::StrBuf | Type::Str | Type::ArrayOf(_) | Type::DynArrayOf(..) => { continue; }
 
 				// Build up one big set of pointer types.
 				Type::Class(_) => {
@@ -350,13 +350,13 @@ poni_gc_get_allocation_size(void *object) {
 								// they can't be deallocated.
 							}
 
-							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(_) => {
+							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(..) => {
 								inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->{});", self.db.get_cname(*field));
 							}
 
 							Type::Option(id) => {
 								match self.db.get(*id) {
-									Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(_) => {
+									Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(..) => {
 										inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->{});", self.db.get_cname(*field));
 									},
 									_ => todo!()
@@ -395,7 +395,7 @@ poni_gc_get_allocation_size(void *object) {
 								// they can't be deallocated.
 							}
 
-							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(_) => {
+							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(..) => {
 								inf_writeln!(valuetype, "\t\tponi_gc_mark(gc, self->v_{});", idx);
 							}
 
