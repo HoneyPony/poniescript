@@ -461,6 +461,17 @@ impl<'db> TypeChecker<'db> {
 	/// 
 	/// Note that it does contain the main "meat" of the do_promote_expr function.
 	fn really_do_promote_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId, promote_to: TypId) {
+		// No need to promote if we're already the right type. (?)
+		//
+		// NOTE: Uncommenting this code results in a bunch of failing tests.
+		// That's weird. I think though it's probably because we aren't pushing
+		// the promotions down the tree (we must call promote_expr on every
+		// node exactly once). I guess the solution is to let Expr::Promote
+		// be promoted.
+		// if ast.get_expr(*expr_id).typ(ast, &self.db) == promote_to {
+		// 	return;
+		// }
+
 		// First, we visit the child expr with promote_expr.
 		self.promote_expr(ast, *expr_id, promote_to);
 
@@ -696,14 +707,20 @@ impl<'db> TypeChecker<'db> {
 					self.do_promote_expr(ast, expr, *typ);
 				}
 			},
-			Expr::Promote(_) => {
+			Expr::Promote(promote) => {
 				// If we hit this, it means we're re-writing an earlier promote
 				// with a different one.
 				//
 				// I'm actually not sure if that is a valid thing to do.
 				//
-				// Let's try panicing and see what happens.
-				panic!("ICE: promote_expr(Promote)")
+				// For now, we will just let the promote_to change. In the
+				// future, we need to probably re-check that the promotion is
+				// valid.
+				log::trace!("promote Expr::Promote from {} to {} (inner is {})",
+					self.db.repr_type(promote.promote_to), self.db.repr_type(promote_to),
+					self.db.repr_type(promote.inner.typ(ast, self.db)));
+					
+				promote.promote_to = promote_to;
 			},
 			Expr::MakeSumType(sum) => {
 				// Pretend that in the future, Type::Option will be used for
