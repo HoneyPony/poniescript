@@ -244,7 +244,9 @@ pub struct Db {
 	sig_cgenerated: FxHashMap<SigId, bool>,
 
 	array_cname_cache: FxHashMap<TypId, &'static str>,
+	dyn_array_cname_cache: FxHashMap<TypId, &'static str>,
 	array_used: Vec<TypId>,
+	dynarray_used: Vec<TypId>,
 	//array_cgenerated: FxHashMap<TypId, bool>,
 
 	str_simple_const_map: FxHashMap<String, StrConstId>,
@@ -382,7 +384,9 @@ impl Db {
 			sig_cgenerated: FxHashMap::default(),
 
 			array_cname_cache: FxHashMap::default(),
+			dyn_array_cname_cache: FxHashMap::default(),
 			array_used: Vec::new(),
+			dynarray_used: Vec::new(),
 
 			str_simple_const_map: FxHashMap::default(),
 
@@ -822,6 +826,12 @@ impl Db {
 		}
 	}
 
+	fn use_dynarray(&mut self, elem_ty: TypId) {
+		if self.is_cgen_safe(elem_ty) {
+			self.dynarray_used.push(elem_ty);
+		}
+	}
+
 	fn use_tuple(&mut self, inner: &Arc<[TypId]>, tuple_ty: TypId) {
 		if !self.is_cgen_safe(tuple_ty) { return; }
 
@@ -907,6 +917,18 @@ impl Db {
 		let name = format!("struct ps_arr_{}*", inner_ty.0);
 		let name = name.leak();
 		self.array_cname_cache.insert(inner_ty, name);
+
+		name
+	}
+
+	pub fn gen_dynarray_ctype(&mut self, inner_ty: TypId) -> &'static str {
+		if let Some(existing) = self.dyn_array_cname_cache.get(&inner_ty) {
+			return existing;
+		}
+
+		let name = format!("struct ps_dynarr_{}*", inner_ty.0);
+		let name = name.leak();
+		self.dyn_array_cname_cache.insert(inner_ty, name);
 
 		name
 	}
@@ -1169,6 +1191,7 @@ impl Db {
 			Type::Bottom => 0,
 			Type::Class(_) => 1,
 			Type::ArrayOf(_) => 1,
+			Type::DynArrayOf(_) => 1,
 			Type::Tuple(typ_ids) => {
 				// TODO: Given that we have to call this function for every
 				// single tuple Val that we create, we really should probably
@@ -1388,6 +1411,8 @@ impl Db {
 
 				// All arrays use the same tag.
 				Type::ArrayOf(_) => { self.tag_cname_cache.insert(typ, "PONI_TAG_ARRAY"); },
+				// All dynamic arrays use the same tag. (?)
+				Type::DynArrayOf(_) => { self.tag_cname_cache.insert(typ, "PONI_TAG_DYNARRAY"); },
 
 				Type::Fun(_) | Type::Class(_) => {
 					// This is very sad, but for now we'll just make their name

@@ -58,6 +58,11 @@ pub enum Type {
 	//ListOf(TypId),
 
 	ArrayOf(TypId),
+	/// For now, I guess dynamic arrays will be a separate type.
+	/// 
+	/// This has the disadvantage that we have to add similar code to several things
+	/// in the program. Idk.
+	DynArrayOf(TypId),
 
 	Tuple(Arc<[TypId]>),
 
@@ -152,6 +157,9 @@ impl Type {
 			Type::ArrayOf(typ) => {
 				format!("Array[{}]", db.get(*typ).to_string(db))
 			}
+			Type::DynArrayOf(typ) => {
+				format!("Vec[{}]", db.get(*typ).to_string(db))
+			}
 			Type::Option(typ) => {
 				format!("{}?", db.get(*typ).to_string(db))
 			}
@@ -200,6 +208,7 @@ impl Type {
 			Type::Class(class_id) => format!("struct {}*", db.get_class_cname(*class_id)),
 
 			Type::ArrayOf(typ) => String::from(db.gen_array_ctype(*typ)),
+			Type::DynArrayOf(typ) => String::from(db.gen_dynarray_ctype(*typ)),
 			Type::Option(_) => { todo!("this is implemented in Db") }
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),

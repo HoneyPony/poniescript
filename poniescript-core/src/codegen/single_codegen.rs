@@ -498,7 +498,7 @@ impl<'a> Codegen<'a> {
 			Type::Int | Type::Float | Type::Bool | Type::Void => {}
 			Type::StrConst => {}
 
-			Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+			Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(_) => {
 				slots.push(self.gc_frame.allocate_slot(prefix.to_string()));
 			}
 
@@ -980,6 +980,7 @@ impl<'a> Codegen<'a> {
 			
 			Type::Option(_) => todo!("print() for Option"),
 			Type::ArrayOf(_) => todo!("print() for Array"),
+			Type::DynArrayOf(_) => todo!("print() for DynArray"),
 			Type::RangeOf(..) => todo!("print() for RangeOf"),
 			Type::Tuple(tup) => {
 				inf_writeln!(into, "{}ps_print_const(\"(\");", indent);
@@ -1041,6 +1042,7 @@ impl<'a> Codegen<'a> {
 			Type::FunRaw(_) => todo!("str() for FunRaw"),
 			Type::Class(_) => todo!("str() for Class"),
 			Type::ArrayOf(_) => todo!("str() for Array"),
+			Type::DynArrayOf(_) => todo!("str() for DynArray"),
 			Type::Tuple(_) => todo!("str() for Tuple"),
 			Type::RangeOf(..) => todo!("str() for RangeOf"),
 			Type::Option(_) => todo!("str() for Option"),

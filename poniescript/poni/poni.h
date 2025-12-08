@@ -254,6 +254,26 @@ struct ps_array_header {
 	ps_int    length;
 };
 
+struct ps_dynarray_header {
+	/** Object header */
+	ps_object object;
+	/**
+	 * Type of the array members. Necessary because our inner array might be
+	 * completely empty.
+	 */
+	uint64_t  type;
+	/** Length of the array. */
+	ps_int    length;
+
+	/** 
+	 * Pointer to the internal array. This should be a non-NULL pointer to
+	 * a ps_array_header.
+	 *
+	 * TODO: For efficiency, this should be nullable if the array is empty.
+	 */
+	void     *buffer;
+};
+
 #ifdef __TINYC__
 	#define PONI_NORETURN __attribute__((noreturn))
 #else

@@ -120,6 +120,7 @@ poni_get_type_stride(uint64_t tag) {
 		case PONI_TAG_STR:
 		case PONI_TAG_STRBUF:
 		case PONI_TAG_ARRAY:
+		case PONI_TAG_DYNARRAY:
 			return sizeof(void*);
 		case PONI_TAG_FLOAT: return sizeof(ps_float);
 		case PONI_TAG_INT:   return sizeof(ps_int);
@@ -143,7 +144,7 @@ poni_get_type_stride(uint64_t tag) {
 				Type::Void | Type::Bottom => { continue; }
 
 				// Already done
-				Type::StrConst | Type::StrBuf | Type::Str | Type::ArrayOf(_) => { continue; }
+				Type::StrConst | Type::StrBuf | Type::Str | Type::ArrayOf(_) | Type::DynArrayOf(_) => { continue; }
 
 				// Build up one big set of pointer types.
 				Type::Class(_) => {
@@ -246,6 +247,56 @@ poni_gc_visit_object(struct poni_gc *gc, void *object) {
 			}
 			break;
 		}
+		case PONI_TAG_DYNARRAY: {
+			struct ps_dynarray_header *header = object;
+			// For memory safety reasons, we need to be walking a known-good
+			// pointer. So, store the pointer ahead of time, as its size
+			// is immutable.
+			//
+			// We also cannot directly mark the inner buffer. The problem is
+			// that it may have undefined contents, outside of the boundaries
+			// of this array. So, instead we directly mark the inner buffer,
+			// and then walk the children manually.
+			struct ps_array_header *inner = header->buffer;
+			char *elem_root = (char*)inner + sizeof(struct ps_array_header);
+
+			// Note that although the DynArray's length might be changed by
+			// another thread, we shouldn't have any code that can invalidate
+			// existing objects in the array (aside from maybe this code).
+			//
+			// So even if the length decreases after we read it, we shouldn't
+			// end up reading an invalid object.
+			//
+			// (*writes* to the length will perhaps have to be atomic-acquire?
+			// they *must* occur *after* any writes to the buffer contents).
+			ps_int length = header->length;
+			if(inner->length < length) { length = inner->length; }
+
+			// Now the rest of the logic is essentially the same as the regular
+			// arrays.
+			if(poni_is_value_type(header->type)) {
+				if(header->type == PONI_TAG_INT || header->type == PONI_TAG_FLOAT
+					|| header->type == PONI_TAG_BOOL)
+				{ break; }
+
+				size_t stride = poni_get_type_stride(header->type);
+
+				for(ps_int i = 0; i < length; ++i) {
+					poni_gc_visit_valuetype(gc, elem_root, header->type);
+					elem_root += stride;
+				}
+			}
+			else {
+				size_t stride = poni_get_type_stride(header->type);
+
+				for(ps_int i = 0; i < length; ++i) {
+					poni_gc_mark(gc, elem_root);
+					elem_root += stride;
+				}
+			}
+
+			break;
+		}
 ".to_string();
 
 	let mut visit_roots = "void
@@ -274,6 +325,9 @@ poni_gc_get_allocation_size(void *object) {
 			size_t stride = poni_get_type_stride(header->type);
 			return sizeof(*header) + stride * header->length;
 		}
+		case PONI_TAG_DYNARRAY: {
+			return sizeof(struct ps_dynarray_header);
+		}
 ".to_string();
 
 		for typ in self.db.iter_typ() {
@@ -296,13 +350,13 @@ poni_gc_get_allocation_size(void *object) {
 								// they can't be deallocated.
 							}
 
-							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(_) => {
 								inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->{});", self.db.get_cname(*field));
 							}
 
 							Type::Option(id) => {
 								match self.db.get(*id) {
-									Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+									Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(_) => {
 										inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->{});", self.db.get_cname(*field));
 									},
 									_ => todo!()
@@ -341,7 +395,7 @@ poni_gc_get_allocation_size(void *object) {
 								// they can't be deallocated.
 							}
 
-							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+							Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(_) => {
 								inf_writeln!(valuetype, "\t\tponi_gc_mark(gc, self->v_{});", idx);
 							}
 
