@@ -98,6 +98,11 @@ pub fn compute_inlay_hint_cache(store: &DocumentStore, project: &Arc<Project>, u
     for fun in &module.functions {
         visitor.visit_expr(&proj.ast, &proj.db, fun.value);
     }
+    for class in &module.classes {
+        for fun in &class.funs {
+            visitor.visit_expr(&proj.ast, &proj.db, fun.value);
+        }
+    }
 
     Some(visitor.cache)
 }
