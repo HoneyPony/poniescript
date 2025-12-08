@@ -103,6 +103,8 @@ pub fn generate(tests_file: &mut File) {
 		("typecheck/", "promote_to_float_return"),
 		("typecheck/", "str_types"),
 		("typecheck/", "return_block_return"), // Make sure this one at least compiles
+		("typecheck/", "nested_if_promote_int"),
+		("typecheck/", "nested_if_promote_void"),
 
 		("typecheck/", "err_try_assign_float_for_int"),
 		("typecheck/", "err_try_return_float_for_int_short"),
