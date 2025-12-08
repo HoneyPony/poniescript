@@ -272,13 +272,6 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 				writeln!(locate_trait, "\t\t\tif self.visit_stmt(ast, db, loc, *item) {{ return true; }}")?;
 				writeln!(locate_trait, "\t\t}}")?;
 			}
-
-			// This is essentially just for ClassDeclare, so that we visit
-			// the inner functions. TODO: Also visit the Vec of Declares somehow?
-			if field.0 == "Vec<FunDeclare>" {
-				writeln!(visit_trait, "\t\tfor item in &{lname}.{} {{", field.1)?;
-				writeln!(visit_trait, "\t\t\tself.visit_expr(");
-			}
 		}
 		// For the locate trait, we always unconditionally locate ourself if none
 		// of our inner nodes returned true.
