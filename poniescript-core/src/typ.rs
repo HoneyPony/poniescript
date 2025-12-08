@@ -161,7 +161,7 @@ impl Type {
 				format!("Array[{}]", db.get(*typ).to_string(db))
 			}
 			Type::DynArrayOf(elem_ty, _) => {
-				format!("Vec[{}]", db.get(*elem_ty).to_string(db))
+				format!("DynArray[{}]", db.get(*elem_ty).to_string(db))
 			}
 			Type::Option(typ) => {
 				format!("{}?", db.get(*typ).to_string(db))

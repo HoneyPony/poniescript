@@ -216,6 +216,19 @@ impl<'db> TypeChecker<'db> {
 				return Ok(self.db.put_type(Type::ArrayOf(elem_typ)));
 			}
 
+			// Array promotes to DynArray.
+			(Type::DynArrayOf(lhs, _), Type::ArrayOf(rhs)) => {
+				let elem_typ = self.compute_assignable(*lhs, *rhs)?;
+				let arr_typ = self.db.put_type(Type::ArrayOf(elem_typ));
+				return Ok(self.db.put_type(Type::DynArrayOf(elem_typ, arr_typ)));
+			}
+
+			(Type::DynArrayOf(lhs, _), Type::DynArrayOf(rhs, _)) => {
+				let elem_typ = self.compute_assignable(*lhs, *rhs)?;
+				let arr_typ = self.db.put_type(Type::ArrayOf(elem_typ));
+				return Ok(self.db.put_type(Type::DynArrayOf(elem_typ, arr_typ)));
+			}
+
 			(Type::Tuple(lhs), Type::Tuple(rhs)) => {
 				// TODO: Let us assign a bigger tuple to a smaller tuple..?
 				// maybe not.
@@ -376,6 +389,12 @@ impl<'db> TypeChecker<'db> {
 				// an existing TypId if we have one. It might be nice to keep
 				// doing that...
 				return Ok(self.db.put_type(Type::ArrayOf(inner)));
+			}
+
+			(Type::DynArrayOf(lhs, _), Type::DynArrayOf(rhs, _)) => {
+				let elem_typ = self.compute_assignable(lhs, rhs)?;
+				let arr_typ = self.db.put_type(Type::ArrayOf(elem_typ));
+				return Ok(self.db.put_type(Type::DynArrayOf(elem_typ, arr_typ)));
 			}
 
 			(Type::Option(lhs), Type::Option(rhs)) => {
@@ -657,6 +676,7 @@ impl<'db> TypeChecker<'db> {
 				fn unwrap_array_type(checker: &mut TypeChecker, id: TypId) -> TypId {
 					match checker.db.get(id) {
 						Type::ArrayOf(elem) => *elem,
+						Type::DynArrayOf(elem, _) => *elem,
 						Type::Option(id) => {
 							// It's unfortunate but we kind of have to explicitly
 							// unwrap the option type here. I wonder if there is a way
@@ -719,7 +739,7 @@ impl<'db> TypeChecker<'db> {
 				log::trace!("promote Expr::Promote from {} to {} (inner is {})",
 					self.db.repr_type(promote.promote_to), self.db.repr_type(promote_to),
 					self.db.repr_type(promote.inner.typ(ast, self.db)));
-					
+
 				promote.promote_to = promote_to;
 			},
 			Expr::MakeSumType(sum) => {
