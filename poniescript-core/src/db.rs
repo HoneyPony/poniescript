@@ -1239,6 +1239,14 @@ impl Db {
 
 				None
 			}
+			Type::DynArrayOf(..) => {
+				// We can reuse this one. :)
+				if propname == self.prop_array.length_key {
+					return Some(self.prop_array.length);
+				}
+
+				None
+			}
 			Type::Class(class_id) => {
 				let class = self.get(*class_id);
 				let result = class.var_map.get(&propname).copied();
