@@ -382,6 +382,8 @@ pub fn generate(file: &mut File) {
 	Variable      : VarId identity
 	Logical       : Tok op, Expr left, Expr right
 	FunCall       : SourceLocation fn_name, FunId identity, Vec<Expr> args, Option<Expr> object
+	BuiltinCall   : SourceLocation fn_name, BuiltinMethodPtr ptr, TypId typ, Vec<Expr> args, Expr object
+	BuiltinCapture : SourceLocation fn_name, BuiltinMethodPtr ptr, Expr object
 	FunDeclare    : FunId identity, Expr value, TypId typ
 	ValCall       : Expr value, Vec<Expr> args, SigId sig
 	FunCapture    : SourceLocation fn_name, FunId identity, TypId typ, Option<Expr> object

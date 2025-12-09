@@ -1485,6 +1485,22 @@ impl<'a> Codegen<'a> {
 
 				val
 			},
+			Expr::BuiltinCall(call) => {
+				let mut vals = Vec::new();
+				for idx in 0..call.args.len() {
+					let arg = &call.args[idx];
+					let val = self.expr(ast, *arg, into);
+					if val.is_bottom() {
+						return val;
+					}
+
+					vals.push(val);
+				}
+
+				let object = self.expr(ast, call.object, into);
+
+				call.ptr.compile(self, ast, object, vals, into)
+			}
 			// TODO: Consider using a different Expr type for string literals
 			Expr::NumLiteral(lit) => {
 				// if lit.typ == self.db.types.int {
@@ -1582,6 +1598,9 @@ impl<'a> Codegen<'a> {
 			}
 			Expr::ForLoop(_) => {
 				panic!("ICE: Tried to codegen a ForLoop (should have been lowered in typecheck)");
+			}
+			Expr::BuiltinCapture(_) => {
+				panic!("ICE: Tried to codegen a BuiltinCapture");
 			}
 
 			Expr::FunCapture(capt) => {

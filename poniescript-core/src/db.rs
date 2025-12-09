@@ -241,6 +241,16 @@ pub trait BuiltinMethod {
 	fn compile(&self, codegen: &mut Codegen, ast: &AstReadonly, self_val: TypedVal, arg_vals: Vec<TypedVal>, into: &mut String) -> TypedVal;
 }
 
+impl<T: BuiltinMethod> BuiltinMethod for Arc<T> {
+	fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>) {
+		self.as_ref().get_types(db, self_ty)
+	}
+
+	fn compile(&self, codegen: &mut Codegen, ast: &AstReadonly, self_val: TypedVal, arg_vals: Vec<TypedVal>, into: &mut String) -> TypedVal {
+		self.as_ref().compile(codegen, ast, self_val, arg_vals, into)
+	}
+}
+
 pub type BuiltinMethodPtr = Arc<dyn BuiltinMethod + Send + Sync>;
 
 /// The Db stores all of the arena-allocated objects that can be referenced

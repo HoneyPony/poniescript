@@ -415,6 +415,8 @@ impl<'db> Binder<'db> {
 			}
 
 			Expr::Promote(_) => panic!("ICE: Tried to bind Expr::Promote"),
+			Expr::BuiltinCall(_) => panic!("ICE: Tried to bind Expr::BuiltinCall"),
+			Expr::BuiltinCapture(_) => panic!("ICE: Tried to bind Expr::BuiltinCapture"),
 		}
 	}
 

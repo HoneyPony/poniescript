@@ -89,6 +89,14 @@ impl Expr {
 			Expr::FunCall(call) => {
 				db.get_fun_ret_type(call.identity)
 			},
+			Expr::BuiltinCall(call) => {
+				// Because this type is dynamic, we might as well just cache it.
+				call.typ
+			}
+			Expr::BuiltinCapture(_) => {
+				// For now, these are always errors, so unassigned.
+				db.types.unassigned
+			}
 			Expr::ValCall(call) => {
 				db.get(call.sig).return_type
 			},

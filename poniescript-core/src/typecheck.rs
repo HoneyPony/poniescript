@@ -2,6 +2,7 @@
 use std::sync::Arc;
 
 use crate::db::*;
+use crate::db::BuiltinMethod;
 use crate::lexer::{Tok, Token};
 use crate::module::Module;
 use crate::source::SourceLocation;
@@ -603,6 +604,12 @@ impl<'db> TypeChecker<'db> {
 			Expr::Variable(_) => { /* Can't promote. */ },
 			Expr::Logical(_) => { /* Can't promote. */ },
 			Expr::FunCall(_) => { /* Can't promote. */ },
+			Expr::BuiltinCall(_) => { /* Can't promote. */ }
+			Expr::BuiltinCapture(_) => {
+				// TODO: This should return an error, as it means we have
+				// a BuiltinCapture that wasn't eaten by a ValCall. For now,
+				// stuff will just explode later.
+			}
 			Expr::FunDeclare(_) => {},
 			Expr::ValCall(_) => {},
 			Expr::FunCapture(_) => {},
@@ -1490,6 +1497,50 @@ impl<'db> TypeChecker<'db> {
 				self.db.get_fun_ret_type(call.identity)
 			},
 
+			Expr::BuiltinCall(call) => {
+				let (ret_type, parameters) = call.ptr.get_types(self.db, call.object.typ(ast, self.db));
+				let fun_arity = parameters.len();
+
+				if call.args.len() != fun_arity {
+					// TODO: Add a Note about the function definition.
+					// Also TODO: We need to store the name of the builtin somewhere...
+					type_error!(self,
+						&call.location,
+						"Incorrect arguments to builtin function");
+				}
+
+				for i in 0..fun_arity {
+					// Check each argument against the corresponding parameter.
+					let arg = self.check_expr(ast, call.args[i], true)?;
+
+					let param = parameters[i];
+
+					// Note that we do NOT mutate the var type in any way.
+					let computed = self.compute_assignable(
+						param, arg);
+
+					let computed = maybe_type_error!(self, computed,
+						&call.location,
+						"Incorrect argument to builtin: Parameter '{}' expects '{}', but was given '{}'",
+						i,
+						self.db.repr_type(param),
+						self.db.repr_type(arg)
+					);
+
+					self.do_promote_expr(ast, &mut call.args[i], computed);
+				}
+
+				call.typ = ret_type;
+				ret_type
+			}
+
+			Expr::BuiltinCapture(capt) => {
+				// Right now, capturing methods is not supported; but, we
+				// need to be able to type check this node because it is temporarily
+				// synthesized. So, just return an unassigned type.
+				self.db.types.unassigned
+			}
+
 			Expr::ValCall(call) => {
 				{
 					// Optimization + semantics: if we are a ValCall of a FunCapture, replace
@@ -1512,6 +1563,23 @@ impl<'db> TypeChecker<'db> {
 						*expr = Expr::FunCall(as_funcall);
 						// Because this is happening first, we have to re-check
 						// the expr.
+						drop(inner_bind);
+						drop(binding);
+						return self.check_expr(ast, expr_id, value_used);
+					}
+
+					if let Expr::BuiltinCapture(capt) = inner_bind.as_mut() {
+						let as_builtincall = BuiltinCall {
+							location: call.location.clone(),
+							fn_name: capt.location.clone(),
+							// TODO: Can I just pass the function pointers themselves?
+							// Arc seems unnecessary.
+							ptr: Arc::clone(&capt.ptr),
+							args: std::mem::take(&mut call.args),
+							object: capt.object,
+							typ: self.db.types.unassigned,
+						};
+						*expr = Expr::BuiltinCall(as_builtincall);
 						drop(inner_bind);
 						drop(binding);
 						return self.check_expr(ast, expr_id, value_used);
@@ -1780,6 +1848,27 @@ impl<'db> TypeChecker<'db> {
 						var: property
 					};
 					*expr = Expr::Get(as_get);
+					drop(binding);
+					return self.check_expr(ast, expr_id, value_used);
+				}
+
+				if let Some(builtin) = self.db.lookup_builtin_method(obj_ty, capt.identifier.lexeme) {
+					// For builtin methods, we currently only support immediately calling them.
+					//
+					// I'm not actually sure how to quite do this...? It essentially needs to
+					// be that we replace the *valcall* node, but this node isn't a ValCall.
+					//
+					// I guess for now, we just replace ourselves with the BuiltinCall and
+					// then in ValCall replaces ourselves with that, but we will need a
+					// more correct approach in the future. (Probably a BuiltinCapture
+					// node..?)
+					let as_builtincapt = BuiltinCapture {
+						location: capt.location.clone(),
+						fn_name: capt.identifier.location.clone(),
+						ptr: Arc::clone(&builtin),
+						object: capt.object.unwrap(), // A little ugly. We should store the object above.
+					};
+					*expr = Expr::BuiltinCapture(as_builtincapt);
 					drop(binding);
 					return self.check_expr(ast, expr_id, value_used);
 				}
