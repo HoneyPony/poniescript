@@ -57,7 +57,7 @@ impl BuiltinMethod for DynarrayPush {
         // The other thing TODO is to check that we don't overflow the
         // length variable. This is very unlikely to happen any time soon,
         // however.
-        inf_writeln!(into, "{}{}->header.length += 1;", indent, inner_array);
+        inf_writeln!(into, "{}{}->header.length += 1;", indent, self_val);
         
         Val::Void.typed(codegen.db.types.void, None)
     }

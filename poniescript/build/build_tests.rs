@@ -322,6 +322,7 @@ pub fn generate(tests_file: &mut File) {
 
 		("dynarray/", "assign_lit"),
 		("dynarray/", "index"),
+		("dynarray/", "push_once"),
 		("dynarray/", "set_index"),
 		("dynarray/", "set_index_len"),
 		("dynarray/", "typename"),
