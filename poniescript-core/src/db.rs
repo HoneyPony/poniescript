@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use crate::codegen::TypedVal;
+use crate::codegen::Codegen;
 use crate::error::Error;
 // Import relevant things.
 use crate::expr::Expr;
@@ -230,6 +232,20 @@ pub struct DbTypes {
 	pub vec4i: TypId,
 }
 
+pub trait BuiltinMethod {
+	/// Given the type that we are being called on, return the return type
+	/// of this method and the parameters for it.
+	fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>);
+
+	fn compile(&self, codegen: &mut Codegen, ast: &AstReadonly, self_val: TypedVal, arg_vals: Vec<TypedVal>, into: &mut String) -> TypedVal;
+}
+
+type BuiltinMethodPtr = Arc<dyn BuiltinMethod + Send + Sync>;
+
+struct BuiltinMethodTable {
+
+}
+
 /// The Db stores all of the arena-allocated objects that can be referenced
 /// with Ids. Basically all of these objects live for the entire program.
 pub struct Db {
@@ -349,6 +365,10 @@ pub struct Db {
 	/// properties.
 	range_vars: FxHashMap<(bool, TypId), VarId>,
 
+	/// Map from TypId's to builtin methods. Used for looking up any method
+	/// that is a compiler builtin.
+	builtin_methods: FxHashMap<TypId, BuiltinMethodPtr>,
+
 	/// TODO: Maybe have only one declare/define code?
 
 	/// Some C code to declare each Array type.
@@ -412,6 +432,8 @@ impl Db {
 			tuple_vars: FxHashMap::default(),
 			tuple_idxs: FxHashMap::default(),
 			range_vars: FxHashMap::default(),
+
+			builtin_methods: FxHashMap::default(),
 
 			value_types: Vec::new(),
 

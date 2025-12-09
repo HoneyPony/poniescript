@@ -1,11 +1,10 @@
-mod single_codegen;
+pub mod single_codegen;
 
 use crossbeam::channel;
 use std::fs::File;
 use std::io::Write;
 
 use crate::arena::ArenaKey;
-use crate::codegen::single_codegen::Codegen;
 use crate::{db::*, Args};
 use crate::typ::Type;
 
@@ -13,6 +12,8 @@ use std::io::BufWriter;
 use std::sync::Arc;
 
 use crate::{inf_write, inf_writeln};
+
+pub use single_codegen::*;
 
 enum CodegenTask {
 	CompileFunction(FunId),

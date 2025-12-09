@@ -84,8 +84,9 @@ impl Val {
 }
 
 pub struct TypedVal {
-	val: Val,
-	typ: TypId,
+	// For now these are pub for the macro invocations.
+	pub val: Val,
+	pub typ: TypId,
 	
 	// TODO: To make this more efficient, what we should really do is have the frame
 	// be &GCFrame, and then pass a &gcframe down the whole tree of codegen
@@ -113,6 +114,9 @@ impl TypedVal {
 	pub fn needs_storage(&self) -> bool {
 		self.val.needs_storage()
 	}
+
+	pub fn get_typid(&self) -> TypId { self.typ }
+	pub fn get_type<'db>(&self, db: &'db Db) -> &'db Type { db.get(self.typ) }
 }
 
 impl Val {
@@ -320,6 +324,7 @@ impl std::fmt::Display for Indenter {
 	}
 }
 
+#[macro_export]
 macro_rules! define_val {
 	($self:ident, $into:ident, $val:expr, $($arg:tt)*) => {
 		if $val.needs_storage() {
@@ -449,7 +454,7 @@ pub struct Codegen<'a> {
 	/// The 'return' value of the current Loop, if any.
 	loop_val: Option<TypedVal>,
 
-	db: &'a Db,
+	pub db: &'a Db,
 
     send: channel::Sender<String>,
 
@@ -583,7 +588,7 @@ impl<'a> Codegen<'a> {
 	}
 
 	// TODO: MOve all uses of new_val() to this function
-	fn new_val_typed(&mut self, typ: TypId) -> TypedVal {
+	pub fn new_val_typed(&mut self, typ: TypId) -> TypedVal {
 		if typ == self.db.types.void { return Val::Void.typed(typ, None); }
 		if typ == self.db.types.bottom { return Val::Bottom.typed(typ, None); }
 
@@ -595,7 +600,7 @@ impl<'a> Codegen<'a> {
 	/// 
 	/// This should be paired with a call to tmp_to_used_val(typ) once the Val
 	/// actually has a value.
-	fn new_val_typed_tmp(&mut self, typ: TypId) -> TypedVal {
+	pub fn new_val_typed_tmp(&mut self, typ: TypId) -> TypedVal {
 		if typ == self.db.types.void { return Val::Void.typed(typ, None); }
 		if typ == self.db.types.bottom { return Val::Bottom.typed(typ, None); }
 
@@ -604,7 +609,7 @@ impl<'a> Codegen<'a> {
 	}
 
 	// TODO: This is Jank & Kind of Unsafe ?
-	fn tmp_to_used_val(&mut self, mut val: TypedVal) -> TypedVal {
+	pub fn tmp_to_used_val(&mut self, mut val: TypedVal) -> TypedVal {
 		// For Bottom in particular, we actually can't format it to a prefix
 		// and then do the thing, so instead do this.
 		if val.typ == self.db.types.void { return val; }

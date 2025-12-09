@@ -275,6 +275,32 @@ struct ps_dynarray_header {
 	void     *buffer;
 };
 
+void*
+poni_array_ensure(void *ctx, void* old_array, ps_int elem_sz, ps_int desired_idx) {
+	struct ps_array_header *header = old_array;
+	ps_int new_size = header->length;
+	
+	// Compute the size of the new block. Because it's an idx, not a size, use
+	// <= instead of <.
+	while(new_size <= desired_idx) {
+		new_size *= 2;
+	}
+
+	ps_int old_sz = sizeof(struct ps_array_header) + elem_sz * header->length;
+	ps_int new_sz = sizeof(struct ps_array_header) + elem_sz * new_size;
+
+	size_t old_szt = (size_t)old_sz;
+	size_t new_szt = (size_t)new_sz;
+
+	struct ps_array_header *new_array = poni_gc_alloc_tagged(ctx,
+		new_szt, PONI_TAG_ARRAY);
+
+	memcpy(new_array, old_array, old_szt);
+
+	// The old array should be garbage collected.
+	return new_array;
+}
+
 #ifdef __TINYC__
 	#define PONI_NORETURN __attribute__((noreturn))
 #else
