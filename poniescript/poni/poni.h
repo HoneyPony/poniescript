@@ -279,6 +279,9 @@ void*
 poni_array_ensure(void *ctx, void* old_array, ps_int elem_sz, ps_int desired_idx) {
 	struct ps_array_header *header = old_array;
 	ps_int new_size = header->length;
+
+	// Hnadles the case of 0.
+	if(new_size < 1) { new_size = 1; }
 	
 	// Compute the size of the new block. Because it's an idx, not a size, use
 	// <= instead of <.
@@ -296,6 +299,9 @@ poni_array_ensure(void *ctx, void* old_array, ps_int elem_sz, ps_int desired_idx
 		new_szt, PONI_TAG_ARRAY);
 
 	memcpy(new_array, old_array, old_szt);
+
+	// After the memcpy(), we have to change the length of the new array.
+	new_array->length = new_size;
 
 	// The old array should be garbage collected.
 	return new_array;
