@@ -707,6 +707,9 @@ impl Db {
 		match &typ {
 			// For array types, use any type we generate.
 			Type::ArrayOf(elem_ty) => self.use_array(*elem_ty),
+			// No need to use_ty the arr_ty, as it will have been put_type'd
+			// before.
+			Type::DynArrayOf(elem_ty, _) => self.use_dynarray(*elem_ty),
 			Type::Tuple(inner) => self.use_tuple(&inner, id),
 			Type::RangeOf(left, right, inner) => self.use_rangeof(left, right, inner, id),
 			_ => { }
@@ -1757,7 +1760,6 @@ impl Db {
 	}
 
 	fn gen_array(&mut self, elem_ty: TypId) {
-		
 		use crate::inf_writeln;
 
 		inf_writeln!(self.arr_declare_code, "struct ps_arr_{};", elem_ty.0);
@@ -1768,11 +1770,30 @@ impl Db {
 		inf_writeln!(self.arr_define_code, "}};");
 	}
 
+	fn gen_dynarray(&mut self, elem_ty: TypId) {
+		use crate::inf_writeln;
+
+		inf_writeln!(self.arr_declare_code, "struct ps_dynarr_{};", elem_ty.0);
+
+		// TODO: Is there actually any reason to have separate structs for these?
+		// We could just generate ps_dynarray_header wherever we would use a
+		// custom dynarray struct.
+		inf_writeln!(self.arr_define_code, "struct ps_dynarr_{} {{", elem_ty.0);
+		inf_writeln!(self.arr_define_code, "\tstruct ps_dynarray_header header;");
+		inf_writeln!(self.arr_define_code, "}};");
+	}
+
 	fn generate_arrays_cache(&mut self) {
 		let arrays = std::mem::take(&mut self.array_used);
 
 		for elem_ty in arrays {
 			self.gen_array(elem_ty);
+		}
+
+		let dynarrays = std::mem::take(&mut self.dynarray_used);
+
+		for elem_ty in dynarrays {
+			self.gen_dynarray(elem_ty);
 		}
 	}
 }
