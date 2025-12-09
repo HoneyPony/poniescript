@@ -1,0 +1,49 @@
+class Horse {
+    var name: StrBuf = "Horse!";
+}
+
+fun init() {
+    var horses: DynArray[Horse?] = [];
+
+    var freq = 20;
+    for i in 0..200 {
+        if freq >= 20 {
+            horses.push(nil);
+            freq = 0;
+        }
+        else {
+            horses.push(new Horse {
+                name: str("Horse #", i)
+            })
+        }
+        freq = freq + 1;
+    }
+
+    //! nil
+    //! Horse #10
+    //! nil
+    //! Horse #30
+    //! nil
+    //! Horse #50
+    //! nil
+    //! Horse #70
+    //! nil
+    //! Horse #90
+    //! nil
+    //! Horse #110
+    //! nil
+    //! Horse #130
+    //! nil
+    //! Horse #150
+    //! nil
+    //! Horse #170
+    //! nil
+    //! Horse #190
+    for i in 0..20 {
+        fun print_horse(horse: Horse?) {
+            var horse = horse else { print("nil"); return; };
+            print(horse.name);
+        }
+        print_horse(horses[i * 10]);
+    }
+}
