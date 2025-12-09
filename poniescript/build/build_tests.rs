@@ -320,6 +320,9 @@ pub fn generate(tests_file: &mut File) {
 		("dead_code/", "dead_args_str"),
 		("dead_code/", "dead_args_valcall"),
 
+		("dynarray/", "assign_lit"),
+		("dynarray/", "typename"),
+
 		("array/", "array_nested_empty_lhs"),
 		("array/", "array_nested_empty_rhs"),
 		("array/", "array_nested_empty"),

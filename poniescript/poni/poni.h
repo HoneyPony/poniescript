@@ -16,6 +16,7 @@
 #define PONI_TAG_STR      10
 #define PONI_TAG_STRBUF   12
 #define PONI_TAG_ARRAY    14
+#define PONI_TAG_DYNARRAY 16
 
 typedef float   ps_float;
 typedef int64_t ps_int;
@@ -291,7 +292,7 @@ struct ps_dynarray_header {
 	inner_arr->header.type   = elem_tag; \
 	arr = poni_gc_alloc_tagged(ctx, sizeof(struct ps_dynarray_header), PONI_TAG_DYNARRAY); \
 	arr->header.length = real_cnt; \
-	arr->header.typ    = elem_tag; \
+	arr->header.type   = elem_tag; \
 	arr->header.buffer = inner_arr;
 
 static inline
