@@ -796,7 +796,7 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn make_panic(&self, ast: &AstReadonly, into: &mut String, message: &'static str, location: &SourceLocation) {
+	pub fn make_panic(&self, ast: &AstReadonly, into: &mut String, message: &'static str, location: &SourceLocation) {
 		let src = ast.sources.get(location.source);
 		let path = src.repr_path();
 		let (line, col) = src.get_line_column(location);
@@ -1499,7 +1499,7 @@ impl<'a> Codegen<'a> {
 
 				let object = self.expr(ast, call.object, into);
 
-				call.ptr.compile(self, ast, object, vals, into)
+				call.ptr.compile(self, call, ast, object, vals, into)
 			}
 			// TODO: Consider using a different Expr type for string literals
 			Expr::NumLiteral(lit) => {

@@ -1,6 +1,7 @@
 use crate::db::*;
 use crate::codegen::*;
 use crate::define_val;
+use crate::expr::BuiltinCall;
 use crate::inf_writeln;
 use crate::inf_write;
 use crate::typ::Type;
@@ -19,6 +20,7 @@ impl BuiltinMethod for DynarrayPush {
     fn compile(
         &self,
         codegen: &mut Codegen,
+        ast_node: &BuiltinCall,
         ast: &AstReadonly,
         self_val: TypedVal,
         arg_vals: Vec<TypedVal>,

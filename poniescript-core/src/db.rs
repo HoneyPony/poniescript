@@ -8,6 +8,7 @@ use crate::builtins::BuiltinMethodTable;
 use crate::codegen::TypedVal;
 use crate::codegen::Codegen;
 use crate::error::Error;
+use crate::expr::BuiltinCall;
 // Import relevant things.
 use crate::expr::Expr;
 use crate::expr::Stmt;
@@ -238,7 +239,14 @@ pub trait BuiltinMethod {
 	/// of this method and the parameters for it.
 	fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>);
 
-	fn compile(&self, codegen: &mut Codegen, ast: &AstReadonly, self_val: TypedVal, arg_vals: Vec<TypedVal>, into: &mut String) -> TypedVal;
+	fn compile(&self,
+		codegen: &mut Codegen,
+		ast_node: &BuiltinCall,
+		ast: &AstReadonly,
+		self_val: TypedVal,
+		arg_vals: Vec<TypedVal>,
+		into: &mut String
+	) -> TypedVal;
 }
 
 impl<T: BuiltinMethod> BuiltinMethod for Arc<T> {
@@ -246,8 +254,8 @@ impl<T: BuiltinMethod> BuiltinMethod for Arc<T> {
 		self.as_ref().get_types(db, self_ty)
 	}
 
-	fn compile(&self, codegen: &mut Codegen, ast: &AstReadonly, self_val: TypedVal, arg_vals: Vec<TypedVal>, into: &mut String) -> TypedVal {
-		self.as_ref().compile(codegen, ast, self_val, arg_vals, into)
+	fn compile(&self, codegen: &mut Codegen, ast_node: &BuiltinCall, ast: &AstReadonly, self_val: TypedVal, arg_vals: Vec<TypedVal>, into: &mut String) -> TypedVal {
+		self.as_ref().compile(codegen, ast_node, ast, self_val, arg_vals, into)
 	}
 }
 
@@ -746,6 +754,11 @@ impl Db {
 			Type::DynArrayOf(elem_ty, _) => self.use_dynarray(id, *elem_ty),
 			Type::Tuple(inner) => self.use_tuple(&inner, id),
 			Type::RangeOf(left, right, inner) => self.use_rangeof(left, right, inner, id),
+			Type::Option(_) => {
+				let or_panic = self.put_str("or_panic");
+				self.builtin_methods.insert((or_panic, id),
+					Arc::clone(&self.builtin_method_table.option_unwrap));
+			}
 			_ => { }
 		}
 

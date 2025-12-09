@@ -369,8 +369,10 @@ pub fn generate(tests_file: &mut File) {
 		("optional/", "optional_strings"),
 		("optional/", "optional_strings_promote"),
 		("optional/", "optional_string_tuple"),
+		("optional/", "or_panic_success"),
 		("optional/", "tree"),
 		("optional/", "tree2"),
+		("optional/", "tree3"),
 
 		("vec/", "vec_types"),
 		("vec/", "vec_ret"),
