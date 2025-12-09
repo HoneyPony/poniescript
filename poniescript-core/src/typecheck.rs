@@ -1542,6 +1542,12 @@ impl<'db> TypeChecker<'db> {
 			}
 
 			Expr::ValCall(call) => {
+				// TODO: Is it safe to check_expr this inner value once, if
+				// we're going to replace it? I believe the answer is *yes*
+				// if it is a FunCapture or BuiltinCapture, which are the cases
+				// that matter.
+				let value = self.check_expr(ast, call.value, true)?;
+
 				{
 					// Optimization + semantics: if we are a ValCall of a FunCapture, replace
 					// us with a FunCall.
@@ -1569,6 +1575,7 @@ impl<'db> TypeChecker<'db> {
 					}
 
 					if let Expr::BuiltinCapture(capt) = inner_bind.as_mut() {
+						log::trace!("ValCall>BuiltinCapture => BuiltinCall");
 						let as_builtincall = BuiltinCall {
 							location: call.location.clone(),
 							fn_name: capt.location.clone(),
@@ -1585,8 +1592,6 @@ impl<'db> TypeChecker<'db> {
 						return self.check_expr(ast, expr_id, value_used);
 					}
 				}
-
-				let value = self.check_expr(ast, call.value, true)?;
 			
 				// Now, we need to make sure that the value is Assignable to
 				// a function type.
@@ -1853,15 +1858,11 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				if let Some(builtin) = self.db.lookup_builtin_method(obj_ty, capt.identifier.lexeme) {
+					log::trace!("identified builtin: {}::{}", self.db.repr_type(obj_ty), self.db.get(capt.identifier.lexeme));
 					// For builtin methods, we currently only support immediately calling them.
 					//
 					// I'm not actually sure how to quite do this...? It essentially needs to
 					// be that we replace the *valcall* node, but this node isn't a ValCall.
-					//
-					// I guess for now, we just replace ourselves with the BuiltinCall and
-					// then in ValCall replaces ourselves with that, but we will need a
-					// more correct approach in the future. (Probably a BuiltinCapture
-					// node..?)
 					let as_builtincapt = BuiltinCapture {
 						location: capt.location.clone(),
 						fn_name: capt.identifier.location.clone(),

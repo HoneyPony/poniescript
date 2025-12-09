@@ -31,21 +31,33 @@ impl BuiltinMethod for DynarrayPush {
 
         let idx = codegen.new_val_typed(codegen.db.types.int);
 
-        let inner_array = format!("(({}){})->buffer",
+        let inner_array = format!("(({}){}->header.buffer)",
             codegen.db.get_ctype(*arr_ty), self_val);
 
         // The index that we want to use is the current length of the array.
-        define_val!(codegen, into, idx, " = {}->length;\n", self_val);
+        define_val!(codegen, into, idx, " = {}->header.length;\n", self_val);
         inf_writeln!(into, "{}if({} < {}->header.length) {{",
             indent, idx, inner_array);
-        inf_writeln!(into, "{}\t{}->contents[{}] = {}", indent, inner_array, idx, new_item);
+        inf_writeln!(into, "{}\t{}->contents[{}] = {};", indent, inner_array, idx, new_item);
         inf_writeln!(into, "{}}}", indent);
         inf_writeln!(into, "{}else {{", indent);
         // Ensure that we have idx room in the array.
-        inf_writeln!(into, "{}\t{}->buffer = poni_array_ensure(ctx, {}, sizeof({}), {});",
-            indent, self_val, inner_array, codegen.db.get_ctype(*elem_ty), idx);
-        inf_writeln!(into, "{}\t{}->contents[{}] = {}", indent, inner_array, idx, new_item);
+        inf_writeln!(into, "{}\t{}->header.buffer = poni_array_ensure(ctx, {}->header.buffer, sizeof({}), {});",
+            indent, self_val, self_val, codegen.db.get_ctype(*elem_ty), idx);
+        inf_writeln!(into, "{}\t{}->contents[{}] = {};", indent, inner_array, idx, new_item);
         inf_writeln!(into, "{}}}", indent);
+
+        // This is one of the most subtle things, at least it will be.
+        //
+        // We probably (?) want this to be an atomic increment, and one that
+        // is guaranteed to be occur-after the buffer write.
+        //
+        // That said, it is safe to under-estimate the size.
+        //
+        // The other thing TODO is to check that we don't overflow the
+        // length variable. This is very unlikely to happen any time soon,
+        // however.
+        inf_writeln!(into, "{}{}->header.length += 1;", indent, inner_array);
         
         Val::Void.typed(codegen.db.types.void, None)
     }
