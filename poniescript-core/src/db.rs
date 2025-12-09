@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use crate::builtins::BuiltinMethodTable;
 use crate::codegen::TypedVal;
 use crate::codegen::Codegen;
 use crate::error::Error;
@@ -240,11 +241,7 @@ pub trait BuiltinMethod {
 	fn compile(&self, codegen: &mut Codegen, ast: &AstReadonly, self_val: TypedVal, arg_vals: Vec<TypedVal>, into: &mut String) -> TypedVal;
 }
 
-type BuiltinMethodPtr = Arc<dyn BuiltinMethod + Send + Sync>;
-
-struct BuiltinMethodTable {
-
-}
+pub type BuiltinMethodPtr = Arc<dyn BuiltinMethod + Send + Sync>;
 
 /// The Db stores all of the arena-allocated objects that can be referenced
 /// with Ids. Basically all of these objects live for the entire program.
@@ -367,7 +364,11 @@ pub struct Db {
 
 	/// Map from TypId's to builtin methods. Used for looking up any method
 	/// that is a compiler builtin.
-	builtin_methods: FxHashMap<TypId, BuiltinMethodPtr>,
+	builtin_methods: FxHashMap<(StrId, TypId), BuiltinMethodPtr>,
+
+	/// Table of builtin methods used for initializing the builtin_methods
+	/// HashMap in some cases.
+	builtin_method_table: BuiltinMethodTable,
 
 	/// TODO: Maybe have only one declare/define code?
 
@@ -434,6 +435,7 @@ impl Db {
 			range_vars: FxHashMap::default(),
 
 			builtin_methods: FxHashMap::default(),
+			builtin_method_table: BuiltinMethodTable::new(),
 
 			value_types: Vec::new(),
 
@@ -731,7 +733,7 @@ impl Db {
 			Type::ArrayOf(elem_ty) => self.use_array(*elem_ty),
 			// No need to use_ty the arr_ty, as it will have been put_type'd
 			// before.
-			Type::DynArrayOf(elem_ty, _) => self.use_dynarray(*elem_ty),
+			Type::DynArrayOf(elem_ty, _) => self.use_dynarray(id, *elem_ty),
 			Type::Tuple(inner) => self.use_tuple(&inner, id),
 			Type::RangeOf(left, right, inner) => self.use_rangeof(left, right, inner, id),
 			_ => { }
@@ -851,9 +853,13 @@ impl Db {
 		}
 	}
 
-	fn use_dynarray(&mut self, elem_ty: TypId) {
+	fn use_dynarray(&mut self, dynarray_ty: TypId, elem_ty: TypId) {
 		if self.is_cgen_safe(elem_ty) {
 			self.dynarray_used.push(elem_ty);
+
+			let push = self.put_str("push");
+			self.builtin_methods.insert((push, dynarray_ty),
+				Arc::clone(&self.builtin_method_table.dynarray_push));
 		}
 	}
 
@@ -1354,6 +1360,11 @@ impl Db {
 
 			_ => None
 		}
+	}
+
+	pub fn lookup_builtin_method(&self, typ: TypId, propname: StrId) -> Option<BuiltinMethodPtr> {
+		self.builtin_methods.get(&(propname, typ))
+			.map(|c| Arc::clone(&c))
 	}
 
 	fn visit_value_types(&mut self, todo: &mut FxHashSet<TypId>, visited: &mut FxHashSet<TypId>, ordering: &mut Vec<TypId>, typ: TypId) -> Result<(), ()> {

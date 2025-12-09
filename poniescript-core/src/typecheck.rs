@@ -1491,6 +1491,33 @@ impl<'db> TypeChecker<'db> {
 			},
 
 			Expr::ValCall(call) => {
+				{
+					// Optimization + semantics: if we are a ValCall of a FunCapture, replace
+					// us with a FunCall.
+					//
+					// This is important for BuiltinMethods because they, in general,
+					// cannot be captured. (TODO: Error message for that?)
+					let mut inner_bind = ast.exprs.get_mut(call.value);
+					if let Expr::FunCapture(capt) = inner_bind.as_mut() {
+						// TODO: FunCall on an Object. Until then, we still have to use
+						// ValCall(FunCapture).
+						let as_funcall = FunCall {
+							location: call.location.clone(),
+							fn_name: capt.location.clone(),
+							identity: capt.identity,
+							args: std::mem::take(&mut call.args),
+							object: capt.object
+						};
+
+						*expr = Expr::FunCall(as_funcall);
+						// Because this is happening first, we have to re-check
+						// the expr.
+						drop(inner_bind);
+						drop(binding);
+						return self.check_expr(ast, expr_id, value_used);
+					}
+				}
+
 				let value = self.check_expr(ast, call.value, true)?;
 			
 				// Now, we need to make sure that the value is Assignable to
@@ -1553,26 +1580,6 @@ impl<'db> TypeChecker<'db> {
 				// TODO: Should ValCall's use_sig their sig?
 
 				let ret_type = self.db.get(call.sig).return_type;
-
-				// Optimization: if we are a ValCall of a FunCapture, replace
-				// us with a FunCall.
-				let mut inner_bind = ast.exprs.get_mut(call.value);
-				if let Expr::FunCapture(capt) = inner_bind.as_mut() {
-					// TODO: FunCall on an Object. Until then, we still have to use
-					// ValCall(FunCapture).
-					let as_funcall = FunCall {
-						location: call.location.clone(),
-						fn_name: capt.location.clone(),
-						identity: capt.identity,
-						args: std::mem::take(&mut call.args),
-						object: capt.object
-					};
-
-					*expr = Expr::FunCall(as_funcall);
-					// There should be no need to re-typecheck the FunCall
-					// in this case.
-					return Ok(ret_type);
-				}
 
 				ret_type
 			},
