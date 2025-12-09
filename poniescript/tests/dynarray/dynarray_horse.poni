@@ -1,0 +1,37 @@
+class Horse {
+    var name: StrBuf = "Horse!";
+}
+
+fun init() {
+    var horses: DynArray[Horse] = [];
+
+    for i in 0..200 {
+        horses.push(new Horse {
+            name: str("Horse #", i)
+        })
+    }
+
+    //! Horse #0
+    //! Horse #10
+    //! Horse #20
+    //! Horse #30
+    //! Horse #40
+    //! Horse #50
+    //! Horse #60
+    //! Horse #70
+    //! Horse #80
+    //! Horse #90
+    //! Horse #100
+    //! Horse #110
+    //! Horse #120
+    //! Horse #130
+    //! Horse #140
+    //! Horse #150
+    //! Horse #160
+    //! Horse #170
+    //! Horse #180
+    //! Horse #190
+    for i in 0..20 {
+        print(horses[i * 10].name);
+    }
+}

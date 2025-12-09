@@ -321,6 +321,7 @@ pub fn generate(tests_file: &mut File) {
 		("dead_code/", "dead_args_valcall"),
 
 		("dynarray/", "assign_lit"),
+		("dynarray/", "dynarray_horse"),
 		("dynarray/", "index"),
 		("dynarray/", "push_many_times"),
 		("dynarray/", "push_once"),

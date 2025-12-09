@@ -534,6 +534,14 @@ impl<'db> Binder<'db> {
 				}
 				return typ;
 			}
+			Type::DynArrayOf(elem_typ, _) => {
+				let inner = self.visit_type(elem_typ, location);
+				if inner != elem_typ {
+					let arr_typ = self.db.put_type(Type::ArrayOf(inner));
+					return self.db.put_type(Type::DynArrayOf(inner, arr_typ));
+				}
+				return typ;
+			}
 			Type::Tuple(inner) => {
 				// TODO: Any way to optimize this?
 				let mut resolved = Vec::new();
