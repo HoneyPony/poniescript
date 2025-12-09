@@ -1914,6 +1914,36 @@ impl<'a> Codegen<'a> {
 						arr_val, idx_val);
 				}
 
+				if let Type::DynArrayOf(_, arr_ty) = self.db.get(arr_val.typ) {
+					// Dynamic ararys will also need to be a bit complicated
+					// when it comes to the bounds check. For now, we check
+					// both lengths directly; TODO make it safe, we will need
+					// to store a temporary with the pointed-to array and
+					// check against that.
+					//
+					// For now I will actually skip the inner check as it shouldn't
+					// be necesary in the short term. In particular, the header.length
+					// should always be <= the allocated inner array.length, UNLESS
+					// the inner array shrinks (which it can't do yet).
+					inf_write!(into, "{}if({} < 0 || {} >= {}->header.length) {{",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &index.location);
+					inf_write!(into, " }};\n");
+
+					// This should be safe (?)
+					if self.db.is_cheap_re_eval_type(index.typ) {
+						return inline_expr!(self, index.typ, "(({}){}->header.buffer)->contents[{}]",
+							self.db.get_ctype(*arr_ty), arr_val, idx_val);
+					}
+
+					let val = self.new_val_typed(index.typ);
+
+					define_val!(self, into, val, " = (({}){}->header.buffer)->contents[{}];\n",
+						self.db.get_ctype(*arr_ty), arr_val, idx_val);
+					
+					return val;
+				}
+
 				// Bounds check
 				// This is actually safe even with the inline_expr! because
 				// we guaranteed that the array pointer was a temporary, so
@@ -1969,6 +1999,15 @@ impl<'a> Codegen<'a> {
 					inf_write!(into, " }};\n");
 					define_val!(self, into, val, "= (ps_int)({}->buffer->contents[{}] = (char)({}));\n"
 						arr_val, idx_val, rhs_val);
+				}
+				else if let Type::DynArrayOf(_, arr_ty) = self.db.get(arr_val.typ) {
+					inf_write!(into, "{}if({} < 0 || {} >= {}->header.length) {{",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &set.location);
+					inf_write!(into, " }};\n");
+					define_val!(self, into, val, " = (({}){}->header.buffer)->contents[{}] = {};\n",
+						self.db.get_ctype(*arr_ty), arr_val, idx_val,
+						rhs_val);
 				}
 				else {
 					inf_write!(into, "{}if({} < 0 || {} >= {}->header.length) {{ ",

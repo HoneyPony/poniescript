@@ -1273,6 +1273,7 @@ impl<'db> TypeChecker<'db> {
 
 				let elem_ty = match self.db.get(arr_ty).clone() {
 					Type::ArrayOf(elem) => elem,
+					Type::DynArrayOf(elem, _) => elem,
 					// We don't have a good string indexing strategy yet. For now,
 					// treat strings as essentially arrays of integers.
 					Type::Str | Type::StrBuf | Type::StrConst => self.db.types.int,
@@ -1302,6 +1303,7 @@ impl<'db> TypeChecker<'db> {
 
 				let elem_ty = match self.db.get(arr_ty).clone() {
 					Type::ArrayOf(elem) => elem,
+					Type::DynArrayOf(elem, _) => elem,
 					// We don't have a good string indexing strategy yet. For now,
 					// treat strings as essentially arrays of integers.
 					Type::Str | Type::StrBuf | Type::StrConst => self.db.types.int,
