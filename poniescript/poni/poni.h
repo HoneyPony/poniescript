@@ -542,12 +542,12 @@ ps_strfmt_bool(struct poni_gc_context *ctx, ps_strbuf *buf, ps_bool b) {
 	if(b) {
 		ps_strbuf_reserve(ctx, buf, sizeof("true"));
 		memcpy(buf->buffer->contents + buf->length, "true", sizeof("true"));
-		buf->length += sizeof("true");
+		buf->length += sizeof("true") - 1;
 	}
 	else {
 		ps_strbuf_reserve(ctx, buf, sizeof("false"));
 		memcpy(buf->buffer->contents + buf->length, "false", sizeof("false"));
-		buf->length += sizeof("false");
+		buf->length += sizeof("false") - 1;
 	}
 }
 
