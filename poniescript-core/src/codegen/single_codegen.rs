@@ -631,7 +631,7 @@ impl<'a> Codegen<'a> {
 		val
 	}
 
-	fn save_gc_values(&mut self, into: &mut String) {
+	pub fn save_gc_values(&mut self, into: &mut String) {
 		// If we're disabling gc frames, trying to save the values will cause
 		// issues.
 		if self.disable_gc_frames { return; }

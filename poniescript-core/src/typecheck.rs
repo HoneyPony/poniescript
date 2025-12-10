@@ -1829,7 +1829,12 @@ impl<'db> TypeChecker<'db> {
 					let Some(object) = &mut capt.object else {
 						type_error!(self, &capt.location, "Can't resolve function call.");
 					};
-					self.check_expr(ast, *object, true)?
+					self.check_expr(ast, *object, true)?;
+					
+					// Strange but kind of true: We want to immediately promote
+					// the object. We need a concrete type to try to resolve
+					// member functions.
+					self.promote_from_unassigned(ast, object)
 				};
 
 				if let Some(fun) = self.db.lookup_member_fn(obj_ty, capt.identifier.lexeme) {

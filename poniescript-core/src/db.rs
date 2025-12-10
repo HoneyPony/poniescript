@@ -886,10 +886,20 @@ impl Db {
 		}
 	}
 
+	fn is_int_or_float(&self, ty: TypId) -> bool {
+		// There should (?) be no need for AssumeInt or AssumeFloat, but maybe
+		// there is.
+		ty == self.types.int || ty == self.types.float
+	}
+
 	fn use_tuple(&mut self, inner: &Arc<[TypId]>, tuple_ty: TypId) {
 		if !self.is_cgen_safe(tuple_ty) { return; }
 
 		self.value_types.push(tuple_ty);
+
+		let mut all_same_ty = true;
+		// It should not be possible to have an empty tuple, I think...?
+		let first = inner.first().unwrap();
 
 		for (idx, ty) in inner.iter().enumerate() {
 			// Generate the StrId for each field index.
@@ -916,6 +926,19 @@ impl Db {
 			let (_, var) = self.synthesize_property(self.get(key), self.get(cname), *ty);
 
 			self.tuple_vars.insert(var_key, var);
+
+			if *first != *ty {
+				all_same_ty = false;
+			}
+		}
+
+		// For tuples that are all-ints or all-floats, provide the map()
+		// function. I suppose this should actually be safe for any tuple
+		// that is all-same-ty?
+		if all_same_ty {
+			let map = self.put_str("map");
+			self.builtin_methods.insert((map, tuple_ty), 
+				Arc::clone(&self.builtin_method_table.vec_map));
 		}
 	}
 

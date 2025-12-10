@@ -4,10 +4,13 @@ use crate::db::BuiltinMethodPtr;
 
 pub mod dynarray;
 pub mod option;
+pub mod vec;
 
 pub struct BuiltinMethodTable {
 	pub dynarray_push: BuiltinMethodPtr,
     pub option_unwrap: BuiltinMethodPtr,
+
+    pub vec_map: BuiltinMethodPtr,
 }
 
 impl BuiltinMethodTable {
@@ -15,6 +18,8 @@ impl BuiltinMethodTable {
         Self {
             dynarray_push: Arc::new(dynarray::DynarrayPush),
             option_unwrap: Arc::new(option::OptionUnwrap),
+
+            vec_map: Arc::new(vec::VecMap),
         }
     }
 }
