@@ -66,7 +66,10 @@ impl BuiltinMethod for DynarrayPush {
     }
 }
 
-pub struct DynarrayAny;
+pub struct DynarrayAny {
+    /// Instead of doing any(), do all(). (They are very similar operations).
+    pub all: bool,
+}
 
 impl BuiltinMethod for DynarrayAny {
     fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>) {
@@ -108,15 +111,23 @@ impl BuiltinMethod for DynarrayAny {
             codegen.db.get_ctype(*arr_ty), self_val);
 
         let val = codegen.new_val_typed(codegen.db.types.bool);
-        define_val!(codegen, into, val, " = 0;");
+        // any starts at false, all starts at true.
+        define_val!(codegen, into, val, " = {};", if self.all { "1" } else { "0" });
 
         // The index that we want to use is the current length of the array.
         define_val!(codegen, into, idx, " = 0;\n");
         inf_writeln!(into, "{}while({} < {}->header.length) {{",
             indent, idx, inner_array);
-        inf_writeln!(into, "{}\tif({}.fun(ctx, {}->contents[{}], {}.closure)) {{",
-            indent, fun, inner_array, idx, fun);
-        inf_writeln!(into, "{}\t\t{} = 1;", indent, val);
+        if self.all {
+            inf_writeln!(into, "{}\tif(!{}.fun(ctx, {}->contents[{}], {}.closure)) {{",
+                indent, fun, inner_array, idx, fun);
+            inf_writeln!(into, "{}\t\t{} = 0;", indent, val);
+        }
+        else {
+            inf_writeln!(into, "{}\tif({}.fun(ctx, {}->contents[{}], {}.closure)) {{",
+                indent, fun, inner_array, idx, fun);
+            inf_writeln!(into, "{}\t\t{} = 1;", indent, val);
+        }
         inf_writeln!(into, "{}\t\tbreak;", indent);
         inf_writeln!(into, "{}\t}}", indent);
         inf_writeln!(into, "{}\t{} += 1;", indent, idx);

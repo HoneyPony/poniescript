@@ -9,6 +9,7 @@ pub mod vec;
 pub struct BuiltinMethodTable {
 	pub dynarray_push: BuiltinMethodPtr,
     pub dynarray_any: BuiltinMethodPtr,
+    pub dynarray_all: BuiltinMethodPtr,
 
     pub option_unwrap: BuiltinMethodPtr,
 
@@ -19,7 +20,8 @@ impl BuiltinMethodTable {
 	pub fn new() -> Self {
         Self {
             dynarray_push: Arc::new(dynarray::DynarrayPush),
-            dynarray_any: Arc::new(dynarray::DynarrayAny),
+            dynarray_any: Arc::new(dynarray::DynarrayAny { all: false }),
+            dynarray_all: Arc::new(dynarray::DynarrayAny { all: true }),
 
             option_unwrap: Arc::new(option::OptionUnwrap),
 
