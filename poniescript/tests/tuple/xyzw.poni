@@ -1,0 +1,36 @@
+fun init() {
+    var a = (1, 2);
+    var b = (2, 3, 4);
+    var c = (4, 5, 6, 7);
+
+    print(a.x); //! 1
+    print(a.y); //! 2
+
+    print(b.x); //! 2
+    print(b.y); //! 3
+    print(b.z); //! 4
+
+    print(c.x); //! 4
+    print(c.y); //! 5
+    print(c.z); //! 6
+    print(c.w); //! 7
+
+    a.x = 5;
+    a.y = 10;
+
+    print(a.x); //! 5
+    print(a.y); //! 10
+
+    b.x = 20;
+    b.y = 30;
+    b.z = 40;
+
+    print(b); //! (20, 30, 40)
+
+    c.x = 11;
+    c.y = 23;
+    c.w = 22;
+    c.z = 21;
+
+    print(c); //! (11, 23, 21, 22)
+}

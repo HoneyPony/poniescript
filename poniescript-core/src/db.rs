@@ -402,6 +402,11 @@ pub struct Db {
 	pub str_left: StrId,
 	pub str_right: StrId,
 
+	pub str_x: StrId,
+	pub str_y: StrId,
+	pub str_z: StrId,
+	pub str_w: StrId,
+
 	/// The list of globals. The initializer ordering pass will sort them.
 	pub globals: Vec<VarId>,
 
@@ -516,6 +521,11 @@ impl Db {
 			str_left: StrId::invalid(),
 			str_right: StrId::invalid(),
 
+			str_x: StrId::invalid(),
+			str_y: StrId::invalid(),
+			str_z: StrId::invalid(),
+			str_w: StrId::invalid(),
+
 			prop_str: StrProperties {
 				length: VarId::invalid(),
 				length_key: StrId::invalid()
@@ -569,6 +579,11 @@ impl Db {
 
 		db.str_left = db.put_str("left");
 		db.str_right = db.put_str("right");
+
+		db.str_x = db.put_str("x");
+		db.str_y = db.put_str("y");
+		db.str_z = db.put_str("z");
+		db.str_w = db.put_str("w");
 
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,
@@ -900,14 +915,20 @@ impl Db {
 		ty == self.types.int || ty == self.types.float
 	}
 
+	/// Returns whether the given TypId is one of the named Vec types we support.
+	fn is_vec(&self, ty: TypId) -> bool {
+		ty == self.types.vec2 || ty == self.types.vec3 || ty == self.types.vec4 ||
+		ty == self.types.vec2i || ty == self.types.vec3i || ty == self.types.vec4i
+	}
+
 	fn use_tuple(&mut self, inner: &Arc<[TypId]>, tuple_ty: TypId) {
 		if !self.is_cgen_safe(tuple_ty) { return; }
 
 		self.value_types.push(tuple_ty);
 
-		let mut all_same_ty = true;
 		// It should not be possible to have an empty tuple, I think...?
 		let first = inner.first().unwrap();
+		let all_same_ty = inner.iter().all(|t| *t == *first);
 
 		for (idx, ty) in inner.iter().enumerate() {
 			// Generate the StrId for each field index.
@@ -935,9 +956,16 @@ impl Db {
 
 			self.tuple_vars.insert(var_key, var);
 
-			if *first != *ty {
-				all_same_ty = false;
-			}
+			// TODO: It would be nice to synthesize these here then put them
+			// in a hashmap. I guess for now we'll have to check them in
+			// lookup_member, which is *fine* but inefficient.
+			// if all_same_ty && self.is_int_or_float(*ty) {
+			// 	// Synthesize a few special properties for int or float (i.e.
+			// 	// 'x', 'y', etc.)
+			// 	let props = ["x", "y", "z", "w"];
+			// 	if let Some(prop) = props.get(idx) {
+			// 		let key = self.put_str(prop);
+			// }
 		}
 
 		// For tuples that are all-ints or all-floats, provide the map()
@@ -1344,7 +1372,22 @@ impl Db {
 			},
 			Type::Tuple(typs) => {
 				// Look up the property index based on name ('0' => 0)
-				let Some(which_prop) = self.tuple_idxs.get(&propname) else { return None; };
+				let Some(which_prop) = self.tuple_idxs.get(&propname).or_else(|| {
+					// Look up a couple special properties if it's a vec.
+					if self.is_vec(typ) {
+						match propname {
+							p if p == self.str_x => Some(&0),
+							p if p == self.str_y => Some(&1),
+							p if p == self.str_z => Some(&2),
+							p if p == self.str_w => Some(&3),
+							_ => None
+						}
+					}
+					else { None }
+				}) else {
+					// Failed to look up property.
+					return None;
+				};
 
 				// We have to manually check the index, this is how we know
 				// whether properties are available.
