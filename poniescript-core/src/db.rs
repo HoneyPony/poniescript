@@ -883,6 +883,10 @@ impl Db {
 			let push = self.put_str("push");
 			self.builtin_methods.insert((push, dynarray_ty),
 				Arc::clone(&self.builtin_method_table.dynarray_push));
+
+			let any = self.put_str("any");
+			self.builtin_methods.insert((any, dynarray_ty),
+				Arc::clone(&self.builtin_method_table.dynarray_any));
 		}
 	}
 

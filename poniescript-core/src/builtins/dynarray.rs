@@ -2,6 +2,7 @@ use crate::db::*;
 use crate::codegen::*;
 use crate::define_val;
 use crate::expr::BuiltinCall;
+use crate::expr::Sig;
 use crate::inf_writeln;
 use crate::inf_write;
 use crate::typ::Type;
@@ -62,5 +63,65 @@ impl BuiltinMethod for DynarrayPush {
         inf_writeln!(into, "{}{}->header.length += 1;", indent, self_val);
         
         Val::Void.typed(codegen.db.types.void, None)
+    }
+}
+
+pub struct DynarrayAny;
+
+impl BuiltinMethod for DynarrayAny {
+    fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>) {
+        // DynArray[T]::push(T) -> void
+        match db.get(self_ty) {
+            Type::DynArrayOf(elem_ty, _) => {
+                // We want a fun(Elem) -> bool
+                let sig = Sig {
+                    parameters: vec![*elem_ty],
+                    return_type: db.types.bool
+                };
+
+                let sig = db.put_sig(&sig);
+                let fun_typ = db.put_type(Type::Fun(sig));
+
+                (db.types.bool, vec![fun_typ])
+            }
+            _ => unreachable!()
+        }
+    }
+
+    fn compile(
+        &self,
+        codegen: &mut Codegen,
+        ast_node: &BuiltinCall,
+        ast: &AstReadonly,
+        self_val: TypedVal,
+        arg_vals: Vec<TypedVal>,
+        into: &mut String
+    ) -> TypedVal {
+        let Type::DynArrayOf(elem_ty, arr_ty) = self_val.get_type(codegen.db) else { unreachable!() };
+        let [fun] = arg_vals.as_slice() else { unreachable!() };
+
+        let indent = codegen.indent();
+
+        let idx = codegen.new_val_typed(codegen.db.types.int);
+
+        let inner_array = format!("(({}){}->header.buffer)",
+            codegen.db.get_ctype(*arr_ty), self_val);
+
+        let val = codegen.new_val_typed(codegen.db.types.bool);
+        define_val!(codegen, into, val, " = 0;");
+
+        // The index that we want to use is the current length of the array.
+        define_val!(codegen, into, idx, " = 0;\n");
+        inf_writeln!(into, "{}while({} < {}->header.length) {{",
+            indent, idx, inner_array);
+        inf_writeln!(into, "{}\tif({}.fun(ctx, {}->contents[{}], {}.closure)) {{",
+            indent, fun, inner_array, idx, fun);
+        inf_writeln!(into, "{}\t\t{} = 1;", indent, val);
+        inf_writeln!(into, "{}\t\tbreak;", indent);
+        inf_writeln!(into, "{}\t}}", indent);
+        inf_writeln!(into, "{}\t{} += 1;", indent, idx);
+        inf_writeln!(into, "{}}}", indent);
+        
+        val
     }
 }

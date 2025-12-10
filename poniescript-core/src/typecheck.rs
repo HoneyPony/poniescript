@@ -707,6 +707,13 @@ impl<'db> TypeChecker<'db> {
 					array_lit.arr_typ = promote_to;
 				}
 
+				if matches!(self.db.get(array_lit.arr_typ), Type::ArrayOf(_)) &&
+					matches!(self.db.get(promote_to), Type::DynArrayOf(..)) {
+					// Promote to incoming DynArray.
+					array_lit.elem_typ = incoming_elem_typ;
+					array_lit.arr_typ = promote_to;
+				}
+
 				// Promote all child nodes to our final elem type.
 				for expr in &mut array_lit.values {
 					self.do_promote_expr(ast, expr, array_lit.elem_typ);
