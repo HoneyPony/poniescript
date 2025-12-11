@@ -17,7 +17,7 @@ use crate::module::Module;
 use anstream::eprintln;
 use anstream::eprint;
 
-use anstyle::Style;
+use anstyle::{RgbColor, Style};
 use anstyle::Color;
 use anstyle::AnsiColor;
 
@@ -27,6 +27,8 @@ const STYLE_LINE_NUM: Style = Style::new()
 // Might change this later. For now: Pony-styled magenta!
 const STYLE_SQUIGGLE: Style = Style::new()
 	.fg_color(Some(Color::Ansi(AnsiColor::Magenta)));
+
+const STYLE_RESET: Style = Style::new();
 
 #[derive(Clone)]
 pub struct SourceLocation {
@@ -141,6 +143,18 @@ impl SourceMap {
 		return self.lines[line as usize] + column;
 	}
 
+	fn show_squiggle(&self, idx: u64) {
+		let a = (255.0, 79.0, 144.0);
+		let b = (252.0, 38.0, 56.0);
+
+		let f = (idx as f32 / 80.0).clamp(0.0, 1.0);
+		let c = (a.0 + (b.0 - a.0) * f, a.1 + (b.1 - a.1) * f, a.2 + (b.2 - a.2) * f);
+
+		let style = Style::new()
+			.fg_color(Some(Color::Rgb(RgbColor(c.0 as u8, c.1 as u8, c.2 as u8))));
+		eprint!("{style}─");
+	}
+
 	fn show_underlined_location(&self, location: &SourceLocation, provider: &dyn SourceProvider) {
 		let mut start = self.get_line_column(location.offset);
 		let end_offset = location.offset + location.length;
@@ -189,6 +203,7 @@ impl SourceMap {
 				// Generate underline
 				if underline {
 					underline = false;
+					let mut squig = 0;
 					eprintln!("");
 					// Line up with the line numbers
 					eprint!("{STYLE_LINE_NUM}     ╰ {STYLE_LINE_NUM:#}");
@@ -197,17 +212,26 @@ impl SourceMap {
 						if i >= start_offset && i < end_offset {
 							if self.contents_chars[i] == '\t' {
 								// TODO: Only generate the STYLE when needed
-								eprint!("{STYLE_SQUIGGLE}────{STYLE_SQUIGGLE:#}");
+								//eprint!("{STYLE_SQUIGGLE}────{STYLE_SQUIGGLE:#}");
+								for _ in 0..4 {
+									self.show_squiggle(squig);
+									squig += 1;
+								}
 							}
-							else { eprint!("{STYLE_SQUIGGLE}─{STYLE_SQUIGGLE:#}"); }
+							else { //eprint!("{STYLE_SQUIGGLE}─{STYLE_SQUIGGLE:#}"); }
+								self.show_squiggle(squig);
+								squig += 1;
+							}
 						}
 						else {
 							if self.contents_chars[i] == '\t' {
 								eprint!("    ");
+								squig += 4;
 							}
-							else { eprint!(" "); }
+							else { eprint!(" "); squig += 1; }
 						}
 					}
+					eprint!("{STYLE_RESET}");
 				}
 
 				// Read until we hit the end of the line after the end of the block.
