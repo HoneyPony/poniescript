@@ -174,6 +174,7 @@ pub fn generate(tests_file: &mut File) {
 		("comparison/", "compare_constants"),
 		("comparison/", "compare_doubleblock"),
 		("comparison/", "compare_equal_nums"),
+		("comparison/", "compare_equal_classes"),
 
 		("lerp/", "basic_including_bools"),
 		("lerp/", "class"),
