@@ -624,6 +624,11 @@ impl<'b> Parser<'b> {
 		// for the iterable.
 		let name_str = name.lexeme;
 		let name_loc = name.location.clone();
+
+		// Push a scope for the for loop. This prevents the variable for the initializer
+		// leaking into the surrounding scope.
+		self.push_scope();
+
 		// When we create variables, don't set the class yet, as we don't
 		// know what it is -- we wire it back in once we're done parsing a 
 		// class.
@@ -633,6 +638,7 @@ impl<'b> Parser<'b> {
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		let inner = self.block()?;
+		self.pop_scope();
 
 		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
 		

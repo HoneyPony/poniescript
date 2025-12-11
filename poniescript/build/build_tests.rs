@@ -395,6 +395,8 @@ pub fn generate(tests_file: &mut File) {
 		("range/", "basic_var"),
 		("range/", "two_main_types"),
 
+		("for/", "correct_scope"),
+		("for/", "correct_scope2"),
 		("for/", "for_basic_i"),
 		("for/", "for_basic"),
 		("for/", "for_closed_i"),

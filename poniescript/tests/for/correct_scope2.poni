@@ -1,0 +1,9 @@
+fun init() {
+    // This test ensures we can't have this invalid construction (or similar
+    // ones that could also involve uninitialized variables).
+    
+    //? Unknown identifier 'i'
+    for i in 0..i {
+        print(i);
+    }
+}
