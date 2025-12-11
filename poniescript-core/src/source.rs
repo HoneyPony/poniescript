@@ -149,8 +149,8 @@ impl SourceMap {
 		// Generate the "name" info
 		// TODO: SourceProvider should show its path?
 		let display_path = provider.repr_path();
-		eprintln!("{STYLE_LINE_NUM}    --- {STYLE_LINE_NUM:#}{}:{}:{}:", display_path, start.0, start.1);
-		eprintln!("{STYLE_LINE_NUM}     | {STYLE_LINE_NUM:#}");
+		eprintln!("{STYLE_LINE_NUM}    ─┬─ {STYLE_LINE_NUM:#}{}:{}:{}:", display_path, start.0, start.1);
+		eprintln!("{STYLE_LINE_NUM}     │ {STYLE_LINE_NUM:#}");
 
 		// Convert back to indices
 		start.0 -= 1;
@@ -174,7 +174,7 @@ impl SourceMap {
 		loop {
 			if at_line_beginning {
 				line_start_offset = offset;
-				eprint!("{STYLE_LINE_NUM}{:>4} | {STYLE_LINE_NUM:#}", line_number);
+				eprint!("{STYLE_LINE_NUM}{:>4} │ {STYLE_LINE_NUM:#}", line_number);
 				at_line_beginning = false;
 			}
 
@@ -191,15 +191,15 @@ impl SourceMap {
 					underline = false;
 					eprintln!("");
 					// Line up with the line numbers
-					eprint!("{STYLE_LINE_NUM}     : {STYLE_LINE_NUM:#}");
+					eprint!("{STYLE_LINE_NUM}     ╰ {STYLE_LINE_NUM:#}");
 					for i in line_start_offset..offset {
 						if self.contents_chars[i] == '\r' { continue; }
 						if i >= start_offset && i < end_offset {
 							if self.contents_chars[i] == '\t' {
 								// TODO: Only generate the STYLE when needed
-								eprint!("{STYLE_SQUIGGLE}~~~~{STYLE_SQUIGGLE:#}");
+								eprint!("{STYLE_SQUIGGLE}────{STYLE_SQUIGGLE:#}");
 							}
-							else { eprint!("{STYLE_SQUIGGLE}~{STYLE_SQUIGGLE:#}"); }
+							else { eprint!("{STYLE_SQUIGGLE}─{STYLE_SQUIGGLE:#}"); }
 						}
 						else {
 							if self.contents_chars[i] == '\t' {
