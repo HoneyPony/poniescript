@@ -432,65 +432,72 @@ ps_strfmt_char(struct poni_gc_context *ctx, ps_strbuf *buf, char c) {
 
 // Just for fun, this is a version of ps_strfmt_int that doesn't go through
 // snprintf. I want to see if it is any faster...
+// static inline
+// void
+// ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
+// 	if(i < 0) {
+// 		if(i == INT64_MIN) {
+// 			char val[] = "-9223372036854775808";
+// 			ps_strfmt_cstr(ctx, buf, val, sizeof(val) - 1);
+// 			return;
+// 		}
+// 		ps_strfmt_char(ctx, buf, '-');
+// 		i = -i;
+// 	}
+
+// 	if(i == 0) {
+// 		ps_strfmt_char(ctx, buf, '0');
+// 		return;
+// 	}
+
+// 	char digits[24] = {0};
+// 	char *str = &digits[23];
+// 	size_t len = 0;
+
+// 	char table[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+
+// 	while(i > 10000) {
+// 		ps_int rem = (i % 10000);
+// 		i /= 10000;
+
+// 		ps_int idx1 = (rem / 100) << 1;
+// 		ps_int idx2 = (rem % 100) << 1;
+
+// 		str -= 4;
+// 		str[0] = table[idx1];
+// 		str[1] = table[idx1 + 1];
+// 		str[2] = table[idx2];
+// 		str[3] = table[idx2 + 1];
+// 		len += 4;
+// 	}
+
+// 	while(i > 100) {
+// 		ps_int idx = i % 100;
+// 		str -= 2;
+// 		str[0] = table[idx * 2];
+// 		str[1] = table[idx * 2 + 1];
+// 		len += 2;
+// 		i /= 100;
+// 	}
+
+// 	while(i > 0) {
+// 		ps_int digit = i % 10;
+// 		str--;
+// 		*str = (char)(digit + '0');		
+// 		len += 1;
+// 		i /= 10;
+// 	}
+
+// 	ps_strfmt_cstr(ctx, buf, str, len - 1);
+// }
+
 static inline
 void
 ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
-	if(i < 0) {
-		if(i == INT64_MIN) {
-			char val[] = "-9223372036854775808";
-			ps_strfmt_cstr(ctx, buf, val, sizeof(val) - 1);
-			return;
-		}
-		ps_strfmt_char(ctx, buf, '-');
-		i = -i;
-	}
-
-	if(i == 0) {
-		ps_strfmt_char(ctx, buf, '0');
-		return;
-	}
-
-	char digits[24] = {0};
-	char *str = &digits[23];
-	size_t len = 0;
-
-	char table[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
-
-	while(i > 10000) {
-		ps_int rem = (i % 10000);
-		i /= 10000;
-
-		ps_int idx1 = (rem / 100) << 1;
-		ps_int idx2 = (rem % 100) << 1;
-
-		str -= 4;
-		str[0] = table[idx1];
-		str[1] = table[idx1 + 1];
-		str[2] = table[idx2];
-		str[3] = table[idx2 + 1];
-		len += 4;
-	}
-
-	while(i > 100) {
-		ps_int idx = i % 100;
-		str -= 2;
-		str[0] = table[idx * 2];
-		str[1] = table[idx * 2 + 1];
-		len += 2;
-		i /= 100;
-	}
-
-	while(i > 0) {
-		ps_int digit = i % 10;
-		str--;
-		*str = (char)(digit + '0');		
-		len += 1;
-		i /= 10;
-	}
-
-	ps_strfmt_cstr(ctx, buf, str, len);
+	char buf2[64];
+	snprintf(buf2, 64, "%" PRId64, i);
+	ps_strfmt_cstr(ctx, buf, buf2, strlen(buf2));
 }
-
 // static inline
 // void
 // ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
@@ -508,8 +515,8 @@ ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
 // 		// Do the snprintf again. The output should not change.
 // 		// We will recompute rem, although it should be the case that
 // 		// there's always enough room.
-// 		rem = (buf->buffer->length - buf->length) - 1;
-// 		snprintf(buf->buffer->contents + buf->length, rem, "%" PRId64, i);
+// 		//rem = (buf->buffer->length - buf->length) - 1;
+// 		snprintf(buf->buffer->contents + buf->length, needed + 1, "%" PRId64, i);
 // 	}
 
 // 	// Finally, the length of the string should increase by needed.
@@ -528,10 +535,10 @@ ps_strfmt_float(struct poni_gc_context *ctx, ps_strbuf *buf, float f) {
 	if(rem < needed) {
 		ps_strbuf_reserve(ctx, buf, needed + 1);
 
-		snprintf(buf->buffer->contents + buf->length, rem, "%f", f);
+		snprintf(buf->buffer->contents + buf->length, needed, "%f", f);
 	}
 
-	buf->length += needed;
+	buf->length += needed - 1;
 	buf->buffer->contents[buf->length] = '\0';
 }
 
