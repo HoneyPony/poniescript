@@ -173,8 +173,12 @@ impl BuiltinMethod for DynarrayCloneShallow {
         let inner_array = format!("(({}){}->header.buffer)",
             codegen.db.get_ctype(*arr_ty), self_val);
 
-        let inner_len_val = codegen.new_val_typed(codegen.db.types.int);
-        define_val!(codegen, into, inner_len_val, " = {}->header.length;\n", inner_array);
+        // It is VERY IMPORTANT that we read the length value from the *DynArray*,
+        // not from the *Array*. After all, the Array's length includes elements
+        // that may be uninitialized.
+        let stored_len_val = codegen.new_val_typed(codegen.db.types.int);
+        define_val!(codegen, into, stored_len_val, " = {}->header.length;\n",
+            self_val);
 
         // Read from a specific inner array temporary. This ensures memory safety
         // (the array can't shrink while we're constructing it).
@@ -193,15 +197,15 @@ impl BuiltinMethod for DynarrayCloneShallow {
             codegen.db.get_ctype(*elem_ty),
             // For now, we use the length we got from the old array as the
             // new length value and the new allocated size.
-            inner_len_val, // elem_cnt
-            inner_len_val, // real_cnt
+            stored_len_val, // elem_cnt
+            stored_len_val, // real_cnt
             codegen.db.get_type_ctag(*elem_ty));
 
 
         // The index that we want to use is the current length of the array.
         define_val!(codegen, into, idx, " = 0;\n");
         inf_writeln!(into, "{}while({} < {}) {{",
-            indent, idx, inner_len_val);
+            indent, idx, stored_len_val);
         // Copy
         inf_writeln!(into, "{}\t{}->contents[{}] = {}->contents[{}];",
             indent, buf_val, idx, inner_arr_val, idx);
