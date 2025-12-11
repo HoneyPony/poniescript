@@ -906,6 +906,10 @@ impl Db {
 			let all = self.put_str("all");
 			self.builtin_methods.insert((all, dynarray_ty),
 				Arc::clone(&self.builtin_method_table.dynarray_all));
+
+			let all = self.put_str("clone_shallow");
+			self.builtin_methods.insert((all, dynarray_ty),
+				Arc::clone(&self.builtin_method_table.dynarray_clone_shallow));
 		}
 	}
 

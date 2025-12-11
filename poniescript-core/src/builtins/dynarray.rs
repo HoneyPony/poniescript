@@ -116,6 +116,10 @@ impl BuiltinMethod for DynarrayAny {
 
         // The index that we want to use is the current length of the array.
         define_val!(codegen, into, idx, " = 0;\n");
+
+        // TODO: Memory safety: What if the array shrinks while we're iterating?
+        // We might want to grab the inner array as a temporary. Or, we could
+        // do the thing where we capture the value.
         inf_writeln!(into, "{}while({} < {}->header.length) {{",
             indent, idx, inner_array);
         if self.all {
@@ -132,6 +136,79 @@ impl BuiltinMethod for DynarrayAny {
         inf_writeln!(into, "{}\t}}", indent);
         inf_writeln!(into, "{}\t{} += 1;", indent, idx);
         inf_writeln!(into, "{}}}", indent);
+        
+        val
+    }
+}
+
+pub struct DynarrayCloneShallow;
+
+impl BuiltinMethod for DynarrayCloneShallow {
+    fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>) {
+        // DynArray[T]::clone() -> DynArray[T]
+        match db.get(self_ty) {
+            Type::DynArrayOf(elem_ty, _) => {
+                (self_ty, vec![])
+            }
+            _ => unreachable!()
+        }
+    }
+
+    fn compile(
+        &self,
+        codegen: &mut Codegen,
+        ast_node: &BuiltinCall,
+        ast: &AstReadonly,
+        self_val: TypedVal,
+        arg_vals: Vec<TypedVal>,
+        into: &mut String
+    ) -> TypedVal {
+        let Type::DynArrayOf(elem_ty, arr_ty) = self_val.get_type(codegen.db) else { unreachable!() };
+        let [] = arg_vals.as_slice() else { unreachable!() };
+
+        let indent = codegen.indent();
+
+        let idx = codegen.new_val_typed(codegen.db.types.int);
+
+        let inner_array = format!("(({}){}->header.buffer)",
+            codegen.db.get_ctype(*arr_ty), self_val);
+
+        let inner_len_val = codegen.new_val_typed(codegen.db.types.int);
+        define_val!(codegen, into, inner_len_val, " = {}->header.length;\n", inner_array);
+
+        // Read from a specific inner array temporary. This ensures memory safety
+        // (the array can't shrink while we're constructing it).
+        let inner_arr_val = codegen.new_val_typed(*arr_ty);
+        define_val!(codegen, into, inner_arr_val, " = {};\n", inner_array);
+
+        // No need for _tmp as we are not claling any functions.
+        // NOTE: This is the buffer we're allocating for the new array.
+        let buf_val = codegen.new_val_typed(*arr_ty);
+        define_val!(codegen, into, buf_val, ";\n");
+
+        let val = codegen.new_val_typed(self_val.typ);
+        define_val!(codegen, into, val, "; PONI_INIT_DYNARRAY({}, {}, sizeof({}), {}, {}, {})\n",
+            buf_val,
+            val,
+            codegen.db.get_ctype(*elem_ty),
+            // For now, we use the length we got from the old array as the
+            // new length value and the new allocated size.
+            inner_len_val, // elem_cnt
+            inner_len_val, // real_cnt
+            codegen.db.get_type_ctag(*elem_ty));
+
+
+        // The index that we want to use is the current length of the array.
+        define_val!(codegen, into, idx, " = 0;\n");
+        inf_writeln!(into, "{}while({} < {}) {{",
+            indent, idx, inner_len_val);
+        // Copy
+        inf_writeln!(into, "{}\t{}->contents[{}] = {}->contents[{}];",
+            indent, buf_val, idx, inner_arr_val, idx);
+        inf_writeln!(into, "{}\t{} += 1;", indent, idx);
+        inf_writeln!(into, "{}}}", indent);
+
+        // TODO: Use memcpy() instead.
         
         val
     }
