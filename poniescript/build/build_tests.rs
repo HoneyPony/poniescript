@@ -378,6 +378,8 @@ pub fn generate(tests_file: &mut File) {
 		("optional/", "tree"),
 		("optional/", "tree2"),
 		("optional/", "tree3"),
+		("optional/", "builtin_is_some_array"),
+		("optional/", "builtin_is_some_horse"),
 
 		("vec/", "vec_types"),
 		("vec/", "vec_ret"),

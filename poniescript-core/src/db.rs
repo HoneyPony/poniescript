@@ -773,6 +773,14 @@ impl Db {
 				let or_panic = self.put_str("or_panic");
 				self.builtin_methods.insert((or_panic, id),
 					Arc::clone(&self.builtin_method_table.option_unwrap));
+
+				let is_some = self.put_str("is_some");
+				self.builtin_methods.insert((is_some, id),
+					Arc::clone(&self.builtin_method_table.option_is_some));
+
+				let is_some = self.put_str("is_nil");
+				self.builtin_methods.insert((is_some, id),
+					Arc::clone(&self.builtin_method_table.option_is_nil));
 			}
 			_ => { }
 		}

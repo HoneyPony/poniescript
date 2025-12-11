@@ -13,6 +13,8 @@ pub struct BuiltinMethodTable {
     pub dynarray_clone_shallow: BuiltinMethodPtr,
 
     pub option_unwrap: BuiltinMethodPtr,
+    pub option_is_some: BuiltinMethodPtr,
+    pub option_is_nil: BuiltinMethodPtr,
 
     pub vec_map: BuiltinMethodPtr,
 }
@@ -26,6 +28,9 @@ impl BuiltinMethodTable {
             dynarray_clone_shallow: Arc::new(dynarray::DynarrayCloneShallow),
 
             option_unwrap: Arc::new(option::OptionUnwrap),
+            option_is_some: Arc::new(option::OptionIsSome { invert: false }),
+            // Inverse of IsSome is IsNil
+            option_is_nil: Arc::new(option::OptionIsSome { invert: true }),
 
             vec_map: Arc::new(vec::VecMap),
         }

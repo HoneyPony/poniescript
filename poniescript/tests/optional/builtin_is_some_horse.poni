@@ -1,0 +1,32 @@
+class Horse {
+    var name: StrBuf = "Twilight";
+}
+
+fun feed(horse: Horse?) {
+    if horse.is_some() {
+        var horse = horse.or_panic();
+        print(horse.name, " ate a carrot.");
+    }
+    else {
+        print("Nopony was here...");
+    }
+}
+
+fun init() {
+    var horse: Horse? = nil;
+
+    print(horse.is_some()); //! false
+    print(horse.is_nil());  //! true
+
+    horse = new Horse {
+        name: "Horse"
+    };
+
+    print(horse.is_some()); //! true
+    print(horse.is_nil());  //! false
+
+    feed(horse); //! Horse ate a carrot.
+    feed(nil); //! Nopony was here...
+
+    feed(new Horse{}); //! Twilight ate a carrot.
+}

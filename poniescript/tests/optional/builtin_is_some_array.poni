@@ -1,0 +1,26 @@
+fun examine(values: Array[int]?) {
+    if values.is_some() {
+        var values = values.or_panic();
+        print(values[0]);
+    }
+    else {
+        print("nothing!");
+    }
+}
+
+fun init() {
+    var values: Array[int]? = nil;
+
+    print(values.is_some()); //! false
+    print(values.is_nil());  //! true
+
+    values = [1, 2, 3];
+
+    print(values.is_some()); //! true
+    print(values.is_nil());  //! false
+
+    examine(values); //! 1
+    examine(nil);    //! nothing!
+
+    examine([30]);   //! 30
+}
