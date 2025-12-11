@@ -65,6 +65,23 @@ pub struct SourceMap {
 	lines: Vec<u64>,
 }
 
+fn gradient(a: (f32, f32, f32), b: (f32, f32, f32), f: f32) -> (f32, f32, f32) {
+	(a.0 + (b.0 - a.0) * f, a.1 + (b.1 - a.1) * f, a.2 + (b.2 - a.2) * f)
+}
+
+fn style(c: (f32, f32, f32)) -> Style {
+	Style::new()
+		.fg_color(Some(Color::Rgb(RgbColor(c.0 as u8, c.1 as u8, c.2 as u8))))
+}
+
+fn gradient_style(a: (f32, f32, f32), b: (f32, f32, f32), f: f32) -> Style {
+	style(gradient(a, b, f))
+}
+
+const ERR_COLOR_V0: (f32, f32, f32) = (255.0, 79.0, 144.0);
+const ERR_COLOR_V1: (f32, f32, f32) = (255.0, 138.0, 220.0);
+const ERR_COLOR_RIGHT: (f32, f32, f32) = (252.0, 38.0, 56.0);
+
 impl SourceMap {
 	pub fn empty() -> SourceMap {
 		return SourceMap {
@@ -143,15 +160,10 @@ impl SourceMap {
 		return self.lines[line as usize] + column;
 	}
 
-	fn show_squiggle(&self, idx: u64) {
-		let a = (255.0, 79.0, 144.0);
-		let b = (252.0, 38.0, 56.0);
-
-		let f = (idx as f32 / 80.0).clamp(0.0, 1.0);
-		let c = (a.0 + (b.0 - a.0) * f, a.1 + (b.1 - a.1) * f, a.2 + (b.2 - a.2) * f);
-
-		let style = Style::new()
-			.fg_color(Some(Color::Rgb(RgbColor(c.0 as u8, c.1 as u8, c.2 as u8))));
+	fn show_squiggle(&self, idx: u64, v: (f32, f32, f32)) {
+		let f = (idx as f32 / 40.0).clamp(0.0, 1.0);
+		let style = gradient_style(v, ERR_COLOR_RIGHT, f);
+		
 		eprint!("{style}─");
 	}
 
@@ -160,11 +172,15 @@ impl SourceMap {
 		let end_offset = location.offset + location.length;
 		let mut end = self.get_line_column(end_offset);
 		
+		let mut lines_rendered = 0;
+		let mut line_style_tup = ERR_COLOR_V0;
+		let mut line_style: Style = style(ERR_COLOR_V0);
+
 		// Generate the "name" info
 		// TODO: SourceProvider should show its path?
 		let display_path = provider.repr_path();
-		eprintln!("{STYLE_LINE_NUM}    ─┬─ {STYLE_LINE_NUM:#}{}:{}:{}:", display_path, start.0, start.1);
-		eprintln!("{STYLE_LINE_NUM}     │ {STYLE_LINE_NUM:#}");
+		eprintln!("{line_style}    ─┬─ {line_style:#}{}:{}:{}:", display_path, start.0, start.1);
+		eprintln!("{line_style}     │ {line_style:#}");
 
 		// Convert back to indices
 		start.0 -= 1;
@@ -183,13 +199,17 @@ impl SourceMap {
 		let mut at_line_beginning: bool = true;
 		let mut underline = false;
 
-		
-
 		loop {
 			if at_line_beginning {
 				line_start_offset = offset;
-				eprint!("{STYLE_LINE_NUM}{:>4} │ {STYLE_LINE_NUM:#}", line_number);
+
+				eprint!("{line_style}{:>4} │ {line_style:#}", line_number);
 				at_line_beginning = false;
+				lines_rendered += 1;
+
+				line_style_tup = gradient(ERR_COLOR_V0, ERR_COLOR_V1,
+					(lines_rendered as f32 / 20.0).clamp(0.0, 1.0));
+				line_style = style(line_style_tup);
 			}
 
 			if offset >= start_offset && offset < end_offset {
@@ -206,7 +226,16 @@ impl SourceMap {
 					let mut squig = 0;
 					eprintln!("");
 					// Line up with the line numbers
-					eprint!("{STYLE_LINE_NUM}     ╰ {STYLE_LINE_NUM:#}");
+					eprint!("{line_style}     ╰ {line_style:#}");
+
+					// Sad code dupe :(
+					// Maybe we need some sort of Renderer struct
+					lines_rendered += 1;
+
+					line_style_tup = gradient(ERR_COLOR_V0, ERR_COLOR_V1,
+						(lines_rendered as f32 / 20.0).clamp(0.0, 1.0));
+					line_style = style(line_style_tup);
+
 					for i in line_start_offset..offset {
 						if self.contents_chars[i] == '\r' { continue; }
 						if i >= start_offset && i < end_offset {
@@ -214,12 +243,12 @@ impl SourceMap {
 								// TODO: Only generate the STYLE when needed
 								//eprint!("{STYLE_SQUIGGLE}────{STYLE_SQUIGGLE:#}");
 								for _ in 0..4 {
-									self.show_squiggle(squig);
+									self.show_squiggle(squig, line_style_tup);
 									squig += 1;
 								}
 							}
 							else { //eprint!("{STYLE_SQUIGGLE}─{STYLE_SQUIGGLE:#}"); }
-								self.show_squiggle(squig);
+								self.show_squiggle(squig, line_style_tup);
 								squig += 1;
 							}
 						}
