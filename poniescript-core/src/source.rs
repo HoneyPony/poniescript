@@ -86,6 +86,9 @@ impl SourceMap {
 		for c in &self.contents_chars {
 			offset += 1;
 			if *c == '\n' {
+				// TODO: Getting rid of the +1 here seems to help with
+				// the CLI error reporting. Does that still work with the Language
+				// Server?
 				self.lines.push(offset + 1);
 			}
 		}
@@ -210,7 +213,7 @@ impl SourceMap {
 				// Read until we hit the end of the line after the end of the block.
 				if offset >= self.contents_chars.len() || offset >= end_offset { break; }
 			}
-
+			
 			if self.contents_chars[offset] == '\t' {
 				eprint!("    ");
 			}
@@ -218,6 +221,17 @@ impl SourceMap {
 				/* do nothing  */
 			}
 			else {
+				// TODO:
+				// Empirically, it seems like we need to subtract 1 from the
+				// offset here, otherwise we get truncated file contents
+				// (see e.g. tests/cyclic/err_cyclic.poni).
+				// It's not really clear why that would be.
+				//
+				// Also, in practice, subtracting one causes a panic if the
+				// file is too short?
+				//
+				// So I guess instead the line number offsets might be wrong
+				// (see above).
 				eprint!("{}", self.contents_chars[offset]);
 			}
 			offset += 1;
