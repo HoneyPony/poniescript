@@ -573,7 +573,7 @@ poni_gc_get_allocation_size(void *object) {
 		}
 
 		// Because we're using a BufWriter, it is important to flush it.
-		output.flush();
+		output.flush()?;
 
 		Ok(())
 	}
