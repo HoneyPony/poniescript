@@ -523,9 +523,6 @@ impl<'db> TypeChecker<'db> {
 			Stmt::Expression(expression) => {
 				self.do_promote_expr(ast, &mut expression.expression, promote_to);
 			},
-			Stmt::Return(_) => {
-				// Should have already promoted.
-			},
 			Stmt::ClassDeclare(_) => {
 				// Should have already promoted.
 			},
@@ -669,6 +666,9 @@ impl<'db> TypeChecker<'db> {
 			Expr::Break(_) => {
 				// The inner expression of the break is promoted by the Loop,
 				// not by the Break. See above.
+			}
+			Expr::Return(_) => {
+				// Should have already promoted.
 			}
 			Expr::Unbound(_) => if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr(Unbound)") },
 			Expr::UnboundFunCapture(_) => if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr(UnboundFunCapture)") },
@@ -1238,6 +1238,51 @@ impl<'db> TypeChecker<'db> {
 				self.break_exprs.push(expr_id);
 
 				// The Break itself is always Never.
+				self.db.types.bottom
+			}
+			Expr::Return(ret) => {
+				// The return statement is interesting in that it entirely
+				// ignores value_used. Because 'return' always returns
+				// the bottom type, its value may always be used if needed.
+				//
+				// That said, it DOES need to always get a value from its inner
+				// expr.
+
+				// TODO: there's no need for a separate stack of these...
+				// We can do the good old trick where you push/pop as part of
+				// the function
+				let Some(&return_type) = self.return_types.last() else {
+					type_error!(self, &ret.location,
+						"Trying to return outside of a function.");
+				};
+
+				let inner = match &mut ret.expression {
+					Some(expr) => expr,
+					None => {
+						if return_type != self.db.types.void {
+							type_error!(self, &ret.location,
+								"Trying to return value in function returning void");
+						}
+
+						return Ok(self.db.types.bottom);
+					},
+				};
+
+				let typ = self.check_expr(ast, *inner, true)?;
+				let computed = self.compute_assignable( 
+					return_type,
+					typ);
+
+				let computed = maybe_type_error!(self, 
+					computed,
+					&ret.location,
+					"Trying to return {} in function returning {}",
+
+					self.db.repr_type(typ),
+					self.db.repr_type(return_type));
+
+				self.do_promote_expr(ast, inner, computed);
+
 				self.db.types.bottom
 			}
 			Expr::OptionElse(opt_else) => {
@@ -2076,51 +2121,6 @@ impl<'db> TypeChecker<'db> {
 					typ = self.promote_from_unassigned(ast, &mut expr.expression);
 				}
 				Ok(Some(typ))
-			},
-			Stmt::Return(ret) => {
-				// The return statement is interesting in that it entirely
-				// ignores value_used. Because 'return' always returns
-				// the bottom type, its value may always be used if needed.
-				//
-				// That said, it DOES need to always get a value from its inner
-				// expr.
-
-				// TODO: there's no need for a separate stack of these...
-				// We can do the good old trick where you push/pop as part of
-				// the function
-				let Some(&return_type) = self.return_types.last() else {
-					type_error!(self, &ret.location,
-						"Trying to return outside of a function.");
-				};
-
-				let inner = match &mut ret.expression {
-					Some(expr) => expr,
-					None => {
-						if return_type != self.db.types.void {
-							type_error!(self, &ret.location,
-								"Trying to return value in function returning void");
-						}
-
-						return Ok(Some(self.db.types.bottom));
-					},
-				};
-
-				let typ = self.check_expr(ast, *inner, true)?;
-				let computed = self.compute_assignable( 
-					return_type,
-					typ);
-
-				let computed = maybe_type_error!(self, 
-					computed,
-					&ret.location,
-					"Trying to return {} in function returning {}",
-
-					self.db.repr_type(typ),
-					self.db.repr_type(return_type));
-
-				self.do_promote_expr(ast, inner, computed);
-
-				Ok(Some(self.db.types.bottom))
 			}
 		}
 	}

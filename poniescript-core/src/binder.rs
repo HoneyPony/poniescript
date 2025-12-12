@@ -248,6 +248,15 @@ impl<'db> Binder<'db> {
 				if let Some(value) = break_.value { self.visit_expr(ast, value); }
 				None
 			}
+
+			Expr::Return(ret) => {
+				if let Some(expr) = &mut ret.expression {
+					self.visit_expr(ast, *expr);
+				}
+				// TODO: I think we probably want to eliminate the return if
+				// the inner type is also Never? But not super necessary...
+				None
+			}
 			
 			Expr::Assign(assign) => {
 				self.visit_expr(ast, assign.value);
@@ -589,11 +598,6 @@ impl<'db> Binder<'db> {
 			},
 			Stmt::Expression(expr) => {
 				self.visit_expr(ast, expr.expression);
-			},
-			Stmt::Return(ret) => {
-				if let Some(expr) = &mut ret.expression {
-					self.visit_expr(ast, *expr);
-				}
 			},
 			Stmt::ClassDeclare(class_declare) => {
 				self.visit_class(ast, class_declare);

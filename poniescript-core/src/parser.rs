@@ -848,6 +848,30 @@ impl<'b> Parser<'b> {
 			Tok::Print => self.expr_print_or_str(true),
 			Tok::Str => self.expr_print_or_str(false),
 
+			Tok::Return => {
+				let location = self.start();
+				self.advance()?;
+				// If there's an immediate Semicolon, Comma, RParen, RBrace, or RBracket,
+				// it's an empty return.
+				//
+				// (Are there any other valid terminating tokens for expressions?
+				// e.g. should 'return and 5' be validly parsed as an and between
+				// a  'return' and a '5'? Seems pretty wrong. But, there might be
+				// other legitimate tokens I missed.)
+				match self.peek_typ() {
+					Tok::Semicolon | Tok::Comma | Tok::RightParen | Tok::RightBrace | Tok::RightSquare => {
+						// The equivalent of self.match_ is we advance now. However,
+						// we actually don't want to consume the token.
+						return Expr::put_return_ok(self.ast, self.end(location), None);
+					},
+					_ => {}
+				}
+
+				let inner = self.expression()?;
+				expected!(self, Tok::Semicolon, "';' after return value")?;
+				Expr::put_return_ok(self.ast, self.end(location), Some(inner))
+			}
+
 			Tok::Break => {
 				let location = self.start();
 				self.advance()?;
@@ -1315,17 +1339,6 @@ impl<'b> Parser<'b> {
 	fn stmt(&mut self) -> Result<StmtId> {
 		let location = self.start();
 		match self.peek_typ() {
-			Tok::Return => {
-				self.advance()?;
-				// If there's an immediate Semicolon, it's an empty return.
-				if self.match_(Tok::Semicolon)?.is_some() {
-					return Stmt::put_return_ok(self.ast, self.end(location), None);
-				}
-
-				let inner = self.expression()?;
-				expected!(self, Tok::Semicolon, "';' after return value")?;
-				Stmt::put_return_ok(self.ast, self.end(location), Some(inner))
-			},
 			Tok::Var => {
 				let inner = self.var_declaration()?;
 				Ok(self.ast.stmts.push(Stmt::Declare(inner)))

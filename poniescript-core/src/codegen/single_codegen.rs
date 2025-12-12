@@ -1324,6 +1324,31 @@ impl<'a> Codegen<'a> {
 				// The Break itself is always Never.
 				Val::Bottom.typed(self.db.types.bottom, None)
 			}
+			Expr::Return(ret) => {
+				inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
+
+				match &ret.expression {
+					Some(value) => {
+						let needed_type = *self.return_types.last().unwrap();
+						let val = self.expr(ast, *value, into);
+
+						// If the inner value is also a bottom type,
+						// then we can't really generate a return here.
+						if !val.is_bottom() {
+							// If it's not bottom, check the typechecker's work.
+							assert!(val.typ == needed_type);
+
+							inf_writeln!(into, "{}return {};",
+								indent, val);
+						}
+					},
+					None => {
+						inf_writeln!(into, "{}return;", indent);
+					}
+				}
+
+				Val::Bottom.typed(self.db.types.bottom, None)
+			}
 			Expr::OptionElse(opt_else) => {
 				let own_val = self.new_val_typed_tmp(opt_else.typ);
 				define_val!(self, into, own_val, ";\n");
@@ -2300,31 +2325,6 @@ impl<'a> Codegen<'a> {
 				// this function simply has to delegate to it.
 				Some(self.expr(ast, expression.expression, into))
 			},
-			Stmt::Return(ret) => {
-				inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
-
-				match &ret.expression {
-					Some(value) => {
-						let needed_type = *self.return_types.last().unwrap();
-						let val = self.expr(ast, *value, into);
-
-						// If the inner value is also a bottom type,
-						// then we can't really generate a return here.
-						if !val.is_bottom() {
-							// If it's not bottom, check the typechecker's work.
-							assert!(val.typ == needed_type);
-
-							inf_writeln!(into, "{}return {};",
-								indent, val);
-						}
-					},
-					None => {
-						inf_writeln!(into, "{}return;", indent);
-					}
-				}
-
-				Some(Val::Bottom.typed(self.db.types.bottom, None))
-			}
 		}
 	}
 

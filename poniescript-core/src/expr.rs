@@ -48,9 +48,6 @@ impl Stmt {
 			Stmt::Expression(expression) => {
 				ast.get_expr(expression.expression).typ(ast, db)
 			},
-			Stmt::Return(_) => {
-				db.types.bottom
-			},
 			Stmt::ClassDeclare(_) => {
 				// TODO: Different typing for ClassDeclare?
 				db.types.void
@@ -83,6 +80,7 @@ impl Expr {
 			// A for loop can't have a type as it is replaced with a while loop.
 			Expr::ForLoop(_) => db.types.unassigned,
 			Expr::Break(_) => db.types.bottom,
+			Expr::Return(_) => db.types.bottom,
 			Expr::Variable(var) => {
 				db.get_var_type(var.identity)
 			},

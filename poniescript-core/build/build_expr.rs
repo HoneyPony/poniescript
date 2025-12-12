@@ -413,6 +413,7 @@ pub fn generate(file: &mut File) {
 	OptionElse    : Expr value, Expr otherwise, TypId typ
 	Loop          : Expr inner, TypId typ, Vec<ExprId> breaks
 	Break         : Option<Expr> value
+	Return        : Option<Expr> expression
 	WhileLoop     : Expr condition, Expr inner, TypId typ, Vec<ExprId> breaks
 	ForLoop       : SourceLocation ident, VarId identity, Expr iterator, bool has_explicit_type, Expr inner
 	Undefined     : 
@@ -424,7 +425,6 @@ pub fn generate(file: &mut File) {
 	
 	Declare      : SourceLocation ident, VarId identity, Expr value, bool has_explicit_type
 	Expression   : Expr expression
-	Return       : Option<Expr> expression
 	ClassDeclare : ClassId identity, Vec<FunDeclare> funs, Vec<Declare> vars
 
 	"#;

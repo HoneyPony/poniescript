@@ -366,6 +366,15 @@ impl<'db> DeadCodeElim<'db> {
                 true
             }
 
+            Expr::Return(ret) => {
+                if let Some(inner) = &mut ret.expression {
+                    self.elim_expr(ast, inner);
+                }
+
+                // Return is always Never.
+                true
+            },
+
             Expr::ForLoop(_) => panic!("ICE: Tried to DCE ForLoop (should have died in TypeCheck.)"),
         }
     }
@@ -396,13 +405,6 @@ impl<'db> DeadCodeElim<'db> {
             Stmt::Expression(expression) => {
                 self.elim_expr(ast, &mut expression.expression);
                 expression.expression.typ(ast, self.db) == self.db.types.bottom
-            },
-            Stmt::Return(ret) => {
-                if let Some(inner) = &mut ret.expression {
-                    self.elim_expr(ast, inner);
-                }
-
-                true
             },
 
             // Awkward:
