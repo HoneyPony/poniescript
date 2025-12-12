@@ -21,8 +21,8 @@ impl BuiltinMethod for DynarrayPush {
     fn compile(
         &self,
         codegen: &mut Codegen,
-        ast_node: &BuiltinCall,
-        ast: &AstReadonly,
+        _ast_node: &BuiltinCall,
+        _ast: &AstReadonly,
         self_val: TypedVal,
         arg_vals: Vec<TypedVal>,
         into: &mut String
@@ -94,13 +94,13 @@ impl BuiltinMethod for DynarrayAny {
     fn compile(
         &self,
         codegen: &mut Codegen,
-        ast_node: &BuiltinCall,
-        ast: &AstReadonly,
+        _ast_node: &BuiltinCall,
+        _ast: &AstReadonly,
         self_val: TypedVal,
         arg_vals: Vec<TypedVal>,
         into: &mut String
     ) -> TypedVal {
-        let Type::DynArrayOf(elem_ty, arr_ty) = self_val.get_type(codegen.db) else { unreachable!() };
+        let Type::DynArrayOf(_, arr_ty) = self_val.get_type(codegen.db) else { unreachable!() };
         let [fun] = arg_vals.as_slice() else { unreachable!() };
 
         let indent = codegen.indent();
@@ -147,7 +147,7 @@ impl BuiltinMethod for DynarrayCloneShallow {
     fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>) {
         // DynArray[T]::clone() -> DynArray[T]
         match db.get(self_ty) {
-            Type::DynArrayOf(elem_ty, _) => {
+            Type::DynArrayOf(_, _) => {
                 (self_ty, vec![])
             }
             _ => unreachable!()
@@ -157,8 +157,8 @@ impl BuiltinMethod for DynarrayCloneShallow {
     fn compile(
         &self,
         codegen: &mut Codegen,
-        ast_node: &BuiltinCall,
-        ast: &AstReadonly,
+        _ast_node: &BuiltinCall,
+        _ast: &AstReadonly,
         self_val: TypedVal,
         arg_vals: Vec<TypedVal>,
         into: &mut String

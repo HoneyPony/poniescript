@@ -770,6 +770,7 @@ impl<'a> Codegen<'a> {
 
 	/// Converts a type into a tuple of length, inner type, if the given type
 	/// is a 'vec' type; otherwise returns None.
+	#[allow(unused)]
 	fn get_vec_params(&self, typ: TypId) -> Option<(usize, TypId)> {
 		match typ {
 			typ if typ == self.db.types.vec2 => Some((2, self.db.types.float)),

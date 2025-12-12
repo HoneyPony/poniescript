@@ -921,14 +921,14 @@ impl Db {
 		}
 	}
 
-	fn is_int_or_float(&self, ty: TypId) -> bool {
+	pub fn is_int_or_float(&self, ty: TypId) -> bool {
 		// There should (?) be no need for AssumeInt or AssumeFloat, but maybe
 		// there is.
 		ty == self.types.int || ty == self.types.float
 	}
 
 	/// Returns whether the given TypId is one of the named Vec types we support.
-	fn is_vec(&self, ty: TypId) -> bool {
+	pub fn is_vec(&self, ty: TypId) -> bool {
 		ty == self.types.vec2 || ty == self.types.vec3 || ty == self.types.vec4 ||
 		ty == self.types.vec2i || ty == self.types.vec3i || ty == self.types.vec4i
 	}

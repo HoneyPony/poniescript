@@ -2,7 +2,6 @@
 use std::sync::Arc;
 
 use crate::db::*;
-use crate::db::BuiltinMethod;
 use crate::lexer::{Tok, Token};
 use crate::module::Module;
 use crate::source::SourceLocation;
@@ -1541,7 +1540,7 @@ impl<'db> TypeChecker<'db> {
 				ret_type
 			}
 
-			Expr::BuiltinCapture(capt) => {
+			Expr::BuiltinCapture(_) => {
 				// Right now, capturing methods is not supported; but, we
 				// need to be able to type check this node because it is temporarily
 				// synthesized. So, just return an unassigned type.
@@ -1939,7 +1938,7 @@ impl<'db> TypeChecker<'db> {
 				let iter_ty = self.db.get(iterable);
 				match iter_ty {
 					Type::RangeOf(a, b, typ) if *typ == self.db.types.int => {
-						let a = *a; let b = *b;
+						let _a = *a; let b = *b;
 						// Desugar the for loop into the following:
 						// var <var> = <start>
 						// while <var> < <end> {

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::{Arc, Mutex, MutexGuard}, time::SystemTime};
+use std::{collections::HashMap, path::PathBuf, sync::{Arc, Mutex}, time::SystemTime};
 
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 

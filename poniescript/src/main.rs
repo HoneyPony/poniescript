@@ -424,7 +424,7 @@ fn main() {
 		// Oops.
 		exit(5);
 	};
-	let (mut writers, ccs) = compile_output.get_output(&args);
+	let (writers, ccs) = compile_output.get_output(&args);
 
 	let ast = Arc::new(ast.into_readonly());
 	// Awkward, but necessary until we figure out a nicer way to deal with

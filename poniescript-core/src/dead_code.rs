@@ -352,7 +352,7 @@ impl<'db> DeadCodeElim<'db> {
                 elim_sequence!(self, ast, expr,
                     MakeTuple, values)
             }
-            Expr::MakeRange(make_range) => {
+            Expr::MakeRange(_) => {
                 // TODO eliminate...
                 false
             }

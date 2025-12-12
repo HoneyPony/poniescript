@@ -1,6 +1,5 @@
 #![allow(unexpected_cfgs)]
 
-use std::cell::RefCell;
 use std::sync::RwLock;
 use std::{fs::File, path::PathBuf};
 use std::io::{self, Read};
@@ -21,10 +20,12 @@ use anstyle::{RgbColor, Style};
 use anstyle::Color;
 use anstyle::AnsiColor;
 
+#[allow(unused)]
 const STYLE_LINE_NUM: Style = Style::new()
 	.fg_color(Some(Color::Ansi(AnsiColor::Magenta)));
 
 // Might change this later. For now: Pony-styled magenta!
+#[allow(unused)]
 const STYLE_SQUIGGLE: Style = Style::new()
 	.fg_color(Some(Color::Ansi(AnsiColor::Magenta)));
 
@@ -173,7 +174,7 @@ impl SourceMap {
 		let mut end = self.get_line_column(end_offset);
 		
 		let mut lines_rendered = 0;
-		let mut line_style_tup = ERR_COLOR_V0;
+		let mut line_style_tup;
 		let mut line_style: Style = style(ERR_COLOR_V0);
 
 		// Generate the "name" info

@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, fs::{self, File}, hash::Hash, io::Write, path::{Path, PathBuf}};
+use std::{collections::{HashMap, HashSet}, fs::{self, File}, io::Write, path::{Path, PathBuf}};
 
 use microxdg::{XdgApp, XdgError};
 use serde::{Deserialize, Serialize};

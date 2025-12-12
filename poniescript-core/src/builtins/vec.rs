@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::db::*;
 use crate::codegen::*;
 use crate::define_val;
@@ -39,8 +37,8 @@ impl BuiltinMethod for VecMap {
     fn compile(
         &self,
         codegen: &mut Codegen,
-        ast_node: &BuiltinCall,
-        ast: &AstReadonly,
+        _ast_node: &BuiltinCall,
+        _ast: &AstReadonly,
         self_val: TypedVal,
         arg_vals: Vec<TypedVal>,
         into: &mut String

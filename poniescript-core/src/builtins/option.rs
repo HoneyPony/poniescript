@@ -52,7 +52,7 @@ impl BuiltinMethod for OptionIsSome {
     fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>) {
         // Option[T]::is_some() -> bool
         match db.get(self_ty) {
-            Type::Option(inner) => (db.types.bool, vec![]),
+            Type::Option(_) => (db.types.bool, vec![]),
             _ => unreachable!()
         }
     }
@@ -60,8 +60,8 @@ impl BuiltinMethod for OptionIsSome {
     fn compile(
         &self,
         codegen: &mut Codegen,
-        ast_node: &BuiltinCall,
-        ast: &AstReadonly,
+        _ast_node: &BuiltinCall,
+        _ast: &AstReadonly,
         self_val: TypedVal,
         arg_vals: Vec<TypedVal>,
         into: &mut String

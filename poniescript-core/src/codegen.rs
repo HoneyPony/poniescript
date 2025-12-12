@@ -15,7 +15,7 @@ use crate::{inf_write, inf_writeln};
 
 pub use single_codegen::*;
 
-enum CodegenTask {
+pub enum CodegenTask {
 	CompileFunction(FunId),
 }
 
