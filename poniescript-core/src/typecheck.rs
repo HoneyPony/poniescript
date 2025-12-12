@@ -1999,8 +1999,20 @@ impl<'db> TypeChecker<'db> {
 						let initializer = Expr::push_get(ast, for_.location.clone(),
 							Token::synthesize_ident_from(self.db, "left"),
 							for_.iterator, self.db.get_range_left(iterable));
+						// NOTE: For now, in order to make for loops work with
+						// 'continue', we will write our loops in a weird way.
+						// (go from start - 1 to end; move increment to beginning
+						// of loop)
+						// What we should do instead is probably synthesize a label
+						// at the *end* of the loop, that we jump to in the continue
+						// statement.
+						let one = Expr::push_numliteral(ast, for_.location.clone(),
+							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
+							self.db.types.int);
+						let sub = Expr::push_binary(ast, for_.location.clone(),
+							Tok::Minus, initializer, one, self.db.types.int);
 						let declare = Stmt::push_declare(ast, for_.location.clone(),
-							for_.ident.clone(), for_.identity, initializer, for_.has_explicit_type);
+							for_.ident.clone(), for_.identity, sub, for_.has_explicit_type);
 						
 						let read = Expr::push_variable(ast, for_.location.clone(),
 							for_.identity);
@@ -2020,12 +2032,21 @@ impl<'db> TypeChecker<'db> {
 						// AWKWARD/TODO: Once we care about the value of the while block,
 						// this is not going to be it...?
 						let inner_block = Expr::push_block(ast, for_.location.clone(),
-							vec![inner_stmt, assign_stmt], self.db.types.void);
+							// Due to our 'continue' jank, the assign has to come
+							// before the inner.
+							vec![assign_stmt, inner_stmt], self.db.types.void);
 
 						// Rhs of the comparison.
 						let rhs = Expr::push_get(ast, for_.location.clone(),
 							Token::synthesize_ident_from(self.db, "right"),
 							for_.iterator, self.db.get_range_right(iterable));
+						// More 'continue' JANK: synthesize a -1 for the RHS
+						// of the loop as well.
+						let one = Expr::push_numliteral(ast, for_.location.clone(),
+							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
+							self.db.types.int);
+						let rhs = Expr::push_binary(ast, for_.location.clone(),
+							Tok::Minus, rhs, one, self.db.types.int);
 						// TODO: Can we re-used the read above? For now, synthesize
 						// two nodes.
 						let read = Expr::push_variable(ast, for_.location.clone(),
