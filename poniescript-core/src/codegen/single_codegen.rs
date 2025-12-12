@@ -1324,6 +1324,13 @@ impl<'a> Codegen<'a> {
 				// The Break itself is always Never.
 				Val::Bottom.typed(self.db.types.bottom, None)
 			}
+			Expr::Continue(_) => {
+				// Nothing special yet.
+				inf_writeln!(into, "{}continue;", indent);
+
+				// The Continue itself is always Never.
+				Val::Bottom.typed(self.db.types.bottom, None)
+			}
 			Expr::Return(ret) => {
 				inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
 

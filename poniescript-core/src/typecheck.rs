@@ -667,6 +667,9 @@ impl<'db> TypeChecker<'db> {
 				// The inner expression of the break is promoted by the Loop,
 				// not by the Break. See above.
 			}
+			Expr::Continue(_) => {
+				// No value to promote.
+			}
 			Expr::Return(_) => {
 				// Should have already promoted.
 			}
@@ -1238,6 +1241,9 @@ impl<'db> TypeChecker<'db> {
 				self.break_exprs.push(expr_id);
 
 				// The Break itself is always Never.
+				self.db.types.bottom
+			}
+			Expr::Continue(_) => {
 				self.db.types.bottom
 			}
 			Expr::Return(ret) => {

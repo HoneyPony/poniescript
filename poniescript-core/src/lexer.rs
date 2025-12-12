@@ -40,7 +40,7 @@ pub enum Tok {
 
 	And, Class, Else, False, Fun, For, If, In, Null, Or,
 	Return, Super, KeySelf, True, Using, Var, While,
-	Loop, Break,
+	Loop, Break, Continue,
 
 	New,
 
@@ -102,32 +102,33 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {
 		map.insert(key, value);
 	};
 
-	add("and"   , Tok::And);
-	add("break" , Tok::Break);
-	add("class" , Tok::Class);
-	add("else"  , Tok::Else);
-	add("false" , Tok::False);
-	add("fun"   , Tok::Fun);
-	add("for"   , Tok::For);
-	add("if"    , Tok::If);
-	add("in"    , Tok::In);
-	add("null"  , Tok::Null);
-	add("or"    , Tok::Or);
-	add("return", Tok::Return);
-	add("super" , Tok::Super);
-	add("self"  , Tok::KeySelf);
-	add("true"  , Tok::True);
-	add("using" , Tok::Using);
-	add("var"   , Tok::Var);
-	add("while" , Tok::While);
-	add("loop"  , Tok::Loop);
-	add("new"   , Tok::New);
+	add("and"   ,   Tok::And);
+	add("break" ,   Tok::Break);
+	add("continue", Tok::Continue);
+	add("class" ,   Tok::Class);
+	add("else"  ,   Tok::Else);
+	add("false" ,   Tok::False);
+	add("fun"   ,   Tok::Fun);
+	add("for"   ,   Tok::For);
+	add("if"    ,   Tok::If);
+	add("in"    ,   Tok::In);
+	add("null"  ,   Tok::Null);
+	add("or"    ,   Tok::Or);
+	add("return",   Tok::Return);
+	add("super" ,   Tok::Super);
+	add("self"  ,   Tok::KeySelf);
+	add("true"  ,   Tok::True);
+	add("using" ,   Tok::Using);
+	add("var"   ,   Tok::Var);
+	add("while" ,   Tok::While);
+	add("loop"  ,   Tok::Loop);
+	add("new"   ,   Tok::New);
 
-	add("some"  , Tok::Some);
-	add("nil"   , Tok::Nil);
+	add("some"  ,   Tok::Some);
+	add("nil"   ,   Tok::Nil);
 
-	add("print", Tok::Print);
-	add("str"  , Tok::Str);
+	add("print",    Tok::Print);
+	add("str"  ,    Tok::Str);
 
 	return map;
 }

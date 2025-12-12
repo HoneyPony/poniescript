@@ -885,6 +885,12 @@ impl<'b> Parser<'b> {
 				Expr::put_break_ok(self.ast, self.end(location), Some(inner))
 			}
 
+			Tok::Continue => {
+				let location = self.start();
+				self.advance()?;
+				Expr::put_continue_ok(self.ast, self.end(location))
+			}
+
 			Tok::True => {
 				let location = self.advance()?.location;
 				Expr::put_boolliteral_ok(self.ast, location, true)

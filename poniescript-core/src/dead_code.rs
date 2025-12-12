@@ -366,6 +366,11 @@ impl<'db> DeadCodeElim<'db> {
                 true
             }
 
+            Expr::Continue(_) => {
+                // Continue is always Never.
+                true
+            }
+
             Expr::Return(ret) => {
                 if let Some(inner) = &mut ret.expression {
                     self.elim_expr(ast, inner);

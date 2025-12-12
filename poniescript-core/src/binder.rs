@@ -249,6 +249,10 @@ impl<'db> Binder<'db> {
 				None
 			}
 
+			Expr::Continue(_) => {
+				None
+			}
+
 			Expr::Return(ret) => {
 				if let Some(expr) = &mut ret.expression {
 					self.visit_expr(ast, *expr);

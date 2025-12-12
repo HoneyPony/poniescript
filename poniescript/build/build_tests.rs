@@ -207,6 +207,8 @@ pub fn generate(tests_file: &mut File) {
 		("loop/", "loop_with_multi_break_noval_bracefix"),
 		("loop/", "loop_with_multi_break_promo_a"),
 		("loop/", "loop_with_multi_break_promo_b"),
+		("loop/", "while_with_continue"),
+		("loop/", "for_with_continue"),
 
 		("misc/", "array_of_str"),
 		("misc/", "array_of_strbuf"),
