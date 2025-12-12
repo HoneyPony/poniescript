@@ -370,6 +370,7 @@ pub fn generate(tests_file: &mut File) {
 		("optional/", "opt_else_promote"),
 		("optional/", "option_else"),
 		("optional/", "option_else_ret"),
+		("optional/", "option_else_ret_nobrace"),
 		("optional/", "option_else_ret_shadow"),
 		("optional/", "optional_array"),
 		("optional/", "optional_strings"),
