@@ -904,6 +904,11 @@ impl<'b> Parser<'b> {
 				self.new_()
 			}
 
+			Tok::KeySelf => {
+				let location = self.advance()?.location;
+				Expr::put_selfval_ok(self.ast, location, self.db.types.unassigned)
+			}
+
 			Tok::LeftSquare => {
 				self.array_literal()
 			}

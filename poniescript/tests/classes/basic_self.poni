@@ -1,0 +1,36 @@
+class Horse {
+    var rank: int = 20;
+
+    fun compare(other: Horse) -> bool {
+        compare_horses(self, other)
+    }
+
+    fun set(rank: int) {
+        self.rank = rank
+    }
+}
+
+fun compare_horses(a: Horse, b: Horse) -> bool {
+    a.rank > b.rank
+}
+
+fun init() {
+    var twilight = new Horse{};
+    var starlight = new Horse{};
+
+    // Neither are > at init
+    print(twilight.compare(starlight)); //! false
+    print(starlight.compare(twilight)); //! false
+
+    // This should set the member variable, despite the parameter name being
+    // named same.
+    twilight.set(30);
+    print(twilight.compare(starlight)); //! true
+    print(starlight.compare(twilight)); //! false
+
+    starlight.set(40);
+    print(twilight.compare(starlight)); //! false
+    print(starlight.compare(twilight)); //! true
+
+    print(twilight.rank, " ", starlight.rank); //! 30 40
+}

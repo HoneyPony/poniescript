@@ -265,6 +265,7 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "class_call_own_funs"),
 		("classes/", "class_member_ref"),
 		("classes/", "basic_new_list"),
+		("classes/", "basic_self"),
 		("classes/", "class_member_that_is_fun"),
 		("classes/", "class_member_function_capture"),
 		("classes/", "noout_data_and_fun_assign"),
