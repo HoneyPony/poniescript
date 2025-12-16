@@ -22,6 +22,8 @@ impl BuiltinDoc {
 fn get_builtins() -> Vec<BuiltinDoc> {
     vec![
         BuiltinDoc::new("print", include_str!("builtins/print.md")),
+        BuiltinDoc::new("str", include_str!("builtins/str.md")),
+        BuiltinDoc::new("DynArray", include_str!("builtins/DynArray.md")),
     ]
 }
 
