@@ -27,7 +27,7 @@ fn get_builtins() -> Vec<BuiltinDoc> {
     ]
 }
 
-fn generate_doc_page(identifier: &str, markdown: &str) -> Markup {
+fn generate_doc_page(identifier: &str, markdown: &str, static_path: &Path) -> Markup {
     let parser = pulldown_cmark::Parser::new(markdown);
     let mut html_output = String::new();
 
@@ -37,10 +37,21 @@ fn generate_doc_page(identifier: &str, markdown: &str) -> Markup {
         html {
             head {
                 meta charset="utf-8";
+                link rel="stylesheet" href=(static_path.join("main.css").display());
                 title { (format!("{identifier} | poniescript docs")) }
             }
             body {
-                (PreEscaped(html_output))
+                .poni-doc {
+                    nav .poni-doc-nav {
+                        h4 { "PonieScript builtins" }
+                        h4 { (identifier) }
+                        h5 { "Member variables" }
+                        h5 { "Member functions" }
+                    }
+                    .poni-doc-content {
+                        (PreEscaped(html_output))
+                    }
+                }
             }
         }
     }
@@ -53,10 +64,16 @@ pub fn generate_docs(output_path: &Path) -> std::io::Result<()> {
     let builtins_dir = output_path.join("builtins");
     fs::create_dir_all(&builtins_dir)?;
     for builtin in builtins {
-        let markup = generate_doc_page(builtin.identifier, builtin.markdown);
+        let markup = generate_doc_page(builtin.identifier, builtin.markdown, Path::new("../static"));
         fs::write(builtins_dir.join(format!("{}.html", builtin.identifier)),
             markup.0)?;
     }
+
+    // Copy static files.
+    let statics_dir = output_path.join("static");
+    fs::create_dir_all(&statics_dir)?;
+    fs::write(statics_dir.join("main.css"),
+        include_bytes!("static/main.css"))?;
 
     Ok(())
 }
