@@ -1,0 +1,8 @@
+[package]
+name = "poni-doc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+maud = "0.27.0"
+pulldown-cmark = "0.13.0"
