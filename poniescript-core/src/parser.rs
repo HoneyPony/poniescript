@@ -98,6 +98,9 @@ pub struct Parser<'b> {
 	scope_name: String,
 	global_scope: Scope,
 
+	cur_doc_comment: Vec<Token>,
+	prev_doc_comment: Vec<Token>,
+
 	pub had_error: bool,
 }
 
@@ -200,10 +203,10 @@ impl<'b> Parser<'b> {
 
 		// TODO: Move File initialization to Lexer
 
-		// Prime the parser with the first token in the file.
-		let current = lexer.next_token(db)?;
+		// Make a dummy current token, due to DocComment handling.
+		let current = Token::synth_tok(db, db.str_x, Tok::Eof);
 		
-		let parser = Parser {
+		let mut parser = Parser {
 			lexer,
 
 			db,
@@ -218,6 +221,9 @@ impl<'b> Parser<'b> {
 			scope_name: String::new(),
 			global_scope: Scope::new(),
 
+			cur_doc_comment: Vec::new(),
+			prev_doc_comment: Vec::new(),
+
 			current,
 			last_location: SourceLocation {
 				source: source_id,
@@ -227,6 +233,20 @@ impl<'b> Parser<'b> {
 
 			had_error: false,
 		};
+
+		// Prime the parser with the first token in the file (and collect
+		// doc comments, etc).
+		parser.advance().map_err(|e| {
+			match e {
+				// Simply advance()ing shouldn't result in a Syntax error.
+				// We would rather return an IoErr here.
+				//
+				// TODO: Maybe make advance() return std::io::Result, and then
+				// implement From<> for ParseErr?
+				ParseErr::SyntaxErr => unreachable!(),
+				ParseErr::IoErr(error) => error,
+			}
+		})?;
 
 		Ok(parser)
 	}
@@ -331,9 +351,21 @@ impl<'b> Parser<'b> {
 
 	fn advance(&mut self) -> Result<Token> {
 		self.last_location = self.current.location.clone();
-		let next = self.lexer
-			.next_token(self.db)
-			.map_err(|err| ParseErr::IoErr(err))?;
+		
+		let next = loop {
+			let next = self.lexer
+				.next_token(self.db)
+				.map_err(|err| ParseErr::IoErr(err))?;
+
+			if matches!(next.typ, Tok::DocComment) {
+				self.cur_doc_comment.push(next);
+			}
+			else {
+				self.prev_doc_comment = std::mem::take(&mut self.cur_doc_comment);
+				break next;
+			}
+		};
+
 		Ok(std::mem::replace(&mut self.current, next))
 	}
 
@@ -1400,6 +1432,7 @@ impl<'b> Parser<'b> {
 	}
 
 	fn fun_declaration(&mut self, require_name: bool) -> Result<FunDeclare> {
+		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let _key_fun = expected!(self, Tok::Fun, "'fun'")?;
 
@@ -1473,6 +1506,10 @@ impl<'b> Parser<'b> {
 			class: None, // Class is not assigned for now, the class parser will assign it later.
 			expression: Some(value),
 			location: fun_location, // We always have a location even if we don't have a name
+
+			// TODO: Consider not bothering with doc comments in the compiler,
+			// only in the documenter, as they probably add some overhead.
+			doc_comment,
 		});
 
 		for param in parameters_for_set {
@@ -1525,7 +1562,16 @@ impl<'b> Parser<'b> {
 		self.scope_name.truncate(self.scope_name.len() - size);
 	}
 
+	fn get_doc_comment(&mut self) -> Option<Vec<Token>> {
+		let doc_comment = std::mem::take(&mut self.prev_doc_comment);
+		if !doc_comment.is_empty() {
+			return Some(doc_comment);
+		}
+		return None;
+	}
+
 	fn class_declaration(&mut self) -> Result<ClassDeclare> {
+		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let key_class = expected!(self, Tok::Class, "'class'")?;
 
@@ -1583,7 +1629,8 @@ impl<'b> Parser<'b> {
 			funs,
 			var_map,
 			fun_map,
-			location: name.location
+			location: name.location,
+			doc_comment,
 		});
 
 		for var in &declare_vars {

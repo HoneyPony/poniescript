@@ -189,6 +189,9 @@ pub struct Fun {
 
 	/// Location pointing to where the function is declared/defined.
 	pub location: SourceLocation,
+
+	/// Doc comment for this function.
+	pub doc_comment: Option<Vec<Token>>,
 }
 
 /// Represents a function signature. Includes the types of all parameters
@@ -209,4 +212,7 @@ pub struct Class {
 
 	/// Location pointing to where the class is declared/defined.
 	pub location: SourceLocation,
+
+	/// Doc comment for this class.
+	pub doc_comment: Option<Vec<Token>>,
 }

@@ -1,0 +1,23 @@
+/// The `Horse` is a creature of many talents. One of them is to speak. Each
+/// `Horse` contains within them a unique, inseperable ideal vocalization; some
+/// are along the lines of "neigh!" but they can take on almost any form.
+///
+/// You can create a new `Horse` by providing to it its own greeting. Take heed
+/// that this is a critical element of the Horse and must not be generated
+/// thoughtlessly.
+///
+/// As an example, consider the following:
+/// ```
+/// var my_horse = new Horse { greeting: "chonk" };
+/// ```
+class Horse {
+    /// The greeting for this `Horse`. See `Horse` for further discussion of
+    /// its importance.
+    var greeting: StrBuf = "neigh!";
+
+    /// Causes this `Horse` to emit its distinctive greeting to the standard
+    /// console.
+    fun greet() {
+        print(greeting);
+    }
+}

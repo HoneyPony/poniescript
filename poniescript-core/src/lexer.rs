@@ -48,6 +48,8 @@ pub enum Tok {
 
 	Some, Nil,
 
+	DocComment,
+
 	Eof
 }
 
@@ -152,6 +154,9 @@ pub struct Lexer {
 	at_eof: bool,
 
 	pub had_error: bool,
+
+	// The previously stored token, if any.
+	prev: Option<Token>,
 }
 
 fn is_whitespace(c: char) -> bool {
@@ -187,6 +192,7 @@ impl Lexer {
 			at_eof: false,
 
 			had_error: false,
+			prev: None,
 		}
 	}
 
@@ -383,10 +389,11 @@ impl Lexer {
 		return self.mk_token_res(db, Tok::WholeNumber);
 	}
 
-	fn line_comment(&mut self, db: &mut Db) -> std::io::Result<()> {
+	fn line_comment(&mut self, db: &mut Db) -> std::io::Result<Option<Token>> {
 		// Here we also handle special kinds of comments.
 		enum CommentKind {
 			None,
+			Doc,
 			TestLine,
 			TestErr,
 		}
@@ -404,6 +411,12 @@ impl Lexer {
 				kind = CommentKind::TestErr;
 				self.buffer.clear();
 			}
+		}
+
+		if self.advance_if('/', db)? {
+			kind = CommentKind::Doc;
+			self.buffer.clear();
+			// TODO: Skip prefixed whitespace?
 		}
 
 		while !self.at_eof {
@@ -425,9 +438,13 @@ impl Lexer {
 				let line = self.buffer.trim();
 				db.test_errors.push(line.to_string());
 			}
+
+			CommentKind::Doc => {
+				return Ok(Some(self.mk_token(db, Tok::DocComment)))
+			}
 		}
 
-		Ok(())
+		Ok(None)
 	}
 
 	fn mk_eof(&mut self, db: &mut Db) -> std::io::Result<Token> {
@@ -494,7 +511,12 @@ impl Lexer {
 			'+' => self.tok_eq(Tok::Plus, Tok::PlusEqual, db)?,
 			'/' => {
 				if self.advance_if('/', db)? {
-					self.line_comment(db)?;
+					let c = self.line_comment(db)?;
+
+					if let Some(c) = c {
+						// Doc comments
+						return Ok(c);
+					}
 					// TODO: Speed this up in the case of multiline comments...
 					// we really don't want to recurse here...
 					return self.next_token(db);

@@ -249,7 +249,9 @@ impl<'b> Parser<'b> {
             funs,
             var_map,
             fun_map,
-            location
+            location,
+            // TODO: Doc comments for imported functions
+            doc_comment: None,
         });
 
         for var in vars {
@@ -326,6 +328,8 @@ impl<'b> Parser<'b> {
             class: None,
             expression: None,
             location,
+            // TODO: Doc comments for imported functions
+            doc_comment: None,
         });
 
         for param in params_for_fun {

@@ -1,0 +1,3 @@
+[projects.main]
+files = ["main.poni"]
+imports = []
