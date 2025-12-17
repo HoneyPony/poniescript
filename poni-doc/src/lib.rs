@@ -88,6 +88,9 @@ fn convert_doc_comment(db: &Db, doc_comment: &Option<Vec<Token>>) -> String {
     if let Some(doc) = doc_comment {
         for tok in doc {
             markdown.push_str(db.get(tok.lexeme));
+
+            // There is no need to terminate the lines with a '\n', as the
+            // newline will be included from the source.
             //markdown.push('\n');
         }
     }
