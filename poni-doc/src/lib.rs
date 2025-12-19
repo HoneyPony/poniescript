@@ -202,6 +202,13 @@ impl DocPage {
                         last.1 += text;
                     }
                 }
+                pulldown_cmark::Event::Code(text) => {
+                    // For the summary sidebar, add internal code without
+                    // formatting it as code for the sidebar.
+                    if let Some(last) = pending_headings.last_mut() {
+                        last.1 += text;
+                    }
+                }
                 _ => {}
             }
             evt
