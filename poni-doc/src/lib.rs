@@ -8,6 +8,7 @@ use maud::html;
 use poniescript_core::db::Ast;
 use poniescript_core::db::Db;
 use poniescript_core::db::IdFuncs;
+use poniescript_core::inf_write;
 use poniescript_core::lexer::Token;
 
 struct BuiltinDoc {
@@ -71,6 +72,14 @@ struct Variable {
     doc_markdown: String,
 }
 
+struct Function {
+    name: String,
+
+    // E.g. do_stuff(x: int, y: int) -> void
+    repr: String,
+    doc_markdown: String,
+}
+
 struct DocPage {
     /// What section the doc page is in, e.g. 'PonieScript Builtins'
     section: Option<String>,
@@ -87,6 +96,9 @@ struct DocPage {
 
     /// Member variables for this type, if any.
     member_vars: Vec<Variable>,
+
+    /// Member functions for this type, if any.
+    member_funs: Vec<Function>,
 }
 
 // TODO: We will probably want to delete / exchange headers somehow in these?
@@ -110,6 +122,10 @@ impl DocPage {
             a.name.cmp(&b.name).then_with(|| {
                 a.type_repr.cmp(&b.type_repr)
             })
+        });
+
+        self.member_funs.sort_by(|a, b| {
+            a.name.cmp(&b.name)
         });
 
         let parser = pulldown_cmark::Parser::new(&self.main_content_markdown);
@@ -142,7 +158,13 @@ impl DocPage {
                                     a { (var.name) }
                                 }
                             }
-                            h5 { "Member functions" }
+                            @if self.member_funs.len() > 0 {
+                                h5 { "Member functions" }
+                                @for fun in &self.member_funs {
+                                    // TODO: actually link these up
+                                    a { (fun.name) }
+                                }
+                            }
                         }
                         .poni-doc-content {
                             // Create a heading that is based on the identifier
@@ -179,6 +201,24 @@ impl DocPage {
                                         }
                                     }
                                     (convert_member_md(&var.doc_markdown))
+                                }
+                            }
+
+                            // Generate documentation for member functions
+                            @if self.member_funs.len() > 0 {
+                                h1 { "Member functions" }
+                                @for fun in &self.member_funs {
+                                    h2 {
+                                        code {
+                                            span .code-k {
+                                                "fun"
+                                            }
+                                            " "
+                                            // TODO: Syntax highlight these.
+                                            (fun.repr)
+                                        }
+                                    }
+                                    (convert_member_md(&fun.doc_markdown))
                                 }
                             }
                         }
@@ -245,6 +285,7 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, output_path: &Path) -> std::io:
         let id: &&str = db.get(class.name);
 
         let mut member_vars = Vec::new();
+        let mut member_funs = Vec::new();
         for var in &class.vars {
             let var = db.get(*var);
             let name = db.get(var.name);
@@ -263,12 +304,54 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, output_path: &Path) -> std::io:
             member_vars.push(var);
         }
 
+        for fun in &class.funs {
+            let fun = db.get(*fun);
+            
+            // To build the string representation:
+            // - Start with the fun name
+            // - For each variable, add its name and type repr (TODO: typecheck...)
+            // - Add the return type
+
+            // Man I'm writing a pretty-printer over here by accident...
+            let name = match fun.name {
+                Some(name) => db.get(name).to_string(),
+                // NOTE: This should (?) be impossible here, but might as well.
+                // TBH, we might extract this formatting into some helper
+                // function eventually anyway.
+                None => "<anonymous>".to_string(),
+            };
+            let mut repr = format!("{}(", name);
+            let mut comma = false;
+            for var in &fun.parameters {
+                if comma { repr.push_str(", "); }
+
+                let var = db.get(*var);
+                // TODO: Use ufmt for everything? :)
+                use std::fmt::Write;
+                write!(repr, "{}: {}",
+                    db.get(var.name), db.repr_type(var.typ)).unwrap();
+
+                comma = true;
+            }
+            repr.push_str(") -> ");
+            repr.push_str(db.repr_type(fun.return_type));
+
+            let fun = Function {
+                name,
+                repr,
+                doc_markdown: convert_doc_comment(&db, &fun.doc_comment),
+            };
+
+            member_funs.push(fun);
+        }
+
         let mut doc_page = DocPage {
             section: None,
             identifier: Identifier::class(id),
             main_content_markdown: md,
             static_path: PathBuf::from("../static"),
             member_vars,
+            member_funs,
         };
 
         let markup = doc_page.generate_html();
@@ -287,6 +370,7 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, output_path: &Path) -> std::io:
             main_content_markdown: builtin.markdown.to_string(),
             static_path: PathBuf::from("../static"),
             member_vars: vec![],
+            member_funs: vec![],
         };
 
         let markup = doc_page.generate_html();
