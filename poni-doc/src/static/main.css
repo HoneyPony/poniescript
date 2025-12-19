@@ -41,6 +41,14 @@ body {
     margin-left: 2em;
 }
 
+.poni-doc-nav a {
+    color: #eee;
+    font-weight: normal;
+}
+
+.poni-doc-nav h6 > a {
+    text-decoration: none;
+}
 
 .poni-doc-content {
     max-width: 960px;
