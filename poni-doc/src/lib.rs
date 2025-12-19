@@ -239,8 +239,14 @@ impl DocPage {
                             @for sect in &section_ids {
                                 // TODO: Different h5/h4 depending on which
                                 // level of heading it was...?
-                                a href={"#" (sect.0)} { (sect.1) }
-                                br;
+                                @match sect.2 {
+                                    HeadingLevel::H1 => h5 { a href={"#" (sect.0)} { (sect.1) } }
+                                    HeadingLevel::H2 => h6 { a href={"#" (sect.0)} { (sect.1) } }
+                                    //_ => (unreachable!())
+                                    // unreachable() gives a silly warning so
+                                    // just generate nothing instead.
+                                    _ => {}
+                                }
                             }
                             @if self.member_vars.len() > 0 {
                                 h5 { "Member variables" }
@@ -248,15 +254,13 @@ impl DocPage {
                                     // TODO: Consider making these flash
                                     // or something when you click them?
                                     // In case the thing is already on screen.
-                                    a href={"#var-" (var.name)} { (var.name) }
-                                    br;
+                                    h6 { a href={"#var-" (var.name)} { (var.name) } }
                                 }
                             }
                             @if self.member_funs.len() > 0 {
                                 h5 { "Member functions" }
                                 @for fun in &self.member_funs {
-                                    a href={"#fun-" (fun.name)} { (fun.name) }
-                                    br;
+                                    h6 { a href={"#fun-" (fun.name)} { (fun.name) } }
                                 }
                             }
                         }
