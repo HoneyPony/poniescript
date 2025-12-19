@@ -33,6 +33,15 @@ body {
     background-color: rgba(20, 20, 20, 0.7);
 }
 
+.poni-doc-nav > h5, h6 {
+    margin: 0.5em;
+}
+
+.poni-doc-nav > h6 {
+    margin-left: 2em;
+}
+
+
 .poni-doc-content {
     max-width: 960px;
     padding: 0.2em 2em;
