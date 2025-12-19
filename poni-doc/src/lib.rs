@@ -59,6 +59,17 @@ impl Identifier {
     }
 }
 
+// struct MemberList {
+//     list_name: String,
+//     // List of tuples of (identifier, member documentation).
+//     members: Vec<(Identifier, String)>,
+// }
+
+struct Variable {
+    name: String,
+    type_repr: String,
+}
+
 struct DocPage {
     /// What section the doc page is in, e.g. 'PonieScript Builtins'
     section: Option<String>,
@@ -72,10 +83,20 @@ struct DocPage {
     /// The Path to the 'static' content for the site, for pulling resources
     /// such as the css files.
     static_path: PathBuf,
+
+    /// Member variables for this type, if any.
+    member_vars: Vec<Variable>,
 }
 
 impl DocPage {
-    pub fn generate_html(&self) -> Markup {
+    pub fn generate_html(&mut self) -> Markup {
+        // Alphabatize members.
+        self.member_vars.sort_by(|a, b| {
+            a.name.cmp(&b.name).then_with(|| {
+                a.type_repr.cmp(&b.type_repr)
+            })
+        });
+
         let parser = pulldown_cmark::Parser::new(&self.main_content_markdown);
         let mut html_output = String::new();
 
@@ -99,7 +120,13 @@ impl DocPage {
                                 None => {}
                             }
                             h4 { (self.identifier.id) }
-                            h5 { "Member variables" }
+                            @if self.member_vars.len() > 0 {
+                                h5 { "Member variables" }
+                                @for var in &self.member_vars {
+                                    // TODO: actually link these up
+                                    a { (var.name) }
+                                }
+                            }
                             h5 { "Member functions" }
                         }
                         .poni-doc-content {
@@ -179,11 +206,30 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, output_path: &Path) -> std::io:
 
         let id: &&str = db.get(class.name);
 
-        let doc_page = DocPage {
+        let mut member_vars = Vec::new();
+        for var in &class.vars {
+            let var = db.get(*var);
+            let name = db.get(var.name);
+            // We are going to have to run type checking...?
+            // :(
+            let typ = db.repr_type(var.typ);
+
+            let var = Variable {
+                name: name.to_string(),
+                // TODO: Reduce number of to_string()'s here? There might be
+                // a way to just have stuff pointing into the Db.
+                type_repr: typ.to_string(),
+            };
+
+            member_vars.push(var);
+        }
+
+        let mut doc_page = DocPage {
             section: None,
             identifier: Identifier::class(id),
             main_content_markdown: md,
             static_path: PathBuf::from("../static"),
+            member_vars,
         };
 
         let markup = doc_page.generate_html();
@@ -196,11 +242,12 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, output_path: &Path) -> std::io:
     for builtin in builtins {
         let output_path = builtins_dir.join(format!("{}.html", builtin.identifier.id));
 
-        let doc_page = DocPage {
+        let mut doc_page = DocPage {
             section: None,
             identifier: builtin.identifier,
             main_content_markdown: builtin.markdown.to_string(),
-            static_path: PathBuf::from("../static")
+            static_path: PathBuf::from("../static"),
+            member_vars: vec![],
         };
 
         let markup = doc_page.generate_html();
