@@ -158,6 +158,7 @@ impl DocPage {
                                 @for var in &self.member_vars {
                                     // TODO: actually link these up
                                     a { (var.name) }
+                                    br;
                                 }
                             }
                             @if self.member_funs.len() > 0 {
@@ -165,6 +166,7 @@ impl DocPage {
                                 @for fun in &self.member_funs {
                                     // TODO: actually link these up
                                     a { (fun.name) }
+                                    br;
                                 }
                             }
                         }
