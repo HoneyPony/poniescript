@@ -45,3 +45,10 @@ body {
 h1, h2, h3, h4, h5, h6 {
     font-family: sans-serif;
 }
+
+.poni-doc-content > h1 {
+    padding-bottom: 0.2em;
+    /* Underline for h1 headers */
+    border-bottom: 1px solid white;
+    border-image: linear-gradient(to right, #eee, #eecfec11) 1;
+}
