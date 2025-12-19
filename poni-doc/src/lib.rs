@@ -156,16 +156,17 @@ impl DocPage {
                             @if self.member_vars.len() > 0 {
                                 h5 { "Member variables" }
                                 @for var in &self.member_vars {
-                                    // TODO: actually link these up
-                                    a { (var.name) }
+                                    // TODO: Consider making these flash
+                                    // or something when you click them?
+                                    // In case the thing is already on screen.
+                                    a href={"#var-" (var.name)} { (var.name) }
                                     br;
                                 }
                             }
                             @if self.member_funs.len() > 0 {
                                 h5 { "Member functions" }
                                 @for fun in &self.member_funs {
-                                    // TODO: actually link these up
-                                    a { (fun.name) }
+                                    a href={"#fun-" (fun.name)} { (fun.name) }
                                     br;
                                 }
                             }
@@ -192,7 +193,7 @@ impl DocPage {
                                 // so they don't interfere with our own.
                                 h1 { "Member variables" }
                                 @for var in &self.member_vars {
-                                    h2 {
+                                    h2 id={"var-" (var.name)} {
                                         code {
                                             span .code-k {
                                                 "var"
@@ -212,7 +213,7 @@ impl DocPage {
                             @if self.member_funs.len() > 0 {
                                 h1 { "Member functions" }
                                 @for fun in &self.member_funs {
-                                    h2 {
+                                    h2 id={"fun-" (fun.name)} {
                                         code {
                                             span .code-k {
                                                 "fun"
