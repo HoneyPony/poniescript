@@ -169,6 +169,7 @@ impl DocPage {
                                 // time we see a Heading tag and pop from each time
                                 // we close a heading tag.
                                 pending_headings.push((new_id.clone(), String::new(), level.clone()));
+                                eprintln!("new pending heading @ level {}", level);
 
                                 next_section_id += 1;
                                 let cow = CowStr::from(new_id);
@@ -178,10 +179,16 @@ impl DocPage {
                         _ => {}
                     }
                 },
+                // pulldown_cmark::Event::SoftBreak => {
+                //     if let Some(next) = pending_headings.pop() {
+                //         section_ids.push(next);
+                //     }
+                // }
                 pulldown_cmark::Event::End(tag) => {
                     match tag {
                         TagEnd::Heading(level) => {
                             if *level <= HeadingLevel::H2 {
+                                eprintln!("end pending heading @ level {}", level);
                                 // Push the next section ID.
                                 section_ids.push(pending_headings.pop().expect("tags should always match"));
                             }
@@ -193,7 +200,8 @@ impl DocPage {
                     // If we have a current heading, add text to it. This is just
                     // summary text for the sidebar, so we don't care if it's
                     // suuuper great.
-                    if let Some(last) = section_ids.last_mut() {
+                    if let Some(last) = pending_headings.last_mut() {
+                        eprintln!("text: {}", text);
                         last.1 += text;
                     }
                 }
@@ -202,7 +210,13 @@ impl DocPage {
             evt
         });
 
-        pulldown_cmark::html::push_html(&mut html_output, heading_eater);
+        for _ in heading_eater {}
+
+        // JANK????
+        let parser = pulldown_cmark::Parser::new(&self.main_content_markdown);
+        pulldown_cmark::html::push_html(&mut html_output, parser);
+
+        assert!(pending_headings.is_empty());
 
         html! {
             html {
@@ -226,6 +240,7 @@ impl DocPage {
                                 // TODO: Different h5/h4 depending on which
                                 // level of heading it was...?
                                 a href={"#" (sect.0)} { (sect.1) }
+                                br;
                             }
                             @if self.member_vars.len() > 0 {
                                 h5 { "Member variables" }
