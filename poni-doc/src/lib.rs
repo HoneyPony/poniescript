@@ -119,6 +119,8 @@ impl DocPage {
     pub fn generate_html(&mut self) -> Markup {
         // Alphabatize members.
         self.member_vars.sort_by(|a, b| {
+            // TODO: Is there actually any reason to use then_with here?
+            // In theory, the parameter names will always be distinct anyway.
             a.name.cmp(&b.name).then_with(|| {
                 a.type_repr.cmp(&b.type_repr)
             })
