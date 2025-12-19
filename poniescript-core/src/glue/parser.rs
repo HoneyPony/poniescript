@@ -290,7 +290,9 @@ impl<'b> Parser<'b> {
             // enough to require them.
             let var_cname = expected!(self, GlueTok::Identifier, "Parameter name")?;
             let identity = self.db.new_var(var_cname.lexeme, c_type, None, None, false, None,
-			    self.last_location.clone());
+			    self.last_location.clone(),
+                // No doc comments for function params for now
+                None);
 
             params.push(identity);
 
@@ -404,7 +406,9 @@ impl<'b> Parser<'b> {
             None => c_name.lexeme
         };
 
-        let var = self.db.new_var(var_name, c_type, None, None, false, None, self.end(location));
+        let var = self.db.new_var(var_name, c_type, None, None, false, None, self.end(location),
+            // TOOD: Doc comments, at least for classes.
+            None);
         self.db.know_var_cname(var, self.db.get(c_name.lexeme));
 
         // TODO: Handle name collisions here as well?

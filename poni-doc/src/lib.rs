@@ -68,6 +68,7 @@ impl Identifier {
 struct Variable {
     name: String,
     type_repr: String,
+    doc_markdown: String,
 }
 
 struct DocPage {
@@ -86,6 +87,20 @@ struct DocPage {
 
     /// Member variables for this type, if any.
     member_vars: Vec<Variable>,
+}
+
+// TODO: We will probably want to delete / exchange headers somehow in these?
+fn convert_member_md(markdown: &String) -> PreEscaped<String> {
+    // Fast path for empty strings.
+    if markdown.is_empty() {
+        return PreEscaped(String::new());
+    }
+
+    let parser = pulldown_cmark::Parser::new(&markdown);
+    let mut html = String::new();
+
+    pulldown_cmark::html::push_html(&mut html, parser);
+    PreEscaped(html)
 }
 
 impl DocPage {
@@ -143,6 +158,29 @@ impl DocPage {
                                 }
                             }
                             (PreEscaped(html_output))
+
+                            // Generate documentation for member variables
+                            @if self.member_vars.len() > 0 {
+                                // NOTE: For jumping-to-section, we will have
+                                // to prepend something to user-defined sections
+                                // so they don't interfere with our own.
+                                h1 { "Member variables" }
+                                @for var in &self.member_vars {
+                                    h2 {
+                                        code {
+                                            span .code-k {
+                                                "var"
+                                            }
+                                            " "
+                                            (var.name)
+                                            ": "
+                                            // TODO: Syntax highlight these too.
+                                            (var.type_repr)
+                                        }
+                                    }
+                                    (convert_member_md(&var.doc_markdown))
+                                }
+                            }
                         }
                     }
                 }
@@ -219,6 +257,7 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, output_path: &Path) -> std::io:
                 // TODO: Reduce number of to_string()'s here? There might be
                 // a way to just have stuff pointing into the Db.
                 type_repr: typ.to_string(),
+                doc_markdown: convert_doc_comment(&db, &var.doc_comment),
             };
 
             member_vars.push(var);

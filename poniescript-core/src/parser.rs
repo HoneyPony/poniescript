@@ -666,7 +666,10 @@ impl<'b> Parser<'b> {
 		// class.
 		//
 		// TODO: For classes, support variables that don't have an initializer?
-		let identity = self.db.new_var(name.lexeme, typ, None, None, true, None, name.location);
+		let identity = self.db.new_var(name.lexeme, typ, None, None, true, None, name.location, 
+			// Currently, the for loop variable can't have a doc comment?
+			// This could be changed.
+			None);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		let inner = self.block()?;
@@ -1278,6 +1281,7 @@ impl<'b> Parser<'b> {
 	}
 
 	fn var_declaration(&mut self) -> Result<Declare> {
+		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let key_var = expected!(self, Tok::Var, "'var''")?;
 
@@ -1308,7 +1312,10 @@ impl<'b> Parser<'b> {
 		// class.
 		//
 		// TODO: For classes, support variables that don't have an initializer?
-		let identity = self.db.new_var(name.lexeme, typ, None, None, true, Some(initializer), name.location);
+		let identity = self.db.new_var(name.lexeme,
+			typ, None, None, true,
+			Some(initializer), name.location,
+			doc_comment);
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -1425,7 +1432,9 @@ impl<'b> Parser<'b> {
 		let name_str = name.lexeme;
 
 		let identity = self.db.new_var(name.lexeme, typ, None, None, false, None,
-			name.location);
+			name.location,
+			// Currenlty, doc comments are not supported for parameters.
+			None);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		Ok(identity)

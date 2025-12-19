@@ -170,6 +170,9 @@ pub struct Var {
 	pub initializer: Option<ExprId>,
 	/// The "location" for the variable.
 	pub location: SourceLocation,
+
+	/// Doc comment for this variable.
+	pub doc_comment: Option<Vec<Token>>,
 }
 
 pub struct Fun {
