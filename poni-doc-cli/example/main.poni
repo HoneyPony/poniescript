@@ -10,6 +10,22 @@
 /// ```
 /// var my_horse = new Horse { greeting: "chonk" };
 /// ```
+///
+/// # How to `Horse`
+/// In order to `Horse`, you must `Horse`. This should not need any further
+/// elaboration.
+///
+/// # Additional examples
+/// ## Basic Horse
+/// `new Horse {}`
+///
+/// ## Complicated Horse
+/// ```
+/// var horses = [new Horse{}, new Horse{}, new Horse{}];
+/// for i in 0..horses.length {
+///     horses[i].gallop(i);
+/// }
+/// ```
 class Horse {
     /// The greeting for this `Horse`. See `Horse` for further discussion of
     /// its importance.

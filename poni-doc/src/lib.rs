@@ -10,6 +10,10 @@ use poniescript_core::db::Db;
 use poniescript_core::db::IdFuncs;
 use poniescript_core::inf_write;
 use poniescript_core::lexer::Token;
+use pulldown_cmark::CowStr;
+use pulldown_cmark::HeadingLevel;
+use pulldown_cmark::Tag;
+use pulldown_cmark::TagEnd;
 
 struct BuiltinDoc {
     identifier: Identifier,
@@ -130,10 +134,75 @@ impl DocPage {
             a.name.cmp(&b.name)
         });
 
+        // let parser = pulldown_cmark::Parser::new_ext(&self.main_content_markdown,
+        //     pulldown_cmark::Options::ENABLE_HEADING_ATTRIBUTES);
         let parser = pulldown_cmark::Parser::new(&self.main_content_markdown);
         let mut html_output = String::new();
 
-        pulldown_cmark::html::push_html(&mut html_output, parser);
+        let mut next_section_id = 0;
+
+        let mut pending_headings = Vec::new();
+        // An in-order list of section ID's for the markdown, plus the section
+        // name.
+        // 
+        // These are for headings of level # or ##, I think.
+        let mut section_ids = Vec::new();
+
+        let heading_eater = parser.map(|mut evt| {
+            match &mut evt {
+                pulldown_cmark::Event::Start(tag) => {
+                    match tag {
+                        Tag::Heading { level, id, classes, attrs } => {
+                            if *level <= HeadingLevel::H2 {
+                                // Just generate simple numerical section ids for now.
+                                //
+                                // We could read some from the source markdown, but
+                                // I'm not sure there's much reason.
+                                //
+                                // We may eventually want them to be a bit more
+                                // correlated simply so documentation links can
+                                // be more stable, but this is fine for now.
+
+                                let new_id = format!("sect-{}", next_section_id);
+
+                                // We have a stack of headings that we push to each
+                                // time we see a Heading tag and pop from each time
+                                // we close a heading tag.
+                                pending_headings.push((new_id.clone(), String::new(), level.clone()));
+
+                                next_section_id += 1;
+                                let cow = CowStr::from(new_id);
+                                *id = Some(cow);
+                            }
+                        },
+                        _ => {}
+                    }
+                },
+                pulldown_cmark::Event::End(tag) => {
+                    match tag {
+                        TagEnd::Heading(level) => {
+                            if *level <= HeadingLevel::H2 {
+                                // Push the next section ID.
+                                section_ids.push(pending_headings.pop().expect("tags should always match"));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                pulldown_cmark::Event::Text(text) => {
+                    // If we have a current heading, add text to it. This is just
+                    // summary text for the sidebar, so we don't care if it's
+                    // suuuper great.
+                    if let Some(last) = section_ids.last_mut() {
+                        last.1 += text;
+                    }
+                }
+                _ => {}
+            }
+            evt
+        });
+
+        pulldown_cmark::html::push_html(&mut html_output, heading_eater);
 
         html! {
             html {
@@ -153,6 +222,11 @@ impl DocPage {
                                 None => {}
                             }
                             h4 { (self.identifier.id) }
+                            @for sect in &section_ids {
+                                // TODO: Different h5/h4 depending on which
+                                // level of heading it was...?
+                                a href={"#" (sect.0)} { (sect.1) }
+                            }
                             @if self.member_vars.len() > 0 {
                                 h5 { "Member variables" }
                                 @for var in &self.member_vars {
