@@ -169,7 +169,6 @@ impl DocPage {
                                 // time we see a Heading tag and pop from each time
                                 // we close a heading tag.
                                 pending_headings.push((new_id.clone(), String::new(), level.clone()));
-                                eprintln!("new pending heading @ level {}", level);
 
                                 next_section_id += 1;
                                 let cow = CowStr::from(new_id);
@@ -188,7 +187,6 @@ impl DocPage {
                     match tag {
                         TagEnd::Heading(level) => {
                             if *level <= HeadingLevel::H2 {
-                                eprintln!("end pending heading @ level {}", level);
                                 // Push the next section ID.
                                 section_ids.push(pending_headings.pop().expect("tags should always match"));
                             }
@@ -201,7 +199,6 @@ impl DocPage {
                     // summary text for the sidebar, so we don't care if it's
                     // suuuper great.
                     if let Some(last) = pending_headings.last_mut() {
-                        eprintln!("text: {}", text);
                         last.1 += text;
                     }
                 }
@@ -210,11 +207,7 @@ impl DocPage {
             evt
         });
 
-        for _ in heading_eater {}
-
-        // JANK????
-        let parser = pulldown_cmark::Parser::new(&self.main_content_markdown);
-        pulldown_cmark::html::push_html(&mut html_output, parser);
+        pulldown_cmark::html::push_html(&mut html_output, heading_eater);
 
         assert!(pending_headings.is_empty());
 
