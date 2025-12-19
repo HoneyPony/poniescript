@@ -15,9 +15,23 @@ class Horse {
     /// its importance.
     var greeting: StrBuf = "neigh!";
 
+    /// The color of the `Horse`'s coat.
+    var color: vec4i = (0, 0, 0, 0);
+
     /// Causes this `Horse` to emit its distinctive greeting to the standard
     /// console.
     fun greet() {
         print(greeting);
+    }
+
+    /// Causes the `Horse` to gallop the given number of meters in some
+    /// direction. Returns how far the `Horse` actually went.
+    fun gallop(meters: int) -> int {
+        if meters < 100 { meters } else { meters - 20 }
+    }
+
+    /// Obtains a permanent copy of the `Horse`'s greeting.
+    fun record() -> StrBuf {
+        str(greeting)
     }
 }
