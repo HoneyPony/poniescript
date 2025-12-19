@@ -249,7 +249,7 @@ impl DocPage {
                                 }
                             }
                             @if self.member_vars.len() > 0 {
-                                h5 { "Member variables" }
+                                h5 { a href="#member-vars" { "Member variables" } }
                                 @for var in &self.member_vars {
                                     // TODO: Consider making these flash
                                     // or something when you click them?
@@ -258,7 +258,7 @@ impl DocPage {
                                 }
                             }
                             @if self.member_funs.len() > 0 {
-                                h5 { "Member functions" }
+                                h5 { a href="#member-funs" { "Member functions" } }
                                 @for fun in &self.member_funs {
                                     h6 { a href={"#fun-" (fun.name)} { (fun.name) } }
                                 }
@@ -284,7 +284,7 @@ impl DocPage {
                                 // NOTE: For jumping-to-section, we will have
                                 // to prepend something to user-defined sections
                                 // so they don't interfere with our own.
-                                h1 { "Member variables" }
+                                h1 id="member-vars" { "Member variables" }
                                 @for var in &self.member_vars {
                                     h2 id={"var-" (var.name)} {
                                         code {
@@ -304,7 +304,7 @@ impl DocPage {
 
                             // Generate documentation for member functions
                             @if self.member_funs.len() > 0 {
-                                h1 { "Member functions" }
+                                h1 id="member-funs" { "Member functions" }
                                 @for fun in &self.member_funs {
                                     h2 id={"fun-" (fun.name)} {
                                         code {
