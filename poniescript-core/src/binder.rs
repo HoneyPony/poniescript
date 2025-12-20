@@ -12,10 +12,17 @@ use crate::arena::IndexCell;
 struct NameChecker {
 	buffer: String,
 	own_length: usize,
+
+	// In the future, this will need to be some sort of chain, to let us
+	// resolve calls/references to parent class functions/variables (in the Java sense).
+	//
+	// For now, this simply represents whether this scope should involve a
+	// new SelfVal bound to any function calls/variables, or not.
+	self_val: bool,
 }
 
 impl NameChecker {
-	pub fn scoped(previous: &NameChecker, scope: &str) -> Self {
+	pub fn scoped(previous: &NameChecker, scope: &str, self_val: bool) -> Self {
 		// We add a dot after the scope, as that's what the names will
 		// look like.
 		//
@@ -24,11 +31,11 @@ impl NameChecker {
 		let buffer = format!("{}{}.", previous.buffer, scope);
 		let own_length = buffer.len();
 
-		return NameChecker { buffer, own_length };
+		return NameChecker { buffer, own_length, self_val };
 	}
 
 	pub fn global() -> Self {
-		return NameChecker { buffer: String::new(), own_length: 0 };
+		return NameChecker { buffer: String::new(), own_length: 0, self_val: false };
 	}
 
 	pub fn check(&mut self, db: &Db, name: StrId) -> ScopeEntry {
@@ -83,11 +90,9 @@ impl<'db> Binder<'db> {
 		None
 	}
 
-	/// If we're currently inside a class, gets a new SelfVal; otherwise, returns
-	/// None. Useful for resolving AST types that can optionally operate on an
-	/// object.
-	fn get_selfval(&mut self, ast: &AstProxy, location: SourceLocation) -> Option<ExprId> {
-		if self.in_class {
+	/// Gets a new SelfVal if appropriate.
+	fn get_selfval(&mut self, ast: &AstProxy, location: SourceLocation, selfval: bool) -> Option<ExprId> {
+		if selfval {
 			Some(Expr::push_selfval(ast, location, self.db.types.unassigned))
 		}
 		else { None }
@@ -97,8 +102,12 @@ impl<'db> Binder<'db> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
-				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location.clone(), location.clone(), fun, self.db.types.fun_sig_unassigned, 
-					self.get_selfval(ast, location))),
+				ScopeEntry::Fun(fun) => {
+					let self_val = checker.self_val;
+					let self_val = self.get_selfval(ast, location.clone(), self_val);
+					return Some(Expr::mk_funcapture(location.clone(), location, fun, self.db.types.fun_sig_unassigned, 
+						self_val))
+				}
 				ScopeEntry::Class(_) => {
 					todo!("what to do when we resolve an Unbound into a Class");
 				}
@@ -157,8 +166,10 @@ impl<'db> Binder<'db> {
 					return Some(Expr::mk_variable(unbound.location.clone(), v));
 				}
 				ScopeEntry::Fun(fun) => {
+					let self_val = checker.self_val;
+					let self_val = self.get_selfval(ast, unbound.location.clone(), self_val);
 					return Some(Expr::mk_funcapture(unbound.location.clone(), unbound.identifier.location.clone(), fun, self.db.types.unassigned, 
-						self.get_selfval(ast, unbound.location.clone())))
+						self_val))
 				}
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
@@ -448,7 +459,7 @@ impl<'db> Binder<'db> {
 
 		let class = self.db.get(class_declare.identity);
 		let name = self.db.get(class.name);
-		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name);
+		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name, true);
 		self.checkers.push(new_scope);
 
 		for fun in &mut class_declare.funs {
