@@ -1919,6 +1919,14 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::SelfVal(selfval) => {
+				// If we currently have a this_val, we must use it.
+				if let Some(this_val) = self.this_val {
+					// I *believe* we still don't need a GC frame for this Val,
+					// although it is less clear. We should probably consider
+					// just directly storing the relevant Val instead of a usize?
+					return Val::Tmp(this_val).typed(selfval.typ, None)
+				}
+
 				// Self is kind of special for the GC. We don't actually need
 				// to keep a reference to it ourselves, because we're guaranteed
 				// that it is either pointed to by a root, or by some other function
