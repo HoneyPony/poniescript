@@ -154,9 +154,6 @@ pub struct Lexer {
 	at_eof: bool,
 
 	pub had_error: bool,
-
-	// The previously stored token, if any.
-	prev: Option<Token>,
 }
 
 fn is_whitespace(c: char) -> bool {
@@ -192,7 +189,6 @@ impl Lexer {
 			at_eof: false,
 
 			had_error: false,
-			prev: None,
 		}
 	}
 
