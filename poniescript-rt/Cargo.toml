@@ -10,3 +10,8 @@ crate-type = ["staticlib"]
 
 [dependencies]
 poniescript-gc = { path = "../poniescript-gc" }
+
+[features]
+# Use this for the runtime to define a main() function, which initializes
+# the PonieScript script and calls into it.
+entry = []
