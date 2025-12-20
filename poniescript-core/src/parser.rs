@@ -442,7 +442,11 @@ impl<'b> Parser<'b> {
 			// makes it easier to generate reasonable code in the common cases.
 			// I guess we don't have FunCalls that are on an object right now?
 			// Unsure...
-			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, self.end(location), ident.location, fun, args, None),
+			ScopeEntry::Fun(fun) => {
+				log::trace!("new bound fun: {} object.is_some(): {}",
+					self.db.get(ident.lexeme), object.is_some());
+				Expr::put_funcall_ok(self.ast, self.end(location), ident.location, fun, args, None)
+			}
 			ScopeEntry::Class(_) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), self.current.location.clone()));
 
@@ -464,6 +468,9 @@ impl<'b> Parser<'b> {
 					}
 					
 				}
+
+				log::trace!("new unbound fun capture: {} object.is_some(): {}",
+					self.db.get(ident.lexeme), object.is_some());
 
 				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
 				Expr::put_valcall_ok(self.ast, location, call, args, self.db.sig_unassigned)

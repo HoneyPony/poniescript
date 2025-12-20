@@ -1895,6 +1895,8 @@ impl<'db> TypeChecker<'db> {
 				};
 
 				if let Some(fun) = self.db.lookup_member_fn(obj_ty, capt.identifier.lexeme) {
+					log::trace!("resolved unbound fun '{}' to member of '{}'",
+						self.db.get(capt.identifier.lexeme), self.db.repr_type(obj_ty));
 					let as_funcapture = FunCapture {
 						location: capt.location.clone(),
 						fn_name: capt.identifier.location.clone(),
@@ -1908,6 +1910,8 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				if let Some(property) = self.db.lookup_property(obj_ty, capt.identifier.lexeme) {
+					log::trace!("resolved unbound fun '{}' to Get{{}} in '{}'",
+						self.db.get(capt.identifier.lexeme), self.db.repr_type(obj_ty));
 					let as_get = Get {
 						location: capt.location.clone(),
 						identifier: capt.identifier.clone(),
