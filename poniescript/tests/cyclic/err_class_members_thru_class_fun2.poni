@@ -1,0 +1,19 @@
+class Example {
+    // This is invalid because c is in the expression, and
+    // c is based on a2.
+
+    //? Cycle in variable initialization order
+    var a2 = test2(b, c);
+
+    fun test2(x: int, y: int) -> int {
+        return x + y;
+    }
+
+    var b = 10;
+    var c = a2;
+}
+
+fun init() {
+    var e = new Example{};
+    print(e.a1, " ", e.a2, " ", e.b, " ", e.c); //! 30 30 10 20
+}

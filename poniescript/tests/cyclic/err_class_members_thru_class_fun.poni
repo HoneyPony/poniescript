@@ -1,0 +1,16 @@
+class Example {
+    // This is invalid because test1() reads from a1.
+
+    //? Cycle in variable initialization order
+    var a1 = test1();
+
+    fun test1() -> int {
+        return b + a1;
+    }
+
+    var b = 10;
+}
+
+fun init() {
+    var e = new Example{};
+}

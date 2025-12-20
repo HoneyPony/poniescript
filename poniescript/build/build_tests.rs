@@ -63,6 +63,12 @@ pub fn generate(tests_file: &mut File) {
 		("cyclic/", "globals_same"),
 		("cyclic/", "globals_and_class_thru_difficult"),
 
+		("cyclic/", "class_members_thru_class_fun_thruself"),
+		("cyclic/", "class_members_thru_class_fun"),
+		("cyclic/", "err_class_members_thru_class_fun_thruself"),
+		("cyclic/", "err_class_members_thru_class_fun"),
+		("cyclic/", "err_class_members_thru_class_fun2"),
+
 		("cyclic/", "err_cyclic"),
 		("cyclic/", "err_granularity_fun_in_init"),
 		("cyclic/", "err_cyclic_fun"),
