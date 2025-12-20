@@ -18,3 +18,20 @@ test1_param(struct context *gc, int depth, void *closure) {
     }
     return test1_param(gc, depth - 1, closure) + test1_param(gc, depth - 2, closure) + 2;
 }
+
+int
+test3_param(struct context *gc, int depth, void *closure) {
+    if(depth <= 0) {
+        return 0;
+    }
+
+    int value = 0;
+
+    if(depth % 64 == 0) {
+        value += gc->value;
+    }
+
+    value += test3_param(gc, depth - 1, closure) + depth;
+
+    return value;
+}

@@ -17,3 +17,25 @@ on the other hand, not every single function allocates. Also, simplifying the
 ABI would be nice for writing bindings, especially in Rust (?).
 
 This is a bit of a microbenchmark to see which one might be better.
+
+## Oh, right...
+
+One other thing to remember is that every function that holds onto any GC
+pointer needs to touch the context.
+
+Well, unless we compile in game-loop mode where we don't actually need to
+generate GC frames for correctness.
+
+Huh.
+
+## Additional option
+
+One other option is to do both.
+
+Then, each function is tagged with whether it follows the parameter ABI or
+the thread-local ABI.
+
+We generate shims for each of the thread-local ABI functions that follow
+the parameter ABI. (Or maybe vice-versa? I guess not though...)
+
+It's a bit weird though.
