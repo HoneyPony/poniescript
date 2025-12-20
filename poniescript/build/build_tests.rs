@@ -49,6 +49,7 @@ pub fn generate(tests_file: &mut File) {
 		("binary/", "err_class"),
 
 		("cyclic/", "class_members_and_fun_thru_param"),
+		("cyclic/", "class_members_and_fun_thru_param_nocycle"),
 		("cyclic/", "class_members_expr"),
 		("cyclic/", "class_members_same"),
 		("cyclic/", "class_members_same2"),
