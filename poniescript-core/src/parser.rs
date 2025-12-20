@@ -431,7 +431,15 @@ impl<'b> Parser<'b> {
 		//	todo!("calling the return value of a call");
 		//}
 
-		match self.scope_lookup(ident.lexeme) {
+		// For any binding that we're doing in the parser, we CANNOT be using
+		// our local scope lookups for things bound to objects. Our current
+		// scope is totally unrelated to that scope.
+		let lookup = match object {
+			Some(_) => ScopeEntry::None,
+			None => self.scope_lookup(ident.lexeme)
+		};
+
+		match lookup {
 			ScopeEntry::Var(v) => {
 				let inner = Expr::put_variable(self.ast, location.clone(), v);
 				return Expr::put_valcall_ok(self.ast, self.end(location), inner, args, self.db.sig_unassigned)
