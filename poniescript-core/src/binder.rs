@@ -171,16 +171,21 @@ impl<'db> Binder<'db> {
 					return Some(Expr::mk_variable(unbound.location.clone(), v));
 				}
 				ScopeEntry::Fun(fun) => {
-					
-
-					// The object for the UnboundFuncapture should be:
-					// - Its current associated object, if it has one; otherwise:
-					// - self.get_selfval()
+					// The Binder is not equipped to handle ANY name resolution
+					// on a bound object. That MUST wait until type checking.
 					//
-					// This is because an unboundfuncapture with no associated
-					// object is still 'floating' and may need to be bound to
-					// its class scope. But if it's called on an object, there
-					// is no world in which we should overwrite that object.. (?)
+					// As such, panic if we ever attempt this. This is even wrong
+					// in an LSP context; it is literally a bug if we get here,
+					// not just an improperly handled case.
+					//
+					// This also means that we *always* call self.get_selfval(),
+					// as the object is always already None. We used to only
+					// call self.get_selfval() if the object was None, but
+					// this extra logic is unnecessary, because the object should
+					// ALWAYS be None.
+					if unbound.object.is_some() {
+						panic!("ICE: Binder tried to resolve_unbound_funcapture on a bound expression. This should never happen.");
+					}
 
 					log::trace!("resolved unbound funcapture '{}' to fun in scope '{}'; self_val: {}",
 						self.db.get(unbound.identifier.lexeme),
@@ -188,14 +193,10 @@ impl<'db> Binder<'db> {
 						checker.self_val);
 
 					let self_val = checker.self_val;
-
-					let object = match unbound.object {
-						Some(obj) => Some(obj),
-						None => self.get_selfval(ast, unbound.location.clone(), self_val)
-					};
+					let self_val = self.get_selfval(ast, unbound.location.clone(), self_val);
 
 					return Some(Expr::mk_funcapture(unbound.location.clone(), unbound.identifier.location.clone(), fun, self.db.types.unassigned, 
-						object))
+						self_val))
 				}
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
