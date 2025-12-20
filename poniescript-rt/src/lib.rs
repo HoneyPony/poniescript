@@ -1,5 +1,3 @@
-use std::os::raw::c_void;
-
 use poniescript_gc::{GcContext, gc_spawn};
 
 extern "C" {
