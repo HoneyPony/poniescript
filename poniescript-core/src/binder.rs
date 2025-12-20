@@ -103,6 +103,11 @@ impl<'db> Binder<'db> {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
 				ScopeEntry::Fun(fun) => {
+					log::trace!("resolved unbound '{}' to fun in scope '{}'; self_val: {}",
+						self.db.get(ident),
+						checker.buffer,
+						checker.self_val);
+
 					let self_val = checker.self_val;
 					let self_val = self.get_selfval(ast, location.clone(), self_val);
 					return Some(Expr::mk_funcapture(location.clone(), location, fun, self.db.types.fun_sig_unassigned, 
@@ -166,10 +171,31 @@ impl<'db> Binder<'db> {
 					return Some(Expr::mk_variable(unbound.location.clone(), v));
 				}
 				ScopeEntry::Fun(fun) => {
+					
+
+					// The object for the UnboundFuncapture should be:
+					// - Its current associated object, if it has one; otherwise:
+					// - self.get_selfval()
+					//
+					// This is because an unboundfuncapture with no associated
+					// object is still 'floating' and may need to be bound to
+					// its class scope. But if it's called on an object, there
+					// is no world in which we should overwrite that object.. (?)
+
+					log::trace!("resolved unbound funcapture '{}' to fun in scope '{}'; self_val: {}",
+						self.db.get(unbound.identifier.lexeme),
+						checker.buffer,
+						checker.self_val);
+
 					let self_val = checker.self_val;
-					let self_val = self.get_selfval(ast, unbound.location.clone(), self_val);
+
+					let object = match unbound.object {
+						Some(obj) => Some(obj),
+						None => self.get_selfval(ast, unbound.location.clone(), self_val)
+					};
+
 					return Some(Expr::mk_funcapture(unbound.location.clone(), unbound.identifier.location.clone(), fun, self.db.types.unassigned, 
-						self_val))
+						object))
 				}
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
