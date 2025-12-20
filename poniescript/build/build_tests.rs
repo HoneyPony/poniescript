@@ -48,6 +48,8 @@ pub fn generate(tests_file: &mut File) {
 		("binary/", "tuples"),
 		("binary/", "err_class"),
 
+		("binder/", "sneaky"),
+
 		("cyclic/", "class_members_and_fun_thru_param"),
 		("cyclic/", "err_class_members_and_fun_thru_param"),
 		("cyclic/", "class_members_and_fun_thru_param_nocycle"),
