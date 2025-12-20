@@ -16,6 +16,7 @@
 #define PONI_TAG_STR      10
 #define PONI_TAG_STRBUF   12
 #define PONI_TAG_ARRAY    14
+#define PONI_TAG_DYNARRAY 16
 
 typedef float   ps_float;
 typedef int64_t ps_int;
@@ -254,6 +255,58 @@ struct ps_array_header {
 	ps_int    length;
 };
 
+struct ps_dynarray_header {
+	/** Object header */
+	ps_object object;
+	/**
+	 * Type of the array members. Necessary because our inner array might be
+	 * completely empty.
+	 */
+	uint64_t  type;
+	/** Length of the array. */
+	ps_int    length;
+
+	/** 
+	 * Pointer to the internal array. This should be a non-NULL pointer to
+	 * a ps_array_header.
+	 *
+	 * TODO: For efficiency, this should be nullable if the array is empty.
+	 */
+	void     *buffer;
+};
+
+void*
+poni_array_ensure(void *ctx, void* old_array, ps_int elem_sz, ps_int desired_idx) {
+	struct ps_array_header *header = old_array;
+	ps_int new_size = header->length;
+
+	// Hnadles the case of 0.
+	if(new_size < 1) { new_size = 1; }
+	
+	// Compute the size of the new block. Because it's an idx, not a size, use
+	// <= instead of <.
+	while(new_size <= desired_idx) {
+		new_size *= 2;
+	}
+
+	ps_int old_sz = sizeof(struct ps_array_header) + elem_sz * header->length;
+	ps_int new_sz = sizeof(struct ps_array_header) + elem_sz * new_size;
+
+	size_t old_szt = (size_t)old_sz;
+	size_t new_szt = (size_t)new_sz;
+
+	struct ps_array_header *new_array = poni_gc_alloc_tagged(ctx,
+		new_szt, PONI_TAG_ARRAY);
+
+	memcpy(new_array, old_array, old_szt);
+
+	// After the memcpy(), we have to change the length of the new array.
+	new_array->length = new_size;
+
+	// The old array should be garbage collected.
+	return new_array;
+}
+
 #ifdef __TINYC__
 	#define PONI_NORETURN __attribute__((noreturn))
 #else
@@ -265,10 +318,32 @@ struct ps_array_header {
 	arr->header.length = elem_cnt; \
 	arr->header.type   = elem_tag;
 
+#define PONI_INIT_DYNARRAY(inner_arr, arr, elem_sz, elem_cnt, real_cnt, elem_tag) \
+	inner_arr = poni_gc_alloc_tagged(ctx, sizeof(struct ps_array_header) + elem_sz * elem_cnt, PONI_TAG_ARRAY); \
+	inner_arr->header.length = elem_cnt; \
+	inner_arr->header.type   = elem_tag; \
+	arr = poni_gc_alloc_tagged(ctx, sizeof(struct ps_dynarray_header), PONI_TAG_DYNARRAY); \
+	arr->header.length = real_cnt; \
+	arr->header.type   = elem_tag; \
+	arr->header.buffer = inner_arr;
+
 static inline
 PONI_NORETURN void
 ps_fatal_error(const char *message) {
 	printf("fatal error: %s\n", message);
+	exit(1);
+}
+
+// It is currently unclear if this should essentially throw an exception somehow.
+static inline
+PONI_NORETURN void
+ps_panic(struct poni_gc_context *ctx, const char *src, ps_int line, ps_int column, const char *message) {
+	printf("%s:%" PRId64 ":%" PRId64 ": panic: %s\n", src, line, column, message);
+	struct poni_gc_frame *frame = ctx->frame;
+	while(frame) {
+		printf("  in %s()\n", frame->fn_name);
+		frame = frame->prev;
+	}
 	exit(1);
 }
 
@@ -357,65 +432,72 @@ ps_strfmt_char(struct poni_gc_context *ctx, ps_strbuf *buf, char c) {
 
 // Just for fun, this is a version of ps_strfmt_int that doesn't go through
 // snprintf. I want to see if it is any faster...
+// static inline
+// void
+// ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
+// 	if(i < 0) {
+// 		if(i == INT64_MIN) {
+// 			char val[] = "-9223372036854775808";
+// 			ps_strfmt_cstr(ctx, buf, val, sizeof(val) - 1);
+// 			return;
+// 		}
+// 		ps_strfmt_char(ctx, buf, '-');
+// 		i = -i;
+// 	}
+
+// 	if(i == 0) {
+// 		ps_strfmt_char(ctx, buf, '0');
+// 		return;
+// 	}
+
+// 	char digits[24] = {0};
+// 	char *str = &digits[23];
+// 	size_t len = 0;
+
+// 	char table[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+
+// 	while(i > 10000) {
+// 		ps_int rem = (i % 10000);
+// 		i /= 10000;
+
+// 		ps_int idx1 = (rem / 100) << 1;
+// 		ps_int idx2 = (rem % 100) << 1;
+
+// 		str -= 4;
+// 		str[0] = table[idx1];
+// 		str[1] = table[idx1 + 1];
+// 		str[2] = table[idx2];
+// 		str[3] = table[idx2 + 1];
+// 		len += 4;
+// 	}
+
+// 	while(i > 100) {
+// 		ps_int idx = i % 100;
+// 		str -= 2;
+// 		str[0] = table[idx * 2];
+// 		str[1] = table[idx * 2 + 1];
+// 		len += 2;
+// 		i /= 100;
+// 	}
+
+// 	while(i > 0) {
+// 		ps_int digit = i % 10;
+// 		str--;
+// 		*str = (char)(digit + '0');		
+// 		len += 1;
+// 		i /= 10;
+// 	}
+
+// 	ps_strfmt_cstr(ctx, buf, str, len - 1);
+// }
+
 static inline
 void
 ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
-	if(i < 0) {
-		if(i == INT64_MIN) {
-			char val[] = "-9223372036854775808";
-			ps_strfmt_cstr(ctx, buf, val, sizeof(val) - 1);
-			return;
-		}
-		ps_strfmt_char(ctx, buf, '-');
-		i = -i;
-	}
-
-	if(i == 0) {
-		ps_strfmt_char(ctx, buf, '0');
-		return;
-	}
-
-	char digits[24] = {0};
-	char *str = &digits[23];
-	size_t len = 0;
-
-	char table[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
-
-	while(i > 10000) {
-		ps_int rem = (i % 10000);
-		i /= 10000;
-
-		ps_int idx1 = (rem / 100) << 1;
-		ps_int idx2 = (rem % 100) << 1;
-
-		str -= 4;
-		str[0] = table[idx1];
-		str[1] = table[idx1 + 1];
-		str[2] = table[idx2];
-		str[3] = table[idx2 + 1];
-		len += 4;
-	}
-
-	while(i > 100) {
-		ps_int idx = i % 100;
-		str -= 2;
-		str[0] = table[idx * 2];
-		str[1] = table[idx * 2 + 1];
-		len += 2;
-		i /= 100;
-	}
-
-	while(i > 0) {
-		ps_int digit = i % 10;
-		str--;
-		*str = (char)(digit + '0');		
-		len += 1;
-		i /= 10;
-	}
-
-	ps_strfmt_cstr(ctx, buf, str, len);
+	char buf2[64];
+	snprintf(buf2, 64, "%" PRId64, i);
+	ps_strfmt_cstr(ctx, buf, buf2, strlen(buf2));
 }
-
 // static inline
 // void
 // ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
@@ -433,8 +515,8 @@ ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
 // 		// Do the snprintf again. The output should not change.
 // 		// We will recompute rem, although it should be the case that
 // 		// there's always enough room.
-// 		rem = (buf->buffer->length - buf->length) - 1;
-// 		snprintf(buf->buffer->contents + buf->length, rem, "%" PRId64, i);
+// 		//rem = (buf->buffer->length - buf->length) - 1;
+// 		snprintf(buf->buffer->contents + buf->length, needed + 1, "%" PRId64, i);
 // 	}
 
 // 	// Finally, the length of the string should increase by needed.
@@ -453,10 +535,10 @@ ps_strfmt_float(struct poni_gc_context *ctx, ps_strbuf *buf, float f) {
 	if(rem < needed) {
 		ps_strbuf_reserve(ctx, buf, needed + 1);
 
-		snprintf(buf->buffer->contents + buf->length, rem, "%f", f);
+		snprintf(buf->buffer->contents + buf->length, needed, "%f", f);
 	}
 
-	buf->length += needed;
+	buf->length += needed - 1;
 	buf->buffer->contents[buf->length] = '\0';
 }
 
@@ -467,12 +549,12 @@ ps_strfmt_bool(struct poni_gc_context *ctx, ps_strbuf *buf, ps_bool b) {
 	if(b) {
 		ps_strbuf_reserve(ctx, buf, sizeof("true"));
 		memcpy(buf->buffer->contents + buf->length, "true", sizeof("true"));
-		buf->length += sizeof("true");
+		buf->length += sizeof("true") - 1;
 	}
 	else {
 		ps_strbuf_reserve(ctx, buf, sizeof("false"));
 		memcpy(buf->buffer->contents + buf->length, "false", sizeof("false"));
-		buf->length += sizeof("false");
+		buf->length += sizeof("false") - 1;
 	}
 }
 
@@ -589,12 +671,14 @@ static inline
 float
 ps_promote_int_to_float(ps_int v) { return (ps_float)v; }
 
-#define PONI_GC_FRAME(in_ptr_count) \
+#define PONI_GC_FRAME(in_ptr_count, in_fn_name) \
 struct { \
 	struct poni_gc_frame *prev; \
+	const char *fn_name; \
 	uint64_t ptr_count; \
 	void *ptrs[in_ptr_count]; \
 } gc_frame = {0}; \
+gc_frame.fn_name = in_fn_name; \
 gc_frame.ptr_count = in_ptr_count; \
 gc_frame.prev = ctx->frame; \
 ctx->frame = (void*)&gc_frame

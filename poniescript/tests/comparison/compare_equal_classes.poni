@@ -1,0 +1,19 @@
+class A {}
+
+fun init() {
+    var one = new A{};
+    var two = new A{};
+
+    print(one == one); //! true
+    print(one == two); //! false
+    print(one != one); //! false
+    print(one != two); //! true
+
+    var pointer = one;
+    print(one == pointer); //! true
+    print(one != pointer); //! false
+
+    two = one;
+    print(two == pointer); //! true
+    print(two == one); //! true
+}

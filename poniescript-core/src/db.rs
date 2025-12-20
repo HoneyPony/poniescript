@@ -4,7 +4,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use crate::builtins::BuiltinMethodTable;
+use crate::codegen::TypedVal;
+use crate::codegen::Codegen;
 use crate::error::Error;
+use crate::expr::BuiltinCall;
 // Import relevant things.
 use crate::expr::Expr;
 use crate::expr::Stmt;
@@ -12,6 +16,7 @@ use crate::expr::Fun;
 use crate::expr::Sig;
 use crate::expr::Class;
 use crate::expr::Var;
+use crate::typ::RangeEnd;
 use crate::typ::Type;
 use crate::source::{PathBufFileSource, Source, SourceLocation, SyntheticSource};
 use crate::{arena::*, inf_writeln, Args};
@@ -88,7 +93,7 @@ pub struct Ast {
 pub struct AstReadonly {
 	pub exprs: Arena<Expr, ExprId>,
 	pub stmts: Arena<Stmt, StmtId>,
-	// For now this doesn't include the Sources because they have a RefCell.
+	pub sources: Arena<Source, SourceId>,
 }
 
 pub struct AstReadonlySources {
@@ -127,19 +132,19 @@ impl Ast {
 		}
 	}
 
-	pub fn into_readonly(self) -> (AstReadonly, Arena<Source, SourceId>) {
-		(AstReadonly {
+	pub fn into_readonly(self) -> AstReadonly {
+		AstReadonly {
 			exprs: self.exprs.into_readonly(),
 			stmts: self.stmts.into_readonly(),
-		},
-			self.sources.into_readonly())
+			sources: self.sources.into_readonly(),
+		}
 	}
 
-	pub fn from_readonly(ast: AstReadonly, sources: Arena<Source, SourceId>) -> Self {
+	pub fn from_readonly(ast: AstReadonly) -> Self {
 		Ast {
 			exprs: ast.exprs.into_cell(),
 			stmts: ast.stmts.into_cell(),
-			sources: sources.into_cell(),
+			sources: ast.sources.into_cell(),
 		}
 	}
 
@@ -229,6 +234,33 @@ pub struct DbTypes {
 	pub vec4i: TypId,
 }
 
+pub trait BuiltinMethod {
+	/// Given the type that we are being called on, return the return type
+	/// of this method and the parameters for it.
+	fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>);
+
+	fn compile(&self,
+		codegen: &mut Codegen,
+		ast_node: &BuiltinCall,
+		ast: &AstReadonly,
+		self_val: TypedVal,
+		arg_vals: Vec<TypedVal>,
+		into: &mut String
+	) -> TypedVal;
+}
+
+impl<T: BuiltinMethod> BuiltinMethod for Arc<T> {
+	fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>) {
+		self.as_ref().get_types(db, self_ty)
+	}
+
+	fn compile(&self, codegen: &mut Codegen, ast_node: &BuiltinCall, ast: &AstReadonly, self_val: TypedVal, arg_vals: Vec<TypedVal>, into: &mut String) -> TypedVal {
+		self.as_ref().compile(codegen, ast_node, ast, self_val, arg_vals, into)
+	}
+}
+
+pub type BuiltinMethodPtr = Arc<dyn BuiltinMethod + Send + Sync>;
+
 /// The Db stores all of the arena-allocated objects that can be referenced
 /// with Ids. Basically all of these objects live for the entire program.
 pub struct Db {
@@ -243,7 +275,9 @@ pub struct Db {
 	sig_cgenerated: FxHashMap<SigId, bool>,
 
 	array_cname_cache: FxHashMap<TypId, &'static str>,
+	dyn_array_cname_cache: FxHashMap<TypId, &'static str>,
 	array_used: Vec<TypId>,
+	dynarray_used: Vec<TypId>,
 	//array_cgenerated: FxHashMap<TypId, bool>,
 
 	str_simple_const_map: FxHashMap<String, StrConstId>,
@@ -324,6 +358,9 @@ pub struct Db {
 	/// Maps tuple TypIds to their cname.
 	pub tuple_cname_cache: FxHashMap<TypId, &'static str>,
 
+	/// Maps range TypIds to their cname.
+	pub range_cname_cache: FxHashMap<TypId, &'static str>,
+
 	/// Maps StrIds representing '0', '1', etc into indexes into a tuple.
 	/// These are generated when a tuple type is created.
 	tuple_idxs: FxHashMap<StrId, u32>,
@@ -331,6 +368,25 @@ pub struct Db {
 	/// Maps indices with particular types to the associated variables
 	/// synthesized for that tuple.
 	tuple_vars: FxHashMap<(u32, TypId), VarId>,
+
+	/// Maps End-Type pairs to the associated variables synthesized for that
+	/// Range type.
+	/// 
+	/// The boolean represents whether it's the left or right end of the range
+	/// (false left, true right).
+	/// 
+	/// Note that the key is keyed by *range* type, not by the inner type.
+	/// This is because different ranges with the same inner type have different
+	/// properties.
+	range_vars: FxHashMap<(bool, TypId), VarId>,
+
+	/// Map from TypId's to builtin methods. Used for looking up any method
+	/// that is a compiler builtin.
+	builtin_methods: FxHashMap<(StrId, TypId), BuiltinMethodPtr>,
+
+	/// Table of builtin methods used for initializing the builtin_methods
+	/// HashMap in some cases.
+	builtin_method_table: BuiltinMethodTable,
 
 	/// TODO: Maybe have only one declare/define code?
 
@@ -342,6 +398,14 @@ pub struct Db {
 	pub str_anonymous: StrId,
 	pub str_lambda: StrId,
 	pub str_lerp: StrId,
+
+	pub str_left: StrId,
+	pub str_right: StrId,
+
+	pub str_x: StrId,
+	pub str_y: StrId,
+	pub str_z: StrId,
+	pub str_w: StrId,
 
 	/// The list of globals. The initializer ordering pass will sort them.
 	pub globals: Vec<VarId>,
@@ -364,7 +428,9 @@ impl Db {
 			sig_cgenerated: FxHashMap::default(),
 
 			array_cname_cache: FxHashMap::default(),
+			dyn_array_cname_cache: FxHashMap::default(),
 			array_used: Vec::new(),
+			dynarray_used: Vec::new(),
 
 			str_simple_const_map: FxHashMap::default(),
 
@@ -385,9 +451,14 @@ impl Db {
 			class_cname_cache: Vec::new(),
 
 			tuple_cname_cache: FxHashMap::default(),
+			range_cname_cache: FxHashMap::default(),
 
 			tuple_vars: FxHashMap::default(),
 			tuple_idxs: FxHashMap::default(),
+			range_vars: FxHashMap::default(),
+
+			builtin_methods: FxHashMap::default(),
+			builtin_method_table: BuiltinMethodTable::new(),
 
 			value_types: Vec::new(),
 
@@ -447,6 +518,14 @@ impl Db {
 			str_lambda: StrId::invalid(),
 			str_lerp: StrId::invalid(),
 
+			str_left: StrId::invalid(),
+			str_right: StrId::invalid(),
+
+			str_x: StrId::invalid(),
+			str_y: StrId::invalid(),
+			str_z: StrId::invalid(),
+			str_w: StrId::invalid(),
+
 			prop_str: StrProperties {
 				length: VarId::invalid(),
 				length_key: StrId::invalid()
@@ -498,6 +577,14 @@ impl Db {
 		db.str_lambda = db.put_str("lambda");
 		db.str_lerp = db.put_str("lerp");	
 
+		db.str_left = db.put_str("left");
+		db.str_right = db.put_str("right");
+
+		db.str_x = db.put_str("x");
+		db.str_y = db.put_str("y");
+		db.str_z = db.put_str("z");
+		db.str_w = db.put_str("w");
+
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,
 		// so it's not a huge inefficiency.
@@ -537,6 +624,7 @@ impl Db {
 			init: false,
 			initializer: None,
 			location: self.synthetic(),
+			doc_comment: None,
 		};
 		let var = self.push(var);
 
@@ -591,6 +679,9 @@ impl Db {
 				}
 				return false;
 			}
+			Type::RangeOf(.., inner) => {
+				self.is_not_concrete(*inner)
+			}
 
 			_ => false
 		}
@@ -617,6 +708,9 @@ impl Db {
 				true
 			}
 			Type::Option(inner) => {
+				self.is_cgen_safe(*inner)
+			}
+			Type::RangeOf(.., inner) => {
 				self.is_cgen_safe(*inner)
 			}
 
@@ -671,7 +765,24 @@ impl Db {
 		match &typ {
 			// For array types, use any type we generate.
 			Type::ArrayOf(elem_ty) => self.use_array(*elem_ty),
+			// No need to use_ty the arr_ty, as it will have been put_type'd
+			// before.
+			Type::DynArrayOf(elem_ty, _) => self.use_dynarray(id, *elem_ty),
 			Type::Tuple(inner) => self.use_tuple(&inner, id),
+			Type::RangeOf(left, right, inner) => self.use_rangeof(left, right, inner, id),
+			Type::Option(_) => {
+				let or_panic = self.put_str("or_panic");
+				self.builtin_methods.insert((or_panic, id),
+					Arc::clone(&self.builtin_method_table.option_unwrap));
+
+				let is_some = self.put_str("is_some");
+				self.builtin_methods.insert((is_some, id),
+					Arc::clone(&self.builtin_method_table.option_is_some));
+
+				let is_some = self.put_str("is_nil");
+				self.builtin_methods.insert((is_some, id),
+					Arc::clone(&self.builtin_method_table.option_is_nil));
+			}
 			_ => { }
 		}
 
@@ -789,10 +900,48 @@ impl Db {
 		}
 	}
 
+	fn use_dynarray(&mut self, dynarray_ty: TypId, elem_ty: TypId) {
+		if self.is_cgen_safe(elem_ty) {
+			self.dynarray_used.push(elem_ty);
+
+			let push = self.put_str("push");
+			self.builtin_methods.insert((push, dynarray_ty),
+				Arc::clone(&self.builtin_method_table.dynarray_push));
+
+			let any = self.put_str("any");
+			self.builtin_methods.insert((any, dynarray_ty),
+				Arc::clone(&self.builtin_method_table.dynarray_any));
+
+			let all = self.put_str("all");
+			self.builtin_methods.insert((all, dynarray_ty),
+				Arc::clone(&self.builtin_method_table.dynarray_all));
+
+			let all = self.put_str("clone_shallow");
+			self.builtin_methods.insert((all, dynarray_ty),
+				Arc::clone(&self.builtin_method_table.dynarray_clone_shallow));
+		}
+	}
+
+	pub fn is_int_or_float(&self, ty: TypId) -> bool {
+		// There should (?) be no need for AssumeInt or AssumeFloat, but maybe
+		// there is.
+		ty == self.types.int || ty == self.types.float
+	}
+
+	/// Returns whether the given TypId is one of the named Vec types we support.
+	pub fn is_vec(&self, ty: TypId) -> bool {
+		ty == self.types.vec2 || ty == self.types.vec3 || ty == self.types.vec4 ||
+		ty == self.types.vec2i || ty == self.types.vec3i || ty == self.types.vec4i
+	}
+
 	fn use_tuple(&mut self, inner: &Arc<[TypId]>, tuple_ty: TypId) {
 		if !self.is_cgen_safe(tuple_ty) { return; }
 
 		self.value_types.push(tuple_ty);
+
+		// It should not be possible to have an empty tuple, I think...?
+		let first = inner.first().unwrap();
+		let all_same_ty = inner.iter().all(|t| *t == *first);
 
 		for (idx, ty) in inner.iter().enumerate() {
 			// Generate the StrId for each field index.
@@ -819,7 +968,59 @@ impl Db {
 			let (_, var) = self.synthesize_property(self.get(key), self.get(cname), *ty);
 
 			self.tuple_vars.insert(var_key, var);
+
+			// TODO: It would be nice to synthesize these here then put them
+			// in a hashmap. I guess for now we'll have to check them in
+			// lookup_member, which is *fine* but inefficient.
+			// if all_same_ty && self.is_int_or_float(*ty) {
+			// 	// Synthesize a few special properties for int or float (i.e.
+			// 	// 'x', 'y', etc.)
+			// 	let props = ["x", "y", "z", "w"];
+			// 	if let Some(prop) = props.get(idx) {
+			// 		let key = self.put_str(prop);
+			// }
 		}
+
+		// For tuples that are all-ints or all-floats, provide the map()
+		// function. I suppose this should actually be safe for any tuple
+		// that is all-same-ty?
+		if all_same_ty {
+			let map = self.put_str("map");
+			self.builtin_methods.insert((map, tuple_ty), 
+				Arc::clone(&self.builtin_method_table.vec_map));
+		}
+	}
+
+	fn use_rangeof(&mut self, left: &RangeEnd, right: &RangeEnd, inner: &TypId, range_ty: TypId) {
+		if !self.is_cgen_safe(range_ty) { return; }
+
+		self.value_types.push(range_ty);
+
+		if left.is_concrete() {
+			let (_, var) = self.synthesize_property("left", "left",
+				*inner);
+			// Note that the type key has to be the range type.
+			self.range_vars.insert((false, range_ty), var);
+		}
+
+		if right.is_concrete() {
+			let (_, var) = self.synthesize_property("right", "right",
+				*inner);
+			self.range_vars.insert((true, range_ty), var);
+		}
+	}
+
+	pub fn srcloc_dummy(&self) -> SourceLocation {
+		SourceLocation { source: self.synthetic, offset: 0, length: 0 }
+	}
+
+	/// Gets the VarId representing the 'left' property on a Range.
+	pub fn get_range_left(&self, range_ty: TypId) -> VarId {
+		self.range_vars.get(&(false, range_ty)).copied().unwrap()
+	}
+	/// Gets the VarId representing the 'right' property on a Range.
+	pub fn get_range_right(&self, range_ty: TypId) -> VarId {
+		self.range_vars.get(&(true, range_ty)).copied().unwrap()
 	}
 
 	/// Generates the ctype for a Sig. Note that this ctype might be nonsense,
@@ -842,6 +1043,18 @@ impl Db {
 		let name = format!("struct ps_arr_{}*", inner_ty.0);
 		let name = name.leak();
 		self.array_cname_cache.insert(inner_ty, name);
+
+		name
+	}
+
+	pub fn gen_dynarray_ctype(&mut self, inner_ty: TypId) -> &'static str {
+		if let Some(existing) = self.dyn_array_cname_cache.get(&inner_ty) {
+			return existing;
+		}
+
+		let name = format!("struct ps_dynarr_{}*", inner_ty.0);
+		let name = name.leak();
+		self.dyn_array_cname_cache.insert(inner_ty, name);
 
 		name
 	}
@@ -937,7 +1150,7 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: StrId, typ: TypId, fun: Option<FunId>, class: Option<ClassId>, init: bool, initializer: Option<ExprId>, location: SourceLocation) -> VarId {
+	pub fn new_var(&mut self, name: StrId, typ: TypId, fun: Option<FunId>, class: Option<ClassId>, init: bool, initializer: Option<ExprId>, location: SourceLocation, doc_comment: Option<Vec<Token>>) -> VarId {
 		let var = Var {
 			name,
 			typ,
@@ -945,7 +1158,8 @@ impl Db {
 			class,
 			init,
 			initializer,
-			location
+			location,
+			doc_comment,
 		};
 
 		return self.push(var);
@@ -1059,7 +1273,15 @@ impl Db {
 			return cached;
 		}
 
-		let value = self.get(typ).to_string(self).leak();
+		let value = match typ {
+			t if t == self.types.vec2 => "vec2".into(),
+			t if t == self.types.vec3 => "vec3".into(),
+			t if t == self.types.vec4 => "vec4".into(),
+			t if t == self.types.vec2i => "vec2i".into(),
+			t if t == self.types.vec3i => "vec3i".into(),
+			t if t == self.types.vec4i => "vec4i".into(),
+			_ => self.get(typ).to_string(self)
+		}.leak();
 
 		// Note: Using &'static str as the hash map value makes it possible
 		// to do this with interior mutability. Maybe we should also do that
@@ -1104,6 +1326,7 @@ impl Db {
 			Type::Bottom => 0,
 			Type::Class(_) => 1,
 			Type::ArrayOf(_) => 1,
+			Type::DynArrayOf(..) => 1,
 			Type::Tuple(typ_ids) => {
 				// TODO: Given that we have to call this function for every
 				// single tuple Val that we create, we really should probably
@@ -1114,6 +1337,10 @@ impl Db {
 				}
 				sum
 			},
+			Type::RangeOf(.., typ) => {
+				// One slot for each item in the range, plus one.
+				self.type_gc_slots(*typ) * 2
+			}
 			Type::Option(id) => {
 				// It should require the same number of slots as its inner type
 				self.type_gc_slots(*id)
@@ -1144,6 +1371,14 @@ impl Db {
 
 				None
 			}
+			Type::DynArrayOf(..) => {
+				// We can reuse this one. :)
+				if propname == self.prop_array.length_key {
+					return Some(self.prop_array.length);
+				}
+
+				None
+			}
 			Type::Class(class_id) => {
 				let class = self.get(*class_id);
 				let result = class.var_map.get(&propname).copied();
@@ -1151,7 +1386,22 @@ impl Db {
 			},
 			Type::Tuple(typs) => {
 				// Look up the property index based on name ('0' => 0)
-				let Some(which_prop) = self.tuple_idxs.get(&propname) else { return None; };
+				let Some(which_prop) = self.tuple_idxs.get(&propname).or_else(|| {
+					// Look up a couple special properties if it's a vec.
+					if self.is_vec(typ) {
+						match propname {
+							p if p == self.str_x => Some(&0),
+							p if p == self.str_y => Some(&1),
+							p if p == self.str_z => Some(&2),
+							p if p == self.str_w => Some(&3),
+							_ => None
+						}
+					}
+					else { None }
+				}) else {
+					// Failed to look up property.
+					return None;
+				};
 
 				// We have to manually check the index, this is how we know
 				// whether properties are available.
@@ -1163,6 +1413,21 @@ impl Db {
 				// have been generated the first time we used the type.
 				self.tuple_vars.get(&(*which_prop, typs[*which_prop as usize])).copied()
 			}
+			Type::RangeOf(..) => {
+				// If this particular Range type had these propreties, we would
+				// have generated them in use_rangeof, which happens the first
+				// time we used the type.
+				if propname == self.str_left {
+					// Note that it is important we use the *range* type (i.e.
+					// 'typ' here, not the inner type, because e.g. an OpenClosed[int]
+					// should have different properties than a ClosedInf[int]).
+					return self.range_vars.get(&(false, typ)).copied();
+				}
+				if propname == self.str_right {
+					return self.range_vars.get(&(true, typ)).copied();
+				}
+				return None;
+			}
 
 			_ => None
 		}
@@ -1173,6 +1438,7 @@ impl Db {
 			Type::Int | Type::Float | Type::Bool | Type::Void => true,
 			Type::Tuple(_) => true,
 			Type::Option(_) => true,
+			Type::RangeOf(..) => true,
 			_ => false
 		}
 	}
@@ -1215,6 +1481,11 @@ impl Db {
 		}
 	}
 
+	pub fn lookup_builtin_method(&self, typ: TypId, propname: StrId) -> Option<BuiltinMethodPtr> {
+		self.builtin_methods.get(&(propname, typ))
+			.map(|c| Arc::clone(&c))
+	}
+
 	fn visit_value_types(&mut self, todo: &mut FxHashSet<TypId>, visited: &mut FxHashSet<TypId>, ordering: &mut Vec<TypId>, typ: TypId) -> Result<(), ()> {
 		// Only visit types that still need to be visited.
 		if !todo.contains(&typ) {
@@ -1239,6 +1510,9 @@ impl Db {
 					self.visit_value_types(todo, visited, ordering, *inner)?;
 				}
 			},
+			Type::RangeOf(.., inner) => {
+				self.visit_value_types(todo, visited, ordering, *inner)?;
+			}
 			// Nothing to visit. Yet.
 			_ => {}
 		}
@@ -1300,6 +1574,8 @@ impl Db {
 
 				// All arrays use the same tag.
 				Type::ArrayOf(_) => { self.tag_cname_cache.insert(typ, "PONI_TAG_ARRAY"); },
+				// All dynamic arrays use the same tag. (?)
+				Type::DynArrayOf(..) => { self.tag_cname_cache.insert(typ, "PONI_TAG_DYNARRAY"); },
 
 				Type::Fun(_) | Type::Class(_) => {
 					// This is very sad, but for now we'll just make their name
@@ -1312,7 +1588,7 @@ impl Db {
 					
 					self.tag_cname_cache.insert(typ, name.leak());
 				}
-				Type::FunRaw(_) | Type::Tuple(_) => {
+				Type::FunRaw(_) | Type::Tuple(_) | Type::RangeOf(..) => {
 					// This is very sad, but for now we'll just make their name
 					// the TypId. We really should make it some kind of relevant
 					// string instead.
@@ -1410,6 +1686,26 @@ impl Db {
 
 					inf_writeln!(self.valty_define_code, "}};");
 				},
+				Type::RangeOf(left, right, typ) => {
+					let cname = self.range_cname_cache.get(ty).unwrap();
+
+					inf_writeln!(self.valty_declare_code, "{};", cname);
+
+					// TODO: We must sort all value types by the way that they are 
+					// used. This will also let us detect cycles in value types.
+					inf_writeln!(self.valty_define_code, "{} {{", cname);
+
+					if left.is_concrete() {
+						inf_writeln!(self.valty_define_code, "\t{} left;",
+							self.get_ctype(*typ));
+					}
+					if right.is_concrete() {
+						inf_writeln!(self.valty_define_code, "\t{} right;",
+							self.get_ctype(*typ));
+					}
+
+					inf_writeln!(self.valty_define_code, "}};");
+				}
 				// No other value types that need to be struct'd yet.
 				_ => {}
 			}
@@ -1443,6 +1739,23 @@ impl Db {
 
 				// TODO: Right now we have to skip tuple gen_ctype this way.
 				// This really seems ugly.
+				continue;
+			}
+
+			if let Type::RangeOf(left, right, _) = &ty {
+				fn to_char(r: &RangeEnd) -> char {
+					match r {
+						RangeEnd::Inclusive => 'i',
+						RangeEnd::Exclusive => 'e',
+						RangeEnd::Unbounded => 'u',
+					}
+				}
+				let ctype = format!("struct ps_range_{}{}_{}",
+					to_char(left), to_char(right), id.to_nonzero_usize()).leak();
+
+				self.range_cname_cache.insert(id, ctype);
+				self.ctype_cache.push(ctype);
+
 				continue;
 			}
 
@@ -1607,7 +1920,6 @@ impl Db {
 	}
 
 	fn gen_array(&mut self, elem_ty: TypId) {
-		
 		use crate::inf_writeln;
 
 		inf_writeln!(self.arr_declare_code, "struct ps_arr_{};", elem_ty.0);
@@ -1618,11 +1930,30 @@ impl Db {
 		inf_writeln!(self.arr_define_code, "}};");
 	}
 
+	fn gen_dynarray(&mut self, elem_ty: TypId) {
+		use crate::inf_writeln;
+
+		inf_writeln!(self.arr_declare_code, "struct ps_dynarr_{};", elem_ty.0);
+
+		// TODO: Is there actually any reason to have separate structs for these?
+		// We could just generate ps_dynarray_header wherever we would use a
+		// custom dynarray struct.
+		inf_writeln!(self.arr_define_code, "struct ps_dynarr_{} {{", elem_ty.0);
+		inf_writeln!(self.arr_define_code, "\tstruct ps_dynarray_header header;");
+		inf_writeln!(self.arr_define_code, "}};");
+	}
+
 	fn generate_arrays_cache(&mut self) {
 		let arrays = std::mem::take(&mut self.array_used);
 
 		for elem_ty in arrays {
 			self.gen_array(elem_ty);
+		}
+
+		let dynarrays = std::mem::take(&mut self.dynarray_used);
+
+		for elem_ty in dynarrays {
+			self.gen_dynarray(elem_ty);
 		}
 	}
 }

@@ -9,3 +9,5 @@ tower-lsp = "0.20.0"
 poniescript-core = { path = "../poniescript-core" }
 serde_json = "1.0.143"
 clap = { workspace = true, features = ["derive"] }
+# Not really needed, but useful for inf_write! and inf_writeln!
+ufmt = "0.2.0"

@@ -191,6 +191,13 @@ impl<'db> DeadCodeElim<'db> {
                 elim_sequence!(self, ast, expr,
                     ValCall, args)
             },
+            Expr::BuiltinCall(_) => {
+                // TODO: For e.g. option.unwrap(), we will need these to sometimes
+                // be Never.
+                elim_sequence!(self, ast, expr,
+                    BuiltinCall, args)
+            }
+            Expr::BuiltinCapture(_) => { panic!("ICE: Tried to DCE BuiltinCapture") }
             Expr::FunCapture(_) => { false },
             Expr::Assign(assign) => {
                 if self.elim_expr(ast, &mut assign.value) {
@@ -345,6 +352,10 @@ impl<'db> DeadCodeElim<'db> {
                 elim_sequence!(self, ast, expr,
                     MakeTuple, values)
             }
+            Expr::MakeRange(_) => {
+                // TODO eliminate...
+                false
+            }
 
             Expr::Break(break_) => {
                 if let Some(inner) = &mut break_.value {
@@ -354,6 +365,22 @@ impl<'db> DeadCodeElim<'db> {
                 // Break is always Never.
                 true
             }
+
+            Expr::Continue(_) => {
+                // Continue is always Never.
+                true
+            }
+
+            Expr::Return(ret) => {
+                if let Some(inner) = &mut ret.expression {
+                    self.elim_expr(ast, inner);
+                }
+
+                // Return is always Never.
+                true
+            },
+
+            Expr::ForLoop(_) => panic!("ICE: Tried to DCE ForLoop (should have died in TypeCheck.)"),
         }
     }
 
@@ -383,13 +410,6 @@ impl<'db> DeadCodeElim<'db> {
             Stmt::Expression(expression) => {
                 self.elim_expr(ast, &mut expression.expression);
                 expression.expression.typ(ast, self.db) == self.db.types.bottom
-            },
-            Stmt::Return(ret) => {
-                if let Some(inner) = &mut ret.expression {
-                    self.elim_expr(ast, inner);
-                }
-
-                true
             },
 
             // Awkward:

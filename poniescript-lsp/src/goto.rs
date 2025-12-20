@@ -54,6 +54,16 @@ impl<'map> GotoDefinitionVisitor<'map> {
             &class.location);
     }
 
+    fn goto_fun(&mut self, ast: &Ast, db: &Db, fun: FunId, origin_selection_range: Option<&SourceLocation>) {
+        // No unassigned funs...?
+
+        let fun = db.get(fun);
+
+        self.set_link(ast, origin_selection_range,
+            &fun.location,
+            &fun.location);
+    }
+
     fn goto_var(&mut self, ast: &Ast, db: &Db, var: VarId, origin_selection_range: Option<&SourceLocation>) {
         if var == db.var_unassigned {
             return;
@@ -107,27 +117,44 @@ impl<'a> LocateAst for GotoDefinitionVisitor<'a> {
             self.goto_class(ast, db, it.class, Some(&it.identifier.location));
         }
     }
+
+    fn locate_funcall(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCall) {
+        if cursor_on(loc, &it.fn_name) {
+            self.goto_fun(ast, db, it.identity, Some(&it.fn_name))
+        }
+    }
+
+    fn locate_funcapture(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCapture) {
+        if cursor_on(loc, &it.fn_name) {
+            self.goto_fun(ast, db, it.identity, Some(&it.fn_name));
+        }
+    }
 }
 
 // TODO: Support jump-to-definition from whatever document
 // We need a good mapping of Url -> SourceId -> Module or something.
 
 pub fn goto_definition(store: &mut DocumentStore, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
-    let (db, ast, _, url_to_id, id_to_url) = store.get_cached_stuff();
-
-    let Some(source_id) = url_to_id.get(&params.text_document_position_params.text_document.uri) else {
+    let Some(project) = store.projects.get(&params.text_document_position_params.text_document.uri) else {
         return None;
     };
 
-    let source_loc = inverse_convert_position(ast, *source_id, &params.text_document_position_params.position);
+    let cached = project.get_cache(store);
+    let cached = cached.lock().unwrap();
+
+    let Some(id) = cached.url_to_id_map.get(&params.text_document_position_params.text_document.uri) else {
+        return None;
+    };
+
+    let source_loc = inverse_convert_position(&cached.ast, *id, &params.text_document_position_params.position);
 
     let mut visitor = GotoDefinitionVisitor {
         response: None,
 
-        id_to_url_map: &id_to_url
+        id_to_url_map: &cached.id_to_url_map
     };
 
-    visitor.visit_ast(ast, db, &source_loc);
+    visitor.visit_ast(&cached.ast, &cached.db, &source_loc);
 
     visitor.response
 }

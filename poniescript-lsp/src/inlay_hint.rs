@@ -4,7 +4,9 @@ use poniescript_core::{
     arena::IndexCell, db::*, expr::*
 };
 
-use crate::document::DocumentStore;
+use std::sync::Arc;
+
+use crate::document::{DocumentStore, Project};
 
 struct InlayHintVisitor {
     cache: InlayHintCache
@@ -30,8 +32,8 @@ macro_rules! into_stmt {
 }
 
 // TODO: Consider making VisitAst visit each node strongly-typed or something..?
-impl poniescript_core::expr::VisitAst for InlayHintVisitor {
-    fn visit_declare(&mut self,ast: &Ast, db: &mut Db, id:StmtId) {
+impl poniescript_core::expr::VisitAstImmut for InlayHintVisitor {
+    fn visit_declare(&mut self,ast: &Ast, db: &Db, id:StmtId) {
         let binding = ast.get_stmt(id);
         let declare = into_stmt!(binding.as_ref(), Declare);
 
@@ -74,23 +76,33 @@ impl InlayHintCache {
     }
 }
 
-pub fn compute_inlay_hint_cache(id: SourceId, store: &mut DocumentStore) -> InlayHintCache {
+pub fn compute_inlay_hint_cache(store: &DocumentStore, project: &Arc<Project>, url: &Url) -> Option<InlayHintCache> {
     let cache = InlayHintCache::empty();
 
     //self.client.log_message(MessageType::INFO, format!("Semantic tokens requested for {}", params.text_document.uri)).await;
 
     // TODO: Yep, this is horrible.
-    let (db, ast, ..) = store.get_cached_stuff();
+    let proj = project.get_cache(store);
+    let proj = proj.lock().unwrap();
+
+    let Some(id) = proj.url_to_id_map.get(url) else {
+        return None;
+    };
 
     let mut visitor = InlayHintVisitor { cache };
 
     // TODO: Implement another Visitor that lets us iterate over everything
     // in a module. (and everyting in an Ast.)
-    let source = ast.sources.get(id);
+    let source = proj.ast.sources.get(*id);
     let module = &source.module;
     for fun in &module.functions {
-        visitor.visit_expr(&ast, db, fun.value);
+        visitor.visit_expr(&proj.ast, &proj.db, fun.value);
+    }
+    for class in &module.classes {
+        for fun in &class.funs {
+            visitor.visit_expr(&proj.ast, &proj.db, fun.value);
+        }
     }
 
-    visitor.cache
+    Some(visitor.cache)
 }

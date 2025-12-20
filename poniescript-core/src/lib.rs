@@ -1,5 +1,6 @@
 #[macro_use]
 pub mod arena;
+pub mod builtins;
 pub mod db;
 pub mod expr;
 pub mod typ;

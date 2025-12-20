@@ -1,0 +1,13 @@
+fun init() {
+    var array: DynArray[int] = [];
+    for i in 1..=100 {
+        array.push(i);
+    }
+
+    var sum: int = 0;
+    for i in 0..array.length {
+        sum = sum + array[i];
+    }
+
+    print(sum); //! 5050
+}

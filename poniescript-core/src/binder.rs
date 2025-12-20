@@ -12,10 +12,17 @@ use crate::arena::IndexCell;
 struct NameChecker {
 	buffer: String,
 	own_length: usize,
+
+	// In the future, this will need to be some sort of chain, to let us
+	// resolve calls/references to parent class functions/variables (in the Java sense).
+	//
+	// For now, this simply represents whether this scope should involve a
+	// new SelfVal bound to any function calls/variables, or not.
+	self_val: bool,
 }
 
 impl NameChecker {
-	pub fn scoped(previous: &NameChecker, scope: &str) -> Self {
+	pub fn scoped(previous: &NameChecker, scope: &str, self_val: bool) -> Self {
 		// We add a dot after the scope, as that's what the names will
 		// look like.
 		//
@@ -24,11 +31,11 @@ impl NameChecker {
 		let buffer = format!("{}{}.", previous.buffer, scope);
 		let own_length = buffer.len();
 
-		return NameChecker { buffer, own_length };
+		return NameChecker { buffer, own_length, self_val };
 	}
 
 	pub fn global() -> Self {
-		return NameChecker { buffer: String::new(), own_length: 0 };
+		return NameChecker { buffer: String::new(), own_length: 0, self_val: false };
 	}
 
 	pub fn check(&mut self, db: &Db, name: StrId) -> ScopeEntry {
@@ -83,11 +90,9 @@ impl<'db> Binder<'db> {
 		None
 	}
 
-	/// If we're currently inside a class, gets a new SelfVal; otherwise, returns
-	/// None. Useful for resolving AST types that can optionally operate on an
-	/// object.
-	fn get_selfval(&mut self, ast: &AstProxy, location: SourceLocation) -> Option<ExprId> {
-		if self.in_class {
+	/// Gets a new SelfVal if appropriate.
+	fn get_selfval(&mut self, ast: &AstProxy, location: SourceLocation, selfval: bool) -> Option<ExprId> {
+		if selfval {
 			Some(Expr::push_selfval(ast, location, self.db.types.unassigned))
 		}
 		else { None }
@@ -97,8 +102,17 @@ impl<'db> Binder<'db> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
 				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
-				ScopeEntry::Fun(fun) => return Some(Expr::mk_funcapture(location.clone(), location.clone(), fun, self.db.types.fun_sig_unassigned, 
-					self.get_selfval(ast, location))),
+				ScopeEntry::Fun(fun) => {
+					log::trace!("resolved unbound '{}' to fun in scope '{}'; self_val: {}",
+						self.db.get(ident),
+						checker.buffer,
+						checker.self_val);
+
+					let self_val = checker.self_val;
+					let self_val = self.get_selfval(ast, location.clone(), self_val);
+					return Some(Expr::mk_funcapture(location.clone(), location, fun, self.db.types.fun_sig_unassigned, 
+						self_val))
+				}
 				ScopeEntry::Class(_) => {
 					todo!("what to do when we resolve an Unbound into a Class");
 				}
@@ -157,8 +171,32 @@ impl<'db> Binder<'db> {
 					return Some(Expr::mk_variable(unbound.location.clone(), v));
 				}
 				ScopeEntry::Fun(fun) => {
+					// The Binder is not equipped to handle ANY name resolution
+					// on a bound object. That MUST wait until type checking.
+					//
+					// As such, panic if we ever attempt this. This is even wrong
+					// in an LSP context; it is literally a bug if we get here,
+					// not just an improperly handled case.
+					//
+					// This also means that we *always* call self.get_selfval(),
+					// as the object is always already None. We used to only
+					// call self.get_selfval() if the object was None, but
+					// this extra logic is unnecessary, because the object should
+					// ALWAYS be None.
+					if unbound.object.is_some() {
+						panic!("ICE: Binder tried to resolve_unbound_funcapture on a bound expression. This should never happen.");
+					}
+
+					log::trace!("resolved unbound funcapture '{}' to fun in scope '{}'; self_val: {}",
+						self.db.get(unbound.identifier.lexeme),
+						checker.buffer,
+						checker.self_val);
+
+					let self_val = checker.self_val;
+					let self_val = self.get_selfval(ast, unbound.location.clone(), self_val);
+
 					return Some(Expr::mk_funcapture(unbound.location.clone(), unbound.identifier.location.clone(), fun, self.db.types.unassigned, 
-						self.get_selfval(ast, unbound.location.clone())))
+						self_val))
 				}
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
@@ -234,8 +272,31 @@ impl<'db> Binder<'db> {
 				None
 			}
 
+			Expr::ForLoop(for_) => {
+				self.visit_expr(ast, for_.inner);
+				self.visit_expr(ast, for_.iterator);
+
+				// Anywhere where the parser might generate a Type::UnboundIdent,
+				// we need to try resolving that identifier.
+				self.visit_var_type(for_.identity);
+				None
+			}
+
 			Expr::Break(break_) => {
 				if let Some(value) = break_.value { self.visit_expr(ast, value); }
+				None
+			}
+
+			Expr::Continue(_) => {
+				None
+			}
+
+			Expr::Return(ret) => {
+				if let Some(expr) = &mut ret.expression {
+					self.visit_expr(ast, *expr);
+				}
+				// TODO: I think we probably want to eliminate the return if
+				// the inner type is also Never? But not super necessary...
 				None
 			}
 			
@@ -387,6 +448,12 @@ impl<'db> Binder<'db> {
 				return None;
 			}
 
+			Expr::MakeRange(make_range) => {
+				self.visit_expr(ast, make_range.left);
+				self.visit_expr(ast, make_range.right);
+				return None;
+			}
+
 			Expr::MakeSumType(_sum) => {
 				// Currently nothing to do. This will change...
 				return None;
@@ -399,6 +466,8 @@ impl<'db> Binder<'db> {
 			}
 
 			Expr::Promote(_) => panic!("ICE: Tried to bind Expr::Promote"),
+			Expr::BuiltinCall(_) => panic!("ICE: Tried to bind Expr::BuiltinCall"),
+			Expr::BuiltinCapture(_) => panic!("ICE: Tried to bind Expr::BuiltinCapture"),
 		}
 	}
 
@@ -417,7 +486,7 @@ impl<'db> Binder<'db> {
 
 		let class = self.db.get(class_declare.identity);
 		let name = self.db.get(class.name);
-		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name);
+		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name, true);
 		self.checkers.push(new_scope);
 
 		for fun in &mut class_declare.funs {
@@ -516,6 +585,14 @@ impl<'db> Binder<'db> {
 				}
 				return typ;
 			}
+			Type::DynArrayOf(elem_typ, _) => {
+				let inner = self.visit_type(elem_typ, location);
+				if inner != elem_typ {
+					let arr_typ = self.db.put_type(Type::ArrayOf(inner));
+					return self.db.put_type(Type::DynArrayOf(inner, arr_typ));
+				}
+				return typ;
+			}
 			Type::Tuple(inner) => {
 				// TODO: Any way to optimize this?
 				let mut resolved = Vec::new();
@@ -523,6 +600,14 @@ impl<'db> Binder<'db> {
 					resolved.push(self.visit_type(*typ, location));
 				}
 				return self.db.put_type(Type::Tuple(Arc::from(resolved)));
+			}
+			Type::RangeOf(left, right, inner_typ) => {
+				let inner = self.visit_type(inner_typ, location);
+				if inner != inner_typ {
+					return self.db.put_type(Type::RangeOf(left, right, inner));
+				}
+				// No change.
+				return typ;
 			}
 			Type::Option(inner_typ) => {
 				let inner = self.visit_type(inner_typ, location);
@@ -555,11 +640,6 @@ impl<'db> Binder<'db> {
 			},
 			Stmt::Expression(expr) => {
 				self.visit_expr(ast, expr.expression);
-			},
-			Stmt::Return(ret) => {
-				if let Some(expr) = &mut ret.expression {
-					self.visit_expr(ast, *expr);
-				}
 			},
 			Stmt::ClassDeclare(class_declare) => {
 				self.visit_class(ast, class_declare);

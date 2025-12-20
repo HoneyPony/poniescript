@@ -1,3 +1,4 @@
-//? Cycle in variable initialization order
 var a: int = b;
 var b: int = a;
+
+//? Cycle in variable initialization order

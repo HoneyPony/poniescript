@@ -1,6 +1,7 @@
 mod document;
 mod inlay_hint;
 mod goto;
+mod hover;
 
 use std::path::PathBuf;
 
@@ -122,21 +123,6 @@ struct Backend {
     store: Mutex<DocumentStore>,
 }
 
-fn build_hover(title: &str, contents: &str) -> Hover {
-    Hover {
-        contents: HoverContents::Array(
-            vec![
-                MarkedString::LanguageString(LanguageString {
-                    language: "poniescript".to_string(),
-                    value: title.to_string()
-                }),
-                MarkedString::String(contents.to_string())
-            ]
-        ),
-        range: None
-    }
-}
-
 fn supports_utf8_encoding(params: InitializeParams) -> bool {
     if let Some(general) = params.capabilities.general {
         if let Some(encodings) = general.position_encodings {
@@ -254,8 +240,10 @@ impl LanguageServer for Backend {
         ])))
     }
 
-    async fn hover(&self, _: HoverParams) -> Result<Option<Hover>> {
-        Ok(Some(build_hover("print(args: ...)", "Prints any series of expressions.")))
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        //Ok(Some(build_hover("print(args: ...)", "Prints any series of expressions.")))
+        let mut store = self.store.lock().await;
+        Ok(hover::hover(&mut store, params))
     }
 
     async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
@@ -279,38 +267,40 @@ impl LanguageServer for Backend {
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
+        return Ok(None);
         // Disable semantic tokens for now. They're not very useful and the LSP
         // is pretty unstable.
-        const ENABLE_SEMANTIC_TOKEN_SUPPORT: bool = false;
-        if !ENABLE_SEMANTIC_TOKEN_SUPPORT { return Ok(None); }
+        //const ENABLE_SEMANTIC_TOKEN_SUPPORT: bool = false;
+        //if !ENABLE_SEMANTIC_TOKEN_SUPPORT { return Ok(None); }
 
-        self.client.log_message(MessageType::INFO, format!("Semantic tokens requested for {}", params.text_document.uri)).await;
+        //  TODO: Make semantic tokens work with new Project setup.
+        // self.client.log_message(MessageType::INFO, format!("Semantic tokens requested for {}", params.text_document.uri)).await;
 
-        let mut lock = self.store.lock().await;
+        // let mut lock = self.store.lock().await;
         
-        let (db, ast, ..) = lock.get_cached_stuff();
+        // let (db, ast, ..) = lock.get_cached_stuff();
 
-        let mut visitor = SemanticTokenVisitor { tokens: vec![], cursor_line: 0, cursor_start: 0 };
+        // let mut visitor = SemanticTokenVisitor { tokens: vec![], cursor_line: 0, cursor_start: 0 };
 
-        for source in ast.sources.iter() {
-            let source = ast.sources.get(source);
-            let module = &source.module;
-            for fun in &module.functions {
-                visitor.visit_expr(&ast, db, fun.value);
-            }
-        }
+        // for source in ast.sources.iter() {
+        //     let source = ast.sources.get(source);
+        //     let module = &source.module;
+        //     for fun in &module.functions {
+        //         visitor.visit_expr(&ast, db, fun.value);
+        //     }
+        // }
 
-        let tokens = SemanticTokens { result_id: None, data: visitor.tokens };
+        // let tokens = SemanticTokens { result_id: None, data: visitor.tokens };
 
-        self.client.log_message(MessageType::INFO, format!("Found {} semantic tokens", tokens.data.len())).await;
-        Ok(Some(SemanticTokensResult::Tokens(tokens)))
+        // self.client.log_message(MessageType::INFO, format!("Found {} semantic tokens", tokens.data.len())).await;
+        // Ok(Some(SemanticTokensResult::Tokens(tokens)))
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = params.text_document.uri;
         let text = params.text_document.text;
 
-        self.store.lock().await.update(uri, text);
+        self.store.lock().await.update(&uri, text);
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
@@ -319,14 +309,16 @@ impl LanguageServer for Backend {
             let text = change.text;
 
             let mut lock = self.store.lock().await;
-            lock.update(uri, text);
+            lock.update(&uri, text);
 
-            let diag = lock.steal_diagnostics();
+            let diag = lock.steal_diagnostics(&uri);
             drop(lock);
 
-            for diag in diag.all {
-                self.client.publish_diagnostics(diag.0, diag.1, None).await;
-            }   
+            if let Some(diag) = diag {
+                for diag in diag.all {
+                    self.client.publish_diagnostics(diag.0, diag.1, None).await;
+                }
+            }
         }
     }
 

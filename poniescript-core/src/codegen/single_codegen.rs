@@ -5,6 +5,8 @@ use crate::arena::ArenaKey;
 use crate::codegen::*;
 use crate::db::*;
 use crate::lexer::Tok;
+use crate::source::SourceLocation;
+use crate::typ::RangeEnd;
 use crate::typ::Type;
 
 use crate::{inf_write, inf_writeln};
@@ -82,8 +84,9 @@ impl Val {
 }
 
 pub struct TypedVal {
-	val: Val,
-	typ: TypId,
+	// For now these are pub for the macro invocations.
+	pub val: Val,
+	pub typ: TypId,
 	
 	// TODO: To make this more efficient, what we should really do is have the frame
 	// be &GCFrame, and then pass a &gcframe down the whole tree of codegen
@@ -111,6 +114,9 @@ impl TypedVal {
 	pub fn needs_storage(&self) -> bool {
 		self.val.needs_storage()
 	}
+
+	pub fn get_typid(&self) -> TypId { self.typ }
+	pub fn get_type<'db>(&self, db: &'db Db) -> &'db Type { db.get(self.typ) }
 }
 
 impl Val {
@@ -318,6 +324,7 @@ impl std::fmt::Display for Indenter {
 	}
 }
 
+#[macro_export]
 macro_rules! define_val {
 	($self:ident, $into:ident, $val:expr, $($arg:tt)*) => {
 		if $val.needs_storage() {
@@ -447,7 +454,7 @@ pub struct Codegen<'a> {
 	/// The 'return' value of the current Loop, if any.
 	loop_val: Option<TypedVal>,
 
-	db: &'a Db,
+	pub db: &'a Db,
 
     send: channel::Sender<String>,
 
@@ -496,7 +503,7 @@ impl<'a> Codegen<'a> {
 			Type::Int | Type::Float | Type::Bool | Type::Void => {}
 			Type::StrConst => {}
 
-			Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) => {
+			Type::Str | Type::StrBuf | Type::Class(_) | Type::ArrayOf(_) | Type::DynArrayOf(..) => {
 				slots.push(self.gc_frame.allocate_slot(prefix.to_string()));
 			}
 
@@ -543,6 +550,17 @@ impl<'a> Codegen<'a> {
 				}
 			},
 
+			Type::RangeOf(left, right, typ) => {
+				if matches!(*left, RangeEnd::Inclusive | RangeEnd::Exclusive) {
+					let prefix = format!("{prefix}.left");
+					self.val_alloc_slots_recurse(&prefix, *typ, slots);
+				}
+				if matches!(*right, RangeEnd::Inclusive | RangeEnd::Exclusive) {
+					let prefix = format!("{prefix}.right");
+					self.val_alloc_slots_recurse(&prefix, *typ, slots);
+				}
+			}
+
 			Type::Unassigned | Type::AssumeInt | Type::AssumeFloat => {}
 			Type::UnboundIdent(_) | Type::UnboundCStructPtr(_) => {}
 		}
@@ -570,7 +588,7 @@ impl<'a> Codegen<'a> {
 	}
 
 	// TODO: MOve all uses of new_val() to this function
-	fn new_val_typed(&mut self, typ: TypId) -> TypedVal {
+	pub fn new_val_typed(&mut self, typ: TypId) -> TypedVal {
 		if typ == self.db.types.void { return Val::Void.typed(typ, None); }
 		if typ == self.db.types.bottom { return Val::Bottom.typed(typ, None); }
 
@@ -582,7 +600,7 @@ impl<'a> Codegen<'a> {
 	/// 
 	/// This should be paired with a call to tmp_to_used_val(typ) once the Val
 	/// actually has a value.
-	fn new_val_typed_tmp(&mut self, typ: TypId) -> TypedVal {
+	pub fn new_val_typed_tmp(&mut self, typ: TypId) -> TypedVal {
 		if typ == self.db.types.void { return Val::Void.typed(typ, None); }
 		if typ == self.db.types.bottom { return Val::Bottom.typed(typ, None); }
 
@@ -591,7 +609,7 @@ impl<'a> Codegen<'a> {
 	}
 
 	// TODO: This is Jank & Kind of Unsafe ?
-	fn tmp_to_used_val(&mut self, mut val: TypedVal) -> TypedVal {
+	pub fn tmp_to_used_val(&mut self, mut val: TypedVal) -> TypedVal {
 		// For Bottom in particular, we actually can't format it to a prefix
 		// and then do the thing, so instead do this.
 		if val.typ == self.db.types.void { return val; }
@@ -613,7 +631,7 @@ impl<'a> Codegen<'a> {
 		val
 	}
 
-	fn save_gc_values(&mut self, into: &mut String) {
+	pub fn save_gc_values(&mut self, into: &mut String) {
 		// If we're disabling gc frames, trying to save the values will cause
 		// issues.
 		if self.disable_gc_frames { return; }
@@ -752,6 +770,7 @@ impl<'a> Codegen<'a> {
 
 	/// Converts a type into a tuple of length, inner type, if the given type
 	/// is a 'vec' type; otherwise returns None.
+	#[allow(unused)]
 	fn get_vec_params(&self, typ: TypId) -> Option<(usize, TypId)> {
 		match typ {
 			typ if typ == self.db.types.vec2 => Some((2, self.db.types.float)),
@@ -776,6 +795,17 @@ impl<'a> Codegen<'a> {
 			typ if typ == self.db.types.vec4i => Some("vec4i"),
 			_ => None
 		}
+	}
+
+	pub fn make_panic(&self, ast: &AstReadonly, into: &mut String, message: &'static str, location: &SourceLocation) {
+		let src = ast.sources.get(location.source);
+		let path = src.repr_path();
+		let (line, col) = src.get_line_column(location);
+
+		// TODO: We need to carefully escape the 'path' string in case it contains e.g
+		// quotation marks and such.
+		inf_write!(into, "ps_panic(ctx, \"{}\", {}, {}, \"{}\");",
+			path, line, col, message)
 	}
 
 	fn compile_partial_lerp(&mut self, bool_val: &TypedVal, float_val: &TypedVal, one_minus_val: &TypedVal, from_val: &TypedVal, to_val: &TypedVal, target_val: &TypedVal, cur_typ: TypId, postfix: &String, into: &mut String) {
@@ -956,6 +986,8 @@ impl<'a> Codegen<'a> {
 			
 			Type::Option(_) => todo!("print() for Option"),
 			Type::ArrayOf(_) => todo!("print() for Array"),
+			Type::DynArrayOf(..) => todo!("print() for DynArray"),
+			Type::RangeOf(..) => todo!("print() for RangeOf"),
 			Type::Tuple(tup) => {
 				inf_writeln!(into, "{}ps_print_const(\"(\");", indent);
 				for (idx, ty) in tup.iter().enumerate() {
@@ -1016,7 +1048,9 @@ impl<'a> Codegen<'a> {
 			Type::FunRaw(_) => todo!("str() for FunRaw"),
 			Type::Class(_) => todo!("str() for Class"),
 			Type::ArrayOf(_) => todo!("str() for Array"),
+			Type::DynArrayOf(..) => todo!("str() for DynArray"),
 			Type::Tuple(_) => todo!("str() for Tuple"),
+			Type::RangeOf(..) => todo!("str() for RangeOf"),
 			Type::Option(_) => todo!("str() for Option"),
 
 			Type::AssumeFloat => panic!("ICE: Tried to codegen str(AssumeFloat)"),
@@ -1151,6 +1185,7 @@ impl<'a> Codegen<'a> {
 			// so return its value.
 			(last, val) => {
 				let last = self.compile_stmt(ast, *last.unwrap(), into);
+				log::trace!("codegen: line: {} is_some(): {}", block.location.offset, last.is_some());
 				let last = last.unwrap();
 				if last.needs_storage() && val.needs_storage() {
 					// Grab fresh copy of indent() because we're in the block,
@@ -1199,6 +1234,26 @@ impl<'a> Codegen<'a> {
 			}
 			_ => {
 				self.expr(ast, expr, into)
+			}
+		}
+	}
+
+	/// Takes a TypedVal and ensures it is a Val::Tmp. This is necessary for 
+	/// certain memory-safety related reasons.
+	/// 
+	/// That said, this actually doesn't ensure a value is a Tmp; it just
+	/// ensures that it is a value that can't change between evaluations.
+	/// That is the importat property.
+	/// 
+	/// (TODO: Can a Tmp change between evaluations? Hopefully not?)
+	fn ensure_is_tmp(&mut self, val: TypedVal, into: &mut String) -> TypedVal {
+		match &val.val {
+			// DirectLit is safe because it cannot change.
+			Val::Tmp(_) | Val::DirectLit { .. } => val,
+			_ => {
+				let tmp = self.new_val_typed(val.typ);
+				define_val!(self, into, tmp, " = {};\n", val);
+				tmp
 			}
 		}
 	}
@@ -1267,6 +1322,38 @@ impl<'a> Codegen<'a> {
 				inf_writeln!(into, "{}break;", indent);
 
 				// The Break itself is always Never.
+				Val::Bottom.typed(self.db.types.bottom, None)
+			}
+			Expr::Continue(_) => {
+				// Nothing special yet.
+				inf_writeln!(into, "{}continue;", indent);
+
+				// The Continue itself is always Never.
+				Val::Bottom.typed(self.db.types.bottom, None)
+			}
+			Expr::Return(ret) => {
+				inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
+
+				match &ret.expression {
+					Some(value) => {
+						let needed_type = *self.return_types.last().unwrap();
+						let val = self.expr(ast, *value, into);
+
+						// If the inner value is also a bottom type,
+						// then we can't really generate a return here.
+						if !val.is_bottom() {
+							// If it's not bottom, check the typechecker's work.
+							assert!(val.typ == needed_type);
+
+							inf_writeln!(into, "{}return {};",
+								indent, val);
+						}
+					},
+					None => {
+						inf_writeln!(into, "{}return;", indent);
+					}
+				}
+
 				Val::Bottom.typed(self.db.types.bottom, None)
 			}
 			Expr::OptionElse(opt_else) => {
@@ -1431,6 +1518,22 @@ impl<'a> Codegen<'a> {
 
 				val
 			},
+			Expr::BuiltinCall(call) => {
+				let mut vals = Vec::new();
+				for idx in 0..call.args.len() {
+					let arg = &call.args[idx];
+					let val = self.expr(ast, *arg, into);
+					if val.is_bottom() {
+						return val;
+					}
+
+					vals.push(val);
+				}
+
+				let object = self.expr(ast, call.object, into);
+
+				call.ptr.compile(self, call, ast, object, vals, into)
+			}
 			// TODO: Consider using a different Expr type for string literals
 			Expr::NumLiteral(lit) => {
 				// if lit.typ == self.db.types.int {
@@ -1525,6 +1628,12 @@ impl<'a> Codegen<'a> {
 			},
 			Expr::Undefined(_) => {
 				panic!("ICE: Tried to codegen an Undefined");
+			}
+			Expr::ForLoop(_) => {
+				panic!("ICE: Tried to codegen a ForLoop (should have been lowered in typecheck)");
+			}
+			Expr::BuiltinCapture(_) => {
+				panic!("ICE: Tried to codegen a BuiltinCapture");
 			}
 
 			Expr::FunCapture(capt) => {
@@ -1653,10 +1762,6 @@ impl<'a> Codegen<'a> {
 						panic!("ICE: New class val wasn't a Tmp");
 					};
 
-					let enclosing_this_val = self.this_val;
-					self.this_val = Some(idx);
-					self.inside_class.push(new.class);
-
 					// Run all the initializers from the new{} first.
 					for init in &new.initializers {
 						let rhs = self.expr(ast, init.value, into);
@@ -1668,6 +1773,19 @@ impl<'a> Codegen<'a> {
 
 						dont_initialize.insert(init.var);
 					}
+
+					// We can't change the this val until we've run the new{}
+					// initializers. In particular, consider:
+					//
+					// class A { var x: int; fun copy() -> A { new A { x: x} } }
+					// when initializing the new A inside copy(), the x value
+					// we should be *reading* should be from the old A. We have
+					// no need to set the this_val until running the initializers
+					// that could possibly depend on it, which by definition
+					// are the default initializers.
+					let enclosing_this_val = self.this_val;
+					self.this_val = Some(idx);
+					self.inside_class.push(new.class);
 
 					// Run all the initializers from the class second.
 					for var in &self.db.get(new.class).vars {
@@ -1744,28 +1862,71 @@ impl<'a> Codegen<'a> {
 			Expr::ArrayLit(lit) => {
 				let val = self.new_val_typed_tmp(lit.arr_typ);
 
-				define_val!(self, into, val, "; PONI_INIT_ARRAY({}, sizeof({}), {}, {})\n",
-					val,
-					self.db.get_ctype(lit.elem_typ),
-					lit.values.len(),
-					self.db.get_type_ctag(lit.elem_typ));
+				match self.db.get(lit.arr_typ) {
+					Type::DynArrayOf(_, arr_ty) => {
+						
+						let buf_val = self.new_val_typed_tmp(*arr_ty);
+						define_val!(self, into, buf_val, ";\n");
+						define_val!(self, into, val, "; PONI_INIT_DYNARRAY({}, {}, sizeof({}), {}, {}, {})\n",
+							buf_val,
+							val,
+							self.db.get_ctype(lit.elem_typ),
+							// TODO: Allocate a number for the buffer that's a power
+							// of two?
+							lit.values.len(), // elem_cnt
+							lit.values.len(), // real_cnt
+							self.db.get_type_ctag(lit.elem_typ));
+						
+						// TODO: Move this duplicated code to a closure somehow?
+						// So far it isn't possible.
+						if buf_val.needs_storage() {
+							let mut idx = 0;
+							for value in &lit.values {
+								let nth = self.expr(ast, *value, into);
+								assert!(nth.typ == lit.elem_typ);
+								inf_writeln!(into, "{}{}->contents[{}] = {};",
+									indent, buf_val.val, idx, nth);
 
-				if val.needs_storage() {
-					let mut idx = 0;
-					for value in &lit.values {
-						let nth = self.expr(ast, *value, into);
-						assert!(nth.typ == lit.elem_typ);
-						inf_writeln!(into, "{}{}->contents[{}] = {};",
-							indent, val.val, idx, nth);
+								idx += 1;
+							}
+						}
 
-						idx += 1;
+						self.tmp_to_used_val(buf_val);
+						self.tmp_to_used_val(val)
+					},
+					_ => {
+						define_val!(self, into, val, "; PONI_INIT_ARRAY({}, sizeof({}), {}, {})\n",
+							val,
+							self.db.get_ctype(lit.elem_typ),
+							lit.values.len(),
+							self.db.get_type_ctag(lit.elem_typ));
+
+						if val.needs_storage() {
+							let mut idx = 0;
+							for value in &lit.values {
+								let nth = self.expr(ast, *value, into);
+								assert!(nth.typ == lit.elem_typ);
+								inf_writeln!(into, "{}{}->contents[{}] = {};",
+									indent, val.val, idx, nth);
+
+								idx += 1;
+							}
+						}
+
+						self.tmp_to_used_val(val)
 					}
-				}
-
-				self.tmp_to_used_val(val)
+				}			
 			}
 
 			Expr::SelfVal(selfval) => {
+				// If we currently have a this_val, we must use it.
+				if let Some(this_val) = self.this_val {
+					// I *believe* we still don't need a GC frame for this Val,
+					// although it is less clear. We should probably consider
+					// just directly storing the relevant Val instead of a usize?
+					return Val::Tmp(this_val).typed(selfval.typ, None)
+				}
+
 				// Self is kind of special for the GC. We don't actually need
 				// to keep a reference to it ourselves, because we're guaranteed
 				// that it is either pointed to by a root, or by some other function
@@ -1780,16 +1941,84 @@ impl<'a> Codegen<'a> {
 				let idx_val = self.expr(ast, index.index, into);
 				assert!(idx_val.typ == self.db.types.int);
 
+				// In order to generate bounds checks in a memory-safe way,
+				// we must read the length and the pointer from a single
+				// fixed temporary value. This is because length is (in theory)
+				// immutable, i.e. we can't realloc an individual Array, so
+				// if the check is in bounds ever, it will remain in bounds
+				// forever.
+
+				// This is also true of the idx_val, because we don't want
+				// e.g. it to be object->field, as that could change.
+				let arr_val = self.ensure_is_tmp(arr_val, into);
+				let idx_val = self.ensure_is_tmp(idx_val, into);
+
 				if arr_val.typ == self.db.types.str || arr_val.typ == self.db.types.str_const {
+					inf_write!(into, "{}if({} < 0 || {} >= {}->length) {{ "
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &index.location);
+					inf_write!(into, " }};\n");
 					return inline_expr!(self, index.typ, "(ps_int)({}->contents[{}])",
 						arr_val, idx_val);
 				}
+
+				// TODO: Make str buf indexing memory safe (this requires 
+				// storing the ->buffer as a temporary and indexing that).
 				if arr_val.typ == self.db.types.str_buf {
+					// We do need to comapre against the strbuf->length for
+					// *correctness*, but not for *memory safety*.
+					//
+					// TODO: To make this memory safe, we will need to also
+					// compare against the str's length, and again, make it
+					// a temporary.
+					inf_write!(into, "{}if({} < 0 || {} >= {}->length) {{ ",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &index.location);
+					inf_write!(into, " }};\n");
 					return inline_expr!(self, index.typ, "(ps_int)({}->buffer->contents[{}])",
 						arr_val, idx_val);
 				}
 
-				// TODO: Generate bounds checks...
+				if let Type::DynArrayOf(_, arr_ty) = self.db.get(arr_val.typ) {
+					// Dynamic ararys will also need to be a bit complicated
+					// when it comes to the bounds check. For now, we check
+					// both lengths directly; TODO make it safe, we will need
+					// to store a temporary with the pointed-to array and
+					// check against that.
+					//
+					// For now I will actually skip the inner check as it shouldn't
+					// be necesary in the short term. In particular, the header.length
+					// should always be <= the allocated inner array.length, UNLESS
+					// the inner array shrinks (which it can't do yet).
+					inf_write!(into, "{}if({} < 0 || {} >= {}->header.length) {{",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &index.location);
+					inf_write!(into, " }};\n");
+
+					// This should be safe (?)
+					if self.db.is_cheap_re_eval_type(index.typ) {
+						return inline_expr!(self, index.typ, "(({}){}->header.buffer)->contents[{}]",
+							self.db.get_ctype(*arr_ty), arr_val, idx_val);
+					}
+
+					let val = self.new_val_typed(index.typ);
+
+					define_val!(self, into, val, " = (({}){}->header.buffer)->contents[{}];\n",
+						self.db.get_ctype(*arr_ty), arr_val, idx_val);
+					
+					return val;
+				}
+
+				// Bounds check
+				// This is actually safe even with the inline_expr! because
+				// we guaranteed that the array pointer was a temporary, so
+				// it shouldn't be able to be reassigned. (Although, I guess
+				// some temporaries are reassigned? Hmm..?)
+				inf_write!(into, "{}if({} < 0 || {} >= {}->header.length) {{ ",
+					indent, idx_val, idx_val, arr_val);
+				self.make_panic(ast, into, "index out of bounds", &index.location);
+				inf_write!(into, " }};\n");
+
 				if self.db.is_cheap_re_eval_type(index.typ) {
 					return inline_expr!(self, index.typ, "{}->contents[{}]", arr_val, idx_val);
 				}
@@ -1797,7 +2026,6 @@ impl<'a> Codegen<'a> {
 				// Generate own val after inner expressions, for GC
 				let val = self.new_val_typed(index.typ);
 
-				// TODO: Generate bounds checks
 				define_val!(self, into, val, " = {}->contents[{}];\n",
 					arr_val, idx_val);
 
@@ -1812,14 +2040,71 @@ impl<'a> Codegen<'a> {
 
 				let rhs_val = self.expr(ast, set.rhs, into);
 
+				// Same idea as in Expr::Index
+				let arr_val = self.ensure_is_tmp(arr_val, into);
+				let idx_val = self.ensure_is_tmp(idx_val, into);
+
 				// Generate own val after inner expressions, for GC
 				let val = self.new_val_typed(set.typ);
 
-				// TODO: Generate bounds checks
-				define_val!(self, into, val, " = {}->contents[{}] = {};\n"
-					arr_val, idx_val, rhs_val);
+				if arr_val.typ == self.db.types.str || arr_val.typ == self.db.types.str_const {
+					inf_write!(into, "{}if({} < 0 || {} >= {}->length) {{ ",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &set.location);
+					inf_write!(into, " }};\n");
+					define_val!(self, into, val, "= (ps_int)({}->contents[{}] = (char)({}));\n"
+						arr_val, idx_val, rhs_val);
+				}
+				else if arr_val.typ == self.db.types.str_buf {
+					// TODO: Just like with Expr::Index, this kind of needs to
+					// be a two-step thing, that involves a temporary.
+					inf_write!(into, "{}if({} < 0 || {} >= {}->length) {{ ",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &set.location);
+					inf_write!(into, " }};\n");
+					define_val!(self, into, val, "= (ps_int)({}->buffer->contents[{}] = (char)({}));\n"
+						arr_val, idx_val, rhs_val);
+				}
+				else if let Type::DynArrayOf(_, arr_ty) = self.db.get(arr_val.typ) {
+					inf_write!(into, "{}if({} < 0 || {} >= {}->header.length) {{",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &set.location);
+					inf_write!(into, " }};\n");
+					define_val!(self, into, val, " = (({}){}->header.buffer)->contents[{}] = {};\n",
+						self.db.get_ctype(*arr_ty), arr_val, idx_val,
+						rhs_val);
+				}
+				else {
+					inf_write!(into, "{}if({} < 0 || {} >= {}->header.length) {{ ",
+						indent, idx_val, idx_val, arr_val);
+					self.make_panic(ast, into, "index out of bounds", &set.location);
+					inf_write!(into, " }};\n");
+					define_val!(self, into, val, " = {}->contents[{}] = {};\n"
+						arr_val, idx_val, rhs_val);
+				}
 
 				val
+			}
+
+			Expr::MakeRange(range) => {
+				let val = self.new_val_typed_tmp(range.typ);
+
+				define_val!(self, into, val, ";\n");
+				if val.needs_storage() {
+					// Hmm. The ast is going to be a bit weird here, as really
+					// we need an Option<> on each end which tells us whether
+					// it's unbounded. That will have to wait a minute.
+					if range.left_end.is_concrete() {
+						let left = self.expr(ast, range.left, into);
+						inf_writeln!(into, "{}{}.left = {};", indent, val, left);
+					}
+					if range.right_end.is_concrete() {
+						let right = self.expr(ast, range.right, into);
+						inf_writeln!(into, "{}{}.right = {};", indent, val, right);
+					}
+				}
+
+				self.tmp_to_used_val(val)
 			}
 
 			Expr::MakeTuple(tuple) => {
@@ -2055,31 +2340,6 @@ impl<'a> Codegen<'a> {
 				// this function simply has to delegate to it.
 				Some(self.expr(ast, expression.expression, into))
 			},
-			Stmt::Return(ret) => {
-				inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
-
-				match &ret.expression {
-					Some(value) => {
-						let needed_type = *self.return_types.last().unwrap();
-						let val = self.expr(ast, *value, into);
-
-						// If the inner value is also a bottom type,
-						// then we can't really generate a return here.
-						if !val.is_bottom() {
-							// If it's not bottom, check the typechecker's work.
-							assert!(val.typ == needed_type);
-
-							inf_writeln!(into, "{}return {};",
-								indent, val);
-						}
-					},
-					None => {
-						inf_writeln!(into, "{}return;", indent);
-					}
-				}
-
-				Some(Val::Bottom.typed(self.db.types.bottom, None))
-			}
 		}
 	}
 
@@ -2215,8 +2475,9 @@ impl<'a> Codegen<'a> {
 		// inf_writeln!(own_buffer_beginning, "{}ctx->frame = (void*)&gc_frame;", indent);
 
 		// Instead of generating the code directly, use a macro.
-		inf_writeln!(own_buffer_beginning, "{}PONI_GC_FRAME({});",
-			indent ,gc_frame_count);
+		inf_writeln!(own_buffer_beginning, "{}PONI_GC_FRAME({}, \"{}\");",
+			indent, gc_frame_count, self.db.get(
+				self.db.get(fun).name.unwrap_or(self.db.str_anonymous)));
 		
 		// Pop type value
 		self.return_types.pop();

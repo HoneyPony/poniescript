@@ -1,0 +1,33 @@
+fun get_name() -> StrBuf {
+    str("h", "o", "r", "s", "e")
+}
+
+class StuffedHorse {
+    var name: StrBuf = get_name();
+
+    fun get_name(concat: StrConst) -> StrBuf {
+        str(name, " ", concat);
+    }
+}
+
+class Foal {
+    var stuffed_horse = new StuffedHorse{};
+}
+
+class Horse {
+    var foal = new Foal{};
+    
+    // This tests immediately pulling a value off of an inner New. This should
+    // ensure that our this_val logic works decently.
+    var strange = new Foal{}.stuffed_horse.name;
+
+    // And also function calls.
+    var strange2 = new Foal{}.stuffed_horse.get_name("2");
+}
+
+fun init() {
+    var horse = new Horse{};
+    print(horse.foal.stuffed_horse.name); //! horse
+    print(horse.strange); //! horse
+    print(horse.strange2); //! horse 2
+}

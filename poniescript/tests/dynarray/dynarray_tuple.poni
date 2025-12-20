@@ -1,0 +1,19 @@
+fun init() {
+    var arr: DynArray[(int, (int, bool))] = [];
+
+    var x = true;
+    for i in 0..1024 {
+        arr.push((i, (i * 20, x)));
+        x = if x { false } else { true };
+    }
+
+    //! 1024
+    print(arr.length);
+
+    print(arr[23])  ; //! (23, (460, false))
+    print(arr[47])  ; //! (47, (940, false))
+    print(arr[146]) ; //! (146, (2920, true))
+    print(arr[500]) ; //! (500, (10000, true))
+    print(arr[777]) ; //! (777, (15540, false))
+    print(arr[1023]); //! (1023, (20460, false))
+}

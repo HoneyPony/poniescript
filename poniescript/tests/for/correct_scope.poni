@@ -1,0 +1,12 @@
+fun init() {
+    for i in 0..5 {
+        print(i);
+    }
+
+    // When for loops were first implementing, the variable would end up
+    // leaking into the *scope that the for loop was in*, but it should be
+    // restricted to *only be available inside the loop*.
+    
+    //? Unknown identifier 'i'
+    print(i);
+}

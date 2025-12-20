@@ -1,0 +1,53 @@
+/// The `Horse` is a creature of many talents. One of them is to speak. Each
+/// `Horse` contains within them a unique, inseperable ideal vocalization; some
+/// are along the lines of "neigh!" but they can take on almost any form.
+///
+/// You can create a new `Horse` by providing to it its own greeting. Take heed
+/// that this is a critical element of the Horse and must not be generated
+/// thoughtlessly.
+///
+/// As an example, consider the following:
+/// ```
+/// var my_horse = new Horse { greeting: "chonk" };
+/// ```
+///
+/// # How to `Horse`
+/// In order to `Horse`, you must `Horse`. This should not need any further
+/// elaboration.
+///
+/// # Additional examples
+/// ## Basic Horse
+/// `new Horse {}`
+///
+/// ## Complicated Horse
+/// ```
+/// var horses = [new Horse{}, new Horse{}, new Horse{}];
+/// for i in 0..horses.length {
+///     horses[i].gallop(i);
+/// }
+/// ```
+class Horse {
+    /// The greeting for this `Horse`. See `Horse` for further discussion of
+    /// its importance.
+    var greeting: StrBuf = "neigh!";
+
+    /// The color of the `Horse`'s coat.
+    var color: vec4i = (0, 0, 0, 0);
+
+    /// Causes this `Horse` to emit its distinctive greeting to the standard
+    /// console.
+    fun greet() {
+        print(greeting);
+    }
+
+    /// Causes the `Horse` to gallop the given number of meters in some
+    /// direction. Returns how far the `Horse` actually went.
+    fun gallop(meters: int) -> int {
+        if meters < 100 { meters } else { meters - 20 }
+    }
+
+    /// Obtains a permanent copy of the `Horse`'s greeting.
+    fun record() -> StrBuf {
+        str(greeting)
+    }
+}

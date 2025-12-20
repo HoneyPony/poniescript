@@ -1,0 +1,28 @@
+// This test case is to make sure we don't try to have the Binder assign
+// Sneaker.sneak() to the call to sneaky.sneak() in do_sneak().
+//
+// In particular, the Binder should essentially never even attempt to handle
+// name resolution on an identifier bound to an expression with a dot.
+
+class Sneaky {
+    fun sneak() {
+        print("I'm sneaky!");
+    }
+}
+
+class Sneaker {
+    fun sneak() {
+        print("I'm a sneaker!");
+    }
+
+    var sneaky = new Sneaky{};
+    
+    fun do_sneak() {
+        sneaky.sneak();
+    }
+}
+
+fun init() {
+    var s = new Sneaker{};
+    s.do_sneak(); //! I'm sneaky!
+}

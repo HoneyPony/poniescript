@@ -13,6 +13,13 @@ pub enum Tok {
 	LeftBrace, RightBrace,
 	LeftSquare, RightSquare,
 	Comma, Dot,
+
+	// Range types
+	// TODO: Also support DotDotLess, LessDotDot, LessDotDotEqual, etc? Might be
+	// unnecessary...
+	//
+	// Also, EqualDotDot and EqualDotDotEqual are actually the wrong ones. Whoops!
+	DotDot, DotDotEqual, EqualDotDot, EqualDotDotEqual,
 	
 	Minus, Plus, Slash, Star,
 	MinusEqual, PlusEqual, SlashEqual, StarEqual,
@@ -32,14 +39,16 @@ pub enum Tok {
 	Identifier, StringSimple, WholeNumber, DecimalNumber,
 
 	And, Class, Else, False, Fun, For, If, In, Null, Or,
-	Range, Return, Super, KeySelf, True, Using, Var, While,
-	Loop, Break,
+	Return, Super, KeySelf, True, Using, Var, While,
+	Loop, Break, Continue,
 
 	New,
 
 	Print, Str,
 
 	Some, Nil,
+
+	DocComment,
 
 	Eof
 }
@@ -51,6 +60,42 @@ pub struct Token {
 	pub location: SourceLocation,
 }
 
+impl Token {
+	pub fn synthesize_ident(db: &Db, str: StrId) -> Token {
+		Token {
+			typ: Tok::Identifier,
+			lexeme: str,
+			location: SourceLocation {
+				source: db.synthetic,
+				offset: 0,
+				length: 0,
+			}
+		}
+	}
+
+	pub fn synthesize_ident_from(db: &mut Db, str: &'static str) -> Token {
+		let str = db.put_str(str);
+		Token::synthesize_ident(db, str)
+	}
+
+	pub fn synth_tok(db: &Db, str: StrId, typ: Tok) -> Token {
+		Token {
+			typ,
+			lexeme: str,
+			location: SourceLocation {
+				source: db.synthetic,
+				offset: 0,
+				length: 0,
+			}
+		}
+	}
+
+	pub fn synth_tok_from(db: &mut Db, str: &'static str, typ: Tok) -> Token {
+		let str = db.put_str(str);
+		Token::synth_tok(db, str, typ)
+	}
+}
+
 pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {
 	let mut map = FxHashMap::default();
 
@@ -59,33 +104,33 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {
 		map.insert(key, value);
 	};
 
-	add("and"   , Tok::And);
-	add("break" , Tok::Break);
-	add("class" , Tok::Class);
-	add("else"  , Tok::Else);
-	add("false" , Tok::False);
-	add("fun"   , Tok::Fun);
-	add("for"   , Tok::For);
-	add("if"    , Tok::If);
-	add("in"    , Tok::In);
-	add("null"  , Tok::Null);
-	add("or"    , Tok::Or);
-	add("range" , Tok::Range);
-	add("return", Tok::Return);
-	add("super" , Tok::Super);
-	add("self"  , Tok::KeySelf);
-	add("true"  , Tok::True);
-	add("using" , Tok::Using);
-	add("var"   , Tok::Var);
-	add("while" , Tok::While);
-	add("loop"  , Tok::Loop);
-	add("new"   , Tok::New);
+	add("and"   ,   Tok::And);
+	add("break" ,   Tok::Break);
+	add("continue", Tok::Continue);
+	add("class" ,   Tok::Class);
+	add("else"  ,   Tok::Else);
+	add("false" ,   Tok::False);
+	add("fun"   ,   Tok::Fun);
+	add("for"   ,   Tok::For);
+	add("if"    ,   Tok::If);
+	add("in"    ,   Tok::In);
+	add("null"  ,   Tok::Null);
+	add("or"    ,   Tok::Or);
+	add("return",   Tok::Return);
+	add("super" ,   Tok::Super);
+	add("self"  ,   Tok::KeySelf);
+	add("true"  ,   Tok::True);
+	add("using" ,   Tok::Using);
+	add("var"   ,   Tok::Var);
+	add("while" ,   Tok::While);
+	add("loop"  ,   Tok::Loop);
+	add("new"   ,   Tok::New);
 
-	add("some"  , Tok::Some);
-	add("nil"   , Tok::Nil);
+	add("some"  ,   Tok::Some);
+	add("nil"   ,   Tok::Nil);
 
-	add("print", Tok::Print);
-	add("str"  , Tok::Str);
+	add("print",    Tok::Print);
+	add("str"  ,    Tok::Str);
 
 	return map;
 }
@@ -328,21 +373,23 @@ impl Lexer {
 	fn number(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		while is_num(self.peek()) { self.advance(db)?; }
 
-		let ty = if self.peek() == '.' {
-			// Eat the dot
-			self.advance(db)?;
+		// No more dot. Numbers are now integers.
+		// let ty = if self.peek() == '.' {
+		// 	// Eat the dot
+		// 	self.advance(db)?;
 
-			while is_num(self.peek()) { self.advance(db)?; }
+		// 	while is_num(self.peek()) { self.advance(db)?; }
 
-			Tok::DecimalNumber
-		} else { Tok::WholeNumber };
-		return self.mk_token_res(db, ty);
+		// 	Tok::DecimalNumber
+		// } else { Tok::WholeNumber };
+		return self.mk_token_res(db, Tok::WholeNumber);
 	}
 
-	fn line_comment(&mut self, db: &mut Db) -> std::io::Result<()> {
+	fn line_comment(&mut self, db: &mut Db) -> std::io::Result<Option<Token>> {
 		// Here we also handle special kinds of comments.
 		enum CommentKind {
 			None,
+			Doc,
 			TestLine,
 			TestErr,
 		}
@@ -360,6 +407,12 @@ impl Lexer {
 				kind = CommentKind::TestErr;
 				self.buffer.clear();
 			}
+		}
+
+		if self.advance_if('/', db)? {
+			kind = CommentKind::Doc;
+			self.buffer.clear();
+			// TODO: Skip prefixed whitespace?
 		}
 
 		while !self.at_eof {
@@ -381,9 +434,13 @@ impl Lexer {
 				let line = self.buffer.trim();
 				db.test_errors.push(line.to_string());
 			}
+
+			CommentKind::Doc => {
+				return Ok(Some(self.mk_token(db, Tok::DocComment)))
+			}
 		}
 
-		Ok(())
+		Ok(None)
 	}
 
 	fn mk_eof(&mut self, db: &mut Db) -> std::io::Result<Token> {
@@ -415,7 +472,19 @@ impl Lexer {
 			'[' => Tok::LeftSquare,
 			']' => Tok::RightSquare,
 			',' => Tok::Comma,
-			'.' => Tok::Dot,
+			'.' => {
+				if self.advance_if('.', db)? {
+					if self.advance_if('=', db)? {
+						Tok::DotDotEqual
+					}
+					else {
+						Tok::DotDot
+					}
+				}
+				else {
+					Tok::Dot
+				}
+			}
 
 			';' => Tok::Semicolon,
 			':' => Tok::Colon,
@@ -438,7 +507,12 @@ impl Lexer {
 			'+' => self.tok_eq(Tok::Plus, Tok::PlusEqual, db)?,
 			'/' => {
 				if self.advance_if('/', db)? {
-					self.line_comment(db)?;
+					let c = self.line_comment(db)?;
+
+					if let Some(c) = c {
+						// Doc comments
+						return Ok(c);
+					}
 					// TODO: Speed this up in the case of multiline comments...
 					// we really don't want to recurse here...
 					return self.next_token(db);
@@ -449,7 +523,30 @@ impl Lexer {
 			'*' => self.tok_eq(Tok::Star, Tok::StarEqual, db)?,
 
 			'!' => self.tok_eq(Tok::Bang, Tok::BangEqual, db)?,
-			'=' => self.tok_eq(Tok::Equal, Tok::EqualEqual, db)?,
+			'=' => {
+				if self.advance_if('=', db)? {
+					Tok::EqualEqual
+				}
+				else if self.advance_if('.', db)? {
+					if self.advance_if('.', db)? {
+						if self.advance_if('=', db)? {
+							Tok::EqualDotDotEqual
+						}
+						else {
+							Tok::EqualDotDot
+						}
+					}
+					else {
+						// TODO: Probably we want to handle some of this stuff
+						// in the parser, not the lexer.
+						self.error(db, "Invalid sequence '=.'".into());
+						return self.mk_token_res(db, Tok::Equal);
+					}
+				}
+				else {
+					Tok::Equal
+				}
+			}
 			'>' => self.tok_eq(Tok::Greater, Tok::GreaterEqual, db)?,
 			'<' => self.tok_eq(Tok::Less, Tok::LessEqual, db)?,
 

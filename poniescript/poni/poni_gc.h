@@ -43,6 +43,7 @@ struct poni_gc_shared;
 
 struct poni_gc_frame {
     struct poni_gc_frame *prev;
+    const char           *fn_name;
     uint64_t              pointer_count;
     void                 *ptrs[];
 };

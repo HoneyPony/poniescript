@@ -2,6 +2,21 @@ use std::sync::Arc;
 
 use crate::db::*;
 
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub enum RangeEnd {
+	Inclusive,
+	Exclusive,
+	Unbounded
+}
+
+impl RangeEnd {
+	/// Returns whether this RangeEnd is concrete, in the sense that it will
+	/// need to be stored as a variable.
+	pub fn is_concrete(&self) -> bool {
+		matches!(self, RangeEnd::Inclusive | RangeEnd::Exclusive)
+	}
+}
+
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub enum Type {
 	Int,
@@ -43,8 +58,20 @@ pub enum Type {
 	//ListOf(TypId),
 
 	ArrayOf(TypId),
+	/// For now, I guess dynamic arrays will be a separate type.
+	/// 
+	/// This has the disadvantage that we have to add similar code to several things
+	/// in the program. Idk.
+	/// 
+	/// The types in the DynArrayOf are 1) the elem_ty, 2) the associated
+	/// ArrayOf type, which is needed for codegen purposes.
+	DynArrayOf(TypId, TypId),
 
 	Tuple(Arc<[TypId]>),
+
+	/// A Range type. These each have a unique name in the frontend. In the future
+	/// we'll also want a Range type that can represent any given range (?)
+	RangeOf(RangeEnd, RangeEnd, TypId),
 
 	Option(TypId),
 	
@@ -133,8 +160,25 @@ impl Type {
 			Type::ArrayOf(typ) => {
 				format!("Array[{}]", db.get(*typ).to_string(db))
 			}
+			Type::DynArrayOf(elem_ty, _) => {
+				format!("DynArray[{}]", db.get(*elem_ty).to_string(db))
+			}
 			Type::Option(typ) => {
 				format!("{}?", db.get(*typ).to_string(db))
+			}
+			Type::RangeOf(left, right, typ) => {
+				let name = match (left, right) {
+					(RangeEnd::Inclusive, RangeEnd::Inclusive) => "Closed",
+					(RangeEnd::Inclusive, RangeEnd::Exclusive) => "ClosedOpen",
+					(RangeEnd::Inclusive, RangeEnd::Unbounded) => "ClosedInf",
+					(RangeEnd::Exclusive, RangeEnd::Inclusive) => "OpenClosed",
+					(RangeEnd::Exclusive, RangeEnd::Exclusive) => "Open",
+					(RangeEnd::Exclusive, RangeEnd::Unbounded) => "OpenInf",
+					(RangeEnd::Unbounded, RangeEnd::Inclusive) => "InfClosed",
+					(RangeEnd::Unbounded, RangeEnd::Exclusive) => "InfOpen",
+					(RangeEnd::Unbounded, RangeEnd::Unbounded) => "Every",
+				};
+				format!("{}[{}]", name, db.get(*typ).to_string(db))
 			}
 
 			Type::AssumeInt => "a number".to_string(),
@@ -157,6 +201,7 @@ impl Type {
 			Type::StrBuf => "ps_strbuf*".into(),
 
 			Type::Tuple(_) => { todo!("probably should move this whole thing into db?") }
+			Type::RangeOf(..) => { todo!("probably should move this whole thing into db?") }
 
 			// TODO: MAybe take &mut db, and then we can use format! and such
 			Type::FunRaw(sig) => String::from(db.gen_sig_raw_ctype(*sig)),
@@ -166,6 +211,7 @@ impl Type {
 			Type::Class(class_id) => format!("struct {}*", db.get_class_cname(*class_id)),
 
 			Type::ArrayOf(typ) => String::from(db.gen_array_ctype(*typ)),
+			Type::DynArrayOf(elem_ty, _) => String::from(db.gen_dynarray_ctype(*elem_ty)),
 			Type::Option(_) => { todo!("this is implemented in Db") }
 
 			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),

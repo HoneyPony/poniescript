@@ -48,7 +48,11 @@ pub fn generate(tests_file: &mut File) {
 		("binary/", "tuples"),
 		("binary/", "err_class"),
 
+		("binder/", "sneaky"),
+
 		("cyclic/", "class_members_and_fun_thru_param"),
+		("cyclic/", "err_class_members_and_fun_thru_param"),
+		("cyclic/", "class_members_and_fun_thru_param_nocycle"),
 		("cyclic/", "class_members_expr"),
 		("cyclic/", "class_members_same"),
 		("cyclic/", "class_members_same2"),
@@ -60,6 +64,12 @@ pub fn generate(tests_file: &mut File) {
 		("cyclic/", "globals_expr"),
 		("cyclic/", "globals_same"),
 		("cyclic/", "globals_and_class_thru_difficult"),
+
+		("cyclic/", "class_members_thru_class_fun_thruself"),
+		("cyclic/", "class_members_thru_class_fun"),
+		("cyclic/", "err_class_members_thru_class_fun_thruself"),
+		("cyclic/", "err_class_members_thru_class_fun"),
+		("cyclic/", "err_class_members_thru_class_fun2"),
 
 		("cyclic/", "err_cyclic"),
 		("cyclic/", "err_granularity_fun_in_init"),
@@ -103,6 +113,8 @@ pub fn generate(tests_file: &mut File) {
 		("typecheck/", "promote_to_float_return"),
 		("typecheck/", "str_types"),
 		("typecheck/", "return_block_return"), // Make sure this one at least compiles
+		("typecheck/", "nested_if_promote_int"),
+		("typecheck/", "nested_if_promote_void"),
 
 		("typecheck/", "err_try_assign_float_for_int"),
 		("typecheck/", "err_try_return_float_for_int_short"),
@@ -124,6 +136,7 @@ pub fn generate(tests_file: &mut File) {
 		("tuple/", "nested_promote_existing"),
 		("tuple/", "nested_promote_return"),
 		("tuple/", "nested_silly_syntax"),
+		("tuple/", "xyzw"),
 
 		("tuple/", "err_assign_big"),
 		("tuple/", "err_assign_big_2"),
@@ -164,11 +177,16 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "err_if_no_else_bad_type"),
 
 		("new/", "new_dotted"),
+		("new/", "new_bad_self_ints"),
+		("new/", "new_bad_self_str"),
+		("new/", "fun_call"),
+		("new/", "nested_initializers"),
 
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants"),
 		("comparison/", "compare_doubleblock"),
 		("comparison/", "compare_equal_nums"),
+		("comparison/", "compare_equal_classes"),
 
 		("lerp/", "basic_including_bools"),
 		("lerp/", "class"),
@@ -201,6 +219,8 @@ pub fn generate(tests_file: &mut File) {
 		("loop/", "loop_with_multi_break_noval_bracefix"),
 		("loop/", "loop_with_multi_break_promo_a"),
 		("loop/", "loop_with_multi_break_promo_b"),
+		("loop/", "while_with_continue"),
+		("loop/", "for_with_continue"),
 
 		("misc/", "array_of_str"),
 		("misc/", "array_of_strbuf"),
@@ -257,6 +277,7 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "class_call_own_funs"),
 		("classes/", "class_member_ref"),
 		("classes/", "basic_new_list"),
+		("classes/", "basic_self"),
 		("classes/", "class_member_that_is_fun"),
 		("classes/", "class_member_function_capture"),
 		("classes/", "noout_data_and_fun_assign"),
@@ -316,6 +337,20 @@ pub fn generate(tests_file: &mut File) {
 		("dead_code/", "dead_args_str"),
 		("dead_code/", "dead_args_valcall"),
 
+		("dynarray/", "assign_lit"),
+		("dynarray/", "dynarray_horse"),
+		("dynarray/", "dynarray_optional_horse"),
+		("dynarray/", "dynarray_tuple"),
+		("dynarray/", "index"),
+		("dynarray/", "push_many_times"),
+		("dynarray/", "push_once"),
+		("dynarray/", "set_index"),
+		("dynarray/", "set_index_len"),
+		("dynarray/", "typename"),
+		("dynarray/", "builtin_any"),
+		("dynarray/", "builtin_all"),
+		("dynarray/", "builtin_clone_shallow"),
+
 		("array/", "array_nested_empty_lhs"),
 		("array/", "array_nested_empty_rhs"),
 		("array/", "array_nested_empty"),
@@ -350,21 +385,43 @@ pub fn generate(tests_file: &mut File) {
 		("optional/", "opt_else_promote"),
 		("optional/", "option_else"),
 		("optional/", "option_else_ret"),
+		("optional/", "option_else_ret_nobrace"),
 		("optional/", "option_else_ret_shadow"),
 		("optional/", "optional_array"),
 		("optional/", "optional_strings"),
 		("optional/", "optional_strings_promote"),
 		("optional/", "optional_string_tuple"),
+		("optional/", "or_panic_success"),
 		("optional/", "tree"),
 		("optional/", "tree2"),
+		("optional/", "tree3"),
+		("optional/", "builtin_is_some_array"),
+		("optional/", "builtin_is_some_horse"),
 
 		("vec/", "vec_types"),
 		("vec/", "vec_ret"),
 		("vec/", "vec_lerp"),
 		("vec/", "vec_product"),
+		("vec/", "builtin_map"),
 
 		("unary/", "unary_int_float"),
 		("unary/", "unary_vec"),
+
+		("range/", "basic_parse"),
+		("range/", "basic_parse_properties"),
+		("range/", "basic_var"),
+		("range/", "two_main_types"),
+
+		("for/", "correct_scope"),
+		("for/", "correct_scope2"),
+		("for/", "for_basic_i"),
+		("for/", "for_basic"),
+		("for/", "for_closed_i"),
+		("for/", "for_closed"),
+		("for/", "for_basic_i_nospace"),
+		("for/", "for_basic_nospace"),
+		("for/", "for_closed_i_nospace"),
+		("for/", "for_closed_nospace"),
 	];
 
 	let mut bt = BuiltTests {

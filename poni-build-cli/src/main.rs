@@ -69,6 +69,17 @@ fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<ExitSta
     // TODO: Configurable ninja path?
     let mut process = Command::new("ninja");
     process.arg("-f").arg(".build/build.ninja")
+        // Apparently ninja will strip ANSI sequences unless we set CLICOLOR_FORCE.
+        //
+        // Supposedly it might (?) have a mode where it auto-detects TTY, but
+        // I haven't looked into this in detail.
+        //
+        // We would like to see colored output (and NO_COLOR will override if
+        // relevant), so set this ourselves.
+        //
+        // (We could consider setting it based on reading CLICOLOR, CLICOLOR_FORCE,
+        // and NO_COLOR, and checking if stdout is a tty.)
+        .env("CLICOLOR_FORCE", "1")
         .env("NINJA_STATUS", format!("{DIM}%e{RESET} %f{DIM}/{RESET}%t 🦄 "));
 
     // If we're only building one project, then pass that as an argument.

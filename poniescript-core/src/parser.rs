@@ -12,6 +12,7 @@ use crate::expr::*;
 use crate::error::Error;
 use crate::source::Source;
 use crate::source::SourceLocation;
+use crate::typ::RangeEnd;
 use crate::typ::Type;
 
 use crate::arena::IndexCell;
@@ -28,6 +29,59 @@ impl Scope {
 	}
 }
 
+struct RangeTypes {
+	key_ii: StrId,
+	key_ie: StrId,
+	key_ei: StrId,
+	key_ee: StrId,
+	key_iu: StrId,
+	key_eu: StrId,
+	key_ui: StrId,
+	key_ue: StrId,
+	key_uu: StrId,
+}
+
+impl RangeTypes {
+	pub fn build(db: &mut Db) -> Self {
+		Self {
+			key_ii: db.put_str("Closed"),
+			key_ie: db.put_str("ClosedOpen"),
+			key_ei: db.put_str("OpenClosed"),
+			key_ee: db.put_str("Open"),
+			key_iu: db.put_str("ClosedInf"),
+			key_eu: db.put_str("OpenInf"),
+			key_ui: db.put_str("InfClosed"),
+			key_ue: db.put_str("InfOpen"),
+			key_uu: db.put_str("Every"), // ?
+		}
+	}
+
+	pub fn is_any(&self, key: StrId) -> bool {
+		key == self.key_ii ||
+		key == self.key_ie ||
+		key == self.key_ei ||
+		key == self.key_ee ||
+		key == self.key_iu ||
+		key == self.key_eu ||
+		key == self.key_ui ||
+		key == self.key_ue ||
+		key == self.key_uu
+	}
+
+	pub fn into_type(&self, key: StrId, inner_typ: TypId) -> Type {
+		if key == self.key_ii { return Type::RangeOf(RangeEnd::Inclusive, RangeEnd::Inclusive, inner_typ); }
+		if key == self.key_ie { return Type::RangeOf(RangeEnd::Inclusive, RangeEnd::Exclusive, inner_typ); }
+		if key == self.key_ei { return Type::RangeOf(RangeEnd::Exclusive, RangeEnd::Inclusive, inner_typ); }
+		if key == self.key_ee { return Type::RangeOf(RangeEnd::Exclusive, RangeEnd::Exclusive, inner_typ); }
+		if key == self.key_iu { return Type::RangeOf(RangeEnd::Inclusive, RangeEnd::Unbounded, inner_typ); }
+		if key == self.key_eu { return Type::RangeOf(RangeEnd::Exclusive, RangeEnd::Unbounded, inner_typ); }
+		if key == self.key_ui { return Type::RangeOf(RangeEnd::Unbounded, RangeEnd::Inclusive, inner_typ); }
+		if key == self.key_ue { return Type::RangeOf(RangeEnd::Unbounded, RangeEnd::Exclusive, inner_typ); }
+		if key == self.key_uu { return Type::RangeOf(RangeEnd::Unbounded, RangeEnd::Unbounded, inner_typ); }
+		panic!("ICE: Called RangeTypes::into_type() when the key was not a valid Range type.")
+	}
+}
+
 pub struct Parser<'b> {
 	lexer: Lexer,
 	db: &'b mut Db,
@@ -38,9 +92,14 @@ pub struct Parser<'b> {
 	current: Token,
 	last_location: SourceLocation,
 
+	range_types: RangeTypes,
+
 	scopes: Vec<Scope>,
 	scope_name: String,
 	global_scope: Scope,
+
+	cur_doc_comment: Vec<Token>,
+	prev_doc_comment: Vec<Token>,
 
 	pub had_error: bool,
 }
@@ -138,14 +197,16 @@ macro_rules! expected_after {
 
 impl<'b> Parser<'b> {
 	pub fn new(input: Box<dyn std::io::Read>, source_id: SourceId, db: &'b mut Db, ast: &'b mut Ast) -> std::io::Result<Self> {
+		// TODO: Technically we only need one of this, even with multiple parsers...
+		let range_types = RangeTypes::build(db);
 		let mut lexer = Lexer::new(input, source_id);
 
 		// TODO: Move File initialization to Lexer
 
-		// Prime the parser with the first token in the file.
-		let current = lexer.next_token(db)?;
+		// Make a dummy current token, due to DocComment handling.
+		let current = Token::synth_tok(db, db.str_x, Tok::Eof);
 		
-		let parser = Parser {
+		let mut parser = Parser {
 			lexer,
 
 			db,
@@ -153,10 +214,15 @@ impl<'b> Parser<'b> {
 
 			source_id,
 
+			range_types,
+
 			scopes: Vec::new(),
 			// TODO: Push and pop things from this name
 			scope_name: String::new(),
 			global_scope: Scope::new(),
+
+			cur_doc_comment: Vec::new(),
+			prev_doc_comment: Vec::new(),
 
 			current,
 			last_location: SourceLocation {
@@ -167,6 +233,20 @@ impl<'b> Parser<'b> {
 
 			had_error: false,
 		};
+
+		// Prime the parser with the first token in the file (and collect
+		// doc comments, etc).
+		parser.advance().map_err(|e| {
+			match e {
+				// Simply advance()ing shouldn't result in a Syntax error.
+				// We would rather return an IoErr here.
+				//
+				// TODO: Maybe make advance() return std::io::Result, and then
+				// implement From<> for ParseErr?
+				ParseErr::SyntaxErr => unreachable!(),
+				ParseErr::IoErr(error) => error,
+			}
+		})?;
 
 		Ok(parser)
 	}
@@ -210,6 +290,7 @@ impl<'b> Parser<'b> {
 	}
 
 	fn scope_put_entry(&mut self, name: StrId, entry: ScopeEntry) {
+		log::trace!("scope: put entry with name {}", self.db.get(name));
 		match self.scopes.last_mut() {
 			Some(last) => {
 				// For local scopes, it is OK to redefine the name with a new
@@ -270,9 +351,21 @@ impl<'b> Parser<'b> {
 
 	fn advance(&mut self) -> Result<Token> {
 		self.last_location = self.current.location.clone();
-		let next = self.lexer
-			.next_token(self.db)
-			.map_err(|err| ParseErr::IoErr(err))?;
+		
+		let next = loop {
+			let next = self.lexer
+				.next_token(self.db)
+				.map_err(|err| ParseErr::IoErr(err))?;
+
+			if matches!(next.typ, Tok::DocComment) {
+				self.cur_doc_comment.push(next);
+			}
+			else {
+				self.prev_doc_comment = std::mem::take(&mut self.cur_doc_comment);
+				break next;
+			}
+		};
+
 		Ok(std::mem::replace(&mut self.current, next))
 	}
 
@@ -293,15 +386,26 @@ impl<'b> Parser<'b> {
 	}
 
 	fn number(&mut self) -> Result<ExprId> {
-		let number = self.advance()?; // Eat numerical token... TODO expected! with multiple
+		let mut number = self.advance()?; // Eat numerical token... TODO expected! with multiple
+		let mut typ = Type::AssumeInt;
 		// types..?
 		//let number = expected!(self, Tok::Number, "number literal")?;
 
-		let typ = match number.typ {
-			Tok::DecimalNumber => Type::AssumeFloat,
-			Tok::WholeNumber => Type::AssumeInt,
-			_ => unreachable!()
-		};
+		// If we're at a single dot, followed by a number, we want to consume
+		// the dot and the number.
+		if self.match_(Tok::Dot)?.is_some() {
+			// If there's no number, that's also fine, e.g. 1. => 1.0.
+			// Find a tail if there is one.
+			let concat = match self.match_(Tok::WholeNumber)? {
+				Some(tail) => format!("{}.{}",
+					self.db.get(number.lexeme), self.db.get(tail.lexeme)),
+				None => format!("{}.0", self.db.get(number.lexeme))
+			};
+			// TODO: Maybe we should try to also change the location to include
+			// the whole span? This is fine for now...?
+			number.lexeme = self.db.put_str(&concat);
+			typ = Type::AssumeFloat;
+		}
 
 		return Expr::put_numliteral_ok(self.ast, number.location.clone(),
 			number,
@@ -327,7 +431,15 @@ impl<'b> Parser<'b> {
 		//	todo!("calling the return value of a call");
 		//}
 
-		match self.scope_lookup(ident.lexeme) {
+		// For any binding that we're doing in the parser, we CANNOT be using
+		// our local scope lookups for things bound to objects. Our current
+		// scope is totally unrelated to that scope.
+		let lookup = match object {
+			Some(_) => ScopeEntry::None,
+			None => self.scope_lookup(ident.lexeme)
+		};
+
+		match lookup {
 			ScopeEntry::Var(v) => {
 				let inner = Expr::put_variable(self.ast, location.clone(), v);
 				return Expr::put_valcall_ok(self.ast, self.end(location), inner, args, self.db.sig_unassigned)
@@ -338,7 +450,11 @@ impl<'b> Parser<'b> {
 			// makes it easier to generate reasonable code in the common cases.
 			// I guess we don't have FunCalls that are on an object right now?
 			// Unsure...
-			ScopeEntry::Fun(fun) => Expr::put_funcall_ok(self.ast, location, ident.location, fun, args, None),
+			ScopeEntry::Fun(fun) => {
+				log::trace!("new bound fun: {} object.is_some(): {}",
+					self.db.get(ident.lexeme), object.is_some());
+				Expr::put_funcall_ok(self.ast, self.end(location), ident.location, fun, args, None)
+			}
 			ScopeEntry::Class(_) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), self.current.location.clone()));
 
@@ -360,6 +476,9 @@ impl<'b> Parser<'b> {
 					}
 					
 				}
+
+				log::trace!("new unbound fun capture: {} object.is_some(): {}",
+					self.db.get(ident.lexeme), object.is_some());
 
 				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
 				Expr::put_valcall_ok(self.ast, location, call, args, self.db.sig_unassigned)
@@ -521,6 +640,62 @@ impl<'b> Parser<'b> {
 			self.db.types.unassigned, Vec::new())
 	}
 
+	fn expr_for(&mut self) -> Result<ExprId> {
+		let location = self.start();
+		let key_for = expected!(self, Tok::For, "'for'")?;
+
+		let name = expected_after!(self, Tok::Identifier, key_for,
+			"variable name")?;
+
+		let mut typ = self.db.types.unassigned;
+		let mut has_explicit_type = false;
+
+		if self.match_(Tok::Colon)?.is_some() {
+			typ = self.typ()?;
+			has_explicit_type = true;
+		}
+
+		// TODO: This should be after the typ if we see a type declaration...
+		expected_after!(self, Tok::In, name, "'in' in for loop")?;
+
+		let iterable = self.expression()?;
+
+		if !self.at(Tok::LeftBrace) {
+			got!(self, "'{{' after for loop iterable");
+		}
+
+		// Note that the var is added to the scope AFTER it is created, so it
+		// by nature can't refer to itself.
+		//
+		// For for loops, the variable must be in scope for the block, but not
+		// for the iterable.
+		let name_str = name.lexeme;
+		let name_loc = name.location.clone();
+
+		// Push a scope for the for loop. This prevents the variable for the initializer
+		// leaking into the surrounding scope.
+		self.push_scope();
+
+		// When we create variables, don't set the class yet, as we don't
+		// know what it is -- we wire it back in once we're done parsing a 
+		// class.
+		//
+		// TODO: For classes, support variables that don't have an initializer?
+		let identity = self.db.new_var(name.lexeme, typ, None, None, true, None, name.location, 
+			// Currently, the for loop variable can't have a doc comment?
+			// This could be changed.
+			None);
+		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
+
+		let inner = self.block()?;
+		self.pop_scope();
+
+		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
+		
+		return Expr::put_forloop_ok(self.ast, self.end(location), name_loc, identity, iterable, has_explicit_type,
+			inner);
+	}
+
 	fn expr_prefix_callable(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
 			Tok::LeftBrace => self.block(),
@@ -558,6 +733,7 @@ impl<'b> Parser<'b> {
 			Tok::If => self.expr_if(),
 			Tok::Loop => self.expr_loop(),
 			Tok::While => self.expr_while(),
+			Tok::For => self.expr_for(),
 
 			Tok::StringSimple => {
 				let lit = self.advance()?;
@@ -633,7 +809,7 @@ impl<'b> Parser<'b> {
 
 	fn expr_prefix(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
-			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::While | Tok::Fun | Tok::StringSimple => {
+			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::While | Tok::For | Tok::Fun | Tok::StringSimple => {
 				let location = self.start();
 				let mut inner = self.expr_prefix_callable()?;
 
@@ -722,6 +898,30 @@ impl<'b> Parser<'b> {
 			Tok::Print => self.expr_print_or_str(true),
 			Tok::Str => self.expr_print_or_str(false),
 
+			Tok::Return => {
+				let location = self.start();
+				self.advance()?;
+				// If there's an immediate Semicolon, Comma, RParen, RBrace, or RBracket,
+				// it's an empty return.
+				//
+				// (Are there any other valid terminating tokens for expressions?
+				// e.g. should 'return and 5' be validly parsed as an and between
+				// a  'return' and a '5'? Seems pretty wrong. But, there might be
+				// other legitimate tokens I missed.)
+				match self.peek_typ() {
+					Tok::Semicolon | Tok::Comma | Tok::RightParen | Tok::RightBrace | Tok::RightSquare => {
+						// The equivalent of self.match_ is we advance now. However,
+						// we actually don't want to consume the token.
+						return Expr::put_return_ok(self.ast, self.end(location), None);
+					},
+					_ => {}
+				}
+
+				let inner = self.expression()?;
+				expected!(self, Tok::Semicolon, "';' after return value")?;
+				Expr::put_return_ok(self.ast, self.end(location), Some(inner))
+			}
+
 			Tok::Break => {
 				let location = self.start();
 				self.advance()?;
@@ -735,6 +935,12 @@ impl<'b> Parser<'b> {
 				Expr::put_break_ok(self.ast, self.end(location), Some(inner))
 			}
 
+			Tok::Continue => {
+				let location = self.start();
+				self.advance()?;
+				Expr::put_continue_ok(self.ast, self.end(location))
+			}
+
 			Tok::True => {
 				let location = self.advance()?.location;
 				Expr::put_boolliteral_ok(self.ast, location, true)
@@ -746,6 +952,11 @@ impl<'b> Parser<'b> {
 
 			Tok::New => {
 				self.new_()
+			}
+
+			Tok::KeySelf => {
+				let location = self.advance()?.location;
+				Expr::put_selfval_ok(self.ast, location, self.db.types.unassigned)
 			}
 
 			Tok::LeftSquare => {
@@ -783,10 +994,15 @@ impl<'b> Parser<'b> {
 			Tok::Less | Tok::LessEqual | Tok::Greater | 
 				Tok::GreaterEqual | Tok::EqualEqual | Tok::BangEqual => (7, 8),
 
-			Tok::Plus | Tok::Minus => (9, 10),
-			Tok::Star | Tok::Slash => (11, 12),
+			// The range-making operators should come below math so that you
+			// can do e.g. 1 + 2..3 * 4
+			Tok::DotDot | Tok::EqualDotDotEqual |
+				Tok::DotDotEqual | Tok::EqualDotDot => (9, 10),
 
-			Tok::Dot => (13, 14),
+			Tok::Plus | Tok::Minus => (11, 12),
+			Tok::Star | Tok::Slash => (13, 14),
+
+			Tok::Dot => (15, 16),
 
 			// Any other tokens should not be parsed as infix.
 			_ => (0, 0)
@@ -817,6 +1033,37 @@ impl<'b> Parser<'b> {
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::put_binary_ok(self.ast, self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
 			},
+
+			typ @ (Tok::DotDot | Tok::DotDotEqual | Tok::EqualDotDot | Tok::EqualDotDotEqual) => {
+				let _op = self.advance()?;
+				let rhs = self.expr_precedence(cur_prec)?;
+
+				let left_end = match typ {
+					Tok::DotDot => RangeEnd::Inclusive,
+					Tok::DotDotEqual => RangeEnd::Inclusive,
+					// Oops.
+					Tok::EqualDotDot => RangeEnd::Inclusive,
+					Tok::EqualDotDotEqual => RangeEnd::Inclusive,
+					_ => unreachable!()
+				};
+
+				let right_end = match typ {
+					Tok::DotDot => RangeEnd::Exclusive,
+					Tok::DotDotEqual => RangeEnd::Inclusive,
+					Tok::EqualDotDot => RangeEnd::Exclusive,
+					Tok::EqualDotDotEqual => RangeEnd::Inclusive,
+					_ => unreachable!()
+				};
+
+				// Note that for the unbounded ranges, we will need
+				// both AST support and parser support. The AST will need
+				// to have e.g. Optional exprs, and then the parser will need
+				// to be able to find terminating expressions on the RHS
+				// of a .., e.g. ..), ..], ..}, ..;, and so forth.
+
+				return Expr::put_makerange_ok(self.ast, self.end(location),
+					 lhs, rhs, left_end, right_end, self.db.types.unassigned);
+			}
 
 			Tok::Less | Tok::LessEqual | Tok::Greater | 
 				Tok::GreaterEqual | Tok::EqualEqual | Tok::BangEqual => {
@@ -963,6 +1210,27 @@ impl<'b> Parser<'b> {
 					return Ok(self.db.put_type(Type::ArrayOf(inner)));
 				}
 
+				if tok.lexeme == self.db.put_str("DynArray") {
+					expected!(self, Tok::LeftSquare, "'[' after 'DynArray'")?;
+
+					let inner = self.typ()?;
+
+					expected!(self, Tok::RightSquare, "']' after inner type")?;
+
+					let arr_ty = self.db.put_type(Type::ArrayOf(inner));
+					return Ok(self.db.put_type(Type::DynArrayOf(inner, arr_ty)));
+				}
+
+				if self.range_types.is_any(tok.lexeme) {
+					expected!(self, Tok::LeftSquare, "'[' after '{}'", self.db.get(tok.lexeme))?;
+
+					let inner = self.typ()?;
+
+					expected!(self, Tok::RightSquare, "']' after inner type")?;
+
+					return Ok(self.db.put_type(self.range_types.into_type(tok.lexeme, inner)));
+				}
+
 				self.db.put_type(Type::UnboundIdent(tok.lexeme))
 			},
 
@@ -1028,6 +1296,7 @@ impl<'b> Parser<'b> {
 	}
 
 	fn var_declaration(&mut self) -> Result<Declare> {
+		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let key_var = expected!(self, Tok::Var, "'var''")?;
 
@@ -1058,7 +1327,10 @@ impl<'b> Parser<'b> {
 		// class.
 		//
 		// TODO: For classes, support variables that don't have an initializer?
-		let identity = self.db.new_var(name.lexeme, typ, None, None, true, Some(initializer), name.location);
+		let identity = self.db.new_var(name.lexeme,
+			typ, None, None, true,
+			Some(initializer), name.location,
+			doc_comment);
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -1132,17 +1404,6 @@ impl<'b> Parser<'b> {
 	fn stmt(&mut self) -> Result<StmtId> {
 		let location = self.start();
 		match self.peek_typ() {
-			Tok::Return => {
-				self.advance()?;
-				// If there's an immediate Semicolon, it's an empty return.
-				if self.match_(Tok::Semicolon)?.is_some() {
-					return Stmt::put_return_ok(self.ast, self.end(location), None);
-				}
-
-				let inner = self.expression()?;
-				expected!(self, Tok::Semicolon, "';' after return value")?;
-				Stmt::put_return_ok(self.ast, self.end(location), Some(inner))
-			},
 			Tok::Var => {
 				let inner = self.var_declaration()?;
 				Ok(self.ast.stmts.push(Stmt::Declare(inner)))
@@ -1153,7 +1414,7 @@ impl<'b> Parser<'b> {
 				let mut expect_semicolon = match self.ast.exprs.get(inner).as_ref() {
 					// If the inner expression is a block or a similar "block-like"
 					// thing, then we don't need a semicolon.
-					Expr::Block(_) | Expr::If(_) | Expr::Loop(_) | Expr::WhileLoop(_) => false,
+					Expr::Block(_) | Expr::If(_) | Expr::Loop(_) | Expr::WhileLoop(_) | Expr::ForLoop(_) => false,
 					Expr::FunDeclare(declare) => {
 						// Named function declarations don't need a semicolon.
 						// Lambda ones are more expression-like, so they do..?
@@ -1186,13 +1447,16 @@ impl<'b> Parser<'b> {
 		let name_str = name.lexeme;
 
 		let identity = self.db.new_var(name.lexeme, typ, None, None, false, None,
-			name.location);
+			name.location,
+			// Currenlty, doc comments are not supported for parameters.
+			None);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
 
 		Ok(identity)
 	}
 
 	fn fun_declaration(&mut self, require_name: bool) -> Result<FunDeclare> {
+		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let _key_fun = expected!(self, Tok::Fun, "'fun'")?;
 
@@ -1266,6 +1530,10 @@ impl<'b> Parser<'b> {
 			class: None, // Class is not assigned for now, the class parser will assign it later.
 			expression: Some(value),
 			location: fun_location, // We always have a location even if we don't have a name
+
+			// TODO: Consider not bothering with doc comments in the compiler,
+			// only in the documenter, as they probably add some overhead.
+			doc_comment,
 		});
 
 		for param in parameters_for_set {
@@ -1318,7 +1586,16 @@ impl<'b> Parser<'b> {
 		self.scope_name.truncate(self.scope_name.len() - size);
 	}
 
+	fn get_doc_comment(&mut self) -> Option<Vec<Token>> {
+		let doc_comment = std::mem::take(&mut self.prev_doc_comment);
+		if !doc_comment.is_empty() {
+			return Some(doc_comment);
+		}
+		return None;
+	}
+
 	fn class_declaration(&mut self) -> Result<ClassDeclare> {
+		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let key_class = expected!(self, Tok::Class, "'class'")?;
 
@@ -1376,7 +1653,8 @@ impl<'b> Parser<'b> {
 			funs,
 			var_map,
 			fun_map,
-			location: name.location
+			location: name.location,
+			doc_comment,
 		});
 
 		for var in &declare_vars {

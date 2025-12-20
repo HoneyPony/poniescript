@@ -2,9 +2,10 @@
 use std::sync::Arc;
 
 use crate::db::*;
+use crate::lexer::{Tok, Token};
 use crate::module::Module;
 use crate::source::SourceLocation;
-use crate::typ::Type;
+use crate::typ::{RangeEnd, Type};
 
 use crate::expr::*;
 use crate::error::Error;
@@ -179,6 +180,12 @@ impl<'db> TypeChecker<'db> {
 				let inner_promoted = self.promote_ty_from_unassigned(*inner);
 				self.db.put_type(Type::Option(inner_promoted))
 			}
+			Type::RangeOf(l, r, inner) => {
+				// Bindings for borrow checker
+				let l = *l; let r = *r;
+				let inner_promoted = self.promote_ty_from_unassigned(*inner);
+				self.db.put_type(Type::RangeOf(l, r, inner_promoted))
+			}
 			_ => ty
 		}
 	}
@@ -209,6 +216,19 @@ impl<'db> TypeChecker<'db> {
 				return Ok(self.db.put_type(Type::ArrayOf(elem_typ)));
 			}
 
+			// Array promotes to DynArray.
+			(Type::DynArrayOf(lhs, _), Type::ArrayOf(rhs)) => {
+				let elem_typ = self.compute_assignable(*lhs, *rhs)?;
+				let arr_typ = self.db.put_type(Type::ArrayOf(elem_typ));
+				return Ok(self.db.put_type(Type::DynArrayOf(elem_typ, arr_typ)));
+			}
+
+			(Type::DynArrayOf(lhs, _), Type::DynArrayOf(rhs, _)) => {
+				let elem_typ = self.compute_assignable(*lhs, *rhs)?;
+				let arr_typ = self.db.put_type(Type::ArrayOf(elem_typ));
+				return Ok(self.db.put_type(Type::DynArrayOf(elem_typ, arr_typ)));
+			}
+
 			(Type::Tuple(lhs), Type::Tuple(rhs)) => {
 				// TODO: Let us assign a bigger tuple to a smaller tuple..?
 				// maybe not.
@@ -227,6 +247,19 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				return Ok(self.db.put_type(Type::Tuple(Arc::from(new_from))))
+			}
+
+			(Type::RangeOf(la, ra, left), Type::RangeOf(lb, rb, right)) => {
+				// Both ends of the range must be the same. We could eventually
+				// let e.g. int..=int be assignable to int..int, as there is
+				// a natural interpretation.
+				if *la != *lb { return Err(TypeComputeErr); }
+				if *ra != *rb { return Err(TypeComputeErr); }
+
+				let la = *la; let ra = *ra;
+
+				let inner = self.compute_assignable(*left, *right)?;
+				return Ok(self.db.put_type(Type::RangeOf(la, ra, inner)));
 			}
 
 			(Type::Option(lhs), Type::Option(rhs)) => {
@@ -358,6 +391,12 @@ impl<'db> TypeChecker<'db> {
 				return Ok(self.db.put_type(Type::ArrayOf(inner)));
 			}
 
+			(Type::DynArrayOf(lhs, _), Type::DynArrayOf(rhs, _)) => {
+				let elem_typ = self.compute_assignable(lhs, rhs)?;
+				let arr_typ = self.db.put_type(Type::ArrayOf(elem_typ));
+				return Ok(self.db.put_type(Type::DynArrayOf(elem_typ, arr_typ)));
+			}
+
 			(Type::Option(lhs), Type::Option(rhs)) => {
 				// Same idea as Array.
 				let inner = self.compute_intersect(bottom_eats, lhs, rhs)?;
@@ -392,6 +431,17 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				return Ok(self.db.put_type(Type::Tuple(Arc::from(inner))))
+			}
+
+			(Type::RangeOf(la, ra, left), Type::RangeOf(lb, rb, right)) => {
+				// Both ends of the range must be the same. We could eventually
+				// let e.g. int..=int be assignable to int..int, as there is
+				// a natural interpretation.
+				if la != lb { return Err(TypeComputeErr); }
+				if ra != rb { return Err(TypeComputeErr); }
+
+				let inner = self.compute_intersect(bottom_eats, left, right)?;
+				return Ok(self.db.put_type(Type::RangeOf(la, ra, inner)));
 			}
 
 			_ => return Err(TypeComputeErr)
@@ -430,6 +480,17 @@ impl<'db> TypeChecker<'db> {
 	/// 
 	/// Note that it does contain the main "meat" of the do_promote_expr function.
 	fn really_do_promote_expr(&mut self, ast: &AstProxy, expr_id: &mut ExprId, promote_to: TypId) {
+		// No need to promote if we're already the right type. (?)
+		//
+		// NOTE: Uncommenting this code results in a bunch of failing tests.
+		// That's weird. I think though it's probably because we aren't pushing
+		// the promotions down the tree (we must call promote_expr on every
+		// node exactly once). I guess the solution is to let Expr::Promote
+		// be promoted.
+		// if ast.get_expr(*expr_id).typ(ast, &self.db) == promote_to {
+		// 	return;
+		// }
+
 		// First, we visit the child expr with promote_expr.
 		self.promote_expr(ast, *expr_id, promote_to);
 
@@ -462,9 +523,6 @@ impl<'db> TypeChecker<'db> {
 			Stmt::Expression(expression) => {
 				self.do_promote_expr(ast, &mut expression.expression, promote_to);
 			},
-			Stmt::Return(_) => {
-				// Should have already promoted.
-			},
 			Stmt::ClassDeclare(_) => {
 				// Should have already promoted.
 			},
@@ -487,6 +545,21 @@ impl<'db> TypeChecker<'db> {
 				self.do_promote_expr(ast, &mut binary.left, binary.typ);
 				self.do_promote_expr(ast, &mut binary.right, binary.typ);
 			},
+			Expr::MakeRange(range) => {
+				if self.db.is_not_concrete(range.typ) {
+					// Ensure that we are actually getting a range type
+					assert!(matches!(self.db.get(promote_to), Type::RangeOf(..)));
+					range.typ = promote_to;
+				}
+
+				let inner = *match self.db.get(range.typ) {
+					Type::RangeOf(.., typ) => typ,
+					_ => panic!("ICE: MakeRange promotion has non-range type"),
+				};
+
+				self.do_promote_expr(ast, &mut range.left, inner);
+				self.do_promote_expr(ast, &mut range.right, inner);
+			}
 			Expr::Unary(unary) => {
 				if self.db.is_not_concrete(unary.typ) {
 					unary.typ = promote_to;
@@ -527,6 +600,12 @@ impl<'db> TypeChecker<'db> {
 			Expr::Variable(_) => { /* Can't promote. */ },
 			Expr::Logical(_) => { /* Can't promote. */ },
 			Expr::FunCall(_) => { /* Can't promote. */ },
+			Expr::BuiltinCall(_) => { /* Can't promote. */ }
+			Expr::BuiltinCapture(_) => {
+				// TODO: This should return an error, as it means we have
+				// a BuiltinCapture that wasn't eaten by a ValCall. For now,
+				// stuff will just explode later.
+			}
 			Expr::FunDeclare(_) => {},
 			Expr::ValCall(_) => {},
 			Expr::FunCapture(_) => {},
@@ -581,9 +660,18 @@ impl<'db> TypeChecker<'db> {
 			Expr::WhileLoop(_) => {
 				// For now, there is nothing to promote.
 			}
+			Expr::ForLoop(_) => {
+				panic!("ICE: Tried to promote ForLoop: Should have been lowered before promotion")
+			}
 			Expr::Break(_) => {
 				// The inner expression of the break is promoted by the Loop,
 				// not by the Break. See above.
+			}
+			Expr::Continue(_) => {
+				// No value to promote.
+			}
+			Expr::Return(_) => {
+				// Should have already promoted.
 			}
 			Expr::Unbound(_) => if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr(Unbound)") },
 			Expr::UnboundFunCapture(_) => if PANIC_ON_BAD_NODE { panic!("ICE: promote_expr(UnboundFunCapture)") },
@@ -597,6 +685,7 @@ impl<'db> TypeChecker<'db> {
 				fn unwrap_array_type(checker: &mut TypeChecker, id: TypId) -> TypId {
 					match checker.db.get(id) {
 						Type::ArrayOf(elem) => *elem,
+						Type::DynArrayOf(elem, _) => *elem,
 						Type::Option(id) => {
 							// It's unfortunate but we kind of have to explicitly
 							// unwrap the option type here. I wonder if there is a way
@@ -616,6 +705,13 @@ impl<'db> TypeChecker<'db> {
 				// array of int, and we should actually eventually get an 
 				// error.
 				if self.db.is_not_concrete(array_lit.elem_typ) {
+					array_lit.elem_typ = incoming_elem_typ;
+					array_lit.arr_typ = promote_to;
+				}
+
+				if matches!(self.db.get(array_lit.arr_typ), Type::ArrayOf(_)) &&
+					matches!(self.db.get(promote_to), Type::DynArrayOf(..)) {
+					// Promote to incoming DynArray.
 					array_lit.elem_typ = incoming_elem_typ;
 					array_lit.arr_typ = promote_to;
 				}
@@ -647,14 +743,20 @@ impl<'db> TypeChecker<'db> {
 					self.do_promote_expr(ast, expr, *typ);
 				}
 			},
-			Expr::Promote(_) => {
+			Expr::Promote(promote) => {
 				// If we hit this, it means we're re-writing an earlier promote
 				// with a different one.
 				//
 				// I'm actually not sure if that is a valid thing to do.
 				//
-				// Let's try panicing and see what happens.
-				panic!("ICE: promote_expr(Promote)")
+				// For now, we will just let the promote_to change. In the
+				// future, we need to probably re-check that the promotion is
+				// valid.
+				log::trace!("promote Expr::Promote from {} to {} (inner is {})",
+					self.db.repr_type(promote.promote_to), self.db.repr_type(promote_to),
+					self.db.repr_type(promote.inner.typ(ast, self.db)));
+
+				promote.promote_to = promote_to;
 			},
 			Expr::MakeSumType(sum) => {
 				// Pretend that in the future, Type::Option will be used for
@@ -783,6 +885,29 @@ impl<'db> TypeChecker<'db> {
 				
 				computed
 			},
+
+			Expr::MakeRange(range) => {
+				let left = self.check_expr(ast, range.left, true)?;
+				let right = self.check_expr(ast, range.right, true)?;
+
+				let computed = maybe_type_error!(
+					self,
+					self.compute_intersect(true, left, right),
+
+					&range.location,
+					"Invalid operands for range: LHS is {}, RHS is {}",
+					self.db.repr_type(left),
+					self.db.repr_type(right)
+				);
+
+				// PROMOTION: occurs in promote_expr
+
+				range.typ = self.db.put_type(Type::RangeOf(range.left_end,
+					range.right_end, computed));
+
+				range.typ
+			}
+
 			Expr::Unary(unary) => {
 				let inner = self.check_expr(ast, unary.inner, value_used)?;
 				
@@ -1118,6 +1243,54 @@ impl<'db> TypeChecker<'db> {
 				// The Break itself is always Never.
 				self.db.types.bottom
 			}
+			Expr::Continue(_) => {
+				self.db.types.bottom
+			}
+			Expr::Return(ret) => {
+				// The return statement is interesting in that it entirely
+				// ignores value_used. Because 'return' always returns
+				// the bottom type, its value may always be used if needed.
+				//
+				// That said, it DOES need to always get a value from its inner
+				// expr.
+
+				// TODO: there's no need for a separate stack of these...
+				// We can do the good old trick where you push/pop as part of
+				// the function
+				let Some(&return_type) = self.return_types.last() else {
+					type_error!(self, &ret.location,
+						"Trying to return outside of a function.");
+				};
+
+				let inner = match &mut ret.expression {
+					Some(expr) => expr,
+					None => {
+						if return_type != self.db.types.void {
+							type_error!(self, &ret.location,
+								"Trying to return value in function returning void");
+						}
+
+						return Ok(self.db.types.bottom);
+					},
+				};
+
+				let typ = self.check_expr(ast, *inner, true)?;
+				let computed = self.compute_assignable( 
+					return_type,
+					typ);
+
+				let computed = maybe_type_error!(self, 
+					computed,
+					&ret.location,
+					"Trying to return {} in function returning {}",
+
+					self.db.repr_type(typ),
+					self.db.repr_type(return_type));
+
+				self.do_promote_expr(ast, inner, computed);
+
+				self.db.types.bottom
+			}
 			Expr::OptionElse(opt_else) => {
 				let value_ty = self.check_expr(ast, opt_else.value, value_used)?;
 				let otherwise_ty = self.check_expr(ast, opt_else.otherwise, value_used)?;
@@ -1164,6 +1337,7 @@ impl<'db> TypeChecker<'db> {
 
 				let elem_ty = match self.db.get(arr_ty).clone() {
 					Type::ArrayOf(elem) => elem,
+					Type::DynArrayOf(elem, _) => elem,
 					// We don't have a good string indexing strategy yet. For now,
 					// treat strings as essentially arrays of integers.
 					Type::Str | Type::StrBuf | Type::StrConst => self.db.types.int,
@@ -1193,7 +1367,11 @@ impl<'db> TypeChecker<'db> {
 
 				let elem_ty = match self.db.get(arr_ty).clone() {
 					Type::ArrayOf(elem) => elem,
-					_ => type_error!(self, &set.location, "Can only index an array.")
+					Type::DynArrayOf(elem, _) => elem,
+					// We don't have a good string indexing strategy yet. For now,
+					// treat strings as essentially arrays of integers.
+					Type::Str | Type::StrBuf | Type::StrConst => self.db.types.int,
+					_ => type_error!(self, &set.location, "Can only index a string or array.")
 				};
 
 				// We can't check the variable just like an Assign, as that
@@ -1209,7 +1387,7 @@ impl<'db> TypeChecker<'db> {
 					computed,
 
 					&set.location,
-					"Invalid assignment to array: need {}, but value is {}",
+					"Invalid indexed assignment: need {}, but value is {}",
 					self.db.repr_type(elem_ty),
 					self.db.repr_type(rhs)
 				);
@@ -1376,8 +1554,101 @@ impl<'db> TypeChecker<'db> {
 				self.db.get_fun_ret_type(call.identity)
 			},
 
+			Expr::BuiltinCall(call) => {
+				let (ret_type, parameters) = call.ptr.get_types(self.db, call.object.typ(ast, self.db));
+				let fun_arity = parameters.len();
+
+				if call.args.len() != fun_arity {
+					// TODO: Add a Note about the function definition.
+					// Also TODO: We need to store the name of the builtin somewhere...
+					type_error!(self,
+						&call.location,
+						"Incorrect arguments to builtin function");
+				}
+
+				for i in 0..fun_arity {
+					// Check each argument against the corresponding parameter.
+					let arg = self.check_expr(ast, call.args[i], true)?;
+
+					let param = parameters[i];
+
+					// Note that we do NOT mutate the var type in any way.
+					let computed = self.compute_assignable(
+						param, arg);
+
+					let computed = maybe_type_error!(self, computed,
+						&call.location,
+						"Incorrect argument to builtin: Parameter '{}' expects '{}', but was given '{}'",
+						i,
+						self.db.repr_type(param),
+						self.db.repr_type(arg)
+					);
+
+					self.do_promote_expr(ast, &mut call.args[i], computed);
+				}
+
+				call.typ = ret_type;
+				ret_type
+			}
+
+			Expr::BuiltinCapture(_) => {
+				// Right now, capturing methods is not supported; but, we
+				// need to be able to type check this node because it is temporarily
+				// synthesized. So, just return an unassigned type.
+				self.db.types.unassigned
+			}
+
 			Expr::ValCall(call) => {
+				// TODO: Is it safe to check_expr this inner value once, if
+				// we're going to replace it? I believe the answer is *yes*
+				// if it is a FunCapture or BuiltinCapture, which are the cases
+				// that matter.
 				let value = self.check_expr(ast, call.value, true)?;
+
+				{
+					// Optimization + semantics: if we are a ValCall of a FunCapture, replace
+					// us with a FunCall.
+					//
+					// This is important for BuiltinMethods because they, in general,
+					// cannot be captured. (TODO: Error message for that?)
+					let mut inner_bind = ast.exprs.get_mut(call.value);
+					if let Expr::FunCapture(capt) = inner_bind.as_mut() {
+						// TODO: FunCall on an Object. Until then, we still have to use
+						// ValCall(FunCapture).
+						let as_funcall = FunCall {
+							location: call.location.clone(),
+							fn_name: capt.location.clone(),
+							identity: capt.identity,
+							args: std::mem::take(&mut call.args),
+							object: capt.object
+						};
+
+						*expr = Expr::FunCall(as_funcall);
+						// Because this is happening first, we have to re-check
+						// the expr.
+						drop(inner_bind);
+						drop(binding);
+						return self.check_expr(ast, expr_id, value_used);
+					}
+
+					if let Expr::BuiltinCapture(capt) = inner_bind.as_mut() {
+						log::trace!("ValCall>BuiltinCapture => BuiltinCall");
+						let as_builtincall = BuiltinCall {
+							location: call.location.clone(),
+							fn_name: capt.location.clone(),
+							// TODO: Can I just pass the function pointers themselves?
+							// Arc seems unnecessary.
+							ptr: Arc::clone(&capt.ptr),
+							args: std::mem::take(&mut call.args),
+							object: capt.object,
+							typ: self.db.types.unassigned,
+						};
+						*expr = Expr::BuiltinCall(as_builtincall);
+						drop(inner_bind);
+						drop(binding);
+						return self.check_expr(ast, expr_id, value_used);
+					}
+				}
 			
 				// Now, we need to make sure that the value is Assignable to
 				// a function type.
@@ -1439,26 +1710,6 @@ impl<'db> TypeChecker<'db> {
 				// TODO: Should ValCall's use_sig their sig?
 
 				let ret_type = self.db.get(call.sig).return_type;
-
-				// Optimization: if we are a ValCall of a FunCapture, replace
-				// us with a FunCall.
-				let mut inner_bind = ast.exprs.get_mut(call.value);
-				if let Expr::FunCapture(capt) = inner_bind.as_mut() {
-					// TODO: FunCall on an Object. Until then, we still have to use
-					// ValCall(FunCapture).
-					let as_funcall = FunCall {
-						location: call.location.clone(),
-						fn_name: capt.location.clone(),
-						identity: capt.identity,
-						args: std::mem::take(&mut call.args),
-						object: capt.object
-					};
-
-					*expr = Expr::FunCall(as_funcall);
-					// There should be no need to re-typecheck the FunCall
-					// in this case.
-					return Ok(ret_type);
-				}
 
 				ret_type
 			},
@@ -1635,10 +1886,17 @@ impl<'db> TypeChecker<'db> {
 					let Some(object) = &mut capt.object else {
 						type_error!(self, &capt.location, "Can't resolve function call.");
 					};
-					self.check_expr(ast, *object, true)?
+					self.check_expr(ast, *object, true)?;
+					
+					// Strange but kind of true: We want to immediately promote
+					// the object. We need a concrete type to try to resolve
+					// member functions.
+					self.promote_from_unassigned(ast, object)
 				};
 
 				if let Some(fun) = self.db.lookup_member_fn(obj_ty, capt.identifier.lexeme) {
+					log::trace!("resolved unbound fun '{}' to member of '{}'",
+						self.db.get(capt.identifier.lexeme), self.db.repr_type(obj_ty));
 					let as_funcapture = FunCapture {
 						location: capt.location.clone(),
 						fn_name: capt.identifier.location.clone(),
@@ -1652,6 +1910,8 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				if let Some(property) = self.db.lookup_property(obj_ty, capt.identifier.lexeme) {
+					log::trace!("resolved unbound fun '{}' to Get{{}} in '{}'",
+						self.db.get(capt.identifier.lexeme), self.db.repr_type(obj_ty));
 					let as_get = Get {
 						location: capt.location.clone(),
 						identifier: capt.identifier.clone(),
@@ -1659,6 +1919,23 @@ impl<'db> TypeChecker<'db> {
 						var: property
 					};
 					*expr = Expr::Get(as_get);
+					drop(binding);
+					return self.check_expr(ast, expr_id, value_used);
+				}
+
+				if let Some(builtin) = self.db.lookup_builtin_method(obj_ty, capt.identifier.lexeme) {
+					log::trace!("identified builtin: {}::{}", self.db.repr_type(obj_ty), self.db.get(capt.identifier.lexeme));
+					// For builtin methods, we currently only support immediately calling them.
+					//
+					// I'm not actually sure how to quite do this...? It essentially needs to
+					// be that we replace the *valcall* node, but this node isn't a ValCall.
+					let as_builtincapt = BuiltinCapture {
+						location: capt.location.clone(),
+						fn_name: capt.identifier.location.clone(),
+						ptr: Arc::clone(&builtin),
+						object: capt.object.unwrap(), // A little ugly. We should store the object above.
+					};
+					*expr = Expr::BuiltinCapture(as_builtincapt);
 					drop(binding);
 					return self.check_expr(ast, expr_id, value_used);
 				}
@@ -1704,6 +1981,118 @@ impl<'db> TypeChecker<'db> {
 			Expr::MakeSumType(sum) => {
 				// Nothing to do yet.
 				sum.typ
+			}
+
+			Expr::ForLoop(for_) => {
+				// First, we check the iterable. This tells us how to desugar it.
+				self.check_expr(ast, for_.iterator, true)?;
+				// We have to promote from unassigned, as this is where this value
+				// is used.
+				let iterable = self.promote_from_unassigned(ast, &mut for_.iterator);
+
+				let iter_ty = self.db.get(iterable);
+				match iter_ty {
+					Type::RangeOf(a, b, typ) if *typ == self.db.types.int => {
+						let _a = *a; let b = *b;
+						// Desugar the for loop into the following:
+						// var <var> = <start>
+						// while <var> < <end> {
+						//    inner
+						//    var = var + 1;
+						// }
+						let initializer = Expr::push_get(ast, for_.location.clone(),
+							Token::synthesize_ident_from(self.db, "left"),
+							for_.iterator, self.db.get_range_left(iterable));
+						// NOTE: For now, in order to make for loops work with
+						// 'continue', we will write our loops in a weird way.
+						// (go from start - 1 to end; move increment to beginning
+						// of loop)
+						// What we should do instead is probably synthesize a label
+						// at the *end* of the loop, that we jump to in the continue
+						// statement.
+						let one = Expr::push_numliteral(ast, for_.location.clone(),
+							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
+							self.db.types.int);
+						let sub = Expr::push_binary(ast, for_.location.clone(),
+							Tok::Minus, initializer, one, self.db.types.int);
+						let declare = Stmt::push_declare(ast, for_.location.clone(),
+							for_.ident.clone(), for_.identity, sub, for_.has_explicit_type);
+						
+						let read = Expr::push_variable(ast, for_.location.clone(),
+							for_.identity);
+						let one = Expr::push_numliteral(ast, for_.location.clone(),
+							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
+							self.db.types.int);
+						let add = Expr::push_binary(ast, for_.location.clone(),
+							Tok::Plus, read, one, self.db.types.int);
+						let assign = Expr::push_assign(ast, for_.location.clone(),
+							self.db.srcloc_dummy(), for_.identity, add);
+
+						let inner_stmt = Stmt::push_expression(ast, for_.location.clone(),
+							for_.inner);
+						let assign_stmt = Stmt::push_expression(ast, for_.location.clone(),
+							assign);
+							
+						// AWKWARD/TODO: Once we care about the value of the while block,
+						// this is not going to be it...?
+						let inner_block = Expr::push_block(ast, for_.location.clone(),
+							// Due to our 'continue' jank, the assign has to come
+							// before the inner.
+							vec![assign_stmt, inner_stmt], self.db.types.void);
+
+						// Rhs of the comparison.
+						let rhs = Expr::push_get(ast, for_.location.clone(),
+							Token::synthesize_ident_from(self.db, "right"),
+							for_.iterator, self.db.get_range_right(iterable));
+						// More 'continue' JANK: synthesize a -1 for the RHS
+						// of the loop as well.
+						let one = Expr::push_numliteral(ast, for_.location.clone(),
+							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
+							self.db.types.int);
+						let rhs = Expr::push_binary(ast, for_.location.clone(),
+							Tok::Minus, rhs, one, self.db.types.int);
+						// TODO: Can we re-used the read above? For now, synthesize
+						// two nodes.
+						let read = Expr::push_variable(ast, for_.location.clone(),
+							for_.identity);
+
+						// Switch comparison based on the range type.
+						let compare_type = match b {
+							RangeEnd::Inclusive => Tok::LessEqual,
+							RangeEnd::Exclusive => Tok::Less,
+							RangeEnd::Unbounded => todo!(),
+						};
+						let comparison = Expr::push_comparison(ast, for_.location.clone(),
+							compare_type, read, rhs, self.db.types.int);
+
+						let while_loop = Expr::push_whileloop(ast, for_.location.clone(),
+							comparison, inner_block, self.db.types.void, Vec::new());
+						
+						let while_stmt = Stmt::push_expression(ast, for_.location.clone(),
+							while_loop);
+						
+						let block = Block {
+							location: for_.location.clone(),
+							stmts: vec![declare, while_stmt],
+							typ: self.db.types.void,
+						};
+
+						// Now, drop the binding, modify ourselves to be the
+						// new block, and re-check it.
+						drop(binding);
+						let mut binding = ast.get_expr_mut(expr_id);
+						*binding = Expr::Block(block);
+						drop(binding);
+
+						return self.check_expr(ast, expr_id, value_used);
+					},
+					_ => {
+						type_error!(self,
+							&for_.location,
+							"Don't know how to iterate over object of type {}",
+							self.db.repr_type(iterable));
+					}
+				}
 			}
 
 			// Promote should not be generated until we get to the TypeCheck stage.
@@ -1763,51 +2152,6 @@ impl<'db> TypeChecker<'db> {
 					typ = self.promote_from_unassigned(ast, &mut expr.expression);
 				}
 				Ok(Some(typ))
-			},
-			Stmt::Return(ret) => {
-				// The return statement is interesting in that it entirely
-				// ignores value_used. Because 'return' always returns
-				// the bottom type, its value may always be used if needed.
-				//
-				// That said, it DOES need to always get a value from its inner
-				// expr.
-
-				// TODO: there's no need for a separate stack of these...
-				// We can do the good old trick where you push/pop as part of
-				// the function
-				let Some(&return_type) = self.return_types.last() else {
-					type_error!(self, &ret.location,
-						"Trying to return outside of a function.");
-				};
-
-				let inner = match &mut ret.expression {
-					Some(expr) => expr,
-					None => {
-						if return_type != self.db.types.void {
-							type_error!(self, &ret.location,
-								"Trying to return value in function returning void");
-						}
-
-						return Ok(Some(self.db.types.bottom));
-					},
-				};
-
-				let typ = self.check_expr(ast, *inner, true)?;
-				let computed = self.compute_assignable( 
-					return_type,
-					typ);
-
-				let computed = maybe_type_error!(self, 
-					computed,
-					&ret.location,
-					"Trying to return {} in function returning {}",
-
-					self.db.repr_type(typ),
-					self.db.repr_type(return_type));
-
-				self.do_promote_expr(ast, inner, computed);
-
-				Ok(Some(self.db.types.bottom))
 			}
 		}
 	}

@@ -1,0 +1,12 @@
+fun init() {
+    var array: DynArray[int] = [1, 2, 3];
+    array.push(10);
+
+    //! 1
+    //! 2
+    //! 3
+    //! 10
+    for i in 0..array.length {
+        print(array[i]);
+    }
+}

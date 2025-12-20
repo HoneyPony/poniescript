@@ -1,0 +1,11 @@
+fun do_it(a: bool, b: bool) -> int {
+    if a {
+        if b {
+            3
+        } else { 4 }
+    } else { 5 }
+}
+
+fun init() {
+    print(do_it(true, true)); //! 3
+}

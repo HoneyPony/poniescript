@@ -4,6 +4,7 @@ use rustc_hash::FxHashMap;
 
 use crate::arena::ArenaKey;
 use crate::{db::*, lexer::Token};
+use crate::typ::RangeEnd;
 use crate::source::SourceLocation;
 use crate::lexer::Tok;
 
@@ -47,9 +48,6 @@ impl Stmt {
 			Stmt::Expression(expression) => {
 				ast.get_expr(expression.expression).typ(ast, db)
 			},
-			Stmt::Return(_) => {
-				db.types.bottom
-			},
 			Stmt::ClassDeclare(_) => {
 				// TODO: Different typing for ClassDeclare?
 				db.types.void
@@ -79,13 +77,25 @@ impl Expr {
 			}
 			Expr::Loop(loop_) => loop_.typ,
 			Expr::WhileLoop(while_) => while_.typ,
+			// A for loop can't have a type as it is replaced with a while loop.
+			Expr::ForLoop(_) => db.types.unassigned,
 			Expr::Break(_) => db.types.bottom,
+			Expr::Continue(_) => db.types.bottom,
+			Expr::Return(_) => db.types.bottom,
 			Expr::Variable(var) => {
 				db.get_var_type(var.identity)
 			},
 			Expr::FunCall(call) => {
 				db.get_fun_ret_type(call.identity)
 			},
+			Expr::BuiltinCall(call) => {
+				// Because this type is dynamic, we might as well just cache it.
+				call.typ
+			}
+			Expr::BuiltinCapture(_) => {
+				// For now, these are always errors, so unassigned.
+				db.types.unassigned
+			}
 			Expr::ValCall(call) => {
 				db.get(call.sig).return_type
 			},
@@ -134,6 +144,7 @@ impl Expr {
 			Expr::Index(index) => index.typ,
 			Expr::SetIndex(set) => set.typ,
 			Expr::MakeTuple(make_tuple) => make_tuple.typ,
+			Expr::MakeRange(make_range) => make_range.typ,
 			Expr::Promote(promote) => promote.promote_to,
 			Expr::Lerp(lerp) => lerp.typ,
 			Expr::MakeSumType(sum) => sum.typ,
@@ -159,6 +170,9 @@ pub struct Var {
 	pub initializer: Option<ExprId>,
 	/// The "location" for the variable.
 	pub location: SourceLocation,
+
+	/// Doc comment for this variable.
+	pub doc_comment: Option<Vec<Token>>,
 }
 
 pub struct Fun {
@@ -178,6 +192,9 @@ pub struct Fun {
 
 	/// Location pointing to where the function is declared/defined.
 	pub location: SourceLocation,
+
+	/// Doc comment for this function.
+	pub doc_comment: Option<Vec<Token>>,
 }
 
 /// Represents a function signature. Includes the types of all parameters
@@ -198,4 +215,7 @@ pub struct Class {
 
 	/// Location pointing to where the class is declared/defined.
 	pub location: SourceLocation,
+
+	/// Doc comment for this class.
+	pub doc_comment: Option<Vec<Token>>,
 }
