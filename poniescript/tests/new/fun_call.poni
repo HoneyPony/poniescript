@@ -1,0 +1,12 @@
+class Horse {
+    var greeting: StrBuf = make_greeting();
+}
+
+fun make_greeting() -> StrBuf {
+    return str("hello ", "world");
+}
+
+fun init() {
+    var horse = new Horse{};
+    print(horse.greeting); //! hello world
+}

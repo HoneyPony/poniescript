@@ -177,6 +177,8 @@ pub fn generate(tests_file: &mut File) {
 		("new/", "new_dotted"),
 		("new/", "new_bad_self_ints"),
 		("new/", "new_bad_self_str"),
+		("new/", "fun_call"),
+		("new/", "nested_initializers"),
 
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants"),
