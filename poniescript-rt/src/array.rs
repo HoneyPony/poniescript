@@ -137,4 +137,17 @@ mod test {
 
         let _arr: Gp<PsArray<PsInt>> = PsArray::from_slice_into(&mut ctx, slice).unwrap();
     }
+    
+    #[test]
+    fn uh_oh() {
+        // This shouldn't compile. PsArray<> should be !Sized. :(
+        let _arr: PsArray<PsInt> = PsArray {
+            header: PsArrayHeader {
+                obj: PsObject::from_type_id(0),
+                typ: 0.into(),
+                length: 0.into()
+            },
+            data: PhantomData
+        };
+    }
 }
