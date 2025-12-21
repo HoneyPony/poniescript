@@ -14,13 +14,16 @@ impl PsObject {
     }
 }
 
-pub type PsInt = AtomicI64;
+pub type AtomicPsInt = AtomicI64;
 pub type PsFloat = f32;
+
+pub type PsInt = i64;
 
 pub trait HasPsType {
     const TYP: u64;
 }
 
+impl HasPsType for AtomicPsInt { const TYP: u64 = PONI_TAG_INT; }
 impl HasPsType for PsInt { const TYP: u64 = PONI_TAG_INT; }
 impl HasPsType for PsFloat { const TYP: u64 = PONI_TAG_FLOAT; }
 

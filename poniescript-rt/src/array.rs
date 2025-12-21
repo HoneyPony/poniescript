@@ -7,14 +7,14 @@ use std::{marker::PhantomData, path::Iter, sync::atomic::{AtomicPtr, AtomicU64, 
 struct PsArrayHeader {
     obj: PsObject,
     typ: AtomicU64,
-    length: PsInt,
+    length: AtomicPsInt,
 }
 
 #[repr(C)]
 struct PsDynArrayHeader {
     obj: PsObject,
     typ: AtomicU64,
-    length: PsInt,
+    length: AtomicPsInt,
     buffer: AtomicPtr<PsArrayHeader>,
 }
 
@@ -59,6 +59,26 @@ impl<T: Sized + HasPsType> PsArray<T> {
     #[inline(always)]
     unsafe fn get_data_ptr(&self) -> *mut T {
         Self::get_data_ptr_from_header(&self.header)
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> PsInt {
+        self.header.length.load(Ordering::Relaxed)
+    }
+
+    pub fn get(&self, index: PsInt) -> &T {
+        unsafe {
+             // Boundary check
+            if index < 0 || index >= self.header.length.load(Ordering::Relaxed) {
+                // TODO: PonieScript panic (?)
+                // Maybe not.
+                panic!("index out of bounds");
+            }
+
+            let data = self.get_data_ptr();
+            // TODO: This index -> isize cast safely..?
+            &*data.offset(index as isize)
+        }
     }
 }
 
@@ -122,9 +142,9 @@ impl<T: Sized + HasPsType> PsArray<T> {
     }
 }
 
+#[cfg(test)]
 mod test {
-    use poniescript_gc::{GcContext, GcHandle, gc_spawn};
-
+    use poniescript_gc::gc_spawn;
     use super::*;
 
     // Shouldn't panic.
@@ -135,13 +155,13 @@ mod test {
 
         let slice: &[i64] = &[1, 2, 3, 4];
 
-        let _arr: Gp<PsArray<PsInt>> = PsArray::from_slice_into(&mut ctx, slice).unwrap();
+        let _arr: Gp<PsArray<AtomicPsInt>> = PsArray::from_slice_into(&mut ctx, slice).unwrap();
     }
     
     #[test]
     fn uh_oh() {
         // This shouldn't compile. PsArray<> should be !Sized. :(
-        let _arr: PsArray<PsInt> = PsArray {
+        let _arr: PsArray<AtomicPsInt> = PsArray {
             header: PsArrayHeader {
                 obj: PsObject::from_type_id(0),
                 typ: 0.into(),
@@ -149,5 +169,44 @@ mod test {
             },
             data: PhantomData
         };
+    }
+
+    #[test]
+    fn set_and_get() {
+        let mut handle = gc_spawn();
+        let mut ctx = handle.create_context_for_existing();
+
+        let slice: &[i64] = &[1, 2, 3, 4];
+
+        let arr: Gp<PsArray<AtomicPsInt>> = PsArray::from_slice_into(&mut ctx, slice).unwrap();
+        for i in 0..arr.len() {
+            let a = arr.get(i).load(Ordering::Relaxed);
+            let b = slice[i as usize];
+            assert_eq!(a, b);
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn too_big_idx() {
+        let mut handle = gc_spawn();
+        let mut ctx = handle.create_context_for_existing();
+
+        let slice: &[i64] = &[1, 2, 3, 4];
+
+        let arr: Gp<PsArray<AtomicPsInt>> = PsArray::from_slice_into(&mut ctx, slice).unwrap();
+        let _x = arr.get(5);
+    }
+
+    #[test]
+    #[should_panic]
+    fn too_small_idx() {
+        let mut handle = gc_spawn();
+        let mut ctx = handle.create_context_for_existing();
+
+        let slice: &[i64] = &[1, 2, 3, 4];
+
+        let arr: Gp<PsArray<AtomicPsInt>> = PsArray::from_slice_into(&mut ctx, slice).unwrap();
+        let _x = arr.get(-1);
     }
 }
