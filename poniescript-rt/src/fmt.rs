@@ -15,7 +15,7 @@ extern "C" fn ps_print_int(x: PsInt) {
 
 #[unsafe(no_mangle)]
 extern "C" fn ps_print_float(x: PsFloat) {
-    print!("{}", x);
+    print!("{:.6}", x);
 }
 
 #[unsafe(no_mangle)]
@@ -82,17 +82,17 @@ extern "C" fn ps_print_bool(x: PsBool) {
 
 #[unsafe(no_mangle)]
 extern "C" fn ps_print_vec2(v: Vec2) {
-    print!("({}, {})", v.x, v.y);
+    print!("({:.6}, {:.6})", v.x, v.y);
 }
 
 #[unsafe(no_mangle)]
 extern "C" fn ps_print_vec3(v: Vec3) {
-    print!("({}, {}, {})", v.x, v.y, v.z);
+    print!("({:.6}, {:.6}, {:.6})", v.x, v.y, v.z);
 }
 
 #[unsafe(no_mangle)]
 extern "C" fn ps_print_vec4(v: Vec4) {
-    print!("({}, {}, {}, {})", v.x, v.y, v.z, v.w);
+    print!("({:.6}, {:.6}, {:.6}, {:.6})", v.x, v.y, v.z, v.w);
 }
 
 #[unsafe(no_mangle)]
