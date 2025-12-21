@@ -827,7 +827,7 @@ dependencies = [
  "env_logger",
  "mimalloc",
  "poniescript-core",
- "poniescript-gc",
+ "poniescript-rt",
 ]
 
 [[package]]

@@ -430,67 +430,6 @@ ps_strfmt_char(struct poni_gc_context *ctx, ps_strbuf *buf, char c) {
 	buf->length += 1;
 }
 
-// Just for fun, this is a version of ps_strfmt_int that doesn't go through
-// snprintf. I want to see if it is any faster...
-// static inline
-// void
-// ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
-// 	if(i < 0) {
-// 		if(i == INT64_MIN) {
-// 			char val[] = "-9223372036854775808";
-// 			ps_strfmt_cstr(ctx, buf, val, sizeof(val) - 1);
-// 			return;
-// 		}
-// 		ps_strfmt_char(ctx, buf, '-');
-// 		i = -i;
-// 	}
-
-// 	if(i == 0) {
-// 		ps_strfmt_char(ctx, buf, '0');
-// 		return;
-// 	}
-
-// 	char digits[24] = {0};
-// 	char *str = &digits[23];
-// 	size_t len = 0;
-
-// 	char table[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
-
-// 	while(i > 10000) {
-// 		ps_int rem = (i % 10000);
-// 		i /= 10000;
-
-// 		ps_int idx1 = (rem / 100) << 1;
-// 		ps_int idx2 = (rem % 100) << 1;
-
-// 		str -= 4;
-// 		str[0] = table[idx1];
-// 		str[1] = table[idx1 + 1];
-// 		str[2] = table[idx2];
-// 		str[3] = table[idx2 + 1];
-// 		len += 4;
-// 	}
-
-// 	while(i > 100) {
-// 		ps_int idx = i % 100;
-// 		str -= 2;
-// 		str[0] = table[idx * 2];
-// 		str[1] = table[idx * 2 + 1];
-// 		len += 2;
-// 		i /= 100;
-// 	}
-
-// 	while(i > 0) {
-// 		ps_int digit = i % 10;
-// 		str--;
-// 		*str = (char)(digit + '0');		
-// 		len += 1;
-// 		i /= 10;
-// 	}
-
-// 	ps_strfmt_cstr(ctx, buf, str, len - 1);
-// }
-
 static inline
 void
 ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
@@ -498,32 +437,6 @@ ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
 	snprintf(buf2, 64, "%" PRId64, i);
 	ps_strfmt_cstr(ctx, buf, buf2, strlen(buf2));
 }
-// static inline
-// void
-// ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
-// 	// We will compare the snprintf() result against the total chars -1,
-// 	// because snprintf() returns the length of everything BUT the NUL
-// 	// terminator.
-// 	size_t rem = (buf->buffer->length - buf->length) - 1;
-// 	int needed = snprintf(buf->buffer->contents + buf->length, rem, "%" PRId64, i);
-
-// 	if(rem < needed) {
-// 		// If we didn't have enough room, we will reallocate and do the
-// 		// snprintf() again. Reserve needed + 1 so that we include the NUL terminator.
-// 		ps_strbuf_reserve(ctx, buf, needed + 1);
-
-// 		// Do the snprintf again. The output should not change.
-// 		// We will recompute rem, although it should be the case that
-// 		// there's always enough room.
-// 		//rem = (buf->buffer->length - buf->length) - 1;
-// 		snprintf(buf->buffer->contents + buf->length, needed + 1, "%" PRId64, i);
-// 	}
-
-// 	// Finally, the length of the string should increase by needed.
-// 	// Then, we should write a NUL terminator.
-// 	buf->length += needed;
-// 	buf->buffer->contents[buf->length] = '\0';
-// }
 
 static inline
 void
@@ -606,23 +519,9 @@ ps_promote_str_const_to_str(struct poni_gc_context *ctx, const ps_str* input) {
 	return ps_str_from_literal_size(ctx, input->contents, input->length);
 }
 
-static inline
-void
-ps_print_int(ps_int i) {
-	printf("%" PRId64, i);
-}
-
-static inline
-void
-ps_print_float(float f) {
-	printf("%f", f);
-}
-
-static inline
-void
-ps_print_bool(ps_bool b) {
-	if(b) { printf("true"); } else { printf("false"); }
-}
+void ps_print_int(ps_int i);
+void ps_print_float(float f);
+void ps_print_bool(ps_bool b);
 
 // Note: functions are like, struct { fun; closure; }
 
@@ -638,34 +537,15 @@ ps_print_ptr(const char *tag, uintptr_t ptr) {
 // If we do eventually use the length value, we will have to add a
 // ps_print_strbuf() method, as the length value will be different from its
 // internal str.
-static inline
-void
-ps_print_str(const ps_str *str) {
-	// TODO: Should the NULL check be part of the print() codegen?
-	if(str) {
-		printf("%s", str->contents);
-	}
-}
-
-static inline void ps_print_vec2(ps_vec2 v) { printf("(%f, %f)", v.x, v.y); }
-static inline void ps_print_vec3(ps_vec3 v) { printf("(%f, %f, %f)", v.x, v.y, v.z); }
-static inline void ps_print_vec4(ps_vec4 v) { printf("(%f, %f, %f, %f)", v.x, v.y, v.z, v.w); }
-
-static inline void ps_print_vec2i(ps_vec2i v) { printf("(%" PRId64 ", %" PRId64 ")", v.x, v.y); }
-static inline void ps_print_vec3i(ps_vec3i v) { printf("(%" PRId64 ", %" PRId64 ", %" PRId64 ")", v.x, v.y, v.z); }
-static inline void ps_print_vec4i(ps_vec4i v) { printf("(%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 ")", v.x, v.y, v.z, v.w); }
-
-static inline
-void
-ps_print_const(const char *what) {
-	printf("%s", what);
-}
-
-static inline
-void
-ps_println(void) {
-	putc('\n', stdout);
-}
+void ps_print_str(const ps_str *str);
+void ps_print_vec2(ps_vec2 v);
+void ps_print_vec3(ps_vec3 v);
+void ps_print_vec4(ps_vec4 v);
+void ps_print_vec2i(ps_vec2i v);
+void ps_print_vec3i(ps_vec3i v);
+void ps_print_vec4i(ps_vec4i v);
+void ps_print_const(const char *what);
+void ps_println(void);
 
 static inline
 float

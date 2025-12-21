@@ -19,6 +19,11 @@ pub type PsFloat = f32;
 
 pub type PsInt = i64;
 
+// TODO:
+// Is this really the best representation for PsBool? Something
+// like C11's bool/_Bool would probably be better.
+pub type PsBool = i8;
+
 pub trait HasPsType {
     const TYP: u64;
 }
