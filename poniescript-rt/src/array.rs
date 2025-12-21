@@ -19,12 +19,14 @@ struct PsDynArrayHeader {
 }
 
 pub struct PsArray<T: Sized + HasPsType> {
-    header: AtomicPtr<PsArrayHeader>,
-    data: PhantomData<T>,
+    header: PsArrayHeader,
+    data: PhantomData<[T]>,
 }
 
+unsafe impl<T: Sized + HasPsType> HasPsHeader for PsArray<T> {}
+
 impl<T: Sized + HasPsType> PsArray<T> {
-    pub unsafe fn from_len_usize(ctx: &mut GcContext, len: usize) -> Option<Self> {
+    pub unsafe fn from_len_usize(ctx: &mut GcContext, len: usize) -> Option<Gp<Self>> {
         // Number of bytes needed for the allocation
         let bytes = len.checked_mul(size_of::<T>())?.checked_add(size_of::<PsArrayHeader>())?;
 
@@ -41,22 +43,22 @@ impl<T: Sized + HasPsType> PsArray<T> {
         let as_header = allocated as *mut PsArrayHeader;
         *as_header = header;
 
-        Some(Self {
-            header: as_header.into(),
-            data: PhantomData,
-        })
+        let as_array = allocated as *mut PsArray<T>;
+
+        Some(Gp::from_ptr(as_array))
     }
 
     #[inline(always)]
-    unsafe fn get_data_ptr_from_header(header: *mut PsArrayHeader) -> *mut T {
+    unsafe fn get_data_ptr_from_header(header: &PsArrayHeader) -> *mut T {
         // Add is in terms of size_of
-        let data = header.add(1);
-        data.cast()
+        let data = header as *const PsArrayHeader;
+        let data = data.add(1);
+        data as *mut T
     }
 
     #[inline(always)]
     unsafe fn get_data_ptr(&self) -> *mut T {
-        Self::get_data_ptr_from_header(self.header.load(Ordering::Relaxed))
+        Self::get_data_ptr_from_header(&self.header)
     }
 }
 
@@ -64,7 +66,7 @@ impl<T: Sized + HasPsType + Clone> PsArray<T> {
     /// Constructs a new PsArray from a slice of Cloneable contents.
     /// 
     /// Each object in the slice will be cloned into the array.
-    pub fn from_slice(ctx: &mut GcContext, slice: &[T]) -> Option<Self> {
+    pub fn from_slice(ctx: &mut GcContext, slice: &[T]) -> Option<Gp<Self>> {
         unsafe {
             let me = Self::from_len_usize(ctx, slice.len())?;
             let data = me.get_data_ptr();
@@ -80,11 +82,9 @@ impl<T: Sized + HasPsType + Clone> PsArray<T> {
     }
 
     pub fn get_cloned(&self, index: i64) -> T {
-        let header = self.header.load(Ordering::Relaxed);
-
         unsafe {
             // Boundary check
-            if index < 0 || index >= (*header).length.load(Ordering::Relaxed) {
+            if index < 0 || index >= self.header.length.load(Ordering::Relaxed) {
                 // TODO: PonieScript panic (?)
                 // Maybe not.
                 panic!("index out of bounds");
@@ -96,5 +96,45 @@ impl<T: Sized + HasPsType + Clone> PsArray<T> {
             // TODO: We probably don't want to use ptr::read here? Seems incorrect.
             (*data.offset(index as isize)).clone()
         }
+    }
+}
+
+impl<T: Sized + HasPsType> PsArray<T> {
+    /// Constructs a new PsArray from a slice of Cloneable contents.
+    /// 
+    /// Each object in the slice will be cloned into the array.
+    pub fn from_slice_into<U>(ctx: &mut GcContext, slice: &[U]) -> Option<Gp<Self>>
+    where 
+        U: Into<T> + Clone
+    {
+        unsafe {
+            let me = Self::from_len_usize(ctx, slice.len())?;
+            let data = me.get_data_ptr();
+
+            for (idx, obj) in slice.iter().enumerate() {
+                // TODO: Is there any way to reduce the number of try_into()'s here?
+                // Probably...
+                std::ptr::write(data.offset(idx.try_into().ok()?), obj.clone().into());
+            }
+
+            Some(me)
+        }
+    }
+}
+
+mod test {
+    use poniescript_gc::{GcContext, GcHandle, gc_spawn};
+
+    use super::*;
+
+    // Shouldn't panic.
+    #[test]
+    fn allocate() {
+        let mut handle = gc_spawn();
+        let mut ctx = handle.create_context_for_existing();
+
+        let slice: &[i64] = &[1, 2, 3, 4];
+
+        let _arr: Gp<PsArray<PsInt>> = PsArray::from_slice_into(&mut ctx, slice).unwrap();
     }
 }

@@ -25,7 +25,7 @@ const GC_REQUEST_SHUTDOWN: u64 = 2;
 static GC_FLAGS: AtomicU64 = AtomicU64::new(0);
 static GC_ALLOCATE_MARKED: AtomicBool = AtomicBool::new(false);
 
-struct Gc<'a> {
+pub struct Gc<'a> {
     mark_queue: VecDeque<AtomicPtr<u64>>,
     shared: &'a GcShared,
 }

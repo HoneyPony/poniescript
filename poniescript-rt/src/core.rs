@@ -1,4 +1,6 @@
-use std::sync::atomic::{AtomicI64, AtomicU64};
+use std::{ops::Deref, sync::atomic::{AtomicI64, AtomicPtr, AtomicU64, Ordering}};
+
+use crate::*;
 
 #[repr(C)]
 pub struct PsObject {
@@ -17,4 +19,53 @@ pub type PsFloat = f32;
 
 pub trait HasPsType {
     const TYP: u64;
+}
+
+impl HasPsType for PsInt { const TYP: u64 = PONI_TAG_INT; }
+impl HasPsType for PsFloat { const TYP: u64 = PONI_TAG_FLOAT; }
+
+/// Marker trait for objects that have a PsObject field as their first field.
+pub unsafe trait HasPsHeader {}
+
+/// A generic garbage-collected pointer.
+/// 
+/// This pointer does NOT perform write barriers.
+/// 
+/// These may only point to objects that have a PsObject field.
+#[repr(transparent)]
+pub struct Gp<T: HasPsHeader> {
+    inner: AtomicPtr<T>
+}
+
+impl<T: HasPsHeader> Gp<T> {
+    pub unsafe fn from_ptr(ptr: *mut T) -> Self {
+        Self {
+            inner: ptr.into()
+        }
+    }
+
+    #[inline(always)]
+    pub fn get_inner(&self) -> &T {
+        // SAFETY: It is not valid to construct a garbage-collected pointer
+        // to invalid memory.
+        //
+        // As such, we can always get the inner pointer.
+        unsafe { &*self.inner.load(Ordering::Relaxed) }
+    }
+}
+
+impl<T: HasPsHeader> Deref for Gp<T> {
+    type Target = T;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        self.get_inner()
+    }
+}
+
+impl<T: HasPsHeader> AsRef<T> for Gp<T> {
+    #[inline(always)]
+    fn as_ref(&self) -> &T {
+        self.get_inner()
+    }
 }
