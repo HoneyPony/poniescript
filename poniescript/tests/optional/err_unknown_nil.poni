@@ -1,0 +1,4 @@
+fun init() {
+    //? Variable 'x' is type '<unknown>?' which is invalid. The variable may require a type annotation.
+    var x = nil;
+}

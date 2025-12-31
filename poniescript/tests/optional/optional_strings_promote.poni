@@ -1,0 +1,25 @@
+fun takes_strconst(x: StrConst?) {
+    var x = x else { print("nil"); return; };
+    print("'", x, "'");
+}
+
+fun takes_str(x: Str?) {
+    var x = x else { print("nil"); return; };
+    print("'", x, "'");
+}
+
+fun takes_strbuf(x: StrBuf?) {
+    var x = x else { print("nil"); return; };
+    print("'", x, "'");
+}
+
+fun init() {
+    takes_strconst("strconst"); //! 'strconst'
+    takes_strconst(nil);        //! nil
+
+    takes_str("str");           //! 'str'
+    takes_str(nil);             //! nil
+
+    takes_strbuf("strbuf");     //! 'strbuf'
+    takes_strbuf(nil);          //! nil
+}

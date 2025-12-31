@@ -1,0 +1,14 @@
+class Horse {
+    var speak = fun() { print("neigh"); };
+}
+
+fun init() {
+    var horse = new Horse{};
+
+    horse.speak = fun() {
+        print("neigh!!");
+    };
+
+    //! neigh!!
+    horse.speak();
+}

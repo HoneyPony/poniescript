@@ -1,0 +1,15 @@
+// This test tests one specific thing:
+// Promoting from a tuple like (int, int, int) to (float, float, float).
+//
+// Note that this is NOT the same thing as promoting a MakeTuple node! The
+// MakeTuple will promote its inner values as necessary. This is testing
+// what happens when we try to assign an *existing* tuple of one type to
+// a location of another type.
+
+fun init() {
+    var ints = (1, 2, 3);
+    var floats = (4.0, 5.0, 6.0);
+
+    floats = ints;
+    print(floats); //! (1.000000, 2.000000, 3.000000)
+}

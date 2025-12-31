@@ -1,6 +1,12 @@
 /target
 /*.c
+/*.o
 /*.exe
 /big1.poni
 /big2.poni
 /big3.poni
+/big4.poni
+/big5.poni
+/big5_80000.poni
+/*.so
+.build

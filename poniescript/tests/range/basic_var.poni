@@ -1,0 +1,4 @@
+fun init() {
+    var x = 0 ..5;
+    print(x.left, " ", x.right); //! 0 5
+}

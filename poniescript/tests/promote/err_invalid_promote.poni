@@ -1,0 +1,10 @@
+fun accepts(arr: Array[(float, float)]) {
+    
+}
+
+fun init() {
+    // I guess for now this should fail with a type error (because the Array
+    // is an array of (int, int), and  is being passed to an invalid function).
+    var arr = [(0, 0),(0, 0),(0, 0),(0, 0),(0, 0),(0, 0),(0, 0),(0, 0)];
+    accepts(arr);
+}

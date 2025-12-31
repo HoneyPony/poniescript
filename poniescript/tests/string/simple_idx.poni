@@ -1,0 +1,23 @@
+// Early on in PonieScript development, string indexing returned an int.
+//
+// We may want to change this so that string indexing returns a byte (e.g.
+// you have to handle the data as if it is opaque utf-8). We might also do it
+// like Godot, where indexing just returns another string.
+//
+// So, this test should just test things that are simple, and that would
+// work the same in all of these strategies.
+
+fun init() {
+    print("abc"[0] == "bac"[0]); //! false
+    print("abc"[0] == "bac"[1]); //! true
+
+    var x: Str = "abcd";
+    var y: Str = "bdca";
+    print(x[0] == y[2]); //! false
+    print(x[0] == y[3]); //! true
+
+    var a: StrBuf = "meow";
+    var b: StrBuf = "weom";
+    print(a[1] == b[3]); //! false
+    print(a[2] == b[2]); //! true
+}

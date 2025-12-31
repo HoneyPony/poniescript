@@ -1,0 +1,13 @@
+[package]
+name = "poniescript-lsp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.47.1", features = ["full"] }
+tower-lsp = "0.20.0"
+poniescript-core = { path = "../poniescript-core" }
+serde_json = "1.0.143"
+clap = { workspace = true, features = ["derive"] }
+# Not really needed, but useful for inf_write! and inf_writeln!
+ufmt = "0.2.0"

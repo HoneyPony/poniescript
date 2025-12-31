@@ -1,0 +1,228 @@
+use std::sync::Arc;
+
+use crate::db::*;
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub enum RangeEnd {
+	Inclusive,
+	Exclusive,
+	Unbounded
+}
+
+impl RangeEnd {
+	/// Returns whether this RangeEnd is concrete, in the sense that it will
+	/// need to be stored as a variable.
+	pub fn is_concrete(&self) -> bool {
+		matches!(self, RangeEnd::Inclusive | RangeEnd::Exclusive)
+	}
+}
+
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub enum Type {
+	Int,
+	Float,
+	Void,
+	Bool,
+
+	/// The constant version of Str. Must be copied, etc to be modified.
+	StrConst,
+
+	/// Essentially a constant-sized array of characters. The characters may
+	/// be modified, but the array must be reallocated to be resized.
+	Str,
+
+	/// A string with a dynamic size. Can have characters added and removed.
+	StrBuf,
+
+	/// A function type that cannot have a closure or bound this.
+	FunRaw(SigId),
+
+	/// A function type that can store any function with a matching signature.
+	/// This includes closures and bound this.
+	Fun(SigId),
+	//Str,
+
+	// StrSlice, // Maybe we need three/four String types:
+	// - Str = a raw block of chars, fixed length.
+	// - StrSlice = slice pointing into a Str.
+	// - String / StrBuf = a string that can be pushed/popped/written.
+	// - StringSlice = slice pointing into a String.
+
+	// Block,
+	// 
+
+	Bottom,
+
+	Class(ClassId),
+	//Function(SignatureId),
+	//ListOf(TypId),
+
+	ArrayOf(TypId),
+	/// For now, I guess dynamic arrays will be a separate type.
+	/// 
+	/// This has the disadvantage that we have to add similar code to several things
+	/// in the program. Idk.
+	/// 
+	/// The types in the DynArrayOf are 1) the elem_ty, 2) the associated
+	/// ArrayOf type, which is needed for codegen purposes.
+	DynArrayOf(TypId, TypId),
+
+	Tuple(Arc<[TypId]>),
+
+	/// A Range type. These each have a unique name in the frontend. In the future
+	/// we'll also want a Range type that can represent any given range (?)
+	RangeOf(RangeEnd, RangeEnd, TypId),
+
+	Option(TypId),
+	
+	Unassigned,
+	AssumeInt,
+	// For floating point numbers, we have to use a different Unassigned type.
+	// This is because numerics can be assigned to either Int or Float, but
+	// Decimals cannot be assigned to Int. (But if we add fixed point types,
+	// they can be assigned to those).
+	AssumeFloat,
+
+	// A type that only exists before the name-binding pass.
+	UnboundIdent(StrId),
+
+	// A type that comes from imported C code.
+	UnboundCStructPtr(StrId),
+}
+
+impl Type {
+	pub fn to_string(&self, db: &Db) -> String {
+		match self {
+			Type::Int => "int".to_string(),
+			Type::Float => "float".to_string(),
+			Type::Void => "void".to_string(),
+			Type::Bool => "bool".to_string(),
+			Type::StrConst => "StrConst".to_string(),
+			Type::Str => "Str".to_string(),
+			Type::StrBuf => "StrBuf".to_string(),
+			Type::Bottom => "<bottom>".to_string(),
+			Type::Unassigned => "<unknown>".to_string(),
+
+			Type::FunRaw(sig) => {
+				let mut result = "fun*(".to_string();
+				let mut comma = false;
+				for ty in &db.get(*sig).parameters {
+					if comma { result.push_str(", "); }
+					comma = true;
+
+					let ty = db.get(*ty);
+					result.push_str(&ty.to_string(db));
+				}
+				result.push(')');
+
+				result
+			},
+
+			// TODO: Deduplicate the code
+			Type::Fun(sig) => {
+				let mut result = "fun(".to_string();
+				let mut comma = false;
+				for ty in &db.get(*sig).parameters {
+					if comma { result.push_str(", "); }
+					comma = true;
+
+					let ty = db.get(*ty);
+					result.push_str(&ty.to_string(db));
+				}
+				result.push_str(") -> ");
+				result.push_str(&db.get(db.get(*sig).return_type).to_string(db));
+
+				result
+			},
+
+			Type::Tuple(typs) => {
+				let mut result = "(".to_string();
+				let mut comma = false;
+				for typ in typs.iter() {
+					if comma { result.push_str(", "); }
+					comma = true;
+
+					let ty = db.get(*typ);
+					result.push_str(&ty.to_string(db));
+				}
+				if typs.len() == 0 {
+					// Single-element tuple must be indicated
+					result.push_str(",");
+				}
+				result.push_str(")");
+
+				result
+			}
+
+			Type::Class(class) => {
+				db.get(db.get(*class).name).to_string()
+			}
+			Type::ArrayOf(typ) => {
+				format!("Array[{}]", db.get(*typ).to_string(db))
+			}
+			Type::DynArrayOf(elem_ty, _) => {
+				format!("DynArray[{}]", db.get(*elem_ty).to_string(db))
+			}
+			Type::Option(typ) => {
+				format!("{}?", db.get(*typ).to_string(db))
+			}
+			Type::RangeOf(left, right, typ) => {
+				let name = match (left, right) {
+					(RangeEnd::Inclusive, RangeEnd::Inclusive) => "Closed",
+					(RangeEnd::Inclusive, RangeEnd::Exclusive) => "ClosedOpen",
+					(RangeEnd::Inclusive, RangeEnd::Unbounded) => "ClosedInf",
+					(RangeEnd::Exclusive, RangeEnd::Inclusive) => "OpenClosed",
+					(RangeEnd::Exclusive, RangeEnd::Exclusive) => "Open",
+					(RangeEnd::Exclusive, RangeEnd::Unbounded) => "OpenInf",
+					(RangeEnd::Unbounded, RangeEnd::Inclusive) => "InfClosed",
+					(RangeEnd::Unbounded, RangeEnd::Exclusive) => "InfOpen",
+					(RangeEnd::Unbounded, RangeEnd::Unbounded) => "Every",
+				};
+				format!("{}[{}]", name, db.get(*typ).to_string(db))
+			}
+
+			Type::AssumeInt => "a number".to_string(),
+			Type::AssumeFloat => "a decimal number".to_string(),
+
+			Type::UnboundIdent(_) => "<unknown named>".to_string(),
+			Type::UnboundCStructPtr(id) => format!("imported struct {}*", db.get(*id))
+		}
+	}
+
+	pub fn gen_ctype(&self, db: &mut Db) -> String {
+		match self {
+			Type::Int => "ps_int".into(),
+			Type::Float => "ps_float".into(),
+
+			Type::Void => "void".into(),
+			Type::Bool => "ps_bool".into(),
+			Type::StrConst => "const ps_str*".into(),
+			Type::Str => "ps_str*".into(),
+			Type::StrBuf => "ps_strbuf*".into(),
+
+			Type::Tuple(_) => { todo!("probably should move this whole thing into db?") }
+			Type::RangeOf(..) => { todo!("probably should move this whole thing into db?") }
+
+			// TODO: MAybe take &mut db, and then we can use format! and such
+			Type::FunRaw(sig) => String::from(db.gen_sig_raw_ctype(*sig)),
+			Type::Fun(sig) => String::from(db.gen_sig_ctype(*sig)),
+
+			// IMPORTANT: We must generate class_cnames before ctypes
+			Type::Class(class_id) => format!("struct {}*", db.get_class_cname(*class_id)),
+
+			Type::ArrayOf(typ) => String::from(db.gen_array_ctype(*typ)),
+			Type::DynArrayOf(elem_ty, _) => String::from(db.gen_dynarray_ctype(*elem_ty)),
+			Type::Option(_) => { todo!("this is implemented in Db") }
+
+			Type::Bottom => "<pony:compiler-err:bottom-type>".into(),
+
+			Type::Unassigned => "<pony:compiler-err:unassigned-type>".into(),
+			Type::AssumeInt => "<pony:compiler-err:unassigned-int-type>".into(),
+			Type::AssumeFloat => "<pony:compiler-err:unassigned-float-type>".into(),
+			Type::UnboundIdent(name) =>
+				format!("<pony:compiler-err:unassigned-named-type[{}]>", db.get(*name)),
+			Type::UnboundCStructPtr(name) =>
+				format!("[compiler error: unbound struct {}*]", db.get(*name))
+		}
+	}
+}

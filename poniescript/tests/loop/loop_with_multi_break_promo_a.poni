@@ -1,0 +1,21 @@
+fun f(i: int) -> float {
+    loop {
+        i = i + 1;
+        if i >= 7 {
+            break 30;
+        }
+        if i >= 5 {
+            break 20;
+        }
+        if i >= 3 {
+            break 10;
+        }
+    }
+}
+
+fun init() {
+    print(f(2)); //! 10.000000
+    print(f(3)); //! 10.000000
+    print(f(5)); //! 20.000000
+    print(f(7)); //! 30.000000
+}

@@ -1,0 +1,9 @@
+class Horse {}
+
+fun do_something(horse: Horse?) {
+    print("did it")
+}
+
+fun init() {
+    do_something(nil); //! did it
+}

@@ -1,0 +1,28 @@
+fun f(i: int) -> int {
+    var retval = 0;
+
+    loop {
+        i = i + 1;
+        if i >= 7 {
+            retval = 30;
+            break;
+        }
+        if i >= 5 {
+            retval = 20;
+            break;
+        }
+        if i >= 3 {
+            retval = 10;
+            break;
+        }
+    };
+    
+    retval
+}
+
+fun init() {
+    print(f(2)); //! 10
+    print(f(3)); //! 10
+    print(f(5)); //! 20
+    print(f(7)); //! 30
+}

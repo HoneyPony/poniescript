@@ -1,0 +1,5 @@
+fun init() {
+    //? Object of type '(StrConst, StrConst)' has no such property 'best'
+    var ponies = ("rainbow dash", "fluttershy");
+    print(ponies.best);
+}

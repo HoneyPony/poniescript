@@ -1,0 +1,13 @@
+fun init() {
+    var ponies = ("rainbow dash", "fluttershy");
+    print(ponies.0); //! rainbow dash
+    print(ponies.1); //! fluttershy
+
+    var ranking = (5, 6);
+    print(ranking.0); //! 5
+    print(ranking.1); //! 6
+
+    ranking.0 = 23;
+    print(ranking.0); //! 23
+    print(ranking.1); //! 6
+}

@@ -1,0 +1,8 @@
+// requires import_class.h
+
+fun init() {
+    var t = new Test { value: 20 };
+    print(t.value); //! 20
+    t.value = t.value + 5;
+    print(t.value); //! 25
+}

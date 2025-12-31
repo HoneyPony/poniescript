@@ -1,0 +1,4 @@
+fun init() {
+    var arr: DynArray[int] = [1, 2, 3];
+    print("success"); //! success
+}

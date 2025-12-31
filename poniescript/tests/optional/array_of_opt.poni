@@ -1,0 +1,26 @@
+class Horse {
+    var name = "twilight";
+}
+
+fun pr(x: Horse?) {
+    var x = x else { print("nil"); return; };
+    print(x.name);
+}
+
+fun init() {
+    var array: Array[Horse?] = [
+        nil,
+        nil,
+        new Horse{},
+        nil,
+        new Horse { name: "starlight" },
+        nil
+    ];
+
+    pr(array[0]); //! nil
+    pr(array[1]); //! nil
+    pr(array[2]); //! twilight
+    pr(array[3]); //! nil
+    pr(array[4]); //! starlight
+    pr(array[5]); //! nil
+}

@@ -1,0 +1,19 @@
+class Horse {
+    var name = "horse";
+}
+
+fun do_stuff(x: (Horse, Horse)) -> Horse {
+    print(x.0 .name);
+    print(x.1 .name);
+    return x.0;
+}
+
+fun init() {
+    var a = new Horse { name: "twilight" };
+    var b = new Horse { name: "starlight" };
+
+    //! twilight
+    //! starlight
+
+    do_stuff((a, b));
+}

@@ -1,0 +1,7 @@
+fun init() {
+    var ponies = (1, "little", "pony");
+    print(ponies); //! (1, little, pony)
+
+    ponies = (2, "miniscule", "equines");
+    print(ponies); //! (2, miniscule, equines)
+}

@@ -1,0 +1,47 @@
+class Horse {
+    var name = "horse";
+}
+
+fun takes_optional_horse(horse: Horse?) {
+    var horse = horse else { return; };
+
+    print("the horse: ", horse.name);
+}
+
+fun init() {
+    takes_optional_horse(nil);
+
+    //! the horse: horse
+    takes_optional_horse(new Horse{});
+
+    var horse: Horse? = new Horse{};
+    //! the horse: horse
+    takes_optional_horse(horse);
+
+    var horse_nil: Horse? = nil;
+
+    // Weird case: What if we give it an else{} that is unwrapping a Horse?,
+    // this should work.
+    //
+    // This test case, in fact, explains why we want to *avoid* the promotion
+    // to Horse?? in the LHS of the else. If the LHS is promoted to Horse??,
+    // then it will always unwrap, and we won't get the expected behavior
+    // of 'else' here.
+    //
+    // NOTE: This test case was fixed by just making sure that OptionElse
+    // stores its own type. Is there a case where the promotion still occurs?
+    //! the horse: else
+    takes_optional_horse(horse_nil else new Horse { name: "else" });
+    
+    //! the horse: horse
+    takes_optional_horse(horse else { return; });
+
+    // Apparently this still works, I guess because the else branch has a type.
+    //! the horse: else
+    takes_optional_horse(nil else new Horse { name: "else" });
+
+    // This one has no choice except to promote the LHS to Horse??, because
+    // the else case results in <something>?, which must turn into <something>??
+    // for the LHS.
+    // takes_optional_horse(nil else nil);
+}

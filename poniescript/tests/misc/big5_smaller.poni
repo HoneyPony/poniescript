@@ -1,0 +1,51 @@
+// When big5.c/big5.poni was first created, everything after var the if that
+// prints hello/goodbye was deleted. This test is to make sure that doesn't
+// happen.
+
+class Horse {
+	var name: StrBuf = "twilight";
+	var style: int = 5;
+}
+
+fun a0() {
+	var a = (1, 2, 3);
+	var b = (4, 5, 6);
+    //! (1, 2, 3)
+	print(lerp(a, b, 0.000000));
+	var arr = [1, 2, 3, 4];
+    //! 1234
+	print(arr[0], arr[1], arr[2], arr[3]);
+	if(arr[2] > a .2) {
+		print("hello");
+	}
+	else {
+        //! goodbye
+		print("goodbye");
+	}
+	var horse = new Horse { style: 0 };
+    //! twilight 0
+	print(horse.name, " ", horse.style);
+	horse.name = str("my", " ", "little", " ", "pony");
+    //! my little pony 0
+	print(horse.name, " ", horse.style);
+	while horse.style < 40 {
+        //! 0
+        //! 23
+		print(horse.style);
+        horse.style = horse.style + 23;
+	}
+	var evaluation = loop {
+		if horse.style > 42 {
+			break "yes";
+		}
+		else {
+			break "no";
+		}
+	};
+    //! yes
+	print(evaluation);
+}
+
+fun init() {
+    a0();
+}

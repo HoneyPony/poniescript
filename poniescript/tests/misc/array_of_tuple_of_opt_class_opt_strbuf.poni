@@ -1,0 +1,40 @@
+class Horse {
+    var name = "twilight";
+}
+
+fun print_horse(x: Horse?) {
+    var x = x else { print("nil"); return; };
+    print(x.name);
+}
+
+fun print_strbuf(x: StrBuf?) {
+    var x = x else { print("nil"); return; };
+    print(x);
+}
+
+fun pr(tup: (Horse?, StrBuf?)) {
+    print_horse (tup.0);
+    print_strbuf(tup.1);
+}
+
+fun init() {
+    var array = [
+        (nil        , nil           ),
+        (new Horse{}, nil           ),
+        (nil        , "Hello"       ),
+        (nil        , str("Goodbye")),
+    ];
+
+    //! nil
+    //! nil
+    pr(array[0]);
+    //! twilight
+    //! nil
+    pr(array[1]);
+    //! nil
+    //! Hello
+    pr(array[2]);
+    //! nil
+    //! Goodbye
+    pr(array[3]);
+}

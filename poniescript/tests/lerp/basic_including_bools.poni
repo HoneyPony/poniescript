@@ -1,0 +1,13 @@
+fun init() {
+    print(lerp(1.0, 2.0, 0.5)); //! 1.500000
+
+    // int lerp
+    print(lerp(10, 20, 0.5)); //! 15
+
+    print(lerp(1.0, 2.0, true)); //! 2.000000
+
+    print(lerp(30, 50, false)); //! 30
+
+    print(lerp("a", "b", true)); //! b
+    print(lerp("a", "b", false)); //! a
+}

@@ -1,0 +1,10 @@
+fun init() {
+    var a = (1.0, 2.0, 10, "hello");
+    var b = (2.0, 4.0, 20, "world");
+
+    print(lerp(a, b, 0.5));  //! (1.500000, 3.000000, 15, world)
+    print(lerp(a, b, 0.25)); //! (1.250000, 2.500000, 12, hello)
+
+    print(lerp(a, b, true));  //! (2.000000, 4.000000, 20, world)
+    print(lerp(a, b, false)); //! (1.000000, 2.000000, 10, hello)
+}

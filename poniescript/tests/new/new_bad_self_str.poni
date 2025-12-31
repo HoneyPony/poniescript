@@ -1,0 +1,25 @@
+class Grid {
+    var grid  : StrBuf = "";
+    var width : int    = 0;
+    var height: int    = 0;
+
+    fun clone_grid() -> Grid {
+        new Grid {
+            grid: str(grid),
+            width: width,
+            height: height,
+        }
+    }
+}
+
+fun init() {
+    var grid = new Grid {
+        grid: "abc",
+        width: 10,
+        height: 20,
+    };
+
+    var clone = grid.clone_grid();
+    //! abc 10 20
+    print(clone.grid, " ", clone.width, " ", clone.height);
+}

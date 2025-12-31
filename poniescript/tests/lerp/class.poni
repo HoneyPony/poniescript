@@ -1,0 +1,29 @@
+class Horse {
+    var name = "twilight sparkle";
+}
+
+fun init() {
+    var a = new Horse{};
+    var b = new Horse{ name: "rainbow dash" };
+
+    print(lerp(a, b, 0.2).name); //! twilight sparkle
+    print(lerp(a, b, 0.4).name); //! twilight sparkle
+    print(lerp(a, b, 0.5).name); //! rainbow dash
+    print(lerp(a, b, 0.8).name); //! rainbow dash
+
+    print(lerp(a, b, false).name); //! twilight sparkle
+    print(lerp(a, b, true ).name); //! rainbow dash
+
+    // No cloning is involved, so if we change one of the names, then re-lerp,
+    // the change should be reflected.
+
+    a.name = "starlight glimmer";
+
+    print(lerp(a, b, 0.2).name); //! starlight glimmer
+    print(lerp(a, b, 0.4).name); //! starlight glimmer
+    print(lerp(a, b, 0.5).name); //! rainbow dash
+    print(lerp(a, b, 0.8).name); //! rainbow dash
+
+    print(lerp(a, b, false).name); //! starlight glimmer
+    print(lerp(a, b, true ).name); //! rainbow dash
+}

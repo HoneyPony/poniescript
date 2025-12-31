@@ -1,0 +1,19 @@
+fun pow(x: int) -> int {
+    var i = 0;
+    var n = 1;
+    loop {
+        n = n * 2;
+
+        i = i + 1;
+        if i >= x {
+            break n;
+        }
+    }
+}
+
+fun init() {
+    print(pow(2)); //! 4
+    print(pow(3)); //! 8
+    print(pow(4)); //! 16
+    print(pow(5)); //! 32
+}

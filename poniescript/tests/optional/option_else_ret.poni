@@ -1,0 +1,16 @@
+class Horse {
+    var name = "bailey";
+}
+
+fun printer(x: Horse?) {
+    // Note that the type here can be inferred because 'x' has a real type,
+    // so the 'else' expression gets a type, so the variable gets a type.
+    var y = x else { print("nil"); return; };
+    print(y.name);
+}
+
+fun init() {
+    printer(nil); //! nil
+    printer(new Horse{}); //! bailey
+    printer(new Horse { name: "alex" }); //! alex
+}

@@ -1,0 +1,62 @@
+class Horse {
+    var name = "twilight sparkle";
+}
+
+fun neigh(horse: Horse) {
+    print(horse.name);
+}
+
+fun init() {
+    var many_things = (
+        "poniescript", "is", "a", "programming", "language", "built", "for",
+        "writing", "scripts", "for", "games",
+
+        1, 2, 3, 4, 5,
+
+        true, false, true, false, true, false, true, false,
+
+        [10, 20, 30, 40, 50],
+
+        str("rainbow", " ", "dash"),
+
+        20 + 30 + 40 + 50,
+
+        0.5 * 0.5 * 0.5 * 0.5,
+
+        fun() { print("hello"); },
+        fun() { print("goodbye"); },
+
+        fun() -> fun() { fun() { print("fun") } },
+
+        new Horse{},
+        new Horse{ name: "fluttershy" },
+
+        "poniescript", "is", "a", "programming", "language", "built", "for",
+        "writing", "scripts", "for", "games"
+    );
+
+    print(many_things.0); //! poniescript
+    print(many_things.10); //! games
+
+    print(many_things.15); //! 5
+
+    print(many_things.16, " ", many_things.17); //! true false
+
+    print(many_things.24[2]); //! 30
+
+    print(many_things.25); //! rainbow dash
+    print(many_things.27); //! 0.062500
+
+    many_things.28(); //! hello
+    many_things.29(); //! goodbye
+
+    many_things.30()(); //! fun
+
+    // TODO: Handle tuples nicer in the lexer/parser.
+    //print(many_things.31.name); //! twilight sparkle
+    //print(many_things.32.name); //! fluttershy
+    neigh(many_things.31); //! twilight sparkle
+    neigh(many_things.32); //! fluttershy
+
+    print(many_things.43); //! games
+}

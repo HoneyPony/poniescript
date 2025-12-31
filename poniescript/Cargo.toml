@@ -1,0 +1,16 @@
+[package]
+name = "poniescript"
+version = "0.1.0"
+edition = "2021"
+build = "build/main.rs"
+
+[dependencies]
+poniescript-core = { path = "../poniescript-core" }
+poniescript-gc = { path = "../poniescript-gc" }
+mimalloc = "0.1.47"
+clap = { workspace = true }
+env_logger = { version = "0.11.8", optional = true }
+
+[features]
+default = ["env_logger"]
+env_logger = ["dep:env_logger"]

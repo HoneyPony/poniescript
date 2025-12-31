@@ -1,0 +1,26 @@
+fun translate(x: (float, float)) -> (float, float) {
+    x + (2, 2)
+}
+
+fun do_loop(out: Array[(float, float)]) {
+    var i = 0;
+    var idx = 0;
+    loop {
+        out[idx] = translate(out[idx]);
+        idx = idx + 1;
+        if idx >= 8 {
+            idx = idx - 8;
+        }
+
+        i = i + 1;
+        
+        if i > 2000000 {
+            return;
+        }
+    }
+}
+
+fun init() {
+    var out = [(0.0, 0),(0, 0.0),(0, 0),(0, 0),(0, 0),(0, 0),(0, 0),(0, 0)];
+    do_loop(out);
+}

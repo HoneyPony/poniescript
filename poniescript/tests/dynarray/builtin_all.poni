@@ -1,0 +1,63 @@
+class Horse {
+    var name: StrBuf = "";
+    var aura: int = 10;
+}
+
+fun init() {
+    var arr: DynArray[int] = [1, 2, 3, 4, 5];
+
+    fun test(x: int) -> bool {
+        x > 4
+    }
+
+    print(arr.all(test)); //! false
+
+    fun test2(x: int) -> bool {
+        x <= 6
+    }
+
+    print(arr.all(test2)); //! true
+
+    var arr: DynArray[Horse] = [
+        new Horse { name: "Rainbow", aura: 15 },
+        new Horse { name: "Sunset" , aura: 18 },
+    ];
+
+    fun test3(x: Horse) -> bool {
+        x.aura > 7
+    }
+
+    print(arr.all(test3)); //! true
+
+    fun test4(y: Horse) -> bool {
+        // Do we want this behavior to be hardcoded in? Er, like, do we want
+        // it to be encoded in a test case? For now, I guess we'll say yes,
+        // at least so we know if the behavior ever changes.
+        print(y.name);
+        y.aura > 16
+    }
+
+    //! Rainbow
+    //! false
+    print(arr.all(test4));
+
+    fun test5(y: Horse) -> bool {
+        print(y.name);
+        y.aura > 13
+    }
+
+    //! Rainbow
+    //! Sunset
+    //! true
+    print(arr.all(test5));
+
+    fun test6(y: Horse) -> bool {
+        print(y.name);
+        y.aura < 16
+    }
+    
+    //! Rainbow
+    //! Sunset
+    //! false
+    print(arr.all(test6));
+}

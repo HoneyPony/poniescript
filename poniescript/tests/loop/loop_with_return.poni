@@ -1,0 +1,20 @@
+fun do_loop() {
+    var i = 0;
+    loop {
+        print("i = ", i);
+        i = i + 1;
+        if i > 5 {
+            return;
+        }
+    }
+}
+
+fun init() {
+    //! i = 0
+    //! i = 1
+    //! i = 2
+    //! i = 3
+    //! i = 4
+    //! i = 5
+    do_loop();
+}

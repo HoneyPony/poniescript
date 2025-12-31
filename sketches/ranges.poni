@@ -1,0 +1,63 @@
+// A very explicit range syntax would be:
+// a<..<b
+// a<..=b
+// a=..<b
+// a=..=b
+// But this is kind of annoying to type, which I think is a real problem.
+//
+// I could make .. equivalent to =..<, but still allow the other options. This
+// would at least make sure all four kinds are available, but it does still
+// feel a bit underspecified, almost.
+//
+// Another option could be to have parens in the mix somehow...
+// (a<<b)
+// (a<=b)
+// (a=<b)
+// (a==b)
+// Obviously this doesn't quite work.
+//
+// I think I would like to avoid using (], [) etc, because although they are
+// unambiguous, they are a bit annoying to type (even with automatic parens
+// turned off) and they also make it impossible to do balanced paren matching
+// for macros, if that ever ends up being a thing.
+//
+// One option is to use colon somehow, sort of like MatLab... not sure how that
+// helps with the inclusive/exclusive thing.
+// a<:<b
+// a=:<b
+// a<:=b
+// a=:=b
+//
+// Another question is how to implement a step size, if at all.
+//
+// And one other thing to keep in mind is slice syntax. For example, it would
+// be kind of nice if a[3..] was "all the elements in a from 3 onwards."
+// I think these also may need to be a different type.
+//
+// In terms of types, I think you have:
+//
+// RangeEE[T] <..< (exclusive-exclusive)
+// RangeEI[T] <..= (exclusive-inclusive)
+// RangeIE[T] =..<
+// RangeII[T] =..=
+// RangeEU[T] <..  (exclusive-unbounded)
+// RangeUE[T]  ..<
+// RangeUU[T]  ..
+// RangeIU[T] =..
+// RangeUI[T]  ..=
+//
+// which I guess is fine.
+//
+// Ultimately probably something like a..b for =< is a decent enough syntax.
+// I'm not really sure.
+//
+// Another question is whether there should be range types that count downwards.
+// Something like a.\.b? Or just
+//
+//    for i in a..b.countdown()
+//
+// or something?
+//
+// Yeah, prolly ultimately for certain fancier use cases it should just be a
+// method on the range that returns something else. E.g. a..b.by(3) returns a
+// new object or iterator that counts by 3.

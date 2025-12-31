@@ -1,0 +1,515 @@
+use poniescript_core::{
+    db::*,
+    db,
+    module,
+    glue,
+    binder,
+    init_ordering,
+    typecheck,
+    dead_code,
+    codegen,
+    Args
+};
+
+use mimalloc::MiMalloc;
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
+use std::fs::File;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::process::{exit, Child, Command, Stdio};
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
+
+use clap::Parser as _;
+
+enum CompileMode {
+	ToCFile,
+	ToExeFile,
+	ToObjectFile,
+	ToSharedLibary,
+	// Will be useful if we can do hot code reloading
+	// ToSharedLibrary,
+}
+
+enum CompileOutputs {
+	CFiles(Vec<PathBuf>),
+	ExeFile(PathBuf),
+	ObjectFiles(Vec<PathBuf>),
+	SharedLibrary(PathBuf)
+}
+
+impl CompileOutputs {
+	pub fn parse(outputs: &Vec<PathBuf>) -> Option<Self> {
+		if outputs.is_empty() {
+			eprintln!("error: Expected at least one output file");
+			return None;
+		}
+
+		let mut total = match CompileMode::parse(&outputs[0]) {
+			CompileMode::ToCFile => CompileOutputs::CFiles(vec![outputs[0].clone()]),
+			CompileMode::ToExeFile => CompileOutputs::ExeFile(outputs[0].clone()),
+			CompileMode::ToObjectFile => CompileOutputs::ObjectFiles(vec![outputs[0].clone()]),
+			CompileMode::ToSharedLibary => CompileOutputs::SharedLibrary(outputs[0].clone()),
+		};
+
+		for file in &outputs[1..] {
+			let next = CompileMode::parse(file);
+			match (&mut total, next) {
+				(CompileOutputs::CFiles(vec), CompileMode::ToCFile) => {
+					vec.push(file.clone());
+				}
+				(CompileOutputs::ObjectFiles(vec), CompileMode::ToObjectFile) => {
+					vec.push(file.clone());
+				}
+				(CompileOutputs::ExeFile(_), _) => {
+					eprintln!("error: Expected only one output argument for executable file.");
+					return None;
+				}
+				(CompileOutputs::SharedLibrary(_), _) => {
+					eprintln!("error: Expected only one output argument for shared library.");
+					return None;
+				}
+				_ => {
+					eprintln!("error: Mismatch between output arguments.");
+					return None;
+				}
+			}
+		}
+
+		Some(total)
+	}
+
+	pub fn get_output(&self, args: &Args) -> (Vec<Box<dyn std::io::Write + Send + 'static>>, Vec<Child>) {
+		let mut writers = Vec::new();
+		let mut childs = Vec::new();
+
+		let mut push = |arg: (Box<dyn std::io::Write + Send + 'static>, Option<Child>)| {
+			writers.push(arg.0);
+			if let Some(child) = arg.1 {
+				childs.push(child);
+			}
+		};
+
+		match self {
+			// TODO: Simplify this repeated logic somehow?
+			CompileOutputs::CFiles(paths) => {
+				for path in paths {
+					push(CompileMode::ToCFile.get_output(args, path))
+				}
+			},
+			CompileOutputs::ObjectFiles(paths) => {
+				for path in paths {
+					push(CompileMode::ToObjectFile.get_output(args, path))
+				}
+			}
+			CompileOutputs::ExeFile(path) => {
+				push(CompileMode::ToExeFile.get_output(args, path))
+			}
+			CompileOutputs::SharedLibrary(path) => {
+				push(CompileMode::ToSharedLibary.get_output(args, path))
+			}
+		}
+
+		(writers, childs)
+	}
+}
+
+impl CompileMode {
+	pub fn parse(output_path: &PathBuf) -> CompileMode {
+		// By default, return ToExeFile. This corresponds to, for example,
+		// -o my_program (which on Linux would suggest an executable)
+		let Some(extension) = output_path.extension() else {
+			return CompileMode::ToExeFile;
+		};
+
+		if extension == "c" { return CompileMode::ToCFile; }
+		if extension == "exe" { return CompileMode::ToExeFile; }
+		if extension == "o" { return CompileMode::ToObjectFile; }
+		if extension == "dll" { return CompileMode::ToSharedLibary; }
+		if extension == "so" { return CompileMode::ToSharedLibary; }
+
+		// Any other extension, we'll happily do Exe, but also print a warning.
+		eprintln!("warning: unknown output file extension '.{}' -- generating executable.", extension.to_string_lossy());
+		return CompileMode::ToExeFile;
+	}
+
+	pub fn get_output(&self, args: &Args, path: &Path) -> (Box<dyn std::io::Write + Send + 'static>, Option<Child>) {
+		match self {
+			CompileMode::ToCFile => {
+				// Don't let us run in test mode if we're trying to output a C
+				// file.
+				if args.test_mode {
+					eprintln!("Error: Running in test mode, but output is a C file.");
+					exit(10);
+				}
+
+				match File::create(path) {
+					Ok(f) => (Box::new(f), None),
+					Err(err) => {
+						eprintln!("Unable to create output file {}: {}", path.display(), err);
+						exit(3);
+					}
+				}
+			},
+			CompileMode::ToExeFile | CompileMode::ToObjectFile | CompileMode::ToSharedLibary => {
+				// TODO: Why is as_deref giving &str?? As long as it works...
+				let compiler = args.c_compiler.as_deref().unwrap_or("gcc");
+				let mut cc = Command::new(compiler);
+				let mut cc = cc.stdin(Stdio::piped());
+
+				// .arg("-std=c11") // TODO: Do we want this? It seems tcc does not support it.
+
+				match self {
+					CompileMode::ToObjectFile => {
+						cc = cc.arg("-c");
+					},
+					CompileMode::ToSharedLibary => {
+						cc = cc.arg("-shared").arg("-fPIC");
+					}
+					_ => {}
+				};
+					
+				let mut cc = cc.arg("-o")
+					.arg(path)
+					.arg("-I.")
+					.arg("-x")
+					.arg("c")
+					.arg("-");
+
+				for arg in &args.c_opt {
+					cc = cc.arg(arg);
+				}
+				
+				let cc = cc.spawn();
+				let mut cc = match cc {
+					Ok(cc) => cc,
+					Err(err) => {
+						eprintln!("Unable to spawn C compiler: {}", err);
+						exit(4);
+					}
+				};
+
+				match cc.stdin.take() {
+					Some(stdin) => (Box::new(stdin), Some(cc)),
+					None => {
+						eprintln!("Unable to feed C compiler with input");
+						exit(5);
+					}
+				}
+			},
+		}
+	}
+}
+
+fn parse_all_modules(ast: &mut Ast, db: &mut db::Db, args: &Args) -> bool {
+	let mut had_error = false;
+
+	for path in &args.input_paths {
+		let source_id = ast.new_source(path.clone());
+		match module::parse_module(ast, db, source_id) {
+			Ok(false) => { },
+			Ok(true) => {
+				had_error = true;
+			}
+			Err(err) => {
+				eprintln!("Unable to parse source file {}: {err}", path.display());
+				had_error = true;
+			}
+		}
+	}
+
+	had_error
+}
+
+fn do_c_modules(ast: &mut Ast, db: &mut db::Db, args: &Args) -> bool {
+	for path in &args.imports {
+		match glue::parser::parse_import(ast, db, path) {
+			Ok(false) => return false,
+			Ok(true) => return true,
+			Err(err) => {
+				eprintln!("Unable to parse imported file {}: {err}", path.display());
+				return true;
+			}
+		}
+	}
+
+	// If there were no imports, there is no error.
+	return false;
+}
+
+struct TimeHelper {
+	duration: Duration
+}
+
+impl std::fmt::Display for TimeHelper {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if self.duration.as_millis() < 10 {
+			write!(f, "{}ms", self.duration.as_micros() as f64 / 1000.0)
+		}
+		else {
+			write!(f, "{}ms", self.duration.as_millis())
+		}
+	}
+}
+
+fn duration(prev: SystemTime, message: &str, duration_set: &mut Vec<&'static str>) -> SystemTime {
+	let now = SystemTime::now();
+
+	if let Ok(duration) = now.duration_since(prev) {
+		// NOTE: Keep padding in sync with longest message
+		let info = format!("{:<18} = {}",
+			message, TimeHelper { duration }).leak();
+		duration_set.push(info);
+	}
+
+	now
+}
+
+fn report_errors(ast: &Ast, db: &Db) {
+	if db.test_mode && !db.test_errors.is_empty() {
+		if db.errors.len() != db.test_errors.len() {
+			eprintln!("Test failure: Wrong number of errors.");
+			exit(15);
+		}
+
+		// For now, we simply expect every single error that the compiler generates.
+		// This does mean tests are brittle, but on the other hand... we don't update
+		// the error messages that often. And for the most part, changes to the error
+		// messages shouldn't require huge numbers of test updates (or where they do,
+		// the updates should be somewhat regexable).
+		for i in 0..db.errors.len() {
+			// TODO:
+			// For some reason, the err_fun_missing_brace test is failing even though
+			// the strings absolutely appear to be the same. Very strange...
+			let want_str = &db.test_errors[i];//.trim();
+			let got_str = &db.errors[i].main_message;//.trim();
+			if want_str != got_str {
+				eprintln!("Test failure: Error message mismatch (index {i}):\nExpected: [{}]\nGot:      [{}]",
+					want_str, got_str);
+				
+				let mut j = 0;
+				for (a, b) in want_str.chars().zip(got_str.chars()) {
+					if a != b {
+						eprintln!("Mismatch at index {j}: {a} vs {b}")
+					}
+					j += 1;
+				}
+				exit(15);
+			}
+		}
+
+		// The test was successful.
+		exit(0);
+	}
+	for error in &db.errors {
+		poniescript_core::error::show_error(&error, ast);
+	}
+}
+
+fn main() {
+	#[cfg(feature = "env_logger")]
+	env_logger::init();
+
+	let timer = SystemTime::now();
+	let timer_begin = SystemTime::now();
+	let mut duration_set = Vec::new();
+
+	// Use Clap to parse arguments
+	let args = Args::parse();
+
+	let mut ast = db::Ast::new();
+	let mut db = db::Db::new(&mut ast);
+	db.test_mode = args.test_mode;
+
+	let timer = duration(timer, "init compiler", &mut duration_set);
+
+	// Pass 0: Handle C modules?
+	let had_error = do_c_modules(&mut ast, &mut db, &args);
+
+	if had_error {
+		report_errors(&ast, &db);
+		exit(7);
+	}
+
+	let timer = duration(timer, "imports", &mut duration_set);
+
+	// Pass 1: Parse
+	let had_error = parse_all_modules(&mut ast, &mut db, &args);
+
+	if had_error {
+		report_errors(&ast, &db);
+		exit(1);
+	}
+
+	let timer = duration(timer, "parsing", &mut duration_set);
+
+	// Pass 2: Binding
+	let had_error = binder::bind(&mut db, &mut ast);
+
+	if had_error {
+		report_errors(&ast, &db);
+		exit(2);
+	}
+
+	let timer = duration(timer, "binding", &mut duration_set);
+
+	// Pass 3: Initialization orders. Fix initialization order of various things,
+	// including globals.
+	//
+	// This must come before type check, otherwise the type checker won't be
+	// able to figure out the types of certain global patterns (e.g. cyclic/globals_same)
+	//
+	// It is also valid for it to come after binding, as after that, all the variables
+	// are essentially lexically bound, and we don't actually care about type
+	// information during the sorting stage.
+	// TODO: Is there a way to make this pattern cleaner..?
+	let mut globals = std::mem::take(&mut db.globals);
+	init_ordering::topological_sort(&mut globals, &ast, &mut db);
+
+	for class in db.iter_class() {
+		let mut vars = std::mem::take(&mut db.get_mut(class).vars);
+
+		init_ordering::topological_sort(&mut vars, &ast, &mut db);
+
+		db.get_mut(class).vars = vars;
+	}
+	db.globals = globals;
+
+	if !db.errors.is_empty() {
+		report_errors(&ast, &db);
+		exit(3);
+	}
+
+	let timer = duration(timer, "initializer sort", &mut duration_set);
+
+	// Pass 4: Type check and infer
+	let had_error = typecheck::typecheck(&mut db, &mut ast);
+
+	if had_error {
+		report_errors(&ast, &db);
+		exit(4);
+	}
+
+	let timer = duration(timer, "type check", &mut duration_set);
+
+	dead_code::eliminate_dead_code(&mut db, &mut ast);
+
+	let timer = duration(timer, "dead code", &mut duration_set);
+
+	// Sort value types.
+	if db.sort_value_types().is_err() {
+		report_errors(&ast, &db);
+		exit(5);
+	}
+
+	// In check mode, we're done after semantic analysis.
+	if args.check_mode {
+		// This is a bit ugly but whatever, the main point of this mode for
+		// now is the timing information
+		if !args.no_timing {
+			for info in duration_set {
+				eprintln!("{}", info);
+			}
+		}
+		exit(0);
+	}
+
+	// Pass 5: Codegen
+	// Generate any caches that require type checking info.
+	db.generate_codegen_caches(&args);
+
+	let Some(compile_output) = CompileOutputs::parse(&args.output_paths) else {
+		// Oops.
+		exit(5);
+	};
+	let (writers, ccs) = compile_output.get_output(&args);
+
+	let ast = Arc::new(ast.into_readonly());
+	// Awkward, but necessary until we figure out a nicer way to deal with
+	// the Db
+	let db = Box::leak(Box::new(db));
+
+	if let Err(err) = codegen::codegen(&args, db, ast, writers) {
+		eprintln!("Unable to write output file: {err}");
+		exit(6);
+	}
+
+	// Wait for the C compiler and exit with an error if it failed.
+	for mut cc in ccs {
+		match cc.wait() {
+			Ok(status) => {
+				if !status.success() {
+					eprintln!("Internal compiler error. C compiler failed.");
+					exit(12);
+				}
+			},
+			Err(err) => {
+				eprintln!("C compiler IO error: {}", err);
+			},
+		}
+	}
+
+	duration(timer, "codegen (to c)", &mut duration_set);
+	duration(timer_begin, "total compile time", &mut duration_set);
+
+	if !args.no_timing {
+		for info in duration_set {
+			eprintln!("{}", info);
+		}
+	}
+
+	// If we're in test mode, then we want to run the program and check its
+	// output.
+	if args.test_mode {
+		if !db.test_errors.is_empty() {
+			// In this case, we actually have an error: we expected the compilation
+			// to result in an error, but it didn't. So, report that to the test
+			// runner.
+			eprintln!("Test failure: Expected an error, but compilation suceeded.");
+			exit(15);
+		}
+		// We've already checked the output is an Exe, so just run it at
+		// that path.
+		match test_compiled(&args.output_paths[0], &db) {
+			Ok(_) => { eprintln!("Test succeeded"); },
+			Err(err) => { 
+				eprintln!("Test encountered IO error: {err}");
+				exit(11);
+			},
+		}
+	}
+}
+
+fn test_compiled(exe_path: &Path, db: &Db) -> std::io::Result<()> {
+	// TODO: We may have a problem if we e.g. get an exe file on Windows.
+	// But, so far it seems to work as expected.
+	let mut testprog = Command::new(exe_path)
+		.stdout(Stdio::piped())
+		.spawn()?;
+
+	let mut stdout = testprog.stdout.take().expect("stdout");
+	testprog.wait()?;
+
+	let mut got = String::new();
+	stdout.read_to_string(&mut got)?;
+
+	// Check every line.
+	let mut idx = 0;
+	for line in got.lines() {
+		if idx >= db.test_lines.len() {
+			eprintln!("Test failure: Too many output lines");
+			exit(15);
+		}
+		assert_eq!(line, db.test_lines[idx]);
+		idx += 1;
+	}
+
+	if idx != db.test_lines.len() {
+		eprintln!("Test failure: Too few output lines");
+		exit(15);
+	}
+
+	Ok(())
+}

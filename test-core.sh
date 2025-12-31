@@ -1,0 +1,1 @@
+cargo test --package poniescript-core

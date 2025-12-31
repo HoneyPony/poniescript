@@ -1,0 +1,63 @@
+#include <stdio.h>
+
+#include <dlfcn.h>
+#include <unistd.h>
+
+#define PONI_HOT_IMPLEMENTATION
+#include "../../poni/poni_hot.h"
+
+static void tick_fn_null(void* closure) {}
+
+static void (*tick_fn)(void*) = tick_fn_null;
+
+static void
+rebuild() {
+    system("make -f hot.mk");
+}
+
+static void
+hot_event_trigger(struct poni_hot_context *ctx, enum poni_hot_event evt) {
+    if(evt == PONI_HOT_DYNLIB_RELOADED) {
+        puts("-- reloaded dynamic library --");
+        // Look up the tick function whenever we're reloaded.
+        tick_fn = poni_hot_lookup_fn(ctx, "f_tick");
+        if(!tick_fn) {
+            tick_fn = tick_fn_null;
+        }
+    }
+
+    if(evt == PONI_HOT_FILE_CHANGED) {
+        puts("-- source file changed --");
+        rebuild();
+    }
+}
+
+int
+main(int argc, char **argv) {
+    // Perform initial rebuild
+    // Note that here you might want to do something like, build WITHOUT reading
+    // from a hot-reload database. Then every future reload WILL generate a hot-reload
+    // database.
+    rebuild();
+
+    struct poni_hot_context hot;
+    poni_hot_init(&hot);
+
+    hot.dynlib_path = "./game.so";
+    hot.event_trigger = hot_event_trigger;
+
+    printf("-- watch: %d --\n", poni_hot_watch(&hot, "./misc/run/poni_run.poni"));
+
+    // Only reload occasionally. (This is especially funny here...)
+    int reload_countdown = 0;
+    const int reload_rate = 2;
+
+    for(;;) {
+        poni_hot_poll(&hot);
+
+        // Tick the game.
+        tick_fn(NULL);
+
+        usleep(100000);
+    }
+}

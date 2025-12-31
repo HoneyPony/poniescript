@@ -1,0 +1,20 @@
+class Example {
+    // TODO: I guess it would be better if we only reported this error once,
+    // but whatever.
+
+    //? Cycle in variable initialization order
+    //? Cycle in variable initialization order
+    var a = test(b, c);
+    var b = 10;
+    var c = d;
+    var d = test(b, a);
+}
+
+fun test(x: int, y: int) -> int {
+    return x * y;
+}
+
+fun init() {
+    var x = new Example{};
+    print(x.a, " ", x.b, " ", x.c); //! 200 10 20
+}

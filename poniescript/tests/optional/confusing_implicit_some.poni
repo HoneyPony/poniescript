@@ -1,0 +1,35 @@
+class Horse {
+    var name = "twilight";
+}
+
+fun pr(horse: Horse?) {
+    var horse = horse else { print("nil"); return; };
+    print(horse.name);
+}
+
+// Wrapper method so that new Horse{} can return a Horse? instead of Horse
+fun fake_new(name: StrConst) -> Horse? {
+    new Horse { name: name }
+}
+
+fun init() {
+    var x: Horse? = nil;
+    pr(x); //! nil
+    
+    // These result in fake_new() being promoted to Horse?? because the else
+    // needs to unwrap *something*. This is a bit confusing.
+    //
+    // I could make it so that else simply never promotes the LHS?? That probably
+    // doesn't quite work though.
+    //
+    // NOTE: This is no longer a problem after fixing the type computation
+    // for OptionElse. See also opt_else_promote.poni.
+    x = fake_new("twilight") else { return; };
+    pr(x); //! twilight
+
+    x = fake_new("starlight") else { return; };
+    pr(x); //! starlight
+
+    x = fake_new("fluttershy") else { return; };
+    pr(x); //! fluttershy
+}

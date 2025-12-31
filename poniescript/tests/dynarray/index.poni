@@ -1,0 +1,11 @@
+fun init() {
+    var arr: DynArray[int] = [1, 2, 3, 44];
+
+    //! 1
+    //! 2
+    //! 3
+    //! 44
+    for i in 0..4 {
+        print(arr[i]);
+    }
+}

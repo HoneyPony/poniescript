@@ -1,0 +1,13 @@
+fun init() {
+    var y: Str = "y";
+
+    var array = [
+        "x",
+        y,
+        "z"
+    ];
+
+    print(array[0]); //! x
+    print(array[1]); //! y
+    print(array[2]); //! z
+}

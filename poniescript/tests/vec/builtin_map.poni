@@ -1,0 +1,23 @@
+class Horse {
+    var name: StrBuf = "Horse";
+}
+
+fun init() {
+    var a = (1, 2, 3);
+
+    fun add_one(x: int) -> int { x + 1 }
+
+    var b = a.map(add_one);
+    print(b); //! (2, 3, 4)
+
+    var c = (3, 5, 6, 7).map(add_one);
+    print(c); //! (4, 6, 7, 8)
+
+    var horse = (new Horse { name: "Rainbow Dash" }, new Horse { name: "Starlight Glimmer" });
+    //! Rainbow Dash
+    //! Starlight Glimmer
+    horse.map(fun(horse: Horse) -> Horse {
+        print(horse.name);
+        return horse;
+    });
+}

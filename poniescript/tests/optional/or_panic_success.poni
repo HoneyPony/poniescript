@@ -1,0 +1,14 @@
+class Horse {
+    var name = "Hello";
+}
+
+fun do_it(horse: Horse?) {
+    var horse = horse.or_panic();
+    print(horse.name);
+}
+
+fun init() {
+    do_it(new Horse { name: "Twilight" }); //! Twilight
+    var other = new Horse { name: "John" };
+    do_it(other); //! John
+}

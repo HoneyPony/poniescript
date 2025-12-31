@@ -1,0 +1,27 @@
+class Example {
+    // This is OK because we don't read from a1.
+    //
+    // TODO: We also need to not read from self...
+    var a1 = test1();
+
+    fun test1() -> int {
+        return b + c;
+    }
+
+    // This is OK because we don't read from a1 or a2.
+    //
+    // TODO: We also need to not read from self...
+    var a2 = test2(b, c);
+
+    fun test2(x: int, y: int) -> int {
+        return x + y;
+    }
+
+    var b = 10;
+    var c = 20;
+}
+
+fun init() {
+    var e = new Example{};
+    print(e.a1, " ", e.a2, " ", e.b, " ", e.c); //! 30 30 10 20
+}

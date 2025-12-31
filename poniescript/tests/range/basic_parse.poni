@@ -1,0 +1,17 @@
+fun ii(range: Closed[int]) {}
+fun ie(range: ClosedOpen[int]) {}
+fun ei(range: OpenClosed[int]) {}
+fun ee(range: Open[int]) {}
+
+fun iu(range: ClosedInf[int]) {}
+fun eu(range: OpenInf[int]) {}
+
+fun ui(range: InfClosed[int]) {}
+fun ue(range: InfOpen[int]) {}
+
+fun uu(range: Every[int]) {}
+
+fun init() {
+    //! success
+    print("success");
+}

@@ -1,0 +1,5 @@
+fun init() {
+    var abc = (1, 2, 3);
+    //? Invalid assignment to 'abc': need vec3i, but value is (a number, StrConst, a number)
+    abc = (1, "hello", 3);
+}

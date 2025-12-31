@@ -1,0 +1,5 @@
+fun accepts(arr: DynArray[int]) {}
+
+fun init() {
+    print("success"); //! success
+}

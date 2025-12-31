@@ -1,0 +1,18 @@
+fun init() {
+    //! hello
+    print("hello");
+    //! "hello"
+    print("\"hello\"");
+
+    //! pony
+    //! time
+    print("pony\ntime");
+
+    //! (\ put your hooves up /)
+    print("(\\ put your hooves up /)");
+
+    //! poniest
+    //! time
+    print("poniest
+time");
+}

@@ -1,0 +1,10 @@
+class Horse {
+    var name = "rarity";
+}
+
+fun init() {
+    var a = new Horse{};
+    var b = new Horse{};
+
+    print(a + b); //? Invalid operands to binary operator: Type is not numerical
+}

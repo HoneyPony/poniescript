@@ -1,0 +1,57 @@
+class Horse {
+    var name = "horse";
+}
+
+fun init() {
+    // The type we want to create:
+    // Array[(Horse?, Array[(Str?, StrBuf?, Array[((int, float, Horse?, StrBuf?), Horse?)]?)]?)]
+
+    // Currently, I believe assignment is the only way to create a value of type
+    // Str.
+    var a_str: Str = "a";
+
+    var array = [
+        (new Horse{}, nil),
+        (nil, []),
+        (nil, [("a", "b", [])]),
+        (nil, [(a_str, nil, nil)]),
+        (nil, [(nil, str("b"), [])]),
+        (nil, [(nil, nil, [((0, 0.0, nil, nil), nil)])]),
+        (nil, [(nil, nil, [((0, 0.0, new Horse { name: "I_HORSE_0_1" }, "IS_1"), nil)])]),
+        (nil, [(nil, nil, [((0, 0.0, new Horse { name: "I_HORSE_0_2" }, str("IS_2")), new Horse { name: "I_HORSE_1_2" })])]),
+        (nil, [(nil, nil, [((0, 4, nil, str("IS_3")), new Horse { name: "I_HORSE_1_3" })])]),
+    ];
+
+    fun get_innermost_strbuf(n: int, x: Array[(Horse?, Array[(Str?, StrBuf?, Array[((int, float, Horse?, StrBuf?), Horse?)]?)]?)]) {
+        var x = x[n] .1 else { return; };
+        var x = x[0] .2 else { return; };
+        var x = x[0] .0 .3 else { return; };
+        print(x);
+    }
+
+    fun get_innermost_horse0(n: int, x: Array[(Horse?, Array[(Str?, StrBuf?, Array[((int, float, Horse?, StrBuf?), Horse?)]?)]?)]) {
+        var x = x[n] .1 else { return; };
+        var x = x[0] .2 else { return; };
+        var x = x[0] .0 .2 else { print("nil"); return; };
+        print(x.name);
+    }
+
+    fun get_innermost_horse1(n: int, x: Array[(Horse?, Array[(Str?, StrBuf?, Array[((int, float, Horse?, StrBuf?), Horse?)]?)]?)]) {
+        var x = x[n] .1 else { return; };
+        var x = x[0] .2 else { return; };
+        var x = x[0] .1 else { print("nil"); return; };
+        print(x.name);
+    }
+
+    get_innermost_strbuf(6, array); //! IS_1
+    get_innermost_strbuf(7, array); //! IS_2
+    get_innermost_strbuf(8, array); //! IS_3
+
+    get_innermost_horse0(6, array); //! I_HORSE_0_1
+    get_innermost_horse0(7, array); //! I_HORSE_0_2
+    get_innermost_horse0(8, array); //! nil
+
+    get_innermost_horse1(6, array); //! nil
+    get_innermost_horse1(7, array); //! I_HORSE_1_2
+    get_innermost_horse1(8, array); //! I_HORSE_1_3
+}

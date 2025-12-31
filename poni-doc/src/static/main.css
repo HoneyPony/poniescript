@@ -1,0 +1,71 @@
+body {
+    padding: 0;
+    margin: 0;
+
+    background-image: linear-gradient(#2f1623,#0f000f);
+    color: #eee;
+}
+
+.poni-doc {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+
+    font-family: sans-serif;
+}
+
+.poni-doc-nav {
+    position: sticky;
+    overflow-y: scroll;
+    overscroll-behavior: contain;
+
+    left: 0;
+    top: 0;
+
+    height: 100vh;
+    z-index: 100;
+
+    width: 200px;
+    flex: 0 0 200px;
+
+    padding: 1em 1em;
+
+    background-color: rgba(20, 20, 20, 0.7);
+}
+
+.poni-doc-nav > h5, h6 {
+    margin: 0.5em;
+}
+
+.poni-doc-nav > h6 {
+    margin-left: 2em;
+}
+
+.poni-doc-nav a {
+    color: #eee;
+    font-weight: normal;
+}
+
+.poni-doc-nav h6 > a {
+    text-decoration: none;
+}
+
+.poni-doc-content {
+    max-width: 960px;
+    padding: 0.2em 2em;
+    background-color: rgba(10, 10, 10, 0.5);
+
+    /* Expand to fill space. */
+    flex: 1;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: sans-serif;
+}
+
+.poni-doc-content > h1 {
+    padding-bottom: 0.2em;
+    /* Underline for h1 headers */
+    border-bottom: 1px solid white;
+    border-image: linear-gradient(to right, #eee, #eecfec11) 1;
+}
