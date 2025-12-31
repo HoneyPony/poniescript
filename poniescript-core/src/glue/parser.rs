@@ -2,8 +2,10 @@ use std::path::Path;
 
 use rustc_hash::FxHashMap;
 
-use crate::{arena::IndexCell, db::*, expr::{Class, Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
+use crate::{db::*, expr::{Class, Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
 use crate::error::Error;
+
+use poni_arena::IndexCell;
 
 pub struct Parser<'b> {
 	lexer: Lexer,

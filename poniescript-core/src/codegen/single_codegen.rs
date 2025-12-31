@@ -1,7 +1,7 @@
 use rustc_hash::FxHashSet;
 use ufmt::uwrite;
 
-use crate::arena::ArenaKey;
+use poni_arena::ArenaKey;
 use crate::codegen::*;
 use crate::db::*;
 use crate::lexer::Tok;

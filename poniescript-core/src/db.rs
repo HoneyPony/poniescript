@@ -19,7 +19,7 @@ use crate::expr::Var;
 use crate::typ::RangeEnd;
 use crate::typ::Type;
 use crate::source::{PathBufFileSource, Source, SourceLocation, SyntheticSource};
-use crate::{arena::*, inf_writeln, Args};
+use crate::{inf_writeln, Args};
 
 use crate::glue::lexer::GlueTok;
 
@@ -27,7 +27,8 @@ use crate::lexer::{Tok, Token};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::arena::IndexCell;
+use poni_arena::*;
+use poni_arena::define_arena_key;
 
 // Include arenas
 include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));

@@ -7,7 +7,7 @@ use crate::module::Module;
 use crate::source::SourceLocation;
 use crate::typ::Type;
 
-use crate::arena::IndexCell;
+use poni_arena::IndexCell;
 
 struct NameChecker {
 	buffer: String,

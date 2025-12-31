@@ -10,7 +10,7 @@ use crate::typ::{RangeEnd, Type};
 use crate::expr::*;
 use crate::error::Error;
 
-use crate::arena::IndexCell;
+use poni_arena::IndexCell;
 
 // Current plan for type inference:
 // variable declarations may infer a type for the variable:

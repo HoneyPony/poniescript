@@ -3,7 +3,7 @@ use crate::{db::{Ast, AstProxy, Db}, expr::*, module::Module};
 use crate::db::ExprId;
 use crate::db::StmtId;
 
-use crate::arena::IndexCell;
+use poni_arena::IndexCell;
 
 struct DeadCodeElim<'db> {
 	db: &'db mut Db,

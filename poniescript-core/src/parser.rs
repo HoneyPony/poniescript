@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
 
-use crate::arena::ArenaBorrowMut;
+use poni_arena::ArenaBorrowMut;
 use crate::db::*;
 
 use crate::lexer::*;
@@ -15,7 +15,7 @@ use crate::source::SourceLocation;
 use crate::typ::RangeEnd;
 use crate::typ::Type;
 
-use crate::arena::IndexCell;
+use poni_arena::IndexCell;
 
 struct Scope {
 	map: FxHashMap<StrId, ScopeEntry>,

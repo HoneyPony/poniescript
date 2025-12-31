@@ -2,13 +2,13 @@ include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 
 use rustc_hash::FxHashMap;
 
-use crate::arena::ArenaKey;
+use poni_arena::ArenaKey;
 use crate::{db::*, lexer::Token};
 use crate::typ::RangeEnd;
 use crate::source::SourceLocation;
 use crate::lexer::Tok;
 
-use crate::arena::IndexCell;
+use poni_arena::IndexCell;
 
 pub struct NewInitElem {
 	pub var: VarId,

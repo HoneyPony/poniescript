@@ -4,7 +4,7 @@ use crossbeam::channel;
 use std::fs::File;
 use std::io::Write;
 
-use crate::arena::ArenaKey;
+use poni_arena::ArenaKey;
 use crate::{db::*, Args};
 use crate::typ::Type;
 
