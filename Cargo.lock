@@ -862,6 +862,7 @@ name = "poniescript-lsp"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "poni-arena",
  "poniescript-core",
  "serde_json",
  "tokio",

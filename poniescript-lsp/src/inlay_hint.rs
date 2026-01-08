@@ -1,8 +1,9 @@
 use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
-    arena::IndexCell, db::*, expr::*
+    db::*, expr::*
 };
+use poni_arena::IndexCell;
 
 use std::sync::Arc;
 

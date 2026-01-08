@@ -3,8 +3,9 @@ use std::{collections::HashMap, path::PathBuf, sync::{Arc, Mutex}, time::SystemT
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 use poniescript_core::{
-    arena::IndexCell, binder, db::*, init_ordering, module::{self}, source::*, typecheck, Args
+    binder, db::*, init_ordering, module::{self}, source::*, typecheck, Args
 };
+use poni_arena::IndexCell;
 
 use crate::{inlay_hint::{compute_inlay_hint_cache, InlayHintCache}, LspArgs};
 
