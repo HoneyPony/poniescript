@@ -69,6 +69,13 @@ macro_rules! define_arena_key {
                 $key_name(id)
             }
         }
+
+        impl $key_name {
+            #[inline(always)]
+            fn to_nonzero_u32(&self) -> std::num::NonZeroU32 {
+                self.0
+            }
+        }
     }
 }
 
