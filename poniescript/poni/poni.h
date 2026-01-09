@@ -313,6 +313,12 @@ poni_array_ensure(void *ctx, void* old_array, ps_int elem_sz, ps_int desired_idx
 	#define PONI_NORETURN _Noreturn
 #endif
 
+#ifdef __GNUC__
+    #define PONI_COLD __attribute__((cold))
+#else
+	#define PONI_COLD
+#endif
+
 #define PONI_INIT_ARRAY(arr, elem_sz, elem_cnt, elem_tag) \
 	arr = poni_gc_alloc_tagged(ctx, sizeof(struct ps_array_header) + elem_sz * elem_cnt, PONI_TAG_ARRAY); \
 	arr->header.length = elem_cnt; \
@@ -328,7 +334,7 @@ poni_array_ensure(void *ctx, void* old_array, ps_int elem_sz, ps_int desired_idx
 	arr->header.buffer = inner_arr;
 
 static inline
-PONI_NORETURN void
+PONI_NORETURN PONI_COLD void
 ps_fatal_error(const char *message) {
 	printf("fatal error: %s\n", message);
 	exit(1);
@@ -336,7 +342,7 @@ ps_fatal_error(const char *message) {
 
 // It is currently unclear if this should essentially throw an exception somehow.
 static inline
-PONI_NORETURN void
+PONI_NORETURN PONI_COLD void
 ps_panic(struct poni_gc_context *ctx, const char *src, ps_int line, ps_int column, const char *message) {
 	printf("%s:%" PRId64 ":%" PRId64 ": panic: %s\n", src, line, column, message);
 	struct poni_gc_frame *frame = ctx->frame;
