@@ -98,6 +98,11 @@ pub struct Parser<'b> {
 	scope_name: String,
 	global_scope: Scope,
 
+	/// Tracks whether we are currently in a member initializer. If so, we
+	/// forbid the 'self' keyword as a straightforward way to keep things
+	/// more correct.
+	in_member_initializer: bool,
+
 	cur_doc_comment: Vec<Token>,
 	prev_doc_comment: Vec<Token>,
 
@@ -223,6 +228,8 @@ impl<'b> Parser<'b> {
 
 			cur_doc_comment: Vec::new(),
 			prev_doc_comment: Vec::new(),
+
+			in_member_initializer: false,
 
 			current,
 			last_location: SourceLocation {
@@ -955,6 +962,13 @@ impl<'b> Parser<'b> {
 			}
 
 			Tok::KeySelf => {
+				if self.in_member_initializer {
+					// TODO: Come up with good terminology for how this works.
+					semantic_error_with!(self,
+						Error::simple("Cannot use 'self' in direct member initializer.".into(),
+						self.current.location.clone())
+					);
+				}
 				let location = self.advance()?.location;
 				Expr::put_selfval_ok(self.ast, location, self.db.types.unassigned)
 			}
@@ -1618,10 +1632,16 @@ impl<'b> Parser<'b> {
 		loop {
 			match self.peek_typ() {
 				Tok::Var => {
+					// Disallow 'self' in member initializers.
+					let enclosing_in_member = self.in_member_initializer;
+					self.in_member_initializer = true;
+
 					let declare = self.var_declaration()?;
 					vars.push(declare.identity);
 					var_map.insert(self.db.get(declare.identity).name, declare.identity);
 					declare_vars.push(declare);
+
+					self.in_member_initializer = enclosing_in_member;
 				},
 				Tok::Fun => {
 					let fun = self.fun_declaration(true)?;
