@@ -789,6 +789,17 @@ impl<'db> TypeChecker<'db> {
 		let computed =
 			self.compute_assignable(self.db.get_var_type(var), value);
 
+		// TODO: This will have to NOT be done in certain new{} expressions.
+		if self.db.get(var).readonly {
+			let readonly_error = Error::simple(
+				format!("Invalid assignment to '{}': cannot be written to.",
+					self.db.repr_var(var)),
+				at.clone()
+			);
+			self.had_error = true;
+			self.db.report_error(readonly_error);
+		}
+
 		let computed = maybe_type_error!(
 			self,
 			computed,
@@ -1858,6 +1869,16 @@ impl<'db> TypeChecker<'db> {
 						self.db.repr_type(lhs),
 						self.db.get(set.identifier.lexeme));
 				};
+
+				if self.db.get(property).readonly {
+					let readonly_error = Error::simple(
+						format!("Invalid assignment to property '{}', which cannot be written to.",
+							self.db.repr_var(property)),
+						set.location.clone()
+					);
+					self.had_error = true;
+					self.db.report_error(readonly_error);
+				}
 
 				// We must actually store the looked-up property.
 				set.var = property;

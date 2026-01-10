@@ -158,6 +158,9 @@ pub struct Var {
 	pub name: StrId,
 	pub typ: TypId,
 
+	/// Stores whether this variable is readonly.
+	pub readonly: bool,
+
 	/// If this variable is a member of a class, this stores the class id.
 	pub class: Option<ClassId>,
 	/// If this variable is a function parameter, this stores the function id.

@@ -592,9 +592,10 @@ impl Db {
 		db.key_lookup_map = crate::lexer::build_key_lookup_map(&mut db);
 		db.glue_key_lookup_map = crate::glue::lexer::build_key_lookup_map(&mut db);
 
-		(db.prop_str.length_key, db.prop_str.length) = db.synthesize_property("length", "length", db.types.int);
+		// These properties are readonly.
+		(db.prop_str.length_key, db.prop_str.length) = db.synthesize_property("length", "length", db.types.int, true);
 
-		(db.prop_array.length_key, db.prop_array.length) = db.synthesize_property("length", "header.length", db.types.int);
+		(db.prop_array.length_key, db.prop_array.length) = db.synthesize_property("length", "header.length", db.types.int, true);
 
 		return db;
 	}
@@ -615,11 +616,12 @@ impl Db {
 		}
 	}
 
-	pub fn synthesize_property(&mut self, str: &str, cname: &'static str, typ: TypId) -> (StrId, VarId) {
+	pub fn synthesize_property(&mut self, str: &str, cname: &'static str, typ: TypId, readonly: bool) -> (StrId, VarId) {
 		let key = self.put_str(str);
 		let var = Var {
 			name: key,
 			typ,
+			readonly,
 			fun: None,
 			class: None,
 			initializer: None,
@@ -965,7 +967,7 @@ impl Db {
 
 			// Now synthesize the property based on our idx, ty pair and
 			// add it to the map.
-			let (_, var) = self.synthesize_property(self.get(key), self.get(cname), *ty);
+			let (_, var) = self.synthesize_property(self.get(key), self.get(cname), *ty, false);
 
 			self.tuple_vars.insert(var_key, var);
 
@@ -998,14 +1000,14 @@ impl Db {
 
 		if left.is_concrete() {
 			let (_, var) = self.synthesize_property("left", "left",
-				*inner);
+				*inner, false);
 			// Note that the type key has to be the range type.
 			self.range_vars.insert((false, range_ty), var);
 		}
 
 		if right.is_concrete() {
 			let (_, var) = self.synthesize_property("right", "right",
-				*inner);
+				*inner, false);
 			self.range_vars.insert((true, range_ty), var);
 		}
 	}
@@ -1150,10 +1152,11 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: StrId, typ: TypId, fun: Option<FunId>, class: Option<ClassId>, initializer: Option<ExprId>, location: SourceLocation, doc_comment: Option<Vec<Token>>) -> VarId {
+	pub fn new_var(&mut self, name: StrId, typ: TypId, readonly: bool, fun: Option<FunId>, class: Option<ClassId>, initializer: Option<ExprId>, location: SourceLocation, doc_comment: Option<Vec<Token>>) -> VarId {
 		let var = Var {
 			name,
 			typ,
+			readonly,
 			fun,
 			class,
 			initializer,
