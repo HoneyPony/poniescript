@@ -1,4 +1,4 @@
-var a = new Example { }.value;
+var a: int = new Example { }.value;
 var b = 10;
 var c = 20;
 
