@@ -63,7 +63,9 @@ impl poniescript_core::expr::VisitAstImmut for InlayHintVisitor {
             self.cache.hints.push(hint);
         }
 
-        self.visit_expr(ast, db, declare.value);
+        if let Some(value) = declare.value {
+            self.visit_expr(ast, db, value);
+        }
     }
 }
 

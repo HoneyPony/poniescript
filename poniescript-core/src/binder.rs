@@ -494,7 +494,9 @@ impl<'db> Binder<'db> {
 		}
 
 		for var in &mut class_declare.vars {
-			self.visit_expr(ast, var.value);
+			if let Some(value) = var.value {
+				self.visit_expr(ast, value);
+			}
 
 			// Bind variable types
 			self.visit_var_type(var.identity);
@@ -632,7 +634,9 @@ impl<'db> Binder<'db> {
 	fn visit_stmt(&mut self, ast: &AstProxy, stmt: StmtId) {
 		match ast.stmts.get_mut(stmt).as_mut() {
 			Stmt::Declare(declare) => {
-				self.visit_expr(ast, declare.value);
+				if let Some(value) = declare.value {
+					self.visit_expr(ast, value);
+				}
 
 				// Anywhere where the parser might generate a Type::UnboundIdent,
 				// we need to try resolving that identifier.
@@ -668,7 +672,10 @@ impl<'db> Binder<'db> {
 		self.checkers.push(NameChecker::global());
 
 		for global in &mut module.globals {
-			self.visit_expr(ast, global.value);
+			// NOTE: We could panic here, but I guess we won't (?)
+			if let Some(value) = global.value {
+				self.visit_expr(ast, value);
+			}
 		}
 
 		for fun in &mut module.functions {

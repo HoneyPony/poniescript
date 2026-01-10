@@ -176,7 +176,10 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "err_if_incompat_types"),
 		("if/", "err_if_no_else_bad_type"),
 
+		("new/", "err_new_mandatory_without_type"),
+		("new/", "err_new_mandatory"),
 		("new/", "new_dotted"),
+		("new/", "new_mandatory"),
 		("new/", "new_bad_self_ints"),
 		("new/", "new_bad_self_str"),
 		("new/", "fun_call"),

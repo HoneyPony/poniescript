@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{db::*, expr::{Class, Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
 use crate::error::Error;
@@ -251,6 +251,10 @@ impl<'b> Parser<'b> {
             funs,
             var_map,
             fun_map,
+            // TODO: For imported classes, we need both the ability to mark
+            // which vars are mandatory, and ALSO a way to mark the class
+            // as unconstructible from PonieScript.
+            mandatory_vars: FxHashSet::default(),
             location,
             // TODO: Doc comments for imported functions
             doc_comment: None,

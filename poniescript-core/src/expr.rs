@@ -1,6 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use poni_arena::ArenaKey;
 use crate::{db::*, lexer::Token};
@@ -209,6 +209,12 @@ pub struct Class {
 	pub name: StrId,
 	pub vars: Vec<VarId>,
 	pub funs: Vec<FunId>,
+
+	/// Variables that new{} expressions are mandated to initialize.
+	/// 
+	/// We store these in a set so that we can easily "check them off" in the
+	/// type checker.
+	pub mandatory_vars: FxHashSet<VarId>,
 
 	pub var_map: FxHashMap<StrId, VarId>,
 	pub fun_map: FxHashMap<StrId, FunId>,

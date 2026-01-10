@@ -4,6 +4,7 @@ use std::sync::Arc;
 use rustc_hash::FxHashMap;
 
 use poni_arena::ArenaBorrowMut;
+use rustc_hash::FxHashSet;
 use crate::db::*;
 
 use crate::lexer::*;
@@ -1309,7 +1310,7 @@ impl<'b> Parser<'b> {
 		})
 	}
 
-	fn var_declaration(&mut self) -> Result<Declare> {
+	fn var_declaration(&mut self, require_initializer: bool) -> Result<Declare> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let key_var = expected!(self, Tok::Var, "'var''")?;
@@ -1325,12 +1326,30 @@ impl<'b> Parser<'b> {
 			has_explicit_type = true;
 		}
 
-		// TODO: This should be after the typ if we see a type declaration...
-		expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
+		// We are always *allowed* to have an initializer, but it is *required*
+		// for local variables.
+		let initializer = if require_initializer || self.at(Tok::Equal) {
+			expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
 
-		let initializer = self.expression()?;
+			Some(self.expression()?)
+		}
+		else {
+			None
+		};
 
-		expected!(self, Tok::Semicolon, "';' after initializer expression")?;
+		// We cannot have a variable without an initializer and without an
+		// explicit type.
+		//
+		// This could technically be relaxed with global type inference or
+		// whatever, but I think that would be bad design for my purposes.
+		if initializer.is_none() && !has_explicit_type {
+			semantic_error_with!(self, Error::simple(
+				"Variable without an initializer must have an explicit type annotation".into(),
+				self.current.location.clone()
+			));
+		}
+
+		expected!(self, Tok::Semicolon, "';' after variable declaration")?;
 
 		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
 		
@@ -1343,7 +1362,7 @@ impl<'b> Parser<'b> {
 		// TODO: For classes, support variables that don't have an initializer?
 		let identity = self.db.new_var(name.lexeme,
 			typ, None, None, true,
-			Some(initializer), name.location,
+			initializer, name.location,
 			doc_comment);
 
 		// Note that the var is added to the scope AFTER it is created, so it
@@ -1419,7 +1438,8 @@ impl<'b> Parser<'b> {
 		let location = self.start();
 		match self.peek_typ() {
 			Tok::Var => {
-				let inner = self.var_declaration()?;
+				// Var declarations in general require initializers
+				let inner = self.var_declaration(true)?;
 				Ok(self.ast.stmts.push(Stmt::Declare(inner)))
 			},
 			_ => {
@@ -1629,6 +1649,8 @@ impl<'b> Parser<'b> {
 		let mut var_map = FxHashMap::default();
 		let mut fun_map = FxHashMap::default();
 
+		let mut mandatory_vars = FxHashSet::default();
+
 		loop {
 			match self.peek_typ() {
 				Tok::Var => {
@@ -1636,8 +1658,17 @@ impl<'b> Parser<'b> {
 					let enclosing_in_member = self.in_member_initializer;
 					self.in_member_initializer = true;
 
-					let declare = self.var_declaration()?;
+					// Var declarations in classes do NOT require initializers.
+					//
+					// If a var doesn't have an initializer, it must be provided
+					// when the class is constructed.
+					let declare = self.var_declaration(false)?;
 					vars.push(declare.identity);
+					if declare.value.is_none() {
+						// Add any variable without an initializer to the mandatory
+						// var map.
+						mandatory_vars.insert(declare.identity);
+					}
 					var_map.insert(self.db.get(declare.identity).name, declare.identity);
 					declare_vars.push(declare);
 
@@ -1667,12 +1698,15 @@ impl<'b> Parser<'b> {
 
 		let name_str = name.lexeme;
 
+		log::trace!("mandatory var count: {}", mandatory_vars.len());
+
 		let identity = self.db.push(Class {
 			name: name_str,
 			vars,
 			funs,
 			var_map,
 			fun_map,
+			mandatory_vars,
 			location: name.location,
 			doc_comment,
 		});
@@ -1701,7 +1735,8 @@ impl<'b> Parser<'b> {
 			Tok::Eof => { },
 
 			Tok::Var => {
-				let global = self.var_declaration()?;
+				// Global variables require initializers.
+				let global = self.var_declaration(true)?;
 				self.db.globals.push(global.identity);
 				self.get_source().module.globals.push(global);
 			},

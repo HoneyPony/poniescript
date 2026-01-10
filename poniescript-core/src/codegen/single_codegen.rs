@@ -2295,7 +2295,17 @@ impl<'a> Codegen<'a> {
 		let indent = self.indent();
 		match ast.stmts.get(stmt) {
 			Stmt::Declare(declare) => {
-				self.compile_assign(ast, declare.identity, declare.value, into, true);
+				if let Some(value) = declare.value {
+					self.compile_assign(ast, declare.identity, value, into, true);
+				}
+				else {
+					// In general, this should be impossible. We should have
+					// reached the codegen stage without having issues here.
+					//
+					// Even in the LSP, we should never *try* to run codegen
+					// if the code is invalid.
+					panic!("ICE: Compile Stmt::Declare without a value.");
+				}
 
 				// Each variable obtains a single GC slot for itself, if relevant.
 				// These are stored in the "block scopes" vector.

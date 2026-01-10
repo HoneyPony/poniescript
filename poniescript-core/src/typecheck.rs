@@ -1765,8 +1765,47 @@ impl<'db> TypeChecker<'db> {
 					}
 				}
 
+				let Type::Class(class_id) = self.db.get(new.typ) else {
+					if PANIC_ON_BAD_NODE {
+						panic!("ICE: New expression with non-class type");
+					}
+					return Ok(new.typ);
+				};
+
+				// We create a copy of the mandatory vars set so that we can
+				// "check" them off as we go through the initializers.
+				//
+				// This might be slightly less performant than some other
+				// strategies but I believe it should be OK.
+				let mut checklist = self.db.get(*class_id).mandatory_vars.clone();
+
 				for init in &mut new.initializers {
 					self.check_assign(ast, &init.location, init.var, &mut init.value, false)?;
+					checklist.remove(&init.var);
+				}
+
+				log::trace!("new expression checklist len: {}", checklist.len());
+				if !checklist.is_empty() {
+					let mut iter = checklist.iter();
+					let mut error = Error::simple(
+						format!("'new' expression is missing initializer for mandatory variable '{}'",
+							// We know the checklist is nonempty, so we can
+							// definitely extract one var.
+							self.db.repr_var(*iter.next().unwrap())),
+						new.location.clone(),
+					);
+
+					// Now attach the rest of the uninitialized vars as notes.
+					for var in iter {
+						error = error.add_note(format!("also missing '{}'", self.db.repr_var(*var)), None);
+					}
+
+					self.db.report_error(error);
+					// A little awkward that we have to remember to put this.
+					self.had_error = true;
+					
+					// I don't actually think there's any reason to return Err here,
+					// as this error can't cause additional type errors.
 				}
 
 				new.typ
@@ -2016,7 +2055,7 @@ impl<'db> TypeChecker<'db> {
 						let sub = Expr::push_binary(ast, for_.location.clone(),
 							Tok::Minus, initializer, one, self.db.types.int);
 						let declare = Stmt::push_declare(ast, for_.location.clone(),
-							for_.ident.clone(), for_.identity, sub, for_.has_explicit_type);
+							for_.ident.clone(), for_.identity, Some(sub), for_.has_explicit_type);
 						
 						let read = Expr::push_variable(ast, for_.location.clone(),
 							for_.identity);
@@ -2157,7 +2196,15 @@ impl<'db> TypeChecker<'db> {
 	}
 
 	fn check_declare(&mut self, ast: &AstProxy, declare: &mut Declare) -> Result<TypId> {
-		self.check_assign(ast, &declare.location, declare.identity, &mut declare.value, true)
+		if let Some(value) = declare.value.as_mut() {
+			self.check_assign(ast, &declare.location, declare.identity, value, true)
+		}
+		else {
+			// In this case, we shiould (?) have had an explicit type from the
+			// parser, so the variable is good. There is also no RHS to typecheck.
+			// So, just return that value.
+			Ok(self.db.get_var_type(declare.identity))
+		}
 	}
 
 	fn check_fun_declare(&mut self, ast: &AstProxy, fun: &mut FunDeclare) -> Result<()> {
