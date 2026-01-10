@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use poniescript_core::lexer::Token;
 use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
@@ -15,7 +16,7 @@ struct HoverVisitor<'map> {
     id_to_url_map: &'map HashMap<SourceId, Url>
 }
 
-fn build_hover(code: &str, doc: Option<&str>, range: Option<Range>) -> Hover {
+fn build_hover(code: &str, doc: Option<String>, range: Option<Range>) -> Hover {
     match doc {
         Some(doc) => {
             Hover {
@@ -28,7 +29,7 @@ fn build_hover(code: &str, doc: Option<&str>, range: Option<Range>) -> Hover {
                         // Provide a horizontal rule before the documentation.
                         MarkedString::String("---".into()),
                         // This is markdown.
-                        MarkedString::String(doc.to_string())
+                        MarkedString::String(doc)
                     ]
                 ),
                 range
@@ -48,7 +49,22 @@ fn build_hover(code: &str, doc: Option<&str>, range: Option<Range>) -> Hover {
 }
 
 impl<'map> HoverVisitor<'map> {
-    fn build_hover(&mut self, ast: &Ast, title: &str, doc: Option<&str>, range: Option<&SourceLocation>) {
+    /// Converts a vector of tokens into a String.
+    /// 
+    /// Not the most efficient, but that's OK.
+    fn inefficient_doc(db: &Db, tokens: &Option<Vec<Token>>) -> Option<String> {
+        tokens.as_ref().map(|tokens| {
+            let mut doc = String::new();
+
+            for tok in tokens {
+                doc.push_str(db.get(tok.lexeme));
+            }
+
+            doc
+        })
+    }
+
+    fn build_hover(&mut self, ast: &Ast, title: &str, doc: Option<String>, range: Option<&SourceLocation>) {
         let range = range.map(|r| convert_range(ast, r));
         self.response = Some(build_hover(title, doc, range));
     }
@@ -59,7 +75,7 @@ impl<'map> HoverVisitor<'map> {
         let mut class_sig = String::new();
         inf_write!(class_sig, "class {}", db.get(class.name));
 
-        self.build_hover(ast, &class_sig, None, range);
+        self.build_hover(ast, &class_sig, Self::inefficient_doc(db, &class.doc_comment), range);
     }
 
     fn hover_fun(&mut self, ast: &Ast, db: &Db, fun: FunId, range: Option<&SourceLocation>) {
@@ -91,7 +107,7 @@ impl<'map> HoverVisitor<'map> {
             inf_write!(fun_sig, " -> {}", db.repr_type(fun.return_type));
         }
 
-        self.build_hover(ast, &fun_sig, None, range);
+        self.build_hover(ast, &fun_sig, Self::inefficient_doc(db, &fun.doc_comment), range);
     }
 
     fn hover_var(&mut self, ast: &Ast, db: &Db, var: VarId, range: Option<&SourceLocation>) {
@@ -100,7 +116,7 @@ impl<'map> HoverVisitor<'map> {
         let mut var_sig = String::new();
         inf_write!(var_sig, "var {}: {}", db.get(var.name), db.repr_type(var.typ));
 
-        self.build_hover(ast, &var_sig, None, range);
+        self.build_hover(ast, &var_sig, Self::inefficient_doc(db, &var.doc_comment), range);
     }
 }
 
@@ -175,7 +191,7 @@ intersperse print() with existing logic, such as:
 if print(a > b) {
     do_high_a_logic();
 }
-```"), Some(&it.location)); // TODO: Store only the print keyword location
+```".into()), Some(&it.location)); // TODO: Store only the print keyword location
     }
 }
 
