@@ -6,7 +6,7 @@ var c = 10;
 // and a class depend on a global.
 
 class Example {
-    var value = c + d;
+    var value: int = c + d;
 }
 
 var d = 15;
