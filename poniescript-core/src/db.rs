@@ -622,7 +622,6 @@ impl Db {
 			typ,
 			fun: None,
 			class: None,
-			init: false,
 			initializer: None,
 			location: self.synthetic(),
 			doc_comment: None,
@@ -1151,13 +1150,12 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: StrId, typ: TypId, fun: Option<FunId>, class: Option<ClassId>, init: bool, initializer: Option<ExprId>, location: SourceLocation, doc_comment: Option<Vec<Token>>) -> VarId {
+	pub fn new_var(&mut self, name: StrId, typ: TypId, fun: Option<FunId>, class: Option<ClassId>, initializer: Option<ExprId>, location: SourceLocation, doc_comment: Option<Vec<Token>>) -> VarId {
 		let var = Var {
 			name,
 			typ,
 			fun,
 			class,
-			init,
 			initializer,
 			location,
 			doc_comment,

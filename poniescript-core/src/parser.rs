@@ -689,7 +689,7 @@ impl<'b> Parser<'b> {
 		// class.
 		//
 		// TODO: For classes, support variables that don't have an initializer?
-		let identity = self.db.new_var(name.lexeme, typ, None, None, true, None, name.location, 
+		let identity = self.db.new_var(name.lexeme, typ, None, None, None, name.location, 
 			// Currently, the for loop variable can't have a doc comment?
 			// This could be changed.
 			None);
@@ -1361,7 +1361,7 @@ impl<'b> Parser<'b> {
 		//
 		// TODO: For classes, support variables that don't have an initializer?
 		let identity = self.db.new_var(name.lexeme,
-			typ, None, None, true,
+			typ, None, None,
 			initializer, name.location,
 			doc_comment);
 
@@ -1480,7 +1480,7 @@ impl<'b> Parser<'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name.lexeme, typ, None, None, false, None,
+		let identity = self.db.new_var(name.lexeme, typ, None, None, None,
 			name.location,
 			// Currenlty, doc comments are not supported for parameters.
 			None);
