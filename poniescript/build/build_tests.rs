@@ -319,6 +319,7 @@ pub fn generate(tests_file: &mut File) {
 		("promote/", "tuples"),
 		("promote/", "tuple_matrix"),
 		("promote/", "weird_tuple"),
+		("promote/", "tuple_of_optional"),
 	
 		("variable/", "assign_numbers"),
 		("variable/", "assign_to_bottom_binop"),
