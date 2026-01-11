@@ -506,6 +506,17 @@ impl<'db> TypeChecker<'db> {
 				// Not allowed.
 				return true;
 			}
+			(Type::Tuple(to), Type::Tuple(from)) => {
+				if to.len() != from.len() { return false; }
+
+				for i in 0..to.len() {
+					if self.promote_is_unsynthesizable(to[i], from[i]) {
+						return true;
+					}
+				}
+
+				return false;
+			}
 			_ => {
 				// Everything else is allowed, I guess.
 				return false;
