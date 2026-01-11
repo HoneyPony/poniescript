@@ -471,6 +471,47 @@ impl<'db> TypeChecker<'db> {
 		self.really_do_promote_expr(ast, expr_id, promote_to);
 	}
 
+	/// Computes whether a given promotion is unsynthesizable.
+	/// 
+	/// This applies to something like assign an Array of a particular type
+	/// to an Array of an incompatible one, or an Array[int] to a DynArray[int].
+	/// 
+	/// In these cases, we cannot actually synthesize the promotion, because it  
+	/// would implicitly copy, which is not what we want.
+	/// 
+	/// This might not be the best way to implement this -- maybe we should
+	/// instead change how we determine which expressions are promotable.
+	/// But this should work for now.
+	fn promote_is_unsynthesizable(&self, assign_to: TypId, assign_from: TypId) -> bool {
+		// These are always valid.
+		if assign_to == assign_from { return false; }
+
+		let to = self.db.get(assign_to);
+		let from = self.db.get(assign_from);
+		
+		match (to, from) {
+			(Type::ArrayOf(_), Type::ArrayOf(_)) => {
+				// Not allowed.
+				//
+				// Note that in the future, if we have something like
+				// ReadonlyArray[Animal], an array of Horse would in
+				// theory be valid to assign to this.
+				return true;
+			}
+			(Type::DynArrayOf(..), Type::DynArrayOf(..)) => {
+				// Not allowed.
+				return true;
+			}
+			(Type::DynArrayOf(..), Type::ArrayOf(_)) => {
+				// Not allowed.
+				return true;
+			}
+			_ => {
+				// Everything else is allowed, I guess.
+				return false;
+			}
+		}
+	}
 	
 	/// DO NOT CALL THIS FUNCTION UNLESS YOU ARE do_promote_expr OR promote_from_unassigned.
 	/// 
@@ -497,10 +538,19 @@ impl<'db> TypeChecker<'db> {
 		// If the child node's type does NOT equal the promoted type, we synthesize
 		// a runtime promotion.
 		if ast.get_expr(*expr_id).typ(ast, &self.db) != promote_to {
+			let promote_from = ast.get_expr(*expr_id).typ(ast, &self.db);
+
 			log::trace!("synthesizing Promote: {:?}: {} -> {}",
 				ast.get_expr(*expr_id).as_ref(),
-				self.db.repr_type(ast.get_expr(*expr_id).typ(ast, &self.db)),
+				self.db.repr_type(promote_from),
 				self.db.repr_type(promote_to));
+
+			if self.promote_is_unsynthesizable(promote_to, promote_from) {
+				self.had_error = true;
+				let msg = format!("Invalid promotion from {} to {}.",
+					self.db.repr_type(promote_from), self.db.repr_type(promote_to));
+				self.db.report_error(Error::simple(msg, expr_id.location(ast)));
+			}
 
 			let id = ast.exprs.push(Expr::Promote(Promote {
 				location: ast.get_expr(*expr_id).location().clone(),
