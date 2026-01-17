@@ -1,0 +1,10 @@
+class Example {
+    var x: int = 20;
+    var y: int;
+}
+
+fun init() {
+    //? 'new' expression is missing initializer for mandatory variable 'y'
+    var e = new Example { x: 80 };
+    print(e.x, " ", e.y);
+}

@@ -2,6 +2,12 @@ use std::{cell::UnsafeCell, marker::PhantomData, num::{NonZeroU32, NonZeroUsize}
 
 const DEFAULT_CAPACITY: usize = 256;
 
+/// Trait for keys for Arenas.
+/// 
+/// These are the core methods necessary to use a particular opaque type as
+/// a key for the various Arena types. However, for the most part you do not need
+/// to implement ArenaKey manually. Instead, use [`define_arena_key!`] for defining
+/// your opaque key types.
 pub trait ArenaKey: Copy {
     fn to_nonzero_usize(self) -> NonZeroUsize;
     unsafe fn from_nonzero_u32(id: NonZeroU32) -> Self;
@@ -13,30 +19,44 @@ pub trait ArenaKey: Copy {
 
     #[inline(always)]
     unsafe fn from_index(index: usize) -> Self {
-        #[cfg(debug_assertions)]
-        {
-            Self::from_nonzero_u32(NonZeroU32::new(index as u32 + 1).unwrap())
-        }
+        unsafe {
+            #[cfg(debug_assertions)]
+            {
+                Self::from_nonzero_u32(NonZeroU32::new(index as u32 + 1).unwrap())
+            }
 
-        #[cfg(not(debug_assertions))]
-        {
-            Self::from_nonzero_u32(NonZeroU32::new_unchecked(index as u32 + 1))
+            #[cfg(not(debug_assertions))]
+            {
+                Self::from_nonzero_u32(NonZeroU32::new_unchecked(index as u32 + 1))
+            }
         }
     }
 
     #[inline(always)]
     unsafe fn invalid() -> Self {
-        Self::from_index(0)
+        unsafe { Self::from_index(0) }
     }
 }
 
+/// Defines a new key type for an Arena.
+/// 
+/// The idea here is to associate a new opaque type with each kind of Arena.
+/// For example, if you have an Arena of Exprs and an Arena of Stmts, you may
+/// want an ExprKey/ExprId and a StmtKey/StmtId.
+/// 
+/// In this case, you could `define_arena_key!(ExprId);` and then later construct
+/// a new arena such as `let arena: Arena<Expr, ExprId> = ...;`
+/// 
+/// Note that Arena keys are currently not associated in any way with the Arena
+/// instance they belong to. This may change in the future.
+#[macro_export]
 macro_rules! define_arena_key {
     ($key_name:ident) => {
         #[derive(Clone, Copy, PartialEq, Eq, Hash)]
         pub struct $key_name(std::num::NonZeroU32);
 
         // TODO: Is this the best fully qualified name for this trait?
-        impl crate::arena::ArenaKey for $key_name {
+        impl $crate::ArenaKey for $key_name {
             #[inline(always)]
             fn to_nonzero_usize(self) -> std::num::NonZeroUsize {
                 // Safety: Our self.0 is always nonzero, so this should always also
@@ -49,9 +69,21 @@ macro_rules! define_arena_key {
                 $key_name(id)
             }
         }
+
+        impl $key_name {
+            #[inline(always)]
+            pub fn to_nonzero_u32(&self) -> std::num::NonZeroU32 {
+                self.0
+            }
+        }
     }
 }
 
+/// The simplest Arena type.
+/// 
+/// This Arena is essentially a `Vec<Ty>`, indexed by the `Key` type. The main
+/// value it provides is to enable the Key types to be opaque, rather than 
+/// normal `usize`s, and to enable conversion into an ArenaCell.
 pub struct Arena<Ty, Key: ArenaKey> {
     objects: Vec<Ty>,
     phantom: PhantomData<Key>
@@ -137,6 +169,21 @@ impl<Ty, Key: ArenaKey> Arena<Ty, Key> {
     }
 }
 
+/// This type is essentially a Vec<RefCell<T>>, except that the borrow checking
+/// for the inner T happens entirely in a side table, rather than per-item.
+/// 
+/// There is also an additional caveat that, as of this writing, ArenaCell
+/// is *intentionally* unsound. In particular, the runtime borrow-checking rules
+/// (a la RefCell) are only enabled when `debug_assertions` are enabled. In
+/// release mode, the borrow checking rules are entirely elided.
+/// 
+/// The motivation for this is that the target use-case of ArenaCell, namely
+/// compiler data structures, does not really enable 'accidentally' forgetting
+/// to drop a borrow. If you have a half-decent test suite, and you have an
+/// accidental double-borrow, you WILL see the panic in debug mode, and you
+/// will be able to trivially fix it.
+/// 
+/// In the future, there may be some 
 pub struct ArenaCell<Ty, Key: ArenaKey> {
     objects: UnsafeCell<Vec<Ty>>,
 

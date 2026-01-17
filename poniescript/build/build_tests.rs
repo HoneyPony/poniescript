@@ -176,7 +176,10 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "err_if_incompat_types"),
 		("if/", "err_if_no_else_bad_type"),
 
+		("new/", "err_new_mandatory_without_type"),
+		("new/", "err_new_mandatory"),
 		("new/", "new_dotted"),
+		("new/", "new_mandatory"),
 		("new/", "new_bad_self_ints"),
 		("new/", "new_bad_self_str"),
 		("new/", "fun_call"),
@@ -304,7 +307,11 @@ pub fn generate(tests_file: &mut File) {
 		("set/", "set_bottom_etc"),
 		("set/", "set_chain"),
 
-		("promote/", "array_assign"),
+		("promote/", "err_array_assign"),
+		("promote/", "err_array_assign_in_tuple"),
+		("promote/", "err_array_lit"),
+		("promote/", "err_dynarray_assign"),
+		("promote/", "err_dynarray_from_array"),
 		("promote/", "blocks_float_print"),
 		("promote/", "blocks_float_var"),
 		("promote/", "blocks_int_print"),
@@ -313,6 +320,7 @@ pub fn generate(tests_file: &mut File) {
 		("promote/", "tuples"),
 		("promote/", "tuple_matrix"),
 		("promote/", "weird_tuple"),
+		("promote/", "tuple_of_optional"),
 	
 		("variable/", "assign_numbers"),
 		("variable/", "assign_to_bottom_binop"),
@@ -411,6 +419,8 @@ pub fn generate(tests_file: &mut File) {
 		("range/", "basic_parse_properties"),
 		("range/", "basic_var"),
 		("range/", "two_main_types"),
+
+		("readonly/", "readonly_properties"),
 
 		("for/", "correct_scope"),
 		("for/", "correct_scope2"),

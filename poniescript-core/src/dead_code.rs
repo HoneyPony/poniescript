@@ -3,7 +3,7 @@ use crate::{db::{Ast, AstProxy, Db}, expr::*, module::Module};
 use crate::db::ExprId;
 use crate::db::StmtId;
 
-use crate::arena::IndexCell;
+use poni_arena::IndexCell;
 
 struct DeadCodeElim<'db> {
 	db: &'db mut Db,
@@ -396,13 +396,15 @@ impl<'db> DeadCodeElim<'db> {
                 // Which is valid.
                 // In these cases, we do have to propogate whatever value
                 // we found inside the assignment upwards.
-                self.elim_expr(ast, &mut declare.value);
+                if let Some(value) = declare.value.as_mut() {
+                    self.elim_expr(ast, value);
 
-                // If the eliminated expression is a Bottom, then we can replace
-                // ourselves with it.
-                if declare.value.typ(ast, self.db) == self.db.types.bottom {
-                    *stmt = Stmt::mk_expression(declare.location.clone(), declare.value);
-                    return true
+                    // If the eliminated expression is a Bottom, then we can replace
+                    // ourselves with it.
+                    if value.typ(ast, self.db) == self.db.types.bottom {
+                        *stmt = Stmt::mk_expression(declare.location.clone(), *value);
+                        return true
+                    }
                 }
 
                 false

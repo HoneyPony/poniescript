@@ -1,0 +1,8 @@
+class Horse {}
+
+fun init() {
+    var horses = (new Horse{}, new Horse{});
+    var x: (Horse?, Horse?) = horses;
+
+    print(x.0.is_some(), " ", x.1.is_some()); //! true true
+}

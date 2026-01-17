@@ -5,11 +5,11 @@ members = [
     "poniescript-core",
     "poniescript-lsp",
     "poniescript-gc",
-    "poniescript-rt",
     "poni-build",
     "poni-build-cli",
     "poni-doc",
-    "poni-doc-cli"
+    "poni-doc-cli",
+    "poni-arena"
 ]
 
 [workspace.dependencies]

@@ -6,7 +6,7 @@ mod hover;
 use std::path::PathBuf;
 
 use clap::Parser;
-use poniescript_core::arena::IndexCell;
+use poni_arena::IndexCell;
 use tokio::sync::Mutex;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;

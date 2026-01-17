@@ -1,14 +1,14 @@
 include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::arena::ArenaKey;
+use poni_arena::ArenaKey;
 use crate::{db::*, lexer::Token};
 use crate::typ::RangeEnd;
 use crate::source::SourceLocation;
 use crate::lexer::Tok;
 
-use crate::arena::IndexCell;
+use poni_arena::IndexCell;
 
 pub struct NewInitElem {
 	pub var: VarId,
@@ -158,13 +158,13 @@ pub struct Var {
 	pub name: StrId,
 	pub typ: TypId,
 
+	/// Stores whether this variable is readonly.
+	pub readonly: bool,
+
 	/// If this variable is a member of a class, this stores the class id.
 	pub class: Option<ClassId>,
 	/// If this variable is a function parameter, this stores the function id.
 	pub fun: Option<FunId>,
-	/// For class members, stores whether this variable was initialized.
-	/// (TODO: Is there a way to not have this field on non-class variables?)
-	pub init: bool,
 
 	/// The initializer for this variable.
 	pub initializer: Option<ExprId>,
@@ -209,6 +209,12 @@ pub struct Class {
 	pub name: StrId,
 	pub vars: Vec<VarId>,
 	pub funs: Vec<FunId>,
+
+	/// Variables that new{} expressions are mandated to initialize.
+	/// 
+	/// We store these in a set so that we can easily "check them off" in the
+	/// type checker.
+	pub mandatory_vars: FxHashSet<VarId>,
 
 	pub var_map: FxHashMap<StrId, VarId>,
 	pub fun_map: FxHashMap<StrId, FunId>,

@@ -1,5 +1,4 @@
 #[macro_use]
-pub mod arena;
 pub mod builtins;
 pub mod db;
 pub mod expr;
@@ -85,7 +84,7 @@ pub struct Args {
 mod tests {
     use std::path::Path;
 
-    use crate::arena::IndexCell;
+    use poni_arena::IndexCell;
 
 	#[test]
 	fn test_line_column() {

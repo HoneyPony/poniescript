@@ -1,9 +1,11 @@
 use std::path::Path;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{arena::IndexCell, db::*, expr::{Class, Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
+use crate::{db::*, expr::{Class, Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
 use crate::error::Error;
+
+use poni_arena::IndexCell;
 
 pub struct Parser<'b> {
 	lexer: Lexer,
@@ -249,6 +251,10 @@ impl<'b> Parser<'b> {
             funs,
             var_map,
             fun_map,
+            // TODO: For imported classes, we need both the ability to mark
+            // which vars are mandatory, and ALSO a way to mark the class
+            // as unconstructible from PonieScript.
+            mandatory_vars: FxHashSet::default(),
             location,
             // TODO: Doc comments for imported functions
             doc_comment: None,
@@ -289,7 +295,7 @@ impl<'b> Parser<'b> {
             // We could possibly skip variable names, but for now it's easy
             // enough to require them.
             let var_cname = expected!(self, GlueTok::Identifier, "Parameter name")?;
-            let identity = self.db.new_var(var_cname.lexeme, c_type, None, None, false, None,
+            let identity = self.db.new_var(var_cname.lexeme, c_type, false, None, None, None,
 			    self.last_location.clone(),
                 // No doc comments for function params for now
                 None);
@@ -406,7 +412,7 @@ impl<'b> Parser<'b> {
             None => c_name.lexeme
         };
 
-        let var = self.db.new_var(var_name, c_type, None, None, false, None, self.end(location),
+        let var = self.db.new_var(var_name, c_type, false, None, None, None, self.end(location),
             // TOOD: Doc comments, at least for classes.
             None);
         self.db.know_var_cname(var, self.db.get(c_name.lexeme));

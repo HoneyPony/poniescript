@@ -5,6 +5,8 @@ fun init() {
 
     // Should fail because we can't promote an actual array. We can only
     // promote array literals (i.e. compile-time instead of Expr::Promote)
+
+    //? Invalid promotion from Array[int] to Array[float].
     arr = second;
 
     print(arr[0]);

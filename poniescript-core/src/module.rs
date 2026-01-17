@@ -1,5 +1,5 @@
 
-use crate::arena::IndexCell;
+use poni_arena::IndexCell;
 use crate::db::*;
 use crate::expr::{Declare, FunDeclare, ClassDeclare};
 use crate::parser::Parser;

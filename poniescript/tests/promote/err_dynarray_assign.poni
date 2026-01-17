@@ -1,0 +1,15 @@
+fun init() {
+    var arr: DynArray[float] = [1.0, 2.0, 3.0];
+
+    var second: DynArray[int] = [4, 5, 6];
+
+    // Should fail because we can't promote an actual array. We can only
+    // promote array literals (i.e. compile-time instead of Expr::Promote)
+
+    //? Invalid promotion from DynArray[int] to DynArray[float].
+    arr = second;
+
+    print(arr[0]);
+    print(arr[1]);
+    print(arr[2]);
+}

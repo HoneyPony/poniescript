@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
 
-use crate::arena::ArenaBorrowMut;
+use poni_arena::ArenaBorrowMut;
+use rustc_hash::FxHashSet;
 use crate::db::*;
 
 use crate::lexer::*;
@@ -15,7 +16,7 @@ use crate::source::SourceLocation;
 use crate::typ::RangeEnd;
 use crate::typ::Type;
 
-use crate::arena::IndexCell;
+use poni_arena::IndexCell;
 
 struct Scope {
 	map: FxHashMap<StrId, ScopeEntry>,
@@ -97,6 +98,11 @@ pub struct Parser<'b> {
 	scopes: Vec<Scope>,
 	scope_name: String,
 	global_scope: Scope,
+
+	/// Tracks whether we are currently in a member initializer. If so, we
+	/// forbid the 'self' keyword as a straightforward way to keep things
+	/// more correct.
+	in_member_initializer: bool,
 
 	cur_doc_comment: Vec<Token>,
 	prev_doc_comment: Vec<Token>,
@@ -223,6 +229,8 @@ impl<'b> Parser<'b> {
 
 			cur_doc_comment: Vec::new(),
 			prev_doc_comment: Vec::new(),
+
+			in_member_initializer: false,
 
 			current,
 			last_location: SourceLocation {
@@ -680,8 +688,8 @@ impl<'b> Parser<'b> {
 		// know what it is -- we wire it back in once we're done parsing a 
 		// class.
 		//
-		// TODO: For classes, support variables that don't have an initializer?
-		let identity = self.db.new_var(name.lexeme, typ, None, None, true, None, name.location, 
+		// TODO: Readonly variables..?
+		let identity = self.db.new_var(name.lexeme, typ, false, None, None, None, name.location, 
 			// Currently, the for loop variable can't have a doc comment?
 			// This could be changed.
 			None);
@@ -955,6 +963,13 @@ impl<'b> Parser<'b> {
 			}
 
 			Tok::KeySelf => {
+				if self.in_member_initializer {
+					// TODO: Come up with good terminology for how this works.
+					semantic_error_with!(self,
+						Error::simple("Cannot use 'self' in direct member initializer.".into(),
+						self.current.location.clone())
+					);
+				}
 				let location = self.advance()?.location;
 				Expr::put_selfval_ok(self.ast, location, self.db.types.unassigned)
 			}
@@ -1295,7 +1310,7 @@ impl<'b> Parser<'b> {
 		})
 	}
 
-	fn var_declaration(&mut self) -> Result<Declare> {
+	fn var_declaration(&mut self, require_initializer: bool) -> Result<Declare> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let key_var = expected!(self, Tok::Var, "'var''")?;
@@ -1311,12 +1326,30 @@ impl<'b> Parser<'b> {
 			has_explicit_type = true;
 		}
 
-		// TODO: This should be after the typ if we see a type declaration...
-		expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
+		// We are always *allowed* to have an initializer, but it is *required*
+		// for local variables.
+		let initializer = if require_initializer || self.at(Tok::Equal) {
+			expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
 
-		let initializer = self.expression()?;
+			Some(self.expression()?)
+		}
+		else {
+			None
+		};
 
-		expected!(self, Tok::Semicolon, "';' after initializer expression")?;
+		// We cannot have a variable without an initializer and without an
+		// explicit type.
+		//
+		// This could technically be relaxed with global type inference or
+		// whatever, but I think that would be bad design for my purposes.
+		if initializer.is_none() && !has_explicit_type {
+			semantic_error_with!(self, Error::simple(
+				"Variable without an initializer must have an explicit type annotation".into(),
+				self.current.location.clone()
+			));
+		}
+
+		expected!(self, Tok::Semicolon, "';' after variable declaration")?;
 
 		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
 		
@@ -1326,10 +1359,10 @@ impl<'b> Parser<'b> {
 		// know what it is -- we wire it back in once we're done parsing a 
 		// class.
 		//
-		// TODO: For classes, support variables that don't have an initializer?
+		// TODO: Readonly variables...?
 		let identity = self.db.new_var(name.lexeme,
-			typ, None, None, true,
-			Some(initializer), name.location,
+			typ, false, None, None,
+			initializer, name.location,
 			doc_comment);
 
 		// Note that the var is added to the scope AFTER it is created, so it
@@ -1405,7 +1438,8 @@ impl<'b> Parser<'b> {
 		let location = self.start();
 		match self.peek_typ() {
 			Tok::Var => {
-				let inner = self.var_declaration()?;
+				// Var declarations in general require initializers
+				let inner = self.var_declaration(true)?;
 				Ok(self.ast.stmts.push(Stmt::Declare(inner)))
 			},
 			_ => {
@@ -1446,7 +1480,7 @@ impl<'b> Parser<'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name.lexeme, typ, None, None, false, None,
+		let identity = self.db.new_var(name.lexeme, typ, false, None, None, None,
 			name.location,
 			// Currenlty, doc comments are not supported for parameters.
 			None);
@@ -1615,13 +1649,30 @@ impl<'b> Parser<'b> {
 		let mut var_map = FxHashMap::default();
 		let mut fun_map = FxHashMap::default();
 
+		let mut mandatory_vars = FxHashSet::default();
+
 		loop {
 			match self.peek_typ() {
 				Tok::Var => {
-					let declare = self.var_declaration()?;
+					// Disallow 'self' in member initializers.
+					let enclosing_in_member = self.in_member_initializer;
+					self.in_member_initializer = true;
+
+					// Var declarations in classes do NOT require initializers.
+					//
+					// If a var doesn't have an initializer, it must be provided
+					// when the class is constructed.
+					let declare = self.var_declaration(false)?;
 					vars.push(declare.identity);
+					if declare.value.is_none() {
+						// Add any variable without an initializer to the mandatory
+						// var map.
+						mandatory_vars.insert(declare.identity);
+					}
 					var_map.insert(self.db.get(declare.identity).name, declare.identity);
 					declare_vars.push(declare);
+
+					self.in_member_initializer = enclosing_in_member;
 				},
 				Tok::Fun => {
 					let fun = self.fun_declaration(true)?;
@@ -1647,12 +1698,15 @@ impl<'b> Parser<'b> {
 
 		let name_str = name.lexeme;
 
+		log::trace!("mandatory var count: {}", mandatory_vars.len());
+
 		let identity = self.db.push(Class {
 			name: name_str,
 			vars,
 			funs,
 			var_map,
 			fun_map,
+			mandatory_vars,
 			location: name.location,
 			doc_comment,
 		});
@@ -1681,7 +1735,8 @@ impl<'b> Parser<'b> {
 			Tok::Eof => { },
 
 			Tok::Var => {
-				let global = self.var_declaration()?;
+				// Global variables require initializers.
+				let global = self.var_declaration(true)?;
 				self.db.globals.push(global.identity);
 				self.get_source().module.globals.push(global);
 			},

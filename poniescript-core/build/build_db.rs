@@ -48,7 +48,7 @@ fn generate_impl(file: &mut File, pairs: &Vec<(&str, &str)>) {
 	let mut init = String::new();
 	let mut struct_ = String::new();
 	let mut db_impl = String::new();
-	writeln!(file, "use crate::arena::Arena;").unwrap();
+	writeln!(file, "use poni_arena::Arena;").unwrap();
 	writeln!(file, "pub type IdType = {TY};").unwrap();
 	writeln!(init, "impl DbArenas {{").unwrap();
 	writeln!(init, "\tpub fn new() -> Self {{").unwrap();

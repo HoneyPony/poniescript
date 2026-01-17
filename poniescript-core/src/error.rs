@@ -2,7 +2,7 @@
 // gives us a warning, which isn't very helpful.
 #![allow(unexpected_cfgs)]
 
-use crate::arena::IndexCell;
+use poni_arena::IndexCell;
 use crate::source::SourceLocation;
 use crate::db::*;
 
