@@ -1,7 +1,7 @@
 use macroquad::prelude::*;
 use notify::{Event, RecursiveMode, Watcher};
 
-use std::{ffi::c_void, fs, path::Path, process::Command, ptr, sync::mpsc};
+use std::{ffi::{OsStr, c_void}, fs, path::Path, process::Command, ptr, sync::mpsc};
 use poniescript_gc::{GcContext, gc_spawn};
 
 // unsafe extern "C" {
@@ -84,8 +84,44 @@ async fn main() {
         if let Ok(event) = rx.try_recv() {
             if let Ok(event) = event {
                 if !event.kind.is_access() {
-                    // We have a filesystem event. Run the rebuild command.
-                    rebuild(&dynlib_name);
+                    // let mut any_is_non_so = false;
+                    // for path in event.paths {
+                    //     eprintln!("path = {}", path.display());
+                    //     if path.extension() != Some(OsStr::new("so")) {
+                    //         any_is_non_so = true;
+                    //         break;
+                    //     }
+                    // }
+                    // if any_is_non_so {
+                    //     // We have a filesystem event. Run the rebuild command.
+                    //     rebuild(&dynlib_name);
+                    // }
+
+                    // It's not sufficient to just check whether the path is
+                    // a non-.so, because all sorts of files end up being written
+                    // when we compile.
+                    //
+                    // Instead, I guess let's just filter down to paths we care
+                    // about. This is anything ending in .poni, .toml, or maybe
+                    // also asset files; maybe we could keep track of every asset
+                    // path we've touched and check those here.
+
+                    let mut we_care = false;
+                    for path in event.paths {
+                        let interesting = match path.extension().and_then(|e| e.to_str()) {
+                            Some("poni") => true,
+                            Some("toml") => true,
+                            _ => false,
+                        };
+
+                        if interesting {
+                            we_care = true;
+                        }
+                    }
+
+                    if we_care {
+                        rebuild(&dynlib_name);
+                    }
                 }
             }
         }
