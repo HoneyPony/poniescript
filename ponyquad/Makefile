@@ -1,6 +1,6 @@
 CC=clang
 #GAMELIB=../target/debug/ponygame_mini
-GAMERUST=../target/debug/ponygame-mini
+GAMERUST=../target/debug/ponyquad
 
 # game: pony.o $(GAMELIB)
 # 	$(CC) -fuse-ld=mold $^ -o $@ -lm
@@ -25,4 +25,4 @@ pony.o: pony.c
 	$(CC) -g -c $^ -o $@ -I../poniescript
 	
 pony.c: test.poni
-	poniescript -e test.poni -i ponygame.h -o $@
+	poniescript -e test.poni -i ponyquad.h -o $@
