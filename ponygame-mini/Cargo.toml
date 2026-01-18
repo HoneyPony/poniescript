@@ -1,0 +1,14 @@
+[package]
+name = "ponygame-mini"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+# Note: This might have to be cdylib, actually, for wasm. Unclear.
+# Also should be 'lib' if we want to link it with other Rust stuff...?
+crate-type = ["staticlib"]
+
+[dependencies]
+macroquad = "0.4.14"
+poniescript-gc = { version = "0.1.0", path = "../poniescript-gc" }
+poniescript-rt = { version = "0.1.0", path = "../poniescript-rt" }

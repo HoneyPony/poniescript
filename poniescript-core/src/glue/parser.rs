@@ -380,8 +380,17 @@ impl<'b> Parser<'b> {
         if id.lexeme == self.db.put_str("ps_bool") {
             return Ok(self.db.types.bool)
         }
+        if id.lexeme == self.db.put_str("void") {
+            return Ok(self.db.types.void)
+        }
+        if id.lexeme == self.db.put_str("ps_vec2") { return Ok(self.db.types.vec2); }
+        if id.lexeme == self.db.put_str("ps_vec3") { return Ok(self.db.types.vec3); }
+        if id.lexeme == self.db.put_str("ps_vec4") { return Ok(self.db.types.vec4); }
+        if id.lexeme == self.db.put_str("ps_vec2i") { return Ok(self.db.types.vec2i); }
+        if id.lexeme == self.db.put_str("ps_vec3i") { return Ok(self.db.types.vec3i); }
+        if id.lexeme == self.db.put_str("ps_vec4i") { return Ok(self.db.types.vec4i); }
         if id.lexeme == self.db.put_str("ps_strbuf") {
-            expected!(self, GlueTok::Star, "'*' after ps_strbuf");
+            expected!(self, GlueTok::Star, "'*' after ps_strbuf")?;
             return Ok(self.db.types.str_buf);
         }
 

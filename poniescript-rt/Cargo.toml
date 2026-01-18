@@ -6,7 +6,7 @@ edition = "2021"
 [lib]
 # Note: This might have to be cdylib, actually, for wasm. Unclear.
 # Also should be 'lib' if we want to link it with other Rust stuff...?
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 poniescript-gc = { path = "../poniescript-gc" }

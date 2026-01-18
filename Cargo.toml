@@ -10,7 +10,7 @@ members = [
     "poni-doc",
     "poni-doc-cli",
     "poni-arena"
-]
+, "ponygame-mini"]
 
 [workspace.dependencies]
 clap = { version = "4.5.8", features = ["derive"] }
