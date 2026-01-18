@@ -21,7 +21,7 @@ game-script.so: pony.o
 	$(CC) -fuse-ld=mold $^ -o $@ -shared
 
 $(GAMERUST): src/main.rs
-	RUSTFLAGS="-C link-arg=-rdynamic" cargo build
+	RUSTFLAGS="-C link-arg=-rdynamic" cargo build --features hotreload
 
 pony.o: pony.c
 	$(CC) -g -c $^ -o $@ -I../poniescript

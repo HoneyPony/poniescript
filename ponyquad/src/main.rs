@@ -1,3 +1,5 @@
+mod hot;
+
 use macroquad::prelude::*;
 use notify::{Event, RecursiveMode, Watcher};
 
@@ -20,14 +22,7 @@ use poniescript_gc::{GcContext, gc_spawn};
 //     macroquad::Window::new("Game", macroquad_main());
 // }
 
-fn rebuild(target_path: &str) {
-    let mut process = Command::new("make")
-        .arg(format!("OUTLIBNAME={}", target_path))
-        .arg("hot-reload")
-        .spawn().unwrap();
 
-    process.wait().unwrap();
-}
 
 #[macroquad::main("Game")]
 async fn main() {
@@ -36,21 +31,7 @@ async fn main() {
 
     let ctx = ctx.as_mut();
 
-    let mut library = unsafe { libloading::Library::new("./game-script.so").unwrap() };
-    let mut f_update: libloading::Symbol<'_, fn(&mut GcContext, *const c_void)> = unsafe { library.get("f_update").unwrap() };
-
-    let mut gc_visit = unsafe { library.get("poni_gc_visit_object").unwrap() };
-    let mut gc_roots = unsafe { library.get("poni_gc_visit_roots").unwrap() };
-    let mut gc_size = unsafe { library.get("poni_gc_get_allocation_size").unwrap() };
-    poniescript_gc::load_gc_functions(*gc_visit, *gc_roots, *gc_size);
-
-    let mut dynlib_idx: u32 = 1;
-    let mut dynlib_name = format!("./tmp-script-0.so");
-
-    let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
-    let mut watcher = notify::recommended_watcher(tx).unwrap();
-
-    watcher.watch(Path::new("."), RecursiveMode::Recursive).unwrap();
+    let mut hot = hot::HotReload::new("./game-script.so").unwrap();
 
     loop {
         clear_background(RED);
@@ -60,71 +41,12 @@ async fn main() {
 
         draw_text("Hello, Macroquad!", 20.0, 20.0, 30.0, DARKGRAY);
 
-        f_update(ctx, ptr::null());
+        hot::call_update(ctx, &mut hot);
+        hot.poll();
 
-        if fs::exists(&dynlib_name).unwrap_or(false) {
-            eprintln!("--- reloading script ---");
-            library = unsafe { libloading::Library::new(&dynlib_name).unwrap() };
-            f_update = unsafe { library.get("f_update").unwrap() };
+        
 
-            gc_visit = unsafe { library.get("poni_gc_visit_object").unwrap() };
-            gc_roots = unsafe { library.get("poni_gc_visit_roots").unwrap() };
-            gc_size = unsafe { library.get("poni_gc_get_allocation_size").unwrap() };
-            poniescript_gc::load_gc_functions(*gc_visit, *gc_roots, *gc_size);
-
-            // I think this is Linux-specific. Windows won't be happy with this.
-            // We might want to do something like generate a unique name for
-            // the library every time? Not sure how that would work.
-            let _ = fs::remove_file(&dynlib_name);
-
-            dynlib_idx += 1;
-            dynlib_name = format!("./tmp-script-{}.so", dynlib_idx);
-        }
-
-        if let Ok(event) = rx.try_recv() {
-            if let Ok(event) = event {
-                if !event.kind.is_access() {
-                    // let mut any_is_non_so = false;
-                    // for path in event.paths {
-                    //     eprintln!("path = {}", path.display());
-                    //     if path.extension() != Some(OsStr::new("so")) {
-                    //         any_is_non_so = true;
-                    //         break;
-                    //     }
-                    // }
-                    // if any_is_non_so {
-                    //     // We have a filesystem event. Run the rebuild command.
-                    //     rebuild(&dynlib_name);
-                    // }
-
-                    // It's not sufficient to just check whether the path is
-                    // a non-.so, because all sorts of files end up being written
-                    // when we compile.
-                    //
-                    // Instead, I guess let's just filter down to paths we care
-                    // about. This is anything ending in .poni, .toml, or maybe
-                    // also asset files; maybe we could keep track of every asset
-                    // path we've touched and check those here.
-
-                    let mut we_care = false;
-                    for path in event.paths {
-                        let interesting = match path.extension().and_then(|e| e.to_str()) {
-                            Some("poni") => true,
-                            Some("toml") => true,
-                            _ => false,
-                        };
-
-                        if interesting {
-                            we_care = true;
-                        }
-                    }
-
-                    if we_care {
-                        rebuild(&dynlib_name);
-                    }
-                }
-            }
-        }
+        
 
         next_frame().await
     }

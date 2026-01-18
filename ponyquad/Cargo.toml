@@ -14,3 +14,6 @@ macroquad = "0.4.14"
 notify = "8.2.0"
 poniescript-gc = { version = "0.1.0", path = "../poniescript-gc", features = ["hotreload"] }
 poniescript-rt = { version = "0.1.0", path = "../poniescript-rt" }
+
+[features]
+hotreload = []
