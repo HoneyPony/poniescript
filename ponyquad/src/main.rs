@@ -1,6 +1,7 @@
 use macroquad::prelude::*;
+use notify::{Event, RecursiveMode, Watcher};
 
-use std::{ffi::c_void, fs, ptr};
+use std::{ffi::c_void, fs, path::Path, process::Command, ptr, sync::mpsc};
 use poniescript_gc::{GcContext, gc_spawn};
 
 // unsafe extern "C" {
@@ -19,6 +20,15 @@ use poniescript_gc::{GcContext, gc_spawn};
 //     macroquad::Window::new("Game", macroquad_main());
 // }
 
+fn rebuild(target_path: &str) {
+    let mut process = Command::new("make")
+        .arg(format!("OUTLIBNAME={}", target_path))
+        .arg("hot-reload")
+        .spawn().unwrap();
+
+    process.wait().unwrap();
+}
+
 #[macroquad::main("Game")]
 async fn main() {
     let mut gc_handle = gc_spawn();
@@ -34,8 +44,13 @@ async fn main() {
     let mut gc_size = unsafe { library.get("poni_gc_get_allocation_size").unwrap() };
     poniescript_gc::load_gc_functions(*gc_visit, *gc_roots, *gc_size);
 
-    let dynlib_names = ["./game-script-A.so", "./game-script-B.so"];
-    let mut dynlib_idx = 0;
+    let mut dynlib_idx: u32 = 1;
+    let mut dynlib_name = format!("./tmp-script-0.so");
+
+    let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
+    let mut watcher = notify::recommended_watcher(tx).unwrap();
+
+    watcher.watch(Path::new("."), RecursiveMode::Recursive).unwrap();
 
     loop {
         clear_background(RED);
@@ -47,9 +62,9 @@ async fn main() {
 
         f_update(ctx, ptr::null());
 
-        if fs::exists(dynlib_names[dynlib_idx]).unwrap_or(false) {
+        if fs::exists(&dynlib_name).unwrap_or(false) {
             eprintln!("--- reloading script ---");
-            library = unsafe { libloading::Library::new(dynlib_names[dynlib_idx]).unwrap() };
+            library = unsafe { libloading::Library::new(&dynlib_name).unwrap() };
             f_update = unsafe { library.get("f_update").unwrap() };
 
             gc_visit = unsafe { library.get("poni_gc_visit_object").unwrap() };
@@ -60,9 +75,19 @@ async fn main() {
             // I think this is Linux-specific. Windows won't be happy with this.
             // We might want to do something like generate a unique name for
             // the library every time? Not sure how that would work.
-            let _ = fs::remove_file(dynlib_names[dynlib_idx]);
+            let _ = fs::remove_file(&dynlib_name);
 
-            dynlib_idx = (dynlib_idx + 1) % dynlib_names.len();
+            dynlib_idx += 1;
+            dynlib_name = format!("./tmp-script-{}.so", dynlib_idx);
+        }
+
+        if let Ok(event) = rx.try_recv() {
+            if let Ok(event) = event {
+                if !event.kind.is_access() {
+                    // We have a filesystem event. Run the rebuild command.
+                    rebuild(&dynlib_name);
+                }
+            }
         }
 
         next_frame().await

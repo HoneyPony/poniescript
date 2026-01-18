@@ -7,10 +7,12 @@ GAMERUST=../target/debug/ponyquad
 
 all: game-host game-script.so
 
-hot-a: pony.o
-	$(CC) -fuse-ld=mold $^ -o game-script-A.so -shared
-hot-b: pony.o
-	$(CC) -fuse-ld=mold $^ -o game-script-B.so -shared
+# hot-a: pony.o
+# 	$(CC) -fuse-ld=mold $^ -o game-script-A.so -shared
+# hot-b: pony.o
+# 	$(CC) -fuse-ld=mold $^ -o game-script-B.so -shared
+hot-reload: pony.o
+	$(CC) -fuse-ld=mold $^ -o $(OUTLIBNAME) -shared
 
 game-host: $(GAMERUST)
 	cp $< $@
