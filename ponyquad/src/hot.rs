@@ -85,7 +85,7 @@ mod watcher {
 
 #[cfg(feature = "hotreload")]
 use libloading::Library;
-use poniescript_gc::GcContext;
+use poniescript_gc::{Gc, GcContext};
 
 #[cfg(feature = "hotreload")]
 pub struct HotReload {
@@ -129,14 +129,24 @@ fn reload_gc_functions(library: &Library) -> Option<()> {
     Some(())
 }
 
+fn call_init_hook(library: &Library, name: &str, gc: &mut GcContext) -> Option<()> {
+    let hook: libloading::Symbol<fn(&mut GcContext)> = unsafe { library.get(name).ok()? };
+    hook(gc);
+
+    Some(())
+}
+
 #[cfg(feature = "hotreload")]
 impl HotReload {
-    pub fn new(game_script_path: &str) -> Option<Self> {
+    pub fn new(game_script_path: &str, gc: &mut GcContext) -> Option<Self> {
         let library = unsafe { libloading::Library::new(game_script_path).ok()? };
         let update_fn: libloading::Symbol<'_, fn(&mut GcContext, *mut c_void)>
             = unsafe { library.get("f_update").ok()? };
 
         reload_gc_functions(&library)?;
+
+        call_init_hook(&library, "poni_init_strings", gc)?;
+        call_init_hook(&library, "poni_init_globals", gc)?;
 
         Some(Self {
             update_fn: *update_fn,
@@ -161,12 +171,15 @@ impl HotReload {
         process.wait().unwrap();
     }
 
-    fn reload_lib_internal(&mut self) -> Option<()> {
+    fn reload_lib_internal(&mut self, gc: &mut GcContext) -> Option<()> {
         unsafe {
             let new_lib = libloading::Library::new(&self.next_tmp_lib).ok()?;
             let update_fn = new_lib.get("f_update").ok()?;
 
             reload_gc_functions(&new_lib)?;
+
+            call_init_hook(&new_lib, "poni_init_strings", gc)?;
+            call_init_hook(&new_lib, "poni_init_globals", gc)?;
             
             // Success!
 
@@ -186,13 +199,13 @@ impl HotReload {
     /// 
     /// Second, if the "temporary script library" that we expect to have built
     /// exists, we attempt to load it.
-    pub fn poll(&mut self) {
+    pub fn poll(&mut self, gc: &mut GcContext) {
         use std::fs;
 
         if fs::exists(&self.next_tmp_lib).unwrap_or(false) {
             eprintln!("--- reloading script ---");
 
-            match self.reload_lib_internal() {
+            match self.reload_lib_internal(gc) {
                 Some(_) => eprintln!("--- successfully reloaded script ---"),
                 None => eprintln!("--- failed to reload script ---"),
             }
@@ -217,10 +230,10 @@ impl HotReload {
 #[cfg(not(feature = "hotreload"))]
 impl HotReload {
     #[inline(always)]
-    pub fn new(game_script_path: &str) -> Option<Self> {
+    pub fn new(game_script_path: &str, gc: &mut GcContext) -> Option<Self> {
         Some(Self {})
     }
 
     #[inline(always)]
-    pub fn poll(&mut self) {}
+    pub fn poll(&mut self, gc: &mut GcContext) {}
 }

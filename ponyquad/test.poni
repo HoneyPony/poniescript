@@ -1,3 +1,15 @@
 fun update() {
-    draw_line((10, 20), (100, 400), 5, (0.0, 0.5, 1.0, 1.0));
+    var RED = (1.0, 0.0, 0.0, 1.0);
+    var GREEN = (0.0, 1.0, 0.0, 1.0);
+    var BLUE = (0.0, 0.0, 1.0, 1.0);
+    var GRAY = (0.2, 0.2, 0.2, 1.0);
+
+    clear_background(RED);
+
+    draw_line((40, 40), (100, 200), 15, BLUE);
+    draw_rectangle((screen_width() / 2.0 - 60.0, 100.0), (120, 60), GREEN);
+
+    draw_text("Hello, Macroquad!", (20, 20), 30.0, GRAY);
+
+    draw_line((10, 20), (100, 400), 5, BLUE);
 }
