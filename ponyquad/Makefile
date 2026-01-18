@@ -23,8 +23,11 @@ game-script.so: pony.o
 $(GAMERUST): src/main.rs
 	RUSTFLAGS="-C link-arg=-rdynamic" cargo build --features hotreload
 
-pony.o: pony.c
-	$(CC) -g -c $^ -o $@ -I../poniescript
+# pony.o: pony.c
+# 	$(CC) -g -c $^ -o $@ -I../poniescript
 	
-pony.c: test.poni
-	poniescript -e test.poni -i ponyquad.h -o $@
+# pony.c: test.poni
+# 	poniescript -e test.poni -i ponyquad.h -o $@
+
+pony.o: test.poni
+	poniescript -e test.poni -i ponyquad.h -o $@ -C-I../poniescript -c tcc
