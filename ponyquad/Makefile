@@ -20,7 +20,7 @@ game-host: $(GAMERUST)
 game-script.so: pony.o
 	$(CC) -fuse-ld=mold $^ -o $@ -shared
 
-$(GAMERUST): src/main.rs
+$(GAMERUST): src/main.rs src/hot.rs
 	RUSTFLAGS="-C link-arg=-rdynamic" cargo build --features hotreload
 
 # pony.o: pony.c
