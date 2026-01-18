@@ -275,7 +275,7 @@ struct ps_dynarray_header {
 	void     *buffer;
 };
 
-void*
+static inline void*
 poni_array_ensure(void *ctx, void* old_array, ps_int elem_sz, ps_int desired_idx) {
 	struct ps_array_header *header = old_array;
 	ps_int new_size = header->length;
