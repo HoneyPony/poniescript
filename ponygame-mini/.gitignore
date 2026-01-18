@@ -1,3 +1,6 @@
 /game
 /pony.c
 /pony.o
+
+/game-host
+/game-script.so

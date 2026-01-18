@@ -3,12 +3,13 @@ name = "ponygame-mini"
 version = "0.1.0"
 edition = "2024"
 
-[lib]
+# [lib]
 # Note: This might have to be cdylib, actually, for wasm. Unclear.
 # Also should be 'lib' if we want to link it with other Rust stuff...?
-crate-type = ["staticlib"]
+# crate-type = ["staticlib"]
 
 [dependencies]
+libloading = "0.9.0"
 macroquad = "0.4.14"
-poniescript-gc = { version = "0.1.0", path = "../poniescript-gc" }
+poniescript-gc = { version = "0.1.0", path = "../poniescript-gc", features = ["hotreload"] }
 poniescript-rt = { version = "0.1.0", path = "../poniescript-rt" }

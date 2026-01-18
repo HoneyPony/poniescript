@@ -3,10 +3,10 @@ use macroquad::prelude::*;
 use std::{ffi::c_void, ptr};
 use poniescript_gc::{GcContext, gc_spawn};
 
-unsafe extern "C" {
-    // The PonieScript update function that we want to call into.
-    fn f_update(gc: &mut GcContext, closure: *const c_void);
-}
+// unsafe extern "C" {
+//     // The PonieScript update function that we want to call into.
+//     fn f_update(gc: &mut GcContext, closure: *const c_void);
+// }
 
 // We need an unsafe(no_mangle) main so that we can link ourselves as the main
 // method against the PonieScript script.
@@ -14,16 +14,20 @@ unsafe extern "C" {
 // This also means we can't directly use Macroquad's #[main] macro; instead,
 // manually do what it does (which is just calling a constructor on
 // macroquad::Window).
-#[unsafe(no_mangle)]
-pub fn main() {
-    macroquad::Window::new("Game", macroquad_main());
-}
+// #[unsafe(no_mangle)]
+// pub fn main() {
+//     macroquad::Window::new("Game", macroquad_main());
+// }
 
-async fn macroquad_main() {
+#[macroquad::main("Game")]
+async fn main() {
     let mut gc_handle = gc_spawn();
     let mut ctx = gc_handle.create_context_for_existing();
 
     let ctx = ctx.as_mut();
+
+    let library = unsafe { libloading::Library::new("./game-script.so").unwrap() };
+    let f_update: libloading::Symbol<'_, fn(&mut GcContext, *const c_void)> = unsafe { library.get("f_update").unwrap() };
 
     loop {
         clear_background(RED);
@@ -33,7 +37,8 @@ async fn macroquad_main() {
 
         draw_text("Hello, Macroquad!", 20.0, 20.0, 30.0, DARKGRAY);
 
-        unsafe { f_update(ctx, ptr::null()); }
+        f_update(ctx, ptr::null());
+        //unsafe { f_update(ctx, ptr::null()); }
 
         next_frame().await
     }
@@ -46,7 +51,7 @@ mod bindings {
     use poniescript_rt::{Vec2, Vec4};
 
     #[unsafe(no_mangle)]
-    extern "C" fn draw_line(_ctx: &mut GcContext, from: Vec2, to: Vec2, thickness: f32, color: Vec4, _closure: *const c_void) {
+    pub extern "C" fn draw_line(_ctx: &mut GcContext, from: Vec2, to: Vec2, thickness: f32, color: Vec4, _closure: *const c_void) {
         unsafe {
             macroquad::prelude::draw_line(
                 from.x, from.y,

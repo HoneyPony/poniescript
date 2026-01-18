@@ -1,11 +1,20 @@
 CC=clang
-GAMELIB=../target/debug/libponygame_mini.a
+#GAMELIB=../target/debug/ponygame_mini
+GAMERUST=../target/debug/ponygame-mini
 
-game: pony.o $(GAMELIB)
-	$(CC) -fuse-ld=mold $^ -o $@ -lm
+# game: pony.o $(GAMELIB)
+# 	$(CC) -fuse-ld=mold $^ -o $@ -lm
 
-$(GAMELIB): src/lib.rs
-	cargo build
+all: game-host game-script.so
+
+game-host: $(GAMERUST)
+	cp $< $@
+
+game-script.so: pony.o
+	$(CC) -fuse-ld=mold $^ -o $@ -shared
+
+$(GAMERUST): src/main.rs
+	RUSTFLAGS="-C link-arg=-rdynamic" cargo build
 
 pony.o: pony.c
 	$(CC) -g -c $^ -o $@ -I../poniescript
