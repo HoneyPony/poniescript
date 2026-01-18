@@ -33,8 +33,14 @@ mod watcher {
             })
         }
 
-        pub fn poll<F: Fn()>(&self, callback: F) {
-            if let Ok(event) = self.rx.try_recv() {
+        /// Helper function for poll(). 
+        ///
+        /// Repeatedly calls try_recv() until it is out of events. Returns true
+        /// if we should fire the callback, and false otherwise.
+        fn poll_all(&self) -> bool {
+            let mut should_call = false;
+
+            while let Ok(event) = self.rx.try_recv() {
                 if let Ok(event) = event {
                     if !event.kind.is_access() {
                         // It's not sufficient to just check whether the path is
@@ -46,7 +52,6 @@ mod watcher {
                         // also asset files; maybe we could keep track of every asset
                         // path we've touched and check those here.
 
-                        let mut we_care = false;
                         for path in event.paths {
                             let interesting = match path.extension().and_then(|e| e.to_str()) {
                                 Some("poni") => true,
@@ -55,15 +60,24 @@ mod watcher {
                             };
 
                             if interesting {
-                                we_care = true;
+                                should_call = true;
+                                break;
                             }
                         }
 
-                        if we_care {
-                            callback();
-                        }
+                        // Note that even if should_call is true, we have to 
+                        // keep polling, so that we can flush all the events out
+                        // and avoid redundant rebuilds.
                     }
                 }
+            }
+
+            return should_call;
+        }
+
+        pub fn poll<F: Fn()>(&self, callback: F) {
+            if self.poll_all() {
+                callback();
             }
         }
     }
