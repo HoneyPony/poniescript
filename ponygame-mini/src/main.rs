@@ -29,6 +29,11 @@ async fn main() {
     let library = unsafe { libloading::Library::new("./game-script.so").unwrap() };
     let f_update: libloading::Symbol<'_, fn(&mut GcContext, *const c_void)> = unsafe { library.get("f_update").unwrap() };
 
+    let gc_visit = unsafe { library.get("poni_gc_visit_object").unwrap() };
+    let gc_roots = unsafe { library.get("poni_gc_visit_roots").unwrap() };
+    let gc_size = unsafe { library.get("poni_gc_get_allocation_size").unwrap() };
+    poniescript_gc::load_gc_functions(*gc_visit, *gc_roots, *gc_size);
+
     loop {
         clear_background(RED);
 
@@ -38,7 +43,6 @@ async fn main() {
         draw_text("Hello, Macroquad!", 20.0, 20.0, 30.0, DARKGRAY);
 
         f_update(ctx, ptr::null());
-        //unsafe { f_update(ctx, ptr::null()); }
 
         next_frame().await
     }
