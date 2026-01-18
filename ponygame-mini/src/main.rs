@@ -1,6 +1,6 @@
 use macroquad::prelude::*;
 
-use std::{ffi::c_void, ptr};
+use std::{ffi::c_void, fs, ptr};
 use poniescript_gc::{GcContext, gc_spawn};
 
 // unsafe extern "C" {
@@ -26,13 +26,16 @@ async fn main() {
 
     let ctx = ctx.as_mut();
 
-    let library = unsafe { libloading::Library::new("./game-script.so").unwrap() };
-    let f_update: libloading::Symbol<'_, fn(&mut GcContext, *const c_void)> = unsafe { library.get("f_update").unwrap() };
+    let mut library = unsafe { libloading::Library::new("./game-script.so").unwrap() };
+    let mut f_update: libloading::Symbol<'_, fn(&mut GcContext, *const c_void)> = unsafe { library.get("f_update").unwrap() };
 
-    let gc_visit = unsafe { library.get("poni_gc_visit_object").unwrap() };
-    let gc_roots = unsafe { library.get("poni_gc_visit_roots").unwrap() };
-    let gc_size = unsafe { library.get("poni_gc_get_allocation_size").unwrap() };
+    let mut gc_visit = unsafe { library.get("poni_gc_visit_object").unwrap() };
+    let mut gc_roots = unsafe { library.get("poni_gc_visit_roots").unwrap() };
+    let mut gc_size = unsafe { library.get("poni_gc_get_allocation_size").unwrap() };
     poniescript_gc::load_gc_functions(*gc_visit, *gc_roots, *gc_size);
+
+    let dynlib_names = ["./game-script-A.so", "./game-script-B.so"];
+    let mut dynlib_idx = 0;
 
     loop {
         clear_background(RED);
@@ -43,6 +46,24 @@ async fn main() {
         draw_text("Hello, Macroquad!", 20.0, 20.0, 30.0, DARKGRAY);
 
         f_update(ctx, ptr::null());
+
+        if fs::exists(dynlib_names[dynlib_idx]).unwrap_or(false) {
+            eprintln!("--- reloading script ---");
+            library = unsafe { libloading::Library::new(dynlib_names[dynlib_idx]).unwrap() };
+            f_update = unsafe { library.get("f_update").unwrap() };
+
+            gc_visit = unsafe { library.get("poni_gc_visit_object").unwrap() };
+            gc_roots = unsafe { library.get("poni_gc_visit_roots").unwrap() };
+            gc_size = unsafe { library.get("poni_gc_get_allocation_size").unwrap() };
+            poniescript_gc::load_gc_functions(*gc_visit, *gc_roots, *gc_size);
+
+            // I think this is Linux-specific. Windows won't be happy with this.
+            // We might want to do something like generate a unique name for
+            // the library every time? Not sure how that would work.
+            let _ = fs::remove_file(dynlib_names[dynlib_idx]);
+
+            dynlib_idx = (dynlib_idx + 1) % dynlib_names.len();
+        }
 
         next_frame().await
     }

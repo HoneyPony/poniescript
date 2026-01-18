@@ -7,6 +7,11 @@ GAMERUST=../target/debug/ponygame-mini
 
 all: game-host game-script.so
 
+hot-a: pony.o
+	$(CC) -fuse-ld=mold $^ -o game-script-A.so -shared
+hot-b: pony.o
+	$(CC) -fuse-ld=mold $^ -o game-script-B.so -shared
+
 game-host: $(GAMERUST)
 	cp $< $@
 
