@@ -36,7 +36,7 @@ typedef struct ps_vec2 {
 			ps_float v_0;
 			ps_float v_1;
 		};
-		ps_float at[2];
+		//ps_float at[2];
 	};
 } ps_vec2;
 
@@ -68,7 +68,7 @@ typedef struct ps_vec3 {
 			ps_float v_1;
 			ps_float v_2;
 		};
-		ps_float at[3];
+		//ps_float at[3];
 	};
 } ps_vec3;
 
@@ -103,7 +103,7 @@ typedef struct ps_vec4 {
 			ps_float v_2;
 			ps_float v_3;
 		};
-		ps_float at[4];
+		//ps_float at[4];
 	};
 } ps_vec4;
 
@@ -135,7 +135,7 @@ typedef struct ps_vec2i {
 			ps_int v_0;
 			ps_int v_1;
 		};
-		ps_int at[2];
+		//ps_int at[2];
 	};
 } ps_vec2i;
 
@@ -168,7 +168,7 @@ typedef struct ps_vec3i {
 			ps_int v_1;
 			ps_int v_2;
 		};
-		ps_int at[3];
+		//ps_int at[3];
 	};
 } ps_vec3i;
 
@@ -203,7 +203,7 @@ typedef struct ps_vec4i {
 			ps_int v_2;
 			ps_int v_3;
 		};
-		ps_int at[4];
+		//ps_int at[4];
 	};
 } ps_vec4i;
 

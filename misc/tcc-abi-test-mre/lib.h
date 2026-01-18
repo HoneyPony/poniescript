@@ -6,6 +6,13 @@ struct vec2 {
         struct {
             float x; float y;
         };
+        
+        struct {
+            float v0; float v1;
+        };
+
+        // If we comment out these arrays everything seems to work correctly.
+        // So, not all unions cause problems, just ones with arrays...?
         float at[2];
     };
 };
@@ -14,6 +21,11 @@ struct vec4 {
         struct {
             float x; float y; float z; float w;
         };
+        
+        struct {
+            float v0; float v1; float v2; float v3;
+        };
+
         float at[4];
     };
 };
