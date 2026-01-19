@@ -2,7 +2,7 @@ pub mod texture;
 pub mod input;
 
 use std::ffi::c_void;
-use poniescript_gc::{Gp, PsFloat, GcContext};
+use poniescript_gc::{GcContext, Gp, PsFloat, PsInt};
 
 use poniescript_rt::{PsStrBuf, Vec2, Vec3, Vec4};
 
@@ -64,4 +64,22 @@ pub extern "C" fn screen_width(_ctx: &mut GcContext, _closure: *const c_void) ->
 #[unsafe(no_mangle)]
 pub extern "C" fn screen_height(_ctx: &mut GcContext, _closure: *const c_void) -> PsFloat {
     macroquad::prelude::screen_height()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn get_frame_time(_ctx: &mut GcContext, _closure: *const c_void) -> PsFloat {
+    macroquad::prelude::get_frame_time()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn get_time(_ctx: &mut GcContext, _closure: *const c_void) -> PsFloat {
+    // This is... not great, to say the least. We might want to implement doubles...?
+    macroquad::prelude::get_time() as PsFloat
+}
+
+// Return PsInt because, even though float would make more sense, Int is more
+// honest that the API can't return a float.
+#[unsafe(no_mangle)]
+pub extern "C" fn get_fps(_ctx: &mut GcContext, _closure: *const c_void) -> PsInt {
+    macroquad::prelude::get_fps() as PsInt
 }

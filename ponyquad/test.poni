@@ -20,7 +20,7 @@ class Horse {
     fun update() {
         var velocity = get_input();
 
-        var mul = 100;
+        var mul = 300 * get_frame_time();
         // TODO: Implement vector multiplication
         velocity.x = velocity.x * mul;
         velocity.y = velocity.y * mul;

@@ -37,4 +37,8 @@ PS_FUN() ps_vec2 mouse_position_local(PONI_ABI());
 PS_FUN() ps_vec2 mouse_delta_position(PONI_ABI());
 PS_FUN() ps_vec2 mouse_wheel(PONI_ABI());
 
+PS_FUN() ps_float get_frame_time(PONI_ABI());
+PS_FUN() ps_float get_time(PONI_ABI());
+PS_FUN() ps_int get_fps(PONI_ABI());
+
 #endif
