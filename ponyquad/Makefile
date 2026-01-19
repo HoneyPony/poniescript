@@ -2,6 +2,12 @@ CC=clang
 #GAMELIB=../target/debug/ponygame_mini
 GAMERUST=../target/debug/ponyquad
 
+RUST_FILES= \
+	src/bindings.rs \
+	src/hot.rs \
+	src/main.rs \
+	src/bindings/texture.rs
+
 # game: pony.o $(GAMELIB)
 # 	$(CC) -fuse-ld=mold $^ -o $@ -lm
 
@@ -20,7 +26,7 @@ game-host: $(GAMERUST)
 game-script.so: pony.o
 	$(CC) -fuse-ld=mold $^ -o $@ -shared
 
-$(GAMERUST): src/main.rs src/hot.rs src/bindings.rs
+$(GAMERUST): $(RUST_FILES)
 	RUSTFLAGS="-C link-arg=-rdynamic" cargo build --features hotreload
 
 pony.o: pony.c
