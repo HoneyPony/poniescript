@@ -1,7 +1,7 @@
 use std::ffi::c_void;
 use poniescript_gc::GcContext;
 
-use poniescript_rt::{PsFloat, Vec2, Vec3, Vec4};
+use poniescript_rt::{Gp, PsFloat, PsStrBuf, Vec2, Vec3, Vec4};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn clear_background(_ctx: &mut GcContext, color: Vec4, _closure: *const c_void) {
@@ -37,10 +37,13 @@ pub extern "C" fn draw_rectangle(_ctx: &mut GcContext, at: Vec2, size: Vec2, col
 
 // We need a PsStrBuf type...
 #[unsafe(no_mangle)]
-pub extern "C" fn draw_text(_ctx: &mut GcContext, text: *const c_void, at: Vec2, font_size: f32, color: Vec4, _closure: *const c_void) -> Vec3 {
+pub extern "C" fn draw_text(_ctx: &mut GcContext, text: Gp<PsStrBuf>, at: Vec2, font_size: f32, color: Vec4, _closure: *const c_void) -> Vec3 {
     unsafe {
+        let text = text.get_inner();
+        let text = text.get_string();
+
         let dims = macroquad::prelude::draw_text(
-            "TODO",
+            &text,
             at.x, at.y,
             font_size,
             std::mem::transmute(color)

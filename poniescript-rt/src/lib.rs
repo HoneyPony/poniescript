@@ -2,6 +2,7 @@ mod core;
 mod array;
 mod vec;
 mod fmt;
+mod str;
 mod type_ids;
 
 #[cfg(feature = "entry")]
@@ -11,6 +12,7 @@ pub use core::*;
 pub use array::*;
 pub use type_ids::*;
 pub use vec::*;
+pub use str::*;
 
 pub use poniescript_gc::GcContext;
 

@@ -232,8 +232,7 @@ typedef struct ps_object {
 typedef struct ps_str {
 	ps_object object;
 
-	// TODO: ps_int?
-	size_t length;
+	ps_int length;
 
 	char contents[];
 } ps_str;
@@ -243,7 +242,7 @@ typedef struct ps_strbuf {
 
 	// Note: buffer->length == allocated, essentially
 	ps_str *buffer;
-	size_t length;
+	ps_int length;
 } ps_strbuf;
 
 struct ps_array_header {
