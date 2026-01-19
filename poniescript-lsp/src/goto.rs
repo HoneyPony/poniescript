@@ -101,11 +101,11 @@ impl<'a> LocateAst for GotoDefinitionVisitor<'a> {
     }
 
     fn locate_get(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Get) {
-        self.goto_var(ast, db, it.var, Some(&it.identifier.location));
+        //self.goto_var(ast, db, it.var, Some(&it.identifier.location));
     }
 
     fn locate_set(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Set) {
-        self.goto_var(ast, db, it.var, Some(&it.identifier.location));
+        //self.goto_var(ast, db, it.var, Some(&it.identifier.location));
     }
 
     fn locate_new(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &New) {

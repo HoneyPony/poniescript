@@ -140,11 +140,11 @@ impl<'a> LocateAst for HoverVisitor<'a> {
     }
 
     fn locate_get(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Get) {
-        self.hover_var(ast, db, it.var, Some(&it.location));
+        //self.hover_var(ast, db, it.var, Some(&it.location));
     }
 
     fn locate_set(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Set) {
-        self.hover_var(ast, db, it.var, Some(&it.identifier.location)); //?
+        //self.hover_var(ast, db, it.var, Some(&it.identifier.location)); //?
     }
 
     fn locate_new(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &New) {
