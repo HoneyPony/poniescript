@@ -480,7 +480,10 @@ impl<'db> Binder<'db> {
 		}
 	}
 
-	fn visit_class_id(&mut self, ast: &AstProxy, id: ClassId) {
+	/// Awkwardly, this logic doesn't actually work for in-PonieScript classes,
+	/// only for the C imported ones. We should probably revisit the Binder in
+	/// more detail eventually.
+	fn visit_class_id_only_call_this_on_imported_classes(&mut self, ast: &AstProxy, id: ClassId) {
 		let enclosing_in_class = self.in_class;
 		self.in_class = true;
 
@@ -508,7 +511,29 @@ impl<'db> Binder<'db> {
 	}
 
 	fn visit_class(&mut self, ast: &AstProxy, class_declare: &mut ClassDeclare) {
-		
+		let enclosing_in_class = self.in_class;
+		self.in_class = true;
+
+		let class = self.db.get(class_declare.identity);
+		let name = self.db.get(class.name);
+		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name, true);
+		self.checkers.push(new_scope);
+
+		for fun in &mut class_declare.funs {
+			self.visit_function(ast, fun);
+		}
+
+		for var in &mut class_declare.vars {
+			if let Some(value) = var.value {
+				self.visit_expr(ast, value);
+			}
+
+			// Bind variable types
+			self.visit_var_type(var.identity);
+		}
+
+		self.checkers.pop();
+		self.in_class = enclosing_in_class;
 	}
 
 	fn resolve_type(&mut self, name: StrId, location: &SourceLocation) -> Option<Type> {
@@ -736,7 +761,7 @@ pub fn bind(db: &mut Db, ast: &mut Ast) -> bool {
 		let class = db.imported_classes[i];
 		let mut binder = Binder::new(db);
 		binder.checkers.push(NameChecker::global());
-		binder.visit_class_id(&proxy, class);
+		binder.visit_class_id_only_call_this_on_imported_classes(&proxy, class);
 	}
 
 	proxy.commit();
