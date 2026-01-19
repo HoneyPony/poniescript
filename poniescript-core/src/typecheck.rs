@@ -1917,23 +1917,61 @@ impl<'db> TypeChecker<'db> {
 			Expr::Get(get) => {
 				// Get the type of the dotted expression. This lets us look up
 				// the property on that type.
-				let lhs = self.check_expr(ast, get.lhs, true)?;
-				if let Some(property) = self.db.lookup_property(lhs, get.identifier.lexeme) {
+				let mut lhs = self.check_expr(ast, get.lhs, true)?;
+
+				let mut var_chain = Vec::new();
+
+				// First, build a Vec of vars for all but the last item in the
+				// chain.
+				for propname in &get.chain[0..get.chain.len() - 1] {
+					if let Some(property) = self.db.lookup_property(lhs, propname.lexeme) {
+						var_chain.push(property);
+						// The LHS type advances as we walk the chain.
+						lhs = self.db.get_var_type(property);
+					}
+					else {
+						type_error!(self,
+							&propname.location,
+							"Object of type '{}' has no such property '{}'",
+							self.db.repr_type(lhs),
+							self.db.get(propname.lexeme));
+					}
+				}
+
+				// Safety: We always have a non-empty chain.
+				//
+				// Clone this token just to make life easy. 
+				let last = get.chain.last().unwrap().clone();
+
+				// The last property is special. It might just be another var
+				// in the var chain, OR it might be a FunCapture.
+				if let Some(property) = self.db.lookup_property(lhs, last.lexeme) {
 					// We must actually store the looked-up property.
-					get.var = property;
+					var_chain.push(property);
+					get.vars = var_chain;
 
 					return Ok(self.db.get_var_type(property));
 				}
 
 				// Check for possible function capture. If so, then we turn this
 				// Get into a FunCapture.
-				if let Some(fun) = self.db.lookup_member_fn(lhs, get.identifier.lexeme) {
+				if let Some(fun) = self.db.lookup_member_fn(lhs, last.lexeme) {
+					let mut funcapt_lhs = get.lhs;
+					if !var_chain.is_empty() {
+						// Remove the last element in the chain
+						let mut chain = std::mem::take(&mut get.chain);
+						chain.truncate(get.chain.len() - 1);
+
+						funcapt_lhs = Expr::push_get(ast, get.location.clone(),
+							chain, get.lhs, var_chain);
+					}
+
 					let as_funcapture = FunCapture {
 						location: get.location.clone(),
-						fn_name: get.identifier.location.clone(),
+						fn_name: last.location.clone(),
 						identity: fun,
 						typ: self.db.types.unassigned,
-						object: Some(get.lhs),
+						object: Some(funcapt_lhs),
 					};
 
 					*expr = Expr::FunCapture(as_funcapture);
@@ -1941,27 +1979,56 @@ impl<'db> TypeChecker<'db> {
 					return self.check_expr(ast, expr_id, value_used);
 				}
 
+				// Failed to look up the last property.
 				type_error!(self,
-					&get.location,
+					&last.location,
 					"Object of type '{}' has no such property '{}'",
 					self.db.repr_type(lhs),
-					self.db.get(get.identifier.lexeme));
+					self.db.get(last.lexeme))
 			}
 
 			Expr::Set(set) => {
 				// Get the type of the dotted expression. This lets us look up
 				// the property on that type.
-				let lhs = self.check_expr(ast, set.lhs, value_used)?;
-				let property = self.db.lookup_property(lhs, set.identifier.lexeme);
+				// Get the type of the dotted expression. This lets us look up
+				// the property on that type.
+				let mut lhs = self.check_expr(ast, set.lhs, true)?;
 
+				let mut var_chain = Vec::new();
+
+				// First, build a Vec of vars for all but the last item in the
+				// chain.
+				for propname in &set.chain[0..set.chain.len() - 1] {
+					if let Some(property) = self.db.lookup_property(lhs, propname.lexeme) {
+						var_chain.push(property);
+						// The LHS type advances as we walk the chain.
+						lhs = self.db.get_var_type(property);
+					}
+					else {
+						type_error!(self,
+							&propname.location,
+							"Object of type '{}' has no such property '{}'",
+							self.db.repr_type(lhs),
+							self.db.get(propname.lexeme));
+					}
+				}
+
+				// Safety: We always have a non-empty chain. 
+				let last = set.chain.last().unwrap();
+
+				let property = self.db.lookup_property(lhs, last.lexeme);
 				let Some(property) = property else {
 					type_error!(self,
 						&set.location,
 						"Object of type '{}' has no such property '{}'",
 						self.db.repr_type(lhs),
-						self.db.get(set.identifier.lexeme));
+						self.db.get(last.lexeme));
 				};
 
+				// We only check the  last property for readonly, for now.
+				//
+				// I suppose we will also need to check any value types along
+				// the way for readonly.  Huh.
 				if self.db.get(property).readonly {
 					let readonly_error = Error::simple(
 						format!("Invalid assignment to property '{}', which cannot be written to.",
@@ -1973,7 +2040,8 @@ impl<'db> TypeChecker<'db> {
 				}
 
 				// We must actually store the looked-up property.
-				set.var = property;
+				var_chain.push(property); //  Push the last property
+				set.vars = var_chain;
 
 				// We can't check the variable just like an Assign, as that
 				// will overwrite the type (the type is given ONLY by the class
@@ -2066,9 +2134,9 @@ impl<'db> TypeChecker<'db> {
 						self.db.get(capt.identifier.lexeme), self.db.repr_type(obj_ty));
 					let as_get = Get {
 						location: capt.location.clone(),
-						identifier: capt.identifier.clone(),
+						chain: vec![capt.identifier.clone()],
 						lhs: capt.object.unwrap(), // Safety: We already checked this above
-						var: property
+						vars: vec![property]
 					};
 					*expr = Expr::Get(as_get);
 					drop(binding);
@@ -2153,8 +2221,8 @@ impl<'db> TypeChecker<'db> {
 						//    var = var + 1;
 						// }
 						let initializer = Expr::push_get(ast, for_.location.clone(),
-							Token::synthesize_ident_from(self.db, "left"),
-							for_.iterator, self.db.get_range_left(iterable));
+							vec![Token::synthesize_ident_from(self.db, "left")],
+							for_.iterator, vec![self.db.get_range_left(iterable)]);
 						// NOTE: For now, in order to make for loops work with
 						// 'continue', we will write our loops in a weird way.
 						// (go from start - 1 to end; move increment to beginning
@@ -2194,8 +2262,8 @@ impl<'db> TypeChecker<'db> {
 
 						// Rhs of the comparison.
 						let rhs = Expr::push_get(ast, for_.location.clone(),
-							Token::synthesize_ident_from(self.db, "right"),
-							for_.iterator, self.db.get_range_right(iterable));
+							vec![Token::synthesize_ident_from(self.db, "right")],
+							for_.iterator, vec![self.db.get_range_right(iterable)]);
 						// More 'continue' JANK: synthesize a -1 for the RHS
 						// of the loop as well.
 						let one = Expr::push_numliteral(ast, for_.location.clone(),

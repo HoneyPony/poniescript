@@ -1811,28 +1811,44 @@ impl<'a> Codegen<'a> {
 			},
 
 			Expr::Get(get) => {
-				let lhs = self.expr(ast, get.lhs, into);
-				let arrow = self.db.get_c_member_lookup(lhs.typ);
-				
-				let varname = self.db.get_cname(get.var);
-
-				// Don't define our own val until we've evaluated inner expr,
-				// for GC.
-				let typ = self.db.get_var_type(get.var);
-
+				// OLD code: Created some cheap re-evals. Not sure if
+				// this is relevant for longer chains..>?
+				//
 				// For integer, float members, etc, we don't care if we generate
 				// something like t1->x t1->x multiple times. Technically this
 				// could change the semantic, but I don't think there's any
 				// cases where that will pop up for these types? E.g. there's
 				// no OptionElse for plain integers.
-				if self.db.is_cheap_re_eval_type(typ) {
-					return inline_expr!(self, typ, "{}{}{}", lhs.val, arrow, varname);
-				}
+				// if self.db.is_cheap_re_eval_type(typ) {
+				// 	return inline_expr!(self, typ, "{}{}{}", lhs.val, arrow, varname);
+				// }
 
-				let val = self.new_val_typed(typ);
+				// Don't define our own val until we've evaluated inner expr,
+				// for GC.
+				let lhs = self.expr(ast, get.lhs, into);
 
-				// TODO: Should lhs be promoted...??
-				define_val!(self, into, val, " = {}{}{};\n", lhs.val, arrow, varname);
+				let val = self.new_val_typed(self.db.get_var_type(get.vars.last().copied().unwrap()));
+				// Start with the define_val!, then start building the chain.
+				//
+				// (The chain starts with the lhs.)
+				define_val!(self, into, val, " = {}", lhs);
+
+				let mut lhs = lhs.typ;
+				if val.needs_storage() {
+					for var in &get.vars {
+						// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
+						let arrow = self.db.get_c_member_lookup(lhs);
+						
+						let varname = self.db.get_cname(*var);
+
+						inf_write!(into, "{}{}", arrow, varname);
+						// Walk the tree of types
+						lhs = self.db.get_var_type(*var);
+					}
+
+					// End the line.
+					inf_writeln!(into, ";");
+				}				
 
 				val
 			}
@@ -1843,18 +1859,30 @@ impl<'a> Codegen<'a> {
 					return rhs;
 				}
 				let lhs = self.expr(ast, set.lhs, into);
-				// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
-				let arrow = self.db.get_c_member_lookup(lhs.typ);
-				
-				let varname = self.db.get_cname(set.var);
 
-				// Define our own val as late as possible, for GC.
-				let typ = self.db.get_var_type(set.var);
-				let val = self.new_val_typed(typ);
+				let val = self.new_val_typed(self.db.get_var_type(set.vars.last().copied().unwrap()));
+				// Start with the define_val!, then start building the chain.
+				//
+				// (The chain starts with the lhs.)
+				define_val!(self, into, val, " = {}", lhs);
 
-				// TODO: Should lhs be promoted...??
-				// This is a bit hacky (the double assign), but I think it is overall fine.
-				define_val!(self, into, val, " = {}{}{} = {};\n", lhs.val, arrow, varname, rhs);
+				let mut lhs = lhs.typ;
+				if val.needs_storage() {
+					for var in &set.vars {
+						// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
+						let arrow = self.db.get_c_member_lookup(lhs);
+						
+						let varname = self.db.get_cname(*var);
+
+						inf_write!(into, "{}{}", arrow, varname);
+						// Walk the tree of types
+						lhs = self.db.get_var_type(*var);
+					}
+
+					// We can finally write the rhs.
+					// This is a bit hacky (the double assign), but I think it is overall fine.
+					inf_writeln!(into, " = {};", rhs);
+				}				
 
 				val
 			}

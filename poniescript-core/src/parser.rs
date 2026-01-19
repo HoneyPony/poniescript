@@ -860,18 +860,30 @@ impl<'b> Parser<'b> {
 						inner = Expr::put_index(self.ast, self.end(location.clone()), inner, index, self.db.types.unassigned);
 					}
 					while self.match_(Tok::Dot)?.is_some() {
+						let mut chain = Vec::new();
+						loop {
+							if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
+								got!(self, "Expected identifier after '.'");
+							}
+							let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
+							chain.push(identifier);
+
+							// Keep building the chain
+							if self.match_(Tok::Dot)?.is_some() { continue; }
+							
+							break;
+						}
+
+						assert!(chain.len() >= 1);
+
 						// For get expressions, we can have '.0' and so forth
 						// for tuples.
-						if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
-							got!(self, "Expected identifier after '.'");
-						}
-						let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
 
 						// TODO: Do we want to move this logic into expr_ident to go
 						// with the other ones?
 						if self.match_(Tok::Equal)?.is_some() {
 							let value = self.expression()?;
-							return Expr::put_set_ok(self.ast, self.end(location), identifier, inner, self.db.var_unassigned, value);
+							return Expr::put_set_ok(self.ast, self.end(location), chain, inner, Vec::new(), value);
 						}
 						// Function calls are mutually exclusive with assignment.
 						//
@@ -890,10 +902,20 @@ impl<'b> Parser<'b> {
 							// really a call on the previous property.
 							//
 							// (Although, we could make that work too).
-							inner = self.expr_call_finish(location.clone(), identifier, Some(inner))?;
+							if chain.len() == 1 {
+								inner = self.expr_call_finish(location.clone(), chain[0].clone(), Some(inner))?;
+							}
+							else {
+								// We want the original chain to have all but 1 of its elements,
+								// which is the identifier for the expr_call_finish().
+								let split_chain = chain.split_off(chain.len() - 1);
+								assert!(split_chain.len() == 1);
+								let get = Expr::put_get(self.ast, self.end(location.clone()), chain, inner, Vec::new());
+								inner = self.expr_call_finish(location.clone(), split_chain[0].clone(), Some(get))?;
+							}
 						}
 						else {
-							inner = Expr::put_get(self.ast, self.end(location.clone()), identifier, inner, self.db.var_unassigned);
+							inner = Expr::put_get(self.ast, self.end(location.clone()), chain, inner, Vec::new());
 						}
 					}
 				}
@@ -1100,38 +1122,51 @@ impl<'b> Parser<'b> {
 				let _op = self.advance()?;
 				// TODO: Check number tokens for being simple, e.g. not something
 				// like 0xff or 1234i32 (if we have postfixes at some point)
-				if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
-					got!(self, "Expected identifier after '.'");
+
+				// TODO: We really need to deduplicate this code. All of the
+				// crazy stuff in that one branch should probably be turned
+				// into binary expressions.
+				let mut chain = Vec::new();
+				loop {
+					if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
+						got!(self, "Expected identifier after '.'");
+					}
+					let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
+					chain.push(identifier);
+
+					// Keep building the chain
+					if self.match_(Tok::Dot)?.is_some() { continue; }
+					
+					break;
 				}
-				let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
+
+				assert!(chain.len() >= 1);
+
+				// For get expressions, we can have '.0' and so forth
+				// for tuples.
 
 				// TODO: Do we want to move this logic into expr_ident to go
 				// with the other ones?
 				if self.match_(Tok::Equal)?.is_some() {
 					let value = self.expression()?;
-					return Expr::put_set_ok(self.ast, self.end(location), identifier, lhs, self.db.var_unassigned, value);
+					return Expr::put_set_ok(self.ast, self.end(location), chain, lhs, Vec::new(), value);
 				}
-				// Function calls are mutually exclusive with assignment.
-				//
-				// An assignment would be like:
-				// object.thing() = 5;  or object.thing() = new Thing {};
-				// But this doesn't make sense, because in either case we're
-				// basically creating a new temporary that isn't really an lvalue.
-				//
-				// So function calls are distinct from assignments.
-				// 
-				// Same logic as above with arrays--we return early
-				// if we end up making an assignment.
+
 				else if self.match_(Tok::LeftParen)?.is_some() {
-					// We have to finish the call right now because
-					// it is a call on this particular idenitifer, not
-					// really a call on the previous property.
-					//
-					// (Although, we could make that work too).
-					return self.expr_call_finish(location.clone(), identifier, Some(lhs));
+					if chain.len() == 1 {
+						return self.expr_call_finish(location.clone(), chain[0].clone(), Some(lhs));
+					}
+					else {
+						// We want the original chain to have all but 1 of its elements,
+						// which is the identifier for the expr_call_finish().
+						let split_chain = chain.split_off(chain.len() - 1);
+						assert!(split_chain.len() == 1);
+						let get = Expr::put_get(self.ast, self.end(location.clone()), chain, lhs, Vec::new());
+						return self.expr_call_finish(location.clone(), split_chain[0].clone(), Some(get));
+					}
 				}
 				else {
-					return Expr::put_get_ok(self.ast, self.end(location.clone()), identifier, lhs, self.db.var_unassigned);
+					return Expr::put_get_ok(self.ast, self.end(location.clone()), chain, lhs, Vec::new());
 				}
 			}
 

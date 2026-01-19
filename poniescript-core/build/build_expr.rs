@@ -399,8 +399,8 @@ pub fn generate(file: &mut File) {
 	Print         : Vec<Expr> exprs, TypId typ
 	Str           : Vec<Expr> exprs
 	New           : Token identifier, ClassId class, TypId typ, Vec<NewInitElem> initializers
-	Get           : Token identifier, Expr lhs, VarId var
-	Set           : Token identifier, Expr lhs, VarId var, Expr rhs
+	Get           : Vec<Token> chain, Expr lhs, Vec<VarId> vars
+	Set           : Vec<Token> chain, Expr lhs, Vec<VarId> vars, Expr rhs
 	SelfVal       : TypId typ
 	ArrayLit      : Vec<Expr> values, TypId elem_typ, TypId arr_typ
 	Index         : Expr value, Expr index, TypId typ
