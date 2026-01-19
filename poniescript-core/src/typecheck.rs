@@ -2043,11 +2043,31 @@ impl<'db> TypeChecker<'db> {
 				var_chain.push(property); //  Push the last property
 				set.vars = var_chain;
 
+				if set.op != Tok::Equal {
+					// very important TODO: We actually need to store the
+					// value in a temporary variable, that we read from as
+					// the LHS of both the set and the get. This is so that
+					// something like call_fun().x += 5 does not cause
+					// a double evaluation of call_fun().
+
+					// Read from the variable
+					let read = Expr::push_get(ast, set.location.clone(),
+						set.chain.clone(), set.lhs, set.vars.clone());
+					// Perform a binary op, with RHS the assign's current value
+					let binop = Expr::push_binary(ast, set.location.clone(),
+						map_assign_op(set.op), read, set.rhs, self.db.types.unassigned);
+					// That is now what we're assigning.
+					set.rhs = binop;
+
+					// The assign is now a regular assign. (As of writing this
+					// comment, nothing else in the code reads this though.)
+					set.op = Tok::Equal;
+				}
+
 				// We can't check the variable just like an Assign, as that
 				// will overwrite the type (the type is given ONLY by the class
 				// definition itself). But, we do need to check that the RHS
 				// is assignable to this variable.
-
 				let rhs = self.check_expr(ast, set.rhs, true)?;
 
 				let computed =

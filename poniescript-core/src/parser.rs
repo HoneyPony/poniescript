@@ -201,6 +201,10 @@ macro_rules! expected_after {
 	}
 }
 
+fn matches_assign(tok: Tok) -> bool {
+	matches!(tok, Tok::Equal | Tok::PlusEqual | Tok::MinusEqual | Tok::StarEqual | Tok::SlashEqual)
+}
+
 impl<'b> Parser<'b> {
 	pub fn new(input: Box<dyn std::io::Read>, source_id: SourceId, db: &'b mut Db, ast: &'b mut Ast) -> std::io::Result<Self> {
 		// TODO: Technically we only need one of this, even with multiple parsers...
@@ -515,7 +519,7 @@ impl<'b> Parser<'b> {
 			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
 		};
 
-		if matches!(self.current.typ, Tok::Equal | Tok::PlusEqual | Tok::MinusEqual | Tok::StarEqual | Tok::SlashEqual) {
+		if matches_assign(self.current.typ) {
 			let op = self.advance()?;
 			let rhs = self.expression()?;
 
@@ -881,9 +885,10 @@ impl<'b> Parser<'b> {
 
 						// TODO: Do we want to move this logic into expr_ident to go
 						// with the other ones?
-						if self.match_(Tok::Equal)?.is_some() {
+						if matches_assign(self.current.typ) {
+							let op = self.advance()?;
 							let value = self.expression()?;
-							return Expr::put_set_ok(self.ast, self.end(location), chain, inner, Vec::new(), value);
+							return Expr::put_set_ok(self.ast, self.end(location), chain, inner, Vec::new(), value, op.typ);
 						}
 						// Function calls are mutually exclusive with assignment.
 						//
@@ -1147,9 +1152,10 @@ impl<'b> Parser<'b> {
 
 				// TODO: Do we want to move this logic into expr_ident to go
 				// with the other ones?
-				if self.match_(Tok::Equal)?.is_some() {
+				if matches_assign(self.current.typ) {
+					let op = self.advance()?;
 					let value = self.expression()?;
-					return Expr::put_set_ok(self.ast, self.end(location), chain, lhs, Vec::new(), value);
+					return Expr::put_set_ok(self.ast, self.end(location), chain, lhs, Vec::new(), value, op.typ);
 				}
 
 				else if self.match_(Tok::LeftParen)?.is_some() {

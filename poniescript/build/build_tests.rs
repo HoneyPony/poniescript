@@ -45,6 +45,9 @@ pub fn generate(tests_file: &mut File) {
 		("assign/", "addition_tuple"),
 		("assign/", "arith_ops_float_promote"),
 		("assign/", "arith_ops_int"),
+		("assign/", "compound_in_tuple"),
+		("assign/", "compound_set_basic"),
+		("assign/", "compound_set_fun_call"),
 		("assign/", "err_arith_ops"),
 
 		("binary/", "binary_doubleblock"),

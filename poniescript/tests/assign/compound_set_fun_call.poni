@@ -1,0 +1,25 @@
+class Horse {
+    var horse: int = 5;
+    var horse2: (int, float) = (5, 5);
+}
+
+var global_horse = new Horse{};
+var call_count = 0;
+
+fun weird() -> Horse {
+    call_count += 1;
+    global_horse
+}
+
+fun init() {
+    // This requires us to correctly have a temporary variable when desugaring
+    // compound operators on set.
+    weird().horse += 7;
+    weird().horse2.1 -= 20;
+
+    print(global_horse.horse); //! 12
+    print(global_horse.horse2); //! (5, -15.000000)
+
+    // Should be only 2.
+    print(call_count); //! 2
+}
