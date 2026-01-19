@@ -35,7 +35,7 @@ pony.o: pony.c
 	$(CC) -fPIC -g -c $^ -o $@ -I../poniescript
 	
 pony.c: test.poni
-	poniescript --bind-fun update -e test.poni keycodes.poni -i ponyquad.h -o $@
+	poniescript --hot --bind-fun update -e test.poni keycodes.poni -i ponyquad.h -o $@
 
 # pony.o: test.poni
 # 	poniescript -e test.poni -i ponyquad.h -o $@ -C-I../poniescript -c tcc

@@ -227,6 +227,65 @@ impl HotReload {
     }
 }
 
+/// Support for poni_hot_lookup.
+#[cfg(feature = "hotreload")]
+mod globals {
+    use std::{alloc::{Layout, alloc}, collections::HashMap, ffi::{CStr, CString}, os::raw::c_void, sync::Mutex};
+
+    static GLOBALS: Mutex<HotGlobals> = Mutex::new(HotGlobals::new());
+
+    struct HotGlobals {
+        // use Option<HashMap> so that we're const-constructible
+        //
+        // Use usize instead of pointer so we can share it between threads..
+        map: Option<HashMap<(CString, usize), usize>>,
+    }
+
+    impl HotGlobals {
+        const fn new() -> Self {
+            Self { map: None }
+        }
+
+        // Returns the global as a usize, plus a boolean of whether it already existed.
+        fn get_global(&mut self, string: CString, expected_bytes: usize) -> (usize, bool) {
+            if self.map.is_none() {
+                self.map = Some(HashMap::new());
+            }
+
+            eprintln!("looking up global: {:?}", string);
+
+            let map = self.map.as_mut().unwrap();
+            let mut existing = true;
+            let entry = map.entry((string,  expected_bytes))
+                .or_insert_with(|| {
+                    eprintln!("--> new global");
+
+                    existing = false;
+
+                    // For hot reloading, these are leaked allocations.
+                    let on_heap = unsafe { alloc(Layout::from_size_align(expected_bytes, 16).unwrap()) };
+                    on_heap as usize
+                });
+
+            (*entry, existing)
+        }
+    }
+
+    #[unsafe(no_mangle)]
+    unsafe extern "C" fn poni_hot_lookup(cdecl: *const i8, expected_bytes: usize, existed: *mut bool) -> *mut c_void {
+        let cstr = unsafe { CStr::from_ptr(cdecl) };
+        let cstring = CString::from(cstr);
+
+        let mut globals = GLOBALS.lock().unwrap();
+        let value = globals.get_global(cstring, expected_bytes);
+
+        // SAFETY: The caller must ensure existed is NULL or points to a valid
+        // memory location.
+        if !existed.is_null() { unsafe { *existed = value.1; } }
+        return value.0 as *mut c_void;
+    }
+}
+
 #[cfg(not(feature = "hotreload"))]
 impl HotReload {
     #[inline(always)]

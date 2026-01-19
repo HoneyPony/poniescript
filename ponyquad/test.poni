@@ -20,14 +20,16 @@ class Horse {
     fun update() {
         var velocity = get_input();
 
-        var mul = 300 * get_frame_time();
+        var mul = 1000 * get_frame_time();
         // TODO: Implement vector multiplication
         velocity.x = velocity.x * mul;
         velocity.y = velocity.y * mul;
 
         position = position + velocity;
 
-        draw_texture(tex_horse, position, WHITE);
+        for i in 0..5 {
+            draw_texture(tex_horse, position + (i * 10, i * 20), WHITE);
+        }
     }
 }
 
