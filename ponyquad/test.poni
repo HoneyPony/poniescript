@@ -3,8 +3,19 @@ var horse = new Horse{};
 
 var WHITE: vec4 = (1, 1, 1, 1);
 
+fun wave(x: float) -> float {
+    while x > 2 {
+        x -= 2;
+    }
+    if x > 1 {
+        x = 2 - x;
+    }
+    return 2 * (3 * x * x - 2 * x * x * x) - 1;
+}
+
 class Horse {
     var position: vec2 = (0, 0);
+    var theta: float = 0;
     
     fun get_input() -> vec2 {
         var xy = (0.0, 0.0);
@@ -22,14 +33,19 @@ class Horse {
 
         var mul = 1000 * get_frame_time();
         // TODO: Implement vector multiplication
-        velocity.x = velocity.x * mul;
-        velocity.y = velocity.y * mul;
+        velocity.x *= mul;
+        velocity.y *= mul;
 
-        position = position + velocity;
+        position += velocity;
 
-        for i in 0..5 {
-            draw_texture(tex_horse, position + (i * 10, i * 20), WHITE);
+
+        for i in 0..100 {
+            var i: float = i;
+            var s = 0.2;
+            draw_texture(tex_horse, position + (i * s * 100, i * s * 20 + wave(theta + i * 0.2) * 30.0), WHITE);
         }
+        theta += get_frame_time() * 0.8;
+        while theta > 2 { theta -= 2; }
     }
 }
 
