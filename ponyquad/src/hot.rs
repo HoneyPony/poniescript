@@ -252,14 +252,10 @@ mod globals {
                 self.map = Some(HashMap::new());
             }
 
-            eprintln!("looking up global: {:?}", string);
-
             let map = self.map.as_mut().unwrap();
             let mut existing = true;
             let entry = map.entry((string,  expected_bytes))
                 .or_insert_with(|| {
-                    eprintln!("--> new global");
-
                     existing = false;
 
                     // For hot reloading, these are leaked allocations.
