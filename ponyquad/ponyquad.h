@@ -1,5 +1,5 @@
-#ifndef PONYGAME_MINI_H
-#define PONYGAME_MINI_H
+#ifndef PONYQUAD_H
+#define PONYQUAD_H
 
 #include "poni/poni.h"
 #include "poni/poni_glue.h"
