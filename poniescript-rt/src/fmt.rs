@@ -1,5 +1,7 @@
 use std::{ffi::c_char, io::{Write, stdout}};
 
+use poniescript_gc::{PsBool, PsFloat, PsInt, PsObject};
+
 use crate::*;
 
 // TODO: We will likely want to refactor the whole formatting

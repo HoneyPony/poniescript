@@ -99,12 +99,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic_fn"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdd31d79f3958c2a795696deb58a3be854c99d900211d61c85363fb27df9e6f3"
-
-[[package]]
 name = "auto_impl"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1134,7 +1128,6 @@ dependencies = [
 name = "poniescript-gc"
 version = "0.1.0"
 dependencies = [
- "atomic_fn",
  "env_logger",
  "log",
  "mimalloc",

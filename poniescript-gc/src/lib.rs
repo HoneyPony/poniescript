@@ -1,7 +1,10 @@
-use std::{alloc::{self, Layout}, collections::VecDeque, marker::PhantomData, ptr::null, sync::{Condvar, Mutex, atomic::{AtomicBool, AtomicPtr, AtomicU64, AtomicUsize, Ordering}}, thread::{self, JoinHandle}};
+mod pointers;
+mod primitives;
 
-#[cfg(feature = "hotreload")]
-use atomic_fn::AtomicFnPtr;
+pub use pointers::*;
+pub use primitives::*;
+
+use std::{alloc::{self, Layout}, collections::VecDeque, marker::PhantomData, mem::MaybeUninit, ptr::null, sync::{Condvar, Mutex, atomic::{AtomicBool, AtomicPtr, AtomicU64, AtomicUsize, Ordering}}, thread::{self, JoinHandle}};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -131,7 +134,7 @@ pub struct GcContext<'a> {
 
 impl<'a> GcContext<'a> {
     #[export_name = "poni_gc_alloc"]
-    pub extern "C" fn alloc(&mut self, size: usize) -> *mut u64 {
+    pub extern "C" fn alloc_raw_bytes(&mut self, size: usize) -> *mut u64 {
         let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
         let ptr = unsafe { alloc::alloc(layout) };
         let ptr = ptr as *mut u64;
@@ -167,6 +170,22 @@ impl<'a> GcContext<'a> {
         }
 
         ptr
+    }
+
+    /// Safely (?) allocates an object of the given type, moving the given
+    /// value into it.
+    pub fn alloc<T: HasPsHeader + HasPsType>(&mut self, init: T) -> Gp<T> {
+        let ptr = self.alloc_raw_bytes(std::mem::size_of::<T>());
+
+        let as_maybe_uninit = ptr as *mut MaybeUninit<T>;
+        // SAFETY: We know the pointer is valid (if alloc_raw_bytes is implemented
+        // correctly), so we can safely dereference it.
+        let as_maybe_uninit = unsafe { &mut *as_maybe_uninit };
+
+        let as_init = as_maybe_uninit.write(init);
+
+        // SAFETY: This is a valid pointer.
+        unsafe { Gp::from_ptr(as_init as *mut T) }
     }
 
     fn do_scan(&self) {

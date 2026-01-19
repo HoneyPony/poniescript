@@ -1,9 +1,9 @@
 pub mod texture;
 
 use std::ffi::c_void;
-use poniescript_gc::GcContext;
+use poniescript_gc::{Gp, PsFloat, GcContext};
 
-use poniescript_rt::{Gp, PsFloat, PsStrBuf, Vec2, Vec3, Vec4};
+use poniescript_rt::{PsStrBuf, Vec2, Vec3, Vec4};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn clear_background(_ctx: &mut GcContext, color: Vec4, _closure: *const c_void) {

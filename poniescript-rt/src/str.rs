@@ -1,7 +1,7 @@
 use core::slice;
 use std::{borrow::Cow, sync::atomic::Ordering};
 
-use crate::{AtomicPsInt, Gp, HasPsHeader, PsInt, PsObject};
+use poniescript_gc::{AtomicPsInt, Gp, HasPsHeader, PsInt, PsObject};
 
 unsafe impl HasPsHeader for PsStr {}
 unsafe impl HasPsHeader for PsStrBuf {}

@@ -1,7 +1,7 @@
-use std::{mem::MaybeUninit, os::raw::c_void, sync::Mutex};
+use std::{os::raw::c_void, sync::Mutex};
 
-use poniescript_gc::GcContext;
-use poniescript_rt::{Gp, HasPsHeader, PsObject, PsStrBuf, Vec2, Vec4};
+use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PsObject};
+use poniescript_rt::{PsStrBuf, Vec2, Vec4};
 
 #[repr(C)]
 pub struct Texture2D {
@@ -10,6 +10,10 @@ pub struct Texture2D {
 }
 
 unsafe impl HasPsHeader for Texture2D {}
+
+impl HasPsType for Texture2D {
+    const TYP: u64 = 18;
+}
 
 /// Handles loading the textures "later."
 /// 
@@ -58,15 +62,7 @@ pub extern "C" fn load_texture(gc: &mut GcContext, path: Gp<PsStrBuf>, _closure:
         inner: macroquad::prelude::Texture2D::empty()
     };
 
-    let result = gc.alloc(std::mem::size_of::<Texture2D>());
-    let ptr = result as *mut MaybeUninit<Texture2D>;
-
-    unsafe {
-        let as_ref = &mut *ptr;
-        as_ref.write(texture);
-    }
-
-    let result: Gp<Texture2D> = unsafe { Gp::from_ptr(ptr as *mut _) };
+    let result = gc.alloc(texture);
 
     // Add it to the queue.
     let mut queue = TEXTURE_QUEUE.lock().unwrap();

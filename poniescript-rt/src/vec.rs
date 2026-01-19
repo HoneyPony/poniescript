@@ -1,4 +1,4 @@
-use crate::{PsFloat, PsInt};
+use poniescript_gc::{PsFloat, PsInt};
 
 // TODO:
 // Consider using some common Rust vec type as our vec type.

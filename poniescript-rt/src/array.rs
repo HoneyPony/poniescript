@@ -1,4 +1,6 @@
 
+use poniescript_gc::{AtomicPsInt, Gp, HasPsHeader, HasPsType, PsInt, PsObject};
+
 use crate::*;
 
 use std::{marker::PhantomData, path::Iter, sync::atomic::{AtomicPtr, AtomicU64, Ordering}};
@@ -39,7 +41,7 @@ impl<T: Sized + HasPsType> PsArray<T> {
             length: len.into(),
         };
 
-        let allocated = ctx.alloc(bytes);
+        let allocated = ctx.alloc_raw_bytes(bytes);
         let as_header = allocated as *mut PsArrayHeader;
         *as_header = header;
 
