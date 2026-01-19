@@ -131,6 +131,7 @@ pub fn generate(tests_file: &mut File) {
 		("string/", "very_simple_str"),
 
 		("tuple/", "assign"),
+		("tuple/", "nested_assign"),
 		("tuple/", "big_tuple"),
 		("tuple/", "create_tuple"),
 		("tuple/", "print_tuple"),
