@@ -74,8 +74,11 @@ fn report_errors(ast: &Ast, db: &Db, doc_map: &HashMap<SourceId, Arc<Document>>)
     }
 
     for error in &db.errors {
+        // Can we show diagnostics without a location..?
+        let Some(main_loc) = &error.main_location else { continue; };
+
         let diag = Diagnostic {
-            range: convert_range(ast, &error.main_location),
+            range: convert_range(ast, &main_loc),
             severity: Some(if error.is_warning { DiagnosticSeverity::WARNING } else { DiagnosticSeverity::ERROR }),
             code: None,
             code_description: None,
@@ -87,7 +90,7 @@ fn report_errors(ast: &Ast, db: &Db, doc_map: &HashMap<SourceId, Arc<Document>>)
         };
 
         // Safety: We should have pushed an idx for every SourceId.
-        let idx = *idx_map.get(&error.main_location.source).unwrap();
+        let idx = *idx_map.get(&main_loc.source).unwrap();
         diags.all[idx].1.push(diag);
 	}
 

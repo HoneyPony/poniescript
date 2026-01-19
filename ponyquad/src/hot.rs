@@ -112,9 +112,9 @@ pub fn call_update(ctx: &mut GcContext, hot: &mut HotReload) {
 
 #[cfg(not(feature = "hotreload"))]
 pub fn call_update(ctx: &mut GcContext, hot: &mut HotReload) {
-    unsafe extern "C" { fn f_update(_ctx: &mut GcContext, _closure: *mut c_void); }
+    unsafe extern "C" { fn update(_ctx: &mut GcContext, _closure: *mut c_void); }
 
-    unsafe { f_update(ctx, std::ptr::null_mut()); }
+    unsafe { update(ctx, std::ptr::null_mut()); }
 }
 
 #[cfg(feature = "hotreload")]
@@ -141,7 +141,7 @@ impl HotReload {
     pub fn new(game_script_path: &str, gc: &mut GcContext) -> Option<Self> {
         let library = unsafe { libloading::Library::new(game_script_path).ok()? };
         let update_fn: libloading::Symbol<'_, fn(&mut GcContext, *mut c_void)>
-            = unsafe { library.get("f_update").ok()? };
+            = unsafe { library.get("update").ok()? };
 
         reload_gc_functions(&library)?;
 
@@ -174,7 +174,7 @@ impl HotReload {
     fn reload_lib_internal(&mut self, gc: &mut GcContext) -> Option<()> {
         unsafe {
             let new_lib = libloading::Library::new(&self.next_tmp_lib).ok()?;
-            let update_fn = new_lib.get("f_update").ok()?;
+            let update_fn = new_lib.get("update").ok()?;
 
             reload_gc_functions(&new_lib)?;
 

@@ -659,6 +659,30 @@ impl Db {
 		self.known_class_cnames.insert(class, struct_cname);
 	}
 
+	/// Should be called some time after parsing. Checks that we have all of
+	/// our bound functions.
+	pub fn handle_bound_functions(&mut self, functions: &Vec<String>) {
+		for fun in functions {
+			//let fullname = format!(".{}", fun);
+			let lookup = self.lookup_full_name(&fun);
+			let fun_id = match lookup {
+				ScopeEntry::Fun(fun_id) => fun_id,
+				ScopeEntry::Class(_) | ScopeEntry::Var(_) => {
+					self.report_error(Error::floating(format!("Name '{}' must refer to a function.", fun)));
+					return;
+				}
+				ScopeEntry::None => {
+					self.report_error(Error::floating(format!("Expected top-level function named '{}' to be defined.", fun)));
+					return;
+				}
+			};
+
+			// Now, we know the name of this function, so do that.
+			let known_cname = fun.clone().leak();
+			self.know_fun_cname(fun_id, known_cname);
+		}
+	}
+
 	pub fn put_sig(&mut self, sig: &Sig) -> SigId {
 		if let Some(existing) = self.sig_side_map.get(sig) {
 			return *existing;

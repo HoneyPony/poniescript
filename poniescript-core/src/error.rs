@@ -29,7 +29,7 @@ struct Note {
 
 pub struct Error {
 	pub main_message: String,
-	pub main_location: SourceLocation,
+	pub main_location: Option<SourceLocation>,
 
 	pub is_warning: bool,
 
@@ -40,7 +40,18 @@ impl Error {
 	pub fn simple(message: String, location: SourceLocation) -> Error {
 		Error {
 			main_message: message,
-			main_location: location,
+			main_location: Some(location),
+
+			is_warning: false,
+
+			notes: vec![],
+		}
+	}
+
+	pub fn floating(message: String) -> Error {
+		Error {
+			main_message: message,
+			main_location: None,
 
 			is_warning: false,
 
@@ -56,8 +67,6 @@ impl Error {
 }
 
 pub fn show_error(error: &Error, ast: &Ast) {
-	let source = ast.sources.get(error.main_location.source);
-
 	match error.is_warning {
 		true => eprint!("{STYLE_WARNING}warning: {STYLE_WARNING:#}"),
 		false => eprint!("{STYLE_ERROR}error: {STYLE_ERROR:#}")
@@ -65,7 +74,10 @@ pub fn show_error(error: &Error, ast: &Ast) {
 
 	eprintln!("{}", error.main_message);
 
-	source.show_underlined_location(&error.main_location);
+	if let Some(main_location) = error.main_location.as_ref() {
+		let source = ast.sources.get(main_location.source);
+		source.show_underlined_location(&main_location);
+	}
 
 	for note in &error.notes {
 		eprintln!("{STYLE_NOTE}note: {STYLE_NOTE:#}{}", note.note);

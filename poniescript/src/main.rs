@@ -392,6 +392,13 @@ fn main() {
 		exit(4);
 	}
 
+	// After typechecking, validate that we have our bound methods.
+	db.handle_bound_functions(&args.bind_funs);
+	if !db.errors.is_empty() {
+		report_errors(&ast, &db);
+		exit(4);
+	}
+
 	let timer = duration(timer, "type check", &mut duration_set);
 
 	dead_code::eliminate_dead_code(&mut db, &mut ast);

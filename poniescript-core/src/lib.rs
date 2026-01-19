@@ -78,6 +78,15 @@ pub struct Args {
 	/// The number of threads to use for codegen. Note that high numbers can
 	/// result in a panic.
 	pub codegen_threads: usize,
+
+	#[arg(long = "bind-fun")]
+	/// Special functions that we expect to have implemented.
+	/// 
+	/// These are treated specially in two ways: First, we MUST define a global
+	/// function with this name, and second, its C name will also be this name
+	/// (no f_ prefix), which should mean it's guaranteed to refer to the global
+	/// function rather than e.g. a class member function of the same name.
+	pub bind_funs: Vec<String>,
 }
 
 #[cfg(test)]
