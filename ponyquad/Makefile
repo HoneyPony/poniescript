@@ -6,7 +6,9 @@ RUST_FILES= \
 	src/bindings.rs \
 	src/hot.rs \
 	src/main.rs \
-	src/bindings/texture.rs
+	src/bindings/texture.rs \
+	src/bindings/input.rs \
+	src/bindings/input/key_table.rs 
 
 # game: pony.o $(GAMELIB)
 # 	$(CC) -fuse-ld=mold $^ -o $@ -lm
@@ -33,7 +35,7 @@ pony.o: pony.c
 	$(CC) -fPIC -g -c $^ -o $@ -I../poniescript
 	
 pony.c: test.poni
-	poniescript -e test.poni -i ponyquad.h -o $@
+	poniescript -e test.poni keycodes.poni -i ponyquad.h -o $@
 
 # pony.o: test.poni
 # 	poniescript -e test.poni -i ponyquad.h -o $@ -C-I../poniescript -c tcc

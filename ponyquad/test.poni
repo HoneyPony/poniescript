@@ -1,20 +1,53 @@
-var horse: Texture2D = load_texture("horse.png");
+var tex_horse: Texture2D = load_texture("horse.png");
+var horse = new Horse{};
+
+var WHITE: vec4 = (1, 1, 1, 1);
+
+class Horse {
+    var position: vec2 = (0, 0);
+    
+    fun get_input() -> vec2 {
+        var xy = (0.0, 0.0);
+
+        if is_key_down(K_LEFT) { xy.x = -1; }
+        if is_key_down(K_RIGHT) { xy.x = 1; }
+        if is_key_down(K_UP) { xy.y = -1; }
+        if is_key_down(K_DOWN) { xy.y = 1; }
+
+        xy
+    }
+
+    fun update() {
+        var velocity = get_input();
+
+        var mul = 100;
+        // TODO: Implement vector multiplication
+        velocity.x = velocity.x * mul;
+        velocity.y = velocity.y * mul;
+
+        position = position + velocity;
+
+        draw_texture(tex_horse, position, WHITE);
+    }
+}
+
+
 
 fun update() {
     var RED = (1.0, 0.0, 0.0, 1.0);
     var GREEN = (0.0, 1.0, 0.0, 1.0);
     var BLUE = (0.0, 0.0, 1.0, 1.0);
     var GRAY = (0.2, 0.2, 0.2, 1.0);
-    var WHITE: vec4 = (1, 1, 1, 1);
 
-    clear_background(RED);
+    clear_background(GRAY);
+    horse.update();
 
-    draw_texture(horse, (40, 40), WHITE);
+    //draw_texture(horse, (40, 40), WHITE);
 
-    draw_line((40, 40), (100, 200), 15, BLUE);
-    draw_rectangle((screen_width() / 2.0 - 60.0, 100.0), (120, 60), GREEN);
+    // draw_line((40, 40), (100, 200), 15, BLUE);
+    // draw_rectangle((screen_width() / 2.0 - 60.0, 100.0), (120, 60), GREEN);
 
-    draw_text("Hello, Macroquad!", (20, 20), 30.0, GRAY);
+    // draw_text("Hello, Macroquad!", (20, 20), 30.0, GRAY);
 
-    draw_line((10, 20), (100, 400), 5, BLUE);
+    // draw_line((10, 20), (100, 400), 5, BLUE);
 }

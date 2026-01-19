@@ -18,6 +18,12 @@ pub type PsInt = i64;
 // like C11's bool/_Bool would probably be better.
 pub type PsBool = i8;
 
+/// Converts a Rust bool to a PsBool. We might consider making PsBool C11 _Bool
+/// so that this isn't necessary.
+pub fn ps_bool(bool: bool) -> PsBool {
+    if bool { 1 } else { 0 }
+}
+
 pub const PONI_TAG_FLOAT    : u64 = 0x8000000000000002;
 pub const PONI_TAG_INT      : u64 = 0x8000000000000004;
 pub const PONI_TAG_BOOL     : u64 = 0x8000000000000006;

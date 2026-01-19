@@ -24,4 +24,17 @@ struct texture2d {
 PS_FUN() struct texture2d* load_texture(PONI_ABI(ps_strbuf *path));
 PS_FUN() void draw_texture(PONI_ABI(struct texture2d* texture, ps_vec2 position, ps_vec4 color));
 
+PS_FUN() ps_bool is_key_down(PONI_ABI(ps_int key));
+PS_FUN() ps_bool is_key_pressed(PONI_ABI(ps_int key));
+PS_FUN() ps_bool is_key_released(PONI_ABI(ps_int key));
+
+PS_FUN() ps_bool is_mouse_button_down(PONI_ABI(ps_int button));
+PS_FUN() ps_bool is_mouse_button_pressed(PONI_ABI(ps_int button));
+PS_FUN() ps_bool is_mouse_button_released(PONI_ABI(ps_int button));
+
+PS_FUN() ps_vec2 mouse_position(PONI_ABI());
+PS_FUN() ps_vec2 mouse_position_local(PONI_ABI());
+PS_FUN() ps_vec2 mouse_delta_position(PONI_ABI());
+PS_FUN() ps_vec2 mouse_wheel(PONI_ABI());
+
 #endif
