@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::Write;
 
 use poni_arena::ArenaKey;
+use crate::expr::ImportKind;
 use crate::{db::*, Args};
 use crate::typ::Type;
 
@@ -74,6 +75,9 @@ impl CodegenCoordinator {
 	}
 
 	fn compile_class_define(&mut self, class: ClassId, out: &mut CodegenOutputs) {
+		// Don't generate struct definitinos for CHeader imports, for now.
+		if matches!(self.db.get(class).import_kind, ImportKind::CHeader) { return; }
+
 		// Write the struct definition.
 		inf_writeln!(out.struct_define, "struct {} {{", self.db.get_class_cname(class));
 

@@ -34,6 +34,8 @@ async fn main() {
         hot::call_update(ctx, &mut hot);
         hot.poll(ctx);
 
+        bindings::texture::process_queue().await;
+
         next_frame().await
     }
 }

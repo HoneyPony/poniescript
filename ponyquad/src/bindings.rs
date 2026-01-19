@@ -1,3 +1,5 @@
+pub mod texture;
+
 use std::ffi::c_void;
 use poniescript_gc::GcContext;
 

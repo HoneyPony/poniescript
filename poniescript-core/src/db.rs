@@ -293,6 +293,9 @@ pub struct Db {
 	known_fun_cnames: FxHashMap<FunId, &'static str>,
 	known_class_cnames: FxHashMap<ClassId, &'static str>,
 
+	/// Resolves e.g. struct myclass* to a PS_CLASS() if we've seen one.
+	known_c_structs: FxHashMap<StrId, ClassId>,
+
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
 	class_cname_cache: Vec<&'static str>,
@@ -314,6 +317,11 @@ pub struct Db {
 	pub var_unassigned: VarId,
 
 	pub errors: Vec<Error>,
+
+	/// Imported from C code / headers. Need to be visisted by Binder.
+	pub imported_funs: Vec<FunId>,
+	/// Imported from C code / headers. Need to be visited by Binder.
+	pub imported_classes: Vec<ClassId>,
 
 	/// Whether we're compiling in a mode where we're testing the compiler.
 	/// Useful for comments to support the "expected value" of the test.
@@ -443,6 +451,10 @@ impl Db {
 			known_var_cnames: FxHashMap::default(),
 			known_fun_cnames: FxHashMap::default(),
 			known_class_cnames: FxHashMap::default(),
+
+			known_c_structs: FxHashMap::default(),
+			imported_funs: Vec::new(),
+			imported_classes: Vec::new(),
 
 			type_repr_cache: RwLock::new(FxHashMap::default()),
 			fun_cparams_cache: Vec::new(),
@@ -1150,6 +1162,15 @@ impl Db {
 		let name = self.put_str(name);
 
 		self.name_map.insert(name, entry)
+	}
+
+	pub fn add_known_c_struct(&mut self, name: StrId, class: ClassId) {
+		self.known_c_structs.insert(name, class);
+	}
+
+	/// NOTE: In the future, this might also return value types.
+	pub fn lookup_c_struct(&self, name: StrId) -> Option<ClassId> {
+		self.known_c_structs.get(&name).copied()
 	}
 
 	pub fn new_var(&mut self, name: StrId, typ: TypId, readonly: bool, fun: Option<FunId>, class: Option<ClassId>, initializer: Option<ExprId>, location: SourceLocation, doc_comment: Option<Vec<Token>>) -> VarId {

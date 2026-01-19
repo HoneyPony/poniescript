@@ -1,10 +1,15 @@
+var horse: Texture2D = load_texture("horse.png");
+
 fun update() {
     var RED = (1.0, 0.0, 0.0, 1.0);
     var GREEN = (0.0, 1.0, 0.0, 1.0);
     var BLUE = (0.0, 0.0, 1.0, 1.0);
     var GRAY = (0.2, 0.2, 0.2, 1.0);
+    var WHITE: vec4 = (1, 1, 1, 1);
 
     clear_background(RED);
+
+    draw_texture(horse, (40, 40), WHITE);
 
     draw_line((40, 40), (100, 200), 15, BLUE);
     draw_rectangle((screen_width() / 2.0 - 60.0, 100.0), (120, 60), GREEN);

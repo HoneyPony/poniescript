@@ -205,6 +205,14 @@ pub struct Sig {
 	pub return_type: TypId,
 }
 
+pub enum ImportKind {
+	Not,
+	/// For now, things imported from C headers should *not* be declared by us.
+	/// 
+	/// This may change.
+	CHeader,
+}
+
 pub struct Class {
 	pub name: StrId,
 	pub vars: Vec<VarId>,
@@ -215,6 +223,8 @@ pub struct Class {
 	/// We store these in a set so that we can easily "check them off" in the
 	/// type checker.
 	pub mandatory_vars: FxHashSet<VarId>,
+
+	pub import_kind: ImportKind,
 
 	pub var_map: FxHashMap<StrId, VarId>,
 	pub fun_map: FxHashMap<StrId, FunId>,

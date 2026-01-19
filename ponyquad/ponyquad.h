@@ -13,4 +13,15 @@ PS_FUN() ps_vec3 draw_text(PONI_ABI(ps_strbuf *text, ps_vec2 at, ps_float size, 
 PS_FUN() ps_float screen_width(PONI_ABI());
 PS_FUN() ps_float screen_height(PONI_ABI());
 
+PS_CLASS("Texture2D")
+struct texture2d {
+    ps_object header;
+
+    // This type is not constructible...
+    char opaque[16];
+};
+
+PS_FUN() struct texture2d* load_texture(PONI_ABI(ps_strbuf *path));
+PS_FUN() void draw_texture(PONI_ABI(struct texture2d* texture, ps_vec2 position, ps_vec4 color));
+
 #endif

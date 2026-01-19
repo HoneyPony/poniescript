@@ -480,30 +480,35 @@ impl<'db> Binder<'db> {
 		}
 	}
 
-	fn visit_class(&mut self, ast: &AstProxy, class_declare: &mut ClassDeclare) {
+	fn visit_class_id(&mut self, ast: &AstProxy, id: ClassId) {
 		let enclosing_in_class = self.in_class;
 		self.in_class = true;
 
-		let class = self.db.get(class_declare.identity);
-		let name = self.db.get(class.name);
+		let name = self.db.get(self.db.get(id).name);
 		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name, true);
 		self.checkers.push(new_scope);
 
-		for fun in &mut class_declare.funs {
-			self.visit_function(ast, fun);
+		for i in 0..self.db.get(id).funs.len() {
+			self.visit_function_id(ast, self.db.get(id).funs[i]);
 		}
 
-		for var in &mut class_declare.vars {
-			if let Some(value) = var.value {
+		for i in 0..self.db.get(id).vars.len() {
+			let var = self.db.get(id).vars[i];
+
+			if let Some(value) = self.db.get(var).initializer {
 				self.visit_expr(ast, value);
 			}
 
 			// Bind variable types
-			self.visit_var_type(var.identity);
+			self.visit_var_type(var);
 		}
 
 		self.checkers.pop();
 		self.in_class = enclosing_in_class;
+	}
+
+	fn visit_class(&mut self, ast: &AstProxy, class_declare: &mut ClassDeclare) {
+		
 	}
 
 	fn resolve_type(&mut self, name: StrId, location: &SourceLocation) -> Option<Type> {
@@ -542,6 +547,17 @@ impl<'db> Binder<'db> {
 				}
 				return typ;
 			},
+			Type::UnboundCStructPtr(str_id) => {
+				if let Some(ty) = self.db.lookup_c_struct(str_id) {
+					return self.db.put_type(Type::Class(ty));
+				}
+				// Report an error.
+				self.db.report_error(Error::simple(
+			format!("Unresolved C struct '{}'", self.db.get(str_id)),
+					location.clone()
+				));
+				return typ;
+			}
 			Type::Fun(sig) => {
 				// TODO: Consider adding a flag here that will keep us from re-visiting
 				// the same funs over and over. In particular, any fully resolved TypId
@@ -651,19 +667,24 @@ impl<'db> Binder<'db> {
 		}
 	}
 
-	fn visit_function(&mut self, ast: &AstProxy, function: &mut FunDeclare) {
-		// TODO: Push my name.
-		self.visit_expr(ast, function.value);
-
-		let param_count = self.db.get(function.identity).parameters.len();
+	fn visit_function_id(&mut self, _ast: &AstProxy, id: FunId) {
+		let param_count = self.db.get(id).parameters.len();
 		for param in 0..param_count {
-			let var = self.db.get(function.identity).parameters[param];
+			let var = self.db.get(id).parameters[param];
 			self.visit_var_type(var);
 		}
 
 		// Visit the function return value type in case it is UnboundIdent.
-		let ret_type = self.visit_type(self.db.get(function.identity).return_type, &function.location);
-		self.db.get_mut(function.identity).return_type = ret_type;
+		let location = self.db.get(id).location.clone();
+		let ret_type = self.visit_type(self.db.get(id).return_type, &location);
+		self.db.get_mut(id).return_type = ret_type;
+	}
+
+	fn visit_function(&mut self, ast: &AstProxy, function: &mut FunDeclare) {
+		// TODO: Push my name.
+		self.visit_expr(ast, function.value);
+
+		self.visit_function_id(ast, function.identity);
 	}
 
 	pub fn visit_module(&mut self, ast: &AstProxy, module: &mut Module) {
@@ -676,6 +697,7 @@ impl<'db> Binder<'db> {
 			if let Some(value) = global.value {
 				self.visit_expr(ast, value);
 			}
+			self.visit_var_type(global.identity);
 		}
 
 		for fun in &mut module.functions {
@@ -700,6 +722,21 @@ pub fn bind(db: &mut Db, ast: &mut Ast) -> bool {
 		binder.visit_module(&proxy, &mut source.module);
 
 		if binder.had_error { had_error = true; }
+	}
+
+	// We also need to visit every class and fun that was imported.
+	for i in 0..db.imported_funs.len() {
+		let fun = db.imported_funs[i];
+		let mut binder = Binder::new(db);
+		binder.checkers.push(NameChecker::global());
+		binder.visit_function_id(&proxy, fun);
+	}
+
+	for i in 0..db.imported_classes.len() {
+		let class = db.imported_classes[i];
+		let mut binder = Binder::new(db);
+		binder.checkers.push(NameChecker::global());
+		binder.visit_class_id(&proxy, class);
 	}
 
 	proxy.commit();

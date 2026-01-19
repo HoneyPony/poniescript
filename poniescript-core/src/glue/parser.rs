@@ -2,7 +2,7 @@ use std::path::Path;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{db::*, expr::{Class, Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
+use crate::{db::*, expr::{Class, Fun, ImportKind, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
 use crate::error::Error;
 
 use poni_arena::IndexCell;
@@ -245,12 +245,15 @@ impl<'b> Parser<'b> {
             None => c_name.lexeme
         };
 
+        log::trace!("got C class name: '{}'", self.db.get(class_name));
+
         let class: ClassId = self.db.push(Class {
             name: class_name,
             vars: vars.clone(),
             funs,
             var_map,
             fun_map,
+            import_kind: ImportKind::CHeader,
             // TODO: For imported classes, we need both the ability to mark
             // which vars are mandatory, and ALSO a way to mark the class
             // as unconstructible from PonieScript.
@@ -265,7 +268,9 @@ impl<'b> Parser<'b> {
         }
 
         self.db.add_full_name(self.db.get(class_name), ScopeEntry::Class(class));
+        self.db.add_known_c_struct(c_name.lexeme, class);
         self.db.know_class_cname(class, self.db.get(c_name.lexeme));
+        self.db.imported_classes.push(class);
 
         Ok(())
     }
@@ -347,6 +352,7 @@ impl<'b> Parser<'b> {
         // TODO: Handle name collisions here as well?
         self.db.add_full_name(self.db.get(fun_name), ScopeEntry::Fun(fun));
         self.db.know_fun_cname(fun, self.db.get(c_name.lexeme));
+        self.db.imported_funs.push(fun);
 
         if self.match_(GlueTok::Semicolon)?.is_some() {
             // Ok, function declaration, we're good
@@ -366,7 +372,7 @@ impl<'b> Parser<'b> {
         if self.match_(GlueTok::Struct)?.is_some() {
             let struct_name = expected!(self, GlueTok::Identifier, "Identifier after 'struct'")?;
             expected!(self, GlueTok::Star, "'*' after struct name")?;
-            self.db.put_type(Type::UnboundCStructPtr(struct_name.lexeme));
+            return Ok(self.db.put_type(Type::UnboundCStructPtr(struct_name.lexeme)));
         }
 
         let id = expected!(self, GlueTok::Identifier, "C type expression")?;
@@ -394,7 +400,7 @@ impl<'b> Parser<'b> {
             return Ok(self.db.types.str_buf);
         }
 
-        parse_error!(self, "Unknown C type");
+        parse_error!(self, "Unknown C type '{}'", self.db.get(id.lexeme));
         Err(ParseErr::SyntaxErr)
     }
 

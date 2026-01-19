@@ -1706,6 +1706,7 @@ impl<'b> Parser<'b> {
 			funs,
 			var_map,
 			fun_map,
+			import_kind: ImportKind::Not,
 			mandatory_vars,
 			location: name.location,
 			doc_comment,
