@@ -91,6 +91,17 @@ macro_rules! type_error {
 
 const PANIC_ON_BAD_NODE: bool = false;
 
+/// Maps +=, -= etc to their corresponding +, -, etc
+fn map_assign_op(op: Tok) -> Tok {
+	match op {
+		Tok::PlusEqual  => Tok::Plus,
+		Tok::MinusEqual => Tok::Minus,
+		Tok::StarEqual  => Tok::Star,
+		Tok::SlashEqual => Tok::Slash,
+		_ => unreachable!("ICE: Bad assign operator")
+	}
+}
+
 impl<'db> TypeChecker<'db> {
 	fn new(db: &'db mut Db) -> Self {
 		TypeChecker {
@@ -1487,6 +1498,26 @@ impl<'db> TypeChecker<'db> {
 			}
 			Expr::Variable(var) => self.db.get(var.identity).typ,
 			Expr::Assign(assign) => {
+				// I'm not sure EXACTLY how I want to do assigns, but I think
+				// it's straightforward enough to do it like this:
+				//
+				// Desugar the assign ahead of time, THEN check it. This ensures
+				// that assigns behave EXACTLY like whatever binary operators
+				// we've implemented.
+				if assign.op != Tok::Equal {
+					// Read from the variable
+					let read = Expr::push_variable(ast, assign.location.clone(),
+						assign.identity);
+					// Perform a binary op, with RHS the assign's current value
+					let binop = Expr::push_binary(ast, assign.location.clone(),
+						map_assign_op(assign.op), read, assign.value, self.db.types.unassigned);
+					// That is now what we're assigning.
+					assign.value = binop;
+
+					// The assign is now a regular assign. (As of writing this
+					// comment, nothing else in the code reads this though.)
+					assign.op = Tok::Equal;
+				}
 				self.check_assign(ast, &assign.location, assign.identity, &mut assign.value, false)?
 			},
 			Expr::NumLiteral(lit) => {
@@ -2147,7 +2178,7 @@ impl<'db> TypeChecker<'db> {
 						let add = Expr::push_binary(ast, for_.location.clone(),
 							Tok::Plus, read, one, self.db.types.int);
 						let assign = Expr::push_assign(ast, for_.location.clone(),
-							self.db.srcloc_dummy(), for_.identity, add);
+							self.db.srcloc_dummy(), for_.identity, add, Tok::Equal);
 
 						let inner_stmt = Stmt::push_expression(ast, for_.location.clone(),
 							for_.inner);

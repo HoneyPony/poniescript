@@ -387,8 +387,8 @@ pub fn generate(file: &mut File) {
 	FunDeclare    : FunId identity, Expr value, TypId typ
 	ValCall       : Expr value, Vec<Expr> args, SigId sig
 	FunCapture    : SourceLocation fn_name, FunId identity, TypId typ, Option<Expr> object
-	Assign        : SourceLocation var_name, VarId identity, Expr value
-	UnboundAssign : Token identifier, Expr value
+	Assign        : SourceLocation var_name, VarId identity, Expr value, Tok op
+	UnboundAssign : Token identifier, Expr value, Tok op
 	NumLiteral    : Token contents, TypId typ
 	StrLiteral    : StrConstId id
 	BoolLiteral   : bool value

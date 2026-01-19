@@ -1,0 +1,14 @@
+fun init() {
+    var x: int = 30;
+
+    // Some type errors..?
+    //
+    // We could consider changing these in the future, but I guess this is fine.
+    //? Invalid operands to binary operator: LHS is int, RHS is a decimal number
+    x += 5.0;
+    print(x); //! 35.000000
+    x *= 5.0;
+    print(x); //! 175.000000
+    x -= 2.0;
+    print(x); //! 173.000000
+}

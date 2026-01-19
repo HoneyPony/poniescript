@@ -3,6 +3,7 @@ use std::sync::Arc;
 use crate::db::*;
 use crate::error::Error;
 use crate::expr::*;
+use crate::lexer::Tok;
 use crate::module::Module;
 use crate::source::SourceLocation;
 use crate::typ::Type;
@@ -129,10 +130,10 @@ impl<'db> Binder<'db> {
 		None
 	}
 
-	fn resolve_unbound_assign(&mut self, ident: StrId, location: SourceLocation, ident_location: SourceLocation, expr: ExprId) -> Option<Expr> {
+	fn resolve_unbound_assign(&mut self, ident: StrId, location: SourceLocation, ident_location: SourceLocation, expr: ExprId, op: Tok) -> Option<Expr> {
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
-				ScopeEntry::Var(var) => return Some(Expr::mk_assign(location, ident_location, var, expr)),
+				ScopeEntry::Var(var) => return Some(Expr::mk_assign(location, ident_location, var, expr, op)),
 				ScopeEntry::Fun(_) => {
 					self.db.report_error(Error::simple(
 						format!("Cannot assign to a function."),
@@ -333,7 +334,11 @@ impl<'db> Binder<'db> {
 				// Important: Must visit the value node too
 				self.visit_expr(ast, assign.value);
 				// TODO: Do we want to avoid the clone here?
-				self.resolve_unbound_assign(assign.identifier.lexeme, assign.location.clone(), assign.identifier.location.clone(), assign.value)
+				self.resolve_unbound_assign(assign.identifier.lexeme,
+					assign.location.clone(),
+					assign.identifier.location.clone(),
+					assign.value,
+					assign.op)
 			},
 
 			Expr::FunCall(call) => {

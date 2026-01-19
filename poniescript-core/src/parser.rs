@@ -515,13 +515,15 @@ impl<'b> Parser<'b> {
 			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
 		};
 
-		if self.match_(Tok::Equal)?.is_some() {
+		if matches!(self.current.typ, Tok::Equal | Tok::PlusEqual | Tok::MinusEqual | Tok::StarEqual | Tok::SlashEqual) {
+			let op = self.advance()?;
 			let rhs = self.expression()?;
 
 			// Assignment
 			match expr {
 				Expr::Variable(variable) => 
-					return Expr::put_assign_ok(self.ast, self.end(location), variable.location, variable.identity, rhs),
+					return Expr::put_assign_ok(self.ast, self.end(location), variable.location, variable.identity, rhs,
+						op.typ),
 				Expr::FunCapture(_) => {
 					let error = Error::simple(format!("Cannot assign to a function"), self.end(location));
 					semantic_error_with!(self, error);
@@ -530,7 +532,7 @@ impl<'b> Parser<'b> {
 					return Ok(self.ast.exprs.push(expr));
 				}
 				Expr::Unbound(unbound) => {
-					return Expr::put_unboundassign_ok(self.ast, self.end(location), unbound.identifier, rhs)
+					return Expr::put_unboundassign_ok(self.ast, self.end(location), unbound.identifier, rhs, op.typ)
 				}
 				Expr::Get(_) => {
 					panic!("ICE: Tried to assign to Get. This should have generated a Set.");

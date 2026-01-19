@@ -1,0 +1,11 @@
+fun init() {
+    var x: float = 30;
+
+    // Tests that these int values get promoted to floats.
+    x += 5;
+    print(x); //! 35.000000
+    x *= 5;
+    print(x); //! 175.000000
+    x -= 2;
+    print(x); //! 173.000000
+}

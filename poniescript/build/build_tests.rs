@@ -42,6 +42,11 @@ fn generate_test(bt: &mut BuiltTests, bt_valgrind: &mut BuiltTests, path: &str, 
 
 pub fn generate(tests_file: &mut File) {
 	let tests = [
+		("assign/", "addition_tuple"),
+		("assign/", "arith_ops_float_promote"),
+		("assign/", "arith_ops_int"),
+		("assign/", "err_arith_ops"),
+
 		("binary/", "binary_doubleblock"),
 		("binary/", "binary_bottom"),
 		("binary/", "binary_parens"),
