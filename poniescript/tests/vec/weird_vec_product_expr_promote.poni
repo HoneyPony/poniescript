@@ -2,5 +2,5 @@ fun init() {
     // Everything should promote to float because we are multiplying by float.
     //
     // This should work because we're promoting a literal, not an expression.
-    print(((1, 2.0), 3) * 5.0); //! ((1.000000, 2.000000), 3.000000)
+    print(((1, 2.0), 3) * 5.0); //! ((5.000000, 10.000000), 15.000000)
 }
