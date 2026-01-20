@@ -83,3 +83,46 @@ pub extern "C" fn get_time(_ctx: &mut GcContext, _closure: *const c_void) -> PsF
 pub extern "C" fn get_fps(_ctx: &mut GcContext, _closure: *const c_void) -> PsInt {
     macroquad::prelude::get_fps() as PsInt
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn hsl_to_rgb(_ctx: &mut GcContext, hsl: Vec3, _closure: *const c_void) -> Vec3 {
+    let rgba = macroquad::color::hsl_to_rgb(hsl.x, hsl.y, hsl.z);
+    Vec3 {
+        x: rgba.r,
+        y: rgba.g,
+        z: rgba.b
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn hsla_to_rgba(_ctx: &mut GcContext, hsla: Vec4, _closure: *const c_void) -> Vec4 {
+    let rgba = macroquad::color::hsl_to_rgb(hsla.x, hsla.y, hsla.z);
+    Vec4 {
+        x: rgba.r,
+        y: rgba.g,
+        z: rgba.b,
+        w: hsla.w,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rgb_to_hsl(_ctx: &mut GcContext, rgb: Vec3, _closure: *const c_void) -> Vec3 {
+    let hsl = macroquad::color::rgb_to_hsl(macroquad::color::Color {
+        r: rgb.x,
+        g: rgb.y,
+        b: rgb.z,
+        a: 1.0
+    });
+    Vec3 { x: hsl.0, y: hsl.1, z: hsl.2 }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rgba_to_hsla(_ctx: &mut GcContext, rgba: Vec4, _closure: *const c_void) -> Vec4 {
+    let hsl = macroquad::color::rgb_to_hsl(macroquad::color::Color {
+        r: rgba.x,
+        g: rgba.y,
+        b: rgba.z,
+        a: 1.0,
+    });
+    Vec4 { x: hsl.0, y: hsl.1, z: hsl.2, w: rgba.w }
+}

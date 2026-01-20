@@ -16,6 +16,7 @@ fun wave(x: float) -> float {
 class Horse {
     var position: vec2 = (0, 0);
     var theta: float = 0;
+    var color_theta: float = 0;
     
     fun get_input() -> vec2 {
         var xy = (0.0, 0.0);
@@ -42,10 +43,20 @@ class Horse {
         for i in 0..100 {
             var i: float = i;
             var s = 0.5;
-            draw_texture(tex_horse, position + (i * s * 100, i * s * 20 + wave(theta + i * 0.2) * 30.0), WHITE);
+
+            var ii = color_theta + i * 0.02;
+            while ii > 1 {
+                ii -= 1;
+            }
+            draw_texture(tex_horse,
+                position + (i * s * 100, i * s * 20 + wave(theta + i * 0.2) * 30.0),
+                hsla_to_rgba((ii, 1.0, 0.5, 1.0)));
         }
         theta += get_frame_time() * 0.8;
         while theta > 2 { theta -= 2; }
+
+        color_theta += get_frame_time() * 0.4;
+        while color_theta > 1 { color_theta -= 1; }
     }
 }
 

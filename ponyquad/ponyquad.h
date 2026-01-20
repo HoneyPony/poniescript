@@ -41,4 +41,9 @@ PS_FUN() ps_float get_frame_time(PONI_ABI());
 PS_FUN() ps_float get_time(PONI_ABI());
 PS_FUN() ps_int get_fps(PONI_ABI());
 
+PS_FUN() ps_vec3 hsl_to_rgb(PONI_ABI(ps_vec3 hsl));
+PS_FUN() ps_vec4 hsla_to_rgba(PONI_ABI(ps_vec4 hsla));
+PS_FUN() ps_vec3 rgb_to_hsl(PONI_ABI(ps_vec3 rgb));
+PS_FUN() ps_vec4 rgba_to_hsla(PONI_ABI(ps_vec4 rgba));
+
 #endif
