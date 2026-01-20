@@ -475,8 +475,8 @@ impl Lexer {
 				if self.next_char == '#' {
 					self.advance(db)?;
 					let mut len = 0;
-					for i in 0..8 {
-						if !matches!(self.next_char, '0'..'9' | 'a'..'f' | 'A'..'F') {
+					for _ in 0..8 {
+						if !matches!(self.next_char, '0'..='9' | 'a'..='f' | 'A'..='F') {
 							break;
 						}
 						// Eat digits & hex characters.

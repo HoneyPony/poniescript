@@ -973,9 +973,12 @@ impl<'b> Parser<'b> {
 						current = current * 16 + value;
 						
 						if on_even {
-							let value = value as f32 / 255.0;
+							log::trace!("color literal: {}", current);
+							// IMPORTANT: Use 'current' here, not 'value'.
+							let value = current as f32 / 255.0;
 							let literal = format!("{}", value);
 							let literal = self.db.put_str(&literal);
+							log::trace!("into literal: {}", self.db.get(literal));
 							values.push(Expr::put_numliteral(self.ast, lit.location.clone(),
 								self.db.synthetic_id(literal),
 								self.db.types.float));
