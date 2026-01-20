@@ -2,6 +2,7 @@ mod document;
 mod inlay_hint;
 mod goto;
 mod hover;
+mod color;
 
 use std::path::PathBuf;
 
@@ -328,6 +329,17 @@ impl LanguageServer for Backend {
     ) -> Result<Option<GotoDefinitionResponse>> {
         let mut lock = self.store.lock().await;
         Ok(goto::goto_definition(&mut lock, params))
+    }
+
+    async fn document_color(&self, params: DocumentColorParams) -> Result<Vec<ColorInformation>> {
+        Err(Error::method_not_found())
+    }
+
+    async fn color_presentation(
+        &self,
+        params: ColorPresentationParams,
+    ) -> Result<Vec<ColorPresentation>> {
+        Err(Error::method_not_found())
     }
 }
 
