@@ -16,13 +16,19 @@ use poniescript_gc::gc_spawn;
 // This also means we can't directly use Macroquad's #[main] macro; instead,
 // manually do what it does (which is just calling a constructor on
 // macroquad::Window).
-// #[unsafe(no_mangle)]
-// pub fn main() {
-//     macroquad::Window::new("Game", macroquad_main());
-// }
+#[unsafe(no_mangle)]
+#[cfg(not(feature = "hotreload"))]
+pub fn main() {
+    macroquad::Window::new("Game", macroquad_main());
+}
 
-#[macroquad::main("Game")]
-async fn main() {
+/// Should be called by the hotreload host.
+#[cfg(feature = "hotreload")]
+pub fn ponyquad_main() {
+    macroquad::Window::new("Game", macroquad_main());
+}
+
+async fn macroquad_main() {
     let mut gc_handle = gc_spawn();
     let mut ctx = gc_handle.create_context_for_existing();
 

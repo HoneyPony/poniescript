@@ -1,0 +1,8 @@
+[package]
+name = "ponyquad-hot-host"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+poniescript-gc = { version = "0.1.0", path = "../poniescript-gc" }
+ponyquad = { version = "0.1.0", path = "../ponyquad", features = ["hotreload"] }

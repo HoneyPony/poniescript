@@ -10,7 +10,8 @@ members = [
     "poni-doc",
     "poni-doc-cli",
     "poni-arena",
-    "ponyquad"
+    "ponyquad",
+    "ponyquad-hot-host"
 ]
 
 [workspace.dependencies]

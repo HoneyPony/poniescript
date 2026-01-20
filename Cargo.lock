@@ -1165,6 +1165,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ponyquad-hot-host"
+version = "0.1.0"
+dependencies = [
+ "poniescript-gc",
+ "ponyquad",
+]
+
+[[package]]
 name = "portable-atomic"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
