@@ -1377,7 +1377,7 @@ impl<'b> Parser<'b> {
 
 				expected!(self, Tok::RightParen, "')' after parameter list for fun type")?;
 
-				if self.match_(Tok::LeftArrow)?.is_some() {
+				if self.match_(Tok::RightArrow)?.is_some() {
 					sig.return_type = self.typ()?;
 				}
 
@@ -1640,7 +1640,7 @@ impl<'b> Parser<'b> {
 
 		let mut return_type = self.db.types.void;
 
-		if self.match_(Tok::LeftArrow)?.is_some() {
+		if self.match_(Tok::RightArrow)?.is_some() {
 			// Parse return type
 			return_type = self.typ()?;
 		}
