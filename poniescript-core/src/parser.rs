@@ -202,7 +202,7 @@ macro_rules! expected_after {
 }
 
 fn matches_assign(tok: Tok) -> bool {
-	matches!(tok, Tok::Equal | Tok::PlusEqual | Tok::MinusEqual | Tok::StarEqual | Tok::SlashEqual)
+	matches!(tok, Tok::Equal | Tok::PlusEqual | Tok::MinusEqual | Tok::StarEqual | Tok::SlashEqual | Tok::PercentEqual)
 }
 
 impl<'b> Parser<'b> {
@@ -1106,7 +1106,7 @@ impl<'b> Parser<'b> {
 				Tok::DotDotEqual | Tok::EqualDotDot => (9, 10),
 
 			Tok::Plus | Tok::Minus => (11, 12),
-			Tok::Star | Tok::Slash => (13, 14),
+			Tok::Star | Tok::Slash | Tok::Percent => (13, 14),
 
 			Tok::Dot => (15, 16),
 
@@ -1134,7 +1134,7 @@ impl<'b> Parser<'b> {
 			}
 
 			// Binary expressions
-			Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash => {
+			Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash | Tok::Percent => {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::put_binary_ok(self.ast, self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);

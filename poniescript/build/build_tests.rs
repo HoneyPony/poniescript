@@ -55,6 +55,7 @@ pub fn generate(tests_file: &mut File) {
 		("binary/", "binary_parens"),
 		("binary/", "tuples"),
 		("binary/", "err_class"),
+		("binary/", "modulo"),
 
 		("binder/", "sneaky"),
 

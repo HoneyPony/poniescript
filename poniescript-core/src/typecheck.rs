@@ -94,10 +94,11 @@ const PANIC_ON_BAD_NODE: bool = false;
 /// Maps +=, -= etc to their corresponding +, -, etc
 fn map_assign_op(op: Tok) -> Tok {
 	match op {
-		Tok::PlusEqual  => Tok::Plus,
-		Tok::MinusEqual => Tok::Minus,
-		Tok::StarEqual  => Tok::Star,
-		Tok::SlashEqual => Tok::Slash,
+		Tok::PlusEqual    => Tok::Plus,
+		Tok::MinusEqual   => Tok::Minus,
+		Tok::StarEqual    => Tok::Star,
+		Tok::SlashEqual   => Tok::Slash,
+		Tok::PercentEqual => Tok::Percent,
 		_ => unreachable!("ICE: Bad assign operator")
 	}
 }

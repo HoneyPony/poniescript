@@ -26,7 +26,7 @@ pub enum Tok {
 
 	Semicolon, Colon,
 
-	Question, Percent, Ampersand, VerticalBar,
+	Question, Percent, PercentEqual, Ampersand, VerticalBar,
 
 	Bang, BangEqual,
 	Equal, EqualEqual,
@@ -519,7 +519,7 @@ impl Lexer {
 			';' => Tok::Semicolon,
 			':' => Tok::Colon,
 			'?' => Tok::Question,
-			'%' => Tok::Percent,
+			'%' => self.tok_eq(Tok::Percent, Tok::PercentEqual, db)?,
 			'&' => Tok::Ampersand,
 			'|' => Tok::VerticalBar,
 

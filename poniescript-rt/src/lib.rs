@@ -4,6 +4,7 @@ mod vec;
 mod fmt;
 mod str;
 mod type_ids;
+mod math;
 
 #[cfg(feature = "entry")]
 mod entry;
