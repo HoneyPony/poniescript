@@ -45,7 +45,7 @@ class Horse {
             var ii = (color_theta + i * 0.02) % 1.0;
             draw_texture(tex_horse,
                 position + (i * s * 100, i * s * 20 + wave(theta + i * 0.2) * 30.0),
-                (#fff));
+                (#308c7743));
         }
         theta = (theta + get_frame_time() * 0.8) % 2.0;
 

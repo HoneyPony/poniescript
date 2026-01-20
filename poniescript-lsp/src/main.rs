@@ -363,7 +363,34 @@ impl LanguageServer for Backend {
         &self,
         params: ColorPresentationParams,
     ) -> Result<Vec<ColorPresentation>> {
-        Err(Error::method_not_found())
+        // For now, as a hack, determine whether we want a 3-elem color or a 
+        // 4-elem color based on the approximate length of the range.
+        let approx_len = params.range.end.character - params.range.start.character;
+
+        let elems = match approx_len {
+            3 => 3,
+            4 => 4,
+            6 => 3,
+            8 => 4,
+            _ => 4
+        };
+
+        let r = (params.color.red   * 255.0) as u8;
+        let g = (params.color.green * 255.0) as u8;
+        let b = (params.color.blue  * 255.0) as u8;
+        let a = (params.color.alpha * 255.0) as u8;
+
+        let label = match elems {
+            3 => format!("{:02x}{:02x}{:02x}", r, g, b),
+            4 => format!("{:02x}{:02x}{:02x}{:02x}", r, g, b, a),
+            _ => unreachable!()
+        };
+
+        Ok(vec![ColorPresentation {
+            label,
+            text_edit: None,
+            additional_text_edits: None
+        }])
     }
 }
 
