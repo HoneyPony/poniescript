@@ -50,7 +50,7 @@ class Horse {
             }
             draw_texture(tex_horse,
                 position + (i * s * 100, i * s * 20 + wave(theta + i * 0.2) * 30.0),
-                hsla_to_rgba((ii, 1.0, 0.5, 1.0)));
+                (#fa3f));
         }
         theta += get_frame_time() * 0.8;
         while theta > 2 { theta -= 2; }
