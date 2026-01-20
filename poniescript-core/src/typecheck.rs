@@ -459,6 +459,38 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	/// Computes the intersection between two types such as (int, float) against float,
+	/// or also (((int, int), float), (AssumeFloat)) against float.
+	/// 
+	/// Note that bottom_eats should be irrelevant, but that's OK.
+	fn compute_scalar_tuple_intersect(&mut self, bottom_eats: bool, scalar: TypId, vector: TypId) -> std::result::Result<TypId, TypeComputeErr> {
+		if scalar == vector { panic!("ICE: compute_scalar_tuple_intersect where the types match") }
+
+		let ty_vector = self.db.get(vector).clone();
+
+		match ty_vector {
+			Type::Tuple(inner) => {
+				let mut new_inner = Vec::new();
+				for i in inner.iter() {
+					if self.is_scalar(*i) {
+						// For scalar types, we compute the normal intersect between
+						// the overall scalar and the tuple member.
+						new_inner.push(self.compute_intersect(bottom_eats, scalar, *i)?);
+					}
+					else {
+						// Otherwise, we recursively compute the scalar-vector intersect.
+						new_inner.push(self.compute_scalar_tuple_intersect(bottom_eats, scalar, *i)?);
+					}
+				}
+
+				Ok(self.db.put_type(Type::Tuple(Arc::from(new_inner))))
+			},
+			_ => {
+				panic!("ICE: compute_scalar_tuple_intersect where the vector isn't a vector")
+			}
+		}
+	}
+
 	/// Promotion in the new system works as follows.
 	/// 
 	/// We ONLY need to promote when a value is actually assigned to something.
@@ -614,8 +646,23 @@ impl<'db> TypeChecker<'db> {
 					binary.typ = promote_to;
 				}
 
-				self.do_promote_expr(ast, &mut binary.left, binary.typ);
-				self.do_promote_expr(ast, &mut binary.right, binary.typ);
+				let left_ty = binary.left.typ(ast, self.db);
+				let right_ty = binary.right.typ(ast, self.db);
+
+				// For scalar-vec ops, we promote the vec to match our own type,
+				// and promote the scalar from unassigned.
+				if self.is_vec(left_ty) && self.is_scalar(right_ty) {
+					self.do_promote_expr(ast, &mut binary.left, binary.typ);
+					self.promote_from_unassigned(ast, &mut binary.right);
+				} 
+				else if self.is_scalar(left_ty) && self.is_vec(right_ty) {
+					self.promote_from_unassigned(ast, &mut binary.left);
+					self.do_promote_expr(ast, &mut binary.right, binary.typ);
+				}
+				else {
+					self.do_promote_expr(ast, &mut binary.left, binary.typ);
+					self.do_promote_expr(ast, &mut binary.right, binary.typ);
+				}
 			},
 			Expr::MakeRange(range) => {
 				if self.db.is_not_concrete(range.typ) {
@@ -911,7 +958,7 @@ impl<'db> TypeChecker<'db> {
 		Ok(computed)
 	}
 
-	fn is_numeric_or_vec(&mut self, typ: TypId) -> bool {
+	fn is_numeric_or_vec(&self, typ: TypId) -> bool {
 		match self.db.get(typ) {
 			// TODO:
 			// We allow bottom here, but I'm not sure that's actually necessary.
@@ -933,6 +980,34 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	fn is_vec(&self, typ: TypId) -> bool {
+		match self.db.get(typ) {
+			// TODO:
+			// Same as is_numeric_or_vec.
+			Type::Bottom => true,
+
+			Type::Tuple(inner) => {
+				let sad = inner.clone();
+				for typ in sad.iter() {
+					if !self.is_numeric_or_vec(*typ) { return false; }
+				}
+				true
+			},
+			_ => false
+		}
+	}
+
+	fn is_scalar(&self, typ: TypId) -> bool {
+		match self.db.get(typ) {
+			Type::Bottom => true,
+
+			Type::Int | Type::Float => true,
+			Type::AssumeInt | Type::AssumeFloat => true,
+
+			_ => false,
+		}
+	}
+
 	// TODO: We could, inside this function, just directly call
 	// promote_from_unassigned on any expr that has value_used = false -- we
 	// should consider if that would make sense.
@@ -945,28 +1020,58 @@ impl<'db> TypeChecker<'db> {
 				let left = self.check_expr(ast, binary.left, true)?;
 				let right = self.check_expr(ast, binary.right, true)?;
 
-				let computed = maybe_type_error!(
-					self,
-					self.compute_intersect(true, left, right),
+				if self.is_vec(left) && self.is_scalar(right) {
+					let computed = maybe_type_error!(
+						self,
+						self.compute_scalar_tuple_intersect(true, right, left),
 
-					&binary.location,
-					"Invalid operands to binary operator: LHS is {}, RHS is {}",
-					self.db.repr_type(left),
-					self.db.repr_type(right)
-				);
-
-				if !self.is_numeric_or_vec(computed) {
-					type_error!(self,
-						binary.location,
-						"Invalid operands to binary operator: Type is not numerical"
+						&binary.location,
+						"Invalid operands to binary operator: LHS is {}, RHS is {}",
+						self.db.repr_type(left),
+						self.db.repr_type(right)
 					);
+
+					// Vec op Scalar -- the result type is the vec type. Promotion
+					// occurs later...
+					binary.typ = computed;
 				}
+				else if self.is_scalar(left) && self.is_vec(right) {
+					let computed = maybe_type_error!(
+						self,
+						self.compute_scalar_tuple_intersect(true, left, right),
 
-				// PROMOTION: occurs in promote_expr
+						&binary.location,
+						"Invalid operands to binary operator: LHS is {}, RHS is {}",
+						self.db.repr_type(left),
+						self.db.repr_type(right)
+					);
 
-				binary.typ = computed;
-				
-				computed
+					binary.typ = computed;
+				}
+				else {
+					let computed = maybe_type_error!(
+						self,
+						self.compute_intersect(true, left, right),
+
+						&binary.location,
+						"Invalid operands to binary operator: LHS is {}, RHS is {}",
+						self.db.repr_type(left),
+						self.db.repr_type(right)
+					);
+
+					if !self.is_numeric_or_vec(computed) {
+						type_error!(self,
+							binary.location,
+							"Invalid operands to binary operator: Type is not numerical"
+						);
+					}
+
+					// PROMOTION: occurs in promote_expr
+
+					binary.typ = computed;
+				}
+					
+				binary.typ
 			},
 
 			Expr::MakeRange(range) => {

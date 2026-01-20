@@ -657,18 +657,28 @@ impl<'a> Codegen<'a> {
 		self.val_alloc_slots(Val::InlineExpr { expr: buf }, typ)
 	}
 
-	fn compile_partial_binary(&mut self, result_val: &TypedVal, lhs_val: &TypedVal, rhs_val: &TypedVal, op: char, cur_typ: TypId, postfix: &String, into: &mut String) {
+	fn compile_partial_binary(&mut self, is_scalar: (bool, bool), result_val: &TypedVal, lhs_val: &TypedVal, rhs_val: &TypedVal, op: char, cur_typ: TypId, postfix: &String, into: &mut String) {
 		let indent = self.indent();
 		match self.db.get(cur_typ) {
 			Type::Int | Type::Float => {
-				inf_writeln!(into, "{}{}{} = {}{} {} {}{};",
-					indent, result_val, postfix, lhs_val, postfix, op, rhs_val, postfix);
+				// This allows us to compile e.g. (1, (2, 3)) * 4
+				inf_write!(into, "{}{}{} = {}", indent, result_val, postfix, lhs_val);
+				if !is_scalar.0 {
+					// LHS postfix
+					inf_write!(into, "{}", postfix);
+				}
+				inf_write!(into, " {} {}", op, rhs_val);
+				if !is_scalar.1 {
+					// RHS postfix
+					inf_write!(into, "{}", postfix);
+				}
+				inf_writeln!(into, ";");
 			}
 			Type::Tuple(typ_ids) => {
 				// Iterate over each tuple member and perform the operator.
 				for i in 0..typ_ids.len() {
 					let postfix = format!("{postfix}.v_{i}");
-					self.compile_partial_binary(result_val, lhs_val, rhs_val,
+					self.compile_partial_binary(is_scalar, result_val, lhs_val, rhs_val,
 						op,
 							typ_ids[i],
 						&postfix,
@@ -710,8 +720,11 @@ impl<'a> Codegen<'a> {
 
 			define_val!(self, into, val, ";\n");
 
+			let lhs_scalar = (left.typ == self.db.types.int || left.typ == self.db.types.float);
+			let rhs_scalar = (right.typ == self.db.types.int || right.typ == self.db.types.float);
+
 			let postfix = "".to_string();
-			self.compile_partial_binary(&val, &left, &right, 
+			self.compile_partial_binary((lhs_scalar, rhs_scalar), &val, &left, &right, 
 				op, val.typ, &postfix, into);
 
 			return val;

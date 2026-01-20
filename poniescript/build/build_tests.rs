@@ -419,6 +419,8 @@ pub fn generate(tests_file: &mut File) {
 		("vec/", "vec_ret"),
 		("vec/", "vec_lerp"),
 		("vec/", "vec_product"),
+		("vec/", "weird_vec_product_promote"),
+		("vec/", "weird_vec_product_expr_promote"),
 		("vec/", "builtin_map"),
 
 		("unary/", "unary_int_float"),

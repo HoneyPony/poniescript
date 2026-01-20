@@ -1,0 +1,8 @@
+fun init() {
+    var xyz = ((1, 2.0), 3);
+    // Everything should promote to float because we are multiplying by float.
+    //
+    // (That is the theory, except note that we don't actually support this
+    // promotion? This will have to wait..?)
+    print(xyz * 5.0); //! ((1.000000, 2.000000), 3.000000)
+}
