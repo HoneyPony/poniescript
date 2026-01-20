@@ -982,9 +982,10 @@ impl<'db> TypeChecker<'db> {
 
 	fn is_vec(&self, typ: TypId) -> bool {
 		match self.db.get(typ) {
-			// TODO:
-			// Same as is_numeric_or_vec.
-			Type::Bottom => true,
+			// Unlike is_numeric_or_vec, we definitely don't want Bottom
+			// to be is_vec or is_scalar, because we use these functions to
+			// decide whether to do certain operations.
+			Type::Bottom => false,
 
 			Type::Tuple(inner) => {
 				let sad = inner.clone();
@@ -999,7 +1000,7 @@ impl<'db> TypeChecker<'db> {
 
 	fn is_scalar(&self, typ: TypId) -> bool {
 		match self.db.get(typ) {
-			Type::Bottom => true,
+			Type::Bottom => false,
 
 			Type::Int | Type::Float => true,
 			Type::AssumeInt | Type::AssumeFloat => true,
