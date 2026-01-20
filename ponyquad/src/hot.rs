@@ -154,7 +154,7 @@ impl HotReload {
             library,
 
             // This will have to be different on Windows...?
-            next_tmp_lib: format!("./tmp-script-0.so"),
+            next_tmp_lib: format!("./.build/hot/script-tmp-0.so"),
             next_tmp_idx: 0,
 
             watcher: watcher::Watcher::new(),
@@ -164,9 +164,14 @@ impl HotReload {
     fn rebuild(&self) {
         use std::process::Command;
 
-        let mut process = Command::new("make")
-            .arg(format!("OUTLIBNAME={}", self.next_tmp_lib))
-            .arg("hot-reload")
+        // let mut process = Command::new("make")
+        //     .arg(format!("OUTLIBNAME={}", self.next_tmp_lib))
+        //     .arg("hot-reload")
+        //     .spawn().unwrap();
+        let mut process = Command::new("ponies")
+            .arg("hot-build")
+            .arg("game")
+            .arg(&self.next_tmp_lib)
             .spawn().unwrap();
 
         process.wait().unwrap();
@@ -217,7 +222,7 @@ impl HotReload {
             let _ = fs::remove_file(&self.next_tmp_lib);
 
             self.next_tmp_idx += 1;
-            self.next_tmp_lib = format!("./tmp-script-{}.so", self.next_tmp_idx);
+            self.next_tmp_lib = format!("./.build/hot/script-tmp-{}.so", self.next_tmp_idx);
         }
 
         if let Some(watcher) = self.watcher.as_ref() {

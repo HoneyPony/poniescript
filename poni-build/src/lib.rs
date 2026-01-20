@@ -79,6 +79,30 @@ impl EnvironmentConfig {
 
         (name, set.0.contains_key(profile))
     }
+
+    pub fn lookup_rust_artifact(&self, profile: Option<&String>, target: Option<&String>, path: &PathBuf) -> Option<PathBuf> {
+        let profile = profile.unwrap_or(&self.default_profile);
+        let target = target.unwrap_or(&self.default_target);
+
+        let Some(set) = self.toolchain.get(target) else {
+            return None;
+        };
+
+        let Some(toolchain) = set.0.get(profile) else {
+            return None;
+        };
+
+        let poni_target_path = self.poni_src_path.join("target");
+
+        let poni_gc_path = match &toolchain.rust_name {
+            // E.g. target/x86_64-pc-windows-gnu/debug
+            Some(name) => poni_target_path.join(name).join(&toolchain.rust_profile),
+            // E.g. target/debug
+            None => poni_target_path.join(&toolchain.rust_profile)
+        };
+
+        Some(poni_gc_path.join(path))
+    }
 }
 
 /// The top-level configuration for the build, described by a .toml file,
@@ -134,6 +158,13 @@ impl ProjectKind {
     fn is_engine(&self) -> bool {
         match self {
             ProjectKind::Ponyquad => true,
+        }
+    }
+
+    /// Path to the host we would use for hot reloading.
+    pub fn get_hot_reload_host(&self) -> Option<PathBuf> {
+        match self {
+            ProjectKind::Ponyquad => Some("ponyquad-hot-host".into()),
         }
     }
 }
@@ -213,6 +244,11 @@ impl BuildConfig {
             toolchain.linker, poni_gc_path.display(), toolchain.linker_args_extra)?;
         writeln!(ninja, "  description = {BLUE}link{RESET}{DIM}.{name}.{profile}{RESET} -> $outdesc")?;
 
+        writeln!(ninja, "rule hot-link-{name}-{profile}")?;
+        writeln!(ninja, "  command = {} $in -o $out -shared {}",
+            toolchain.linker, toolchain.linker_args_extra)?;
+        writeln!(ninja, "  description = {BLUE}hot {RESET}{DIM}.{name}.{profile}{RESET} -> $outdesc")?;
+
         writeln!(ninja, "rule cc-{name}-{profile}")?;
         writeln!(ninja, "  command = {} -c $in -o $out -MD -MF $out.d -I$poni_h_path -I. {}", toolchain.cc, toolchain.cc_args_extra)?;
         writeln!(ninja, "  depfile = $out.d")?;
@@ -277,6 +313,14 @@ impl BuildConfig {
             writeln!(ninja, "  outdesc = {project_name}")?;
             writeln!(ninja, "  runtime_lib = {runtime_lib}")?;
 
+            // Link rule for hot reloading.
+            write!(ninja, "build {dir}/{project_name}.so: hot-link-{name}-{profile}")?;
+            for obj in &object_files {
+                write!(ninja, " {dir}/{obj}")?;
+            }
+            write!(ninja, "\n")?;
+            writeln!(ninja, "  outdesc = {project_name}")?;
+
             let c_file_deps = "$poni_h_path/poni/poni.h $poni_h_path/poni/poni_standalone.h $poni_h_path/poni/poni_gc.h";
 
             // The object file rule depends on whether or not the output is piped.
@@ -321,7 +365,7 @@ impl BuildConfig {
                 write!(ninja, " -i {}", import.display())?;
             }
             // ProjectKind-specific imports.
-            for import in &project.kind.as_ref().map(|p| p.get_imports()).unwrap_or(Vec::new()) {
+            for import in &project.kind.as_ref().map(|p: &ProjectKind| p.get_imports()).unwrap_or(Vec::new()) {
                 write!(ninja, " -i {}", poni_src_path.join(import).display())?;
             }
             // So, technically imports is just imports, not any arguments, but

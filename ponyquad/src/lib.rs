@@ -34,7 +34,7 @@ async fn macroquad_main() {
 
     let ctx = ctx.as_mut();
 
-    let mut hot = hot::HotReload::new("./game-script.so", ctx).unwrap();
+    let mut hot = hot::HotReload::new("./.build/hot/script-init.so", ctx).unwrap();
 
     loop {
         hot::call_update(ctx, &mut hot);
