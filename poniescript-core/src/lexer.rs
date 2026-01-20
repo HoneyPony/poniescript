@@ -490,7 +490,9 @@ impl Lexer {
 						self.error(db, "Color literal should be 3, 4, 6, or 8 numerals.".into());
 					}
 
-					return self.mk_token_res(db, Tok::ColorLiteral);
+					let tok = self.mk_token(db, Tok::ColorLiteral);
+					db.color_tokens.push(tok.clone());
+					return Ok(tok);
 				}
 				else {
 					Tok::LeftParen

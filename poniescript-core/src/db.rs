@@ -318,6 +318,9 @@ pub struct Db {
 
 	pub errors: Vec<Error>,
 
+	/// List of tokens used for colors. Used for providing color support in LSP.
+	pub color_tokens: Vec<Token>,
+
 	/// Imported from C code / headers. Need to be visisted by Binder.
 	pub imported_funs: Vec<FunId>,
 	/// Imported from C code / headers. Need to be visited by Binder.
@@ -476,6 +479,7 @@ impl Db {
 			value_types: Vec::new(),
 
 			errors: Vec::new(),
+			color_tokens: Vec::new(),
 
 			fun_init: None,
 			types: DbTypes {

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use poniescript_core::lexer::Token;
 use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
@@ -11,88 +12,59 @@ use poniescript_core::{
 use crate::document::DocumentStore;
 use crate::document::*;
 
-struct ColorVisitor<'map> {
-    response: Vec<ColorInformation>,
+pub fn convert_color(db: &Db, token: &Token) -> Color {
+    let subslice = {
+        let string = db.get(token.lexeme);
+        &string[2..string.len() - 1]
+    };
 
-    id_to_url_map: &'map HashMap<SourceId, Url>
-}
-
-impl<'map> GotoDefinitionVisitor<'map> {
-    
-}
-
-fn cursor_on(cursor: &SourceLocation, target: &SourceLocation) -> bool {
-    if cursor.offset < target.offset { return false; }
-    if cursor.offset > target.offset + target.length { return false; }
-    return true;
-}
-
-impl<'a> LocateAst for GotoDefinitionVisitor<'a> {
-    fn locate_assign(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Assign) {
-        // TODO: We could just not even do an origin_selection_range here as the
-        // default should be correct...?
-        self.goto_var(ast, db, it.identity,  Some(&it.var_name));
-    }
-
-    fn locate_variable(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Variable) {
-        self.goto_var(ast, db, it.identity, Some(&it.location));
-    }
-
-    fn locate_get(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Get) {
-        //self.goto_var(ast, db, it.var, Some(&it.identifier.location));
-    }
-
-    fn locate_set(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Set) {
-        //self.goto_var(ast, db, it.var, Some(&it.identifier.location));
-    }
-
-    fn locate_new(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &New) {
-        eprintln!("it.identifier.location: {} ? {} ? {}",
-            it.identifier.location.offset,
-            loc.offset,
-            it.identifier.location.offset + it.identifier.location.length);
-        if cursor_on(loc, &it.identifier.location) {
-            self.goto_class(ast, db, it.class, Some(&it.identifier.location));
+    fn conv(x: char) -> u32 {
+        match x {
+            '0'..='9' => { x as u32 - '0' as u32 }
+            'a'..='f' => { x as u32 - 'a' as u32 + 10 }
+            'A'..='F' => { x as u32 - 'A' as u32 + 10 }
+            _ => unreachable!("ICE: Bad color literal")
         }
     }
 
-    fn locate_funcall(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCall) {
-        if cursor_on(loc, &it.fn_name) {
-            self.goto_fun(ast, db, it.identity, Some(&it.fn_name))
+    let mut values: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+    let mut idx = 0;
+
+    if subslice.len() <= 4 {
+        for c in subslice.chars() {
+            let value = conv(c);
+            let value = value * 16 + value;
+            let value = value as f32 / 255.0;
+
+            values[idx] = value;
+            idx += 1;
+        }
+    }
+    else {
+        let mut on_even = false;
+        let mut current: u32 = 0;
+        for c in subslice.chars() {
+            let value = conv(c);
+            current = current * 16 + value;
+            
+            if on_even {
+                // IMPORTANT: Use 'current' here, not 'value'.
+                let value = current as f32 / 255.0;
+
+                values[idx] = value;
+                idx += 1;
+
+                current = 0;
+            }
+
+            on_even = !on_even;
         }
     }
 
-    fn locate_funcapture(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCapture) {
-        if cursor_on(loc, &it.fn_name) {
-            self.goto_fun(ast, db, it.identity, Some(&it.fn_name));
-        }
+    Color {
+        red:   values[0],
+        green: values[1],
+        blue:  values[2],
+        alpha: values[3]
     }
-}
-
-// TODO: Support jump-to-definition from whatever document
-// We need a good mapping of Url -> SourceId -> Module or something.
-
-pub fn goto_definition(store: &mut DocumentStore, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
-    let Some(project) = store.projects.get(&params.text_document_position_params.text_document.uri) else {
-        return None;
-    };
-
-    let cached = project.get_cache(store);
-    let cached = cached.lock().unwrap();
-
-    let Some(id) = cached.url_to_id_map.get(&params.text_document_position_params.text_document.uri) else {
-        return None;
-    };
-
-    let source_loc = inverse_convert_position(&cached.ast, *id, &params.text_document_position_params.position);
-
-    let mut visitor = GotoDefinitionVisitor {
-        response: None,
-
-        id_to_url_map: &cached.id_to_url_map
-    };
-
-    visitor.visit_ast(&cached.ast, &cached.db, &source_loc);
-
-    visitor.response
 }

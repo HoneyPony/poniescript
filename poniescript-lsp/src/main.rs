@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use poni_arena::IndexCell;
 use tokio::sync::Mutex;
-use tower_lsp::jsonrpc::Result;
+use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
@@ -206,6 +206,8 @@ impl LanguageServer for Backend {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
 
                 definition_provider: Some(OneOf::Left(true)),
+                
+                color_provider: Some(ColorProviderCapability::ColorProvider(ColorProviderOptions{})),
 
                 ..Default::default()
             },
@@ -332,7 +334,29 @@ impl LanguageServer for Backend {
     }
 
     async fn document_color(&self, params: DocumentColorParams) -> Result<Vec<ColorInformation>> {
-        Err(Error::method_not_found())
+        let mut lock = self.store.lock().await;
+
+        let Some(project) = lock.projects.get(&params.text_document.uri) else {
+            return Ok(Vec::new());
+        };
+
+        let proj = project.get_cache(&lock);
+        let proj = proj.lock().unwrap();
+
+        let mut colors = Vec::new();
+
+        for color in &proj.db.color_tokens {
+            let mut location = color.location.clone();
+            // Cut out the (#)
+            location.offset += 2;
+            location.length -= 3;
+            colors.push(ColorInformation {
+                range: convert_range(&proj.ast, &location),
+                color: color::convert_color(&proj.db, color)
+            })
+        }
+       
+        Ok(colors)
     }
 
     async fn color_presentation(
