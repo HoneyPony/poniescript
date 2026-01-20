@@ -662,7 +662,22 @@ impl<'a> Codegen<'a> {
 		match self.db.get(cur_typ) {
 			Type::Int | Type::Float => {
 				// This allows us to compile e.g. (1, (2, 3)) * 4
-				inf_write!(into, "{}{}{} = {}", indent, result_val, postfix, lhs_val);
+				let (op_prefix, op, op_postfix) = match op {
+					'%' => {
+						// Modulo is implemented through a function.
+						let prefix = if cur_typ == self.db.types.int {
+							"ps_mod_int("
+						}
+						else {
+							"ps_mod_float("
+						};
+						(prefix, ',', ")")
+					},
+					_ => {
+						("", op, "")
+					}
+				};
+				inf_write!(into, "{}{}{} = {}{}", indent, result_val, postfix, op_prefix, lhs_val);
 				if !is_scalar.0 {
 					// LHS postfix
 					inf_write!(into, "{}", postfix);
@@ -672,7 +687,7 @@ impl<'a> Codegen<'a> {
 					// RHS postfix
 					inf_write!(into, "{}", postfix);
 				}
-				inf_writeln!(into, ";");
+				inf_writeln!(into, "{};", op_postfix);
 			}
 			Type::Tuple(typ_ids) => {
 				// Iterate over each tuple member and perform the operator.
@@ -703,12 +718,17 @@ impl<'a> Codegen<'a> {
 			Tok::Plus => '+',
 			Tok::Minus => '-',
 			Tok::Slash => '/',
+			Tok::Percent => '%',
 			_ => panic!("ICE: Tried to codegen unknown binary operator")
 		};
 
 		// For simple binary expressions, write them out as one line & make them
 		// a constant value
 		if binary.typ == self.db.types.int || binary.typ == self.db.types.float {
+			if op == '%' {
+				let fun = if binary.typ == self.db.types.int { "ps_mod_int" } else { "ps_mod_float" };
+				return inline_expr!(self, binary.typ, "{}({}, {})", fun, left, right);
+			}
 			return inline_expr!(self, binary.typ, "({} {} {})", left, op, right);
 		}
 		else {

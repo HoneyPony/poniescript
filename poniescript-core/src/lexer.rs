@@ -26,15 +26,14 @@ pub enum Tok {
 
 	Semicolon, Colon,
 
-	Question, Percent, Ampersand, VerticalBar,
+	Question, Percent, PercentEqual, Ampersand, VerticalBar,
 
 	Bang, BangEqual,
 	Equal, EqualEqual,
 	Greater, GreaterEqual,
 	Less, LessEqual,
 
-	// TODO: Rename this to RightArrow... Oops...
-	LeftArrow,
+	RightArrow,
 
 	Identifier, StringSimple, WholeNumber, DecimalNumber,
 
@@ -520,7 +519,7 @@ impl Lexer {
 			';' => Tok::Semicolon,
 			':' => Tok::Colon,
 			'?' => Tok::Question,
-			'%' => Tok::Percent,
+			'%' => self.tok_eq(Tok::Percent, Tok::PercentEqual, db)?,
 			'&' => Tok::Ampersand,
 			'|' => Tok::VerticalBar,
 
@@ -529,7 +528,7 @@ impl Lexer {
 					Tok::MinusEqual
 				}
 				else if self.advance_if('>', db)? {
-					Tok::LeftArrow
+					Tok::RightArrow
 				}
 				else {
 					Tok::Minus

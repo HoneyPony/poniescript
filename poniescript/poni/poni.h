@@ -574,4 +574,18 @@ ctx->frame = (void*)&gc_frame
 	#define PONI_ABI(...) struct poni_gc_context *ctx, __VA_ARGS__ __VA_OPT__(,) void *closure
 #endif
 
+static inline ps_int
+ps_mod_int(ps_int a, ps_int b) {
+	// TODO: What to do for INT_MIN?
+	if(b < 0) { b = -b; }
+	ps_int remainder = a % b;
+	if(remainder < 0) {
+		remainder += b;
+	}
+	return remainder;
+}
+
+ps_float
+ps_mod_float(ps_float a, ps_float b);
+
 #endif
