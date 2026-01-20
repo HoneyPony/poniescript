@@ -4,9 +4,7 @@ var horse = new Horse{};
 var WHITE: vec4 = (1, 1, 1, 1);
 
 fun wave(x: float) -> float {
-    while x > 2 {
-        x -= 2;
-    }
+    x %= 2.0;
     if x > 1 {
         x = 2 - x;
     }
