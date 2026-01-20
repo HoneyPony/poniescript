@@ -3,10 +3,10 @@ name = "ponyquad"
 version = "0.1.0"
 edition = "2024"
 
-# [lib]
+[lib]
 # Note: This might have to be cdylib, actually, for wasm. Unclear.
 # Also should be 'lib' if we want to link it with other Rust stuff...?
-# crate-type = ["staticlib"]
+crate-type = ["staticlib", "lib"]
 
 [dependencies]
 libloading = "0.9.0"

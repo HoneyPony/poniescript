@@ -89,12 +89,64 @@ pub struct BuildConfig {
 }
 
 #[derive(Serialize, Deserialize)]
+pub enum ProjectKind {
+    /// Project using the small Ponyquad "game engine" / macroquad wrapper.
+    Ponyquad,
+}
+
+impl ProjectKind {
+    /// Gets additional C imports that this project kind requires. These are
+    /// local to the poni_src_path.
+    fn get_imports(&self) -> Vec<PathBuf> {
+        match self {
+            ProjectKind::Ponyquad => vec!["ponyquad/ponyquad.h".into()],
+        }
+    }
+
+    /// Gets additional scripts that this project kind requires. These are
+    /// local to the poni_src_path.
+    fn get_poniescripts(&self) -> Vec<PathBuf> {
+        match self {
+            ProjectKind::Ponyquad => vec!["ponyquad/keycodes.poni".into()],
+        }
+    }
+
+    /// Gets the name of the runtime library that this project kind requires.
+    /// 
+    /// For standalone projects, we just link against poniescript_rt. Otherwise,
+    /// we may require something more in-depth.
+    fn get_runtime_lib(&self) -> &'static str {
+        match self {
+            ProjectKind::Ponyquad => "ponyquad".into()
+        }
+    }
+
+    /// Returns a vector of bound function names for this project types,
+    /// e.g. 'update'.
+    fn get_required_binds(&self) -> Vec<&'static str> {
+        match self {
+            ProjectKind::Ponyquad => vec!["update"]
+        }
+    }
+
+    /// Returns whether this kind of project expects the '-e' argument to
+    /// PonieScript.
+    fn is_engine(&self) -> bool {
+        match self {
+            ProjectKind::Ponyquad => true,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Project {
     /// The .poni files that make up this project.
     pub files: Vec<PathBuf>,
 
     /// .h files that are imported for this project.
     pub imports: Vec<PathBuf>,
+
+    pub kind: Option<ProjectKind>,
 }
 
 pub struct GeneratedNinjaInfo {
@@ -155,7 +207,9 @@ impl BuildConfig {
         //writeln!(ninja, "  command = {} $in -o $out -L$poni_gc_path -lponiescript_gc",
         //    toolchain.linker)?;
         //writeln!(ninja, "  poni_gc_path = {}", poni_gc_path.display())?;
-        writeln!(ninja, "  command = {} $in -o $out -L{} -lponiescript_gc {}",
+
+        // For now, always add -lm, although this might be wrong.
+        writeln!(ninja, "  command = {} $in -o $out -L{} -l$runtime_lib -lm {}",
             toolchain.linker, poni_gc_path.display(), toolchain.linker_args_extra)?;
         writeln!(ninja, "  description = {BLUE}link{RESET}{DIM}.{name}.{profile}{RESET} -> $outdesc")?;
 
@@ -208,16 +262,20 @@ impl BuildConfig {
             for obj in &object_files {
                 write!(ninja, " {dir}/{obj}")?;
             }
+            
             // Include a dependency on any of the Rust runtime libraries. That
             // way, if they change, we will automatically rebuild. (Or we can
             // build the Rust library if it hasn't been built yet).
 
             // TODO: Is this the same on windows? :)
-            let poni_gc_bin_path = poni_gc_path.join("libponiescript_gc.a");
-            write!(ninja, " | {}", poni_gc_bin_path.display())?;
+            let runtime_lib = project.kind.as_ref().map(|p| p.get_runtime_lib())
+                .unwrap_or("poniescript_gc");
+            let runtime_artefact_path = poni_gc_path.join(format!("lib{}.a", runtime_lib));
+            write!(ninja, " | {}", runtime_artefact_path.display())?;
 
             write!(ninja, "\n")?;
             writeln!(ninja, "  outdesc = {project_name}")?;
+            writeln!(ninja, "  runtime_lib = {runtime_lib}")?;
 
             let c_file_deps = "$poni_h_path/poni/poni.h $poni_h_path/poni/poni_standalone.h $poni_h_path/poni/poni_gc.h";
 
@@ -248,6 +306,10 @@ impl BuildConfig {
             for poni in &project.files {
                 write!(ninja, " {}", poni.display())?;
             }
+            // ProjectKind-specific PonieScript source files..
+            for poni in &project.kind.as_ref().map(|p| p.get_poniescripts()).unwrap_or(Vec::new()) {
+                write!(ninja, " {}", poni_src_path.join(poni).display())?;
+            }
 
             if toolchain.piped {
                 write!(ninja, " | {c_file_deps}")?;
@@ -258,6 +320,19 @@ impl BuildConfig {
             for import in &project.imports {
                 write!(ninja, " -i {}", import.display())?;
             }
+            // ProjectKind-specific imports.
+            for import in &project.kind.as_ref().map(|p| p.get_imports()).unwrap_or(Vec::new()) {
+                write!(ninja, " -i {}", poni_src_path.join(import).display())?;
+            }
+            // So, technically imports is just imports, not any arguments, but
+            // we'll include the -e in imports for now.
+            if project.kind.as_ref().map(|p| p.is_engine()).unwrap_or(false) {
+                write!(ninja, " -e")?;
+            }
+            for bind in &project.kind.as_ref().map(|p| p.get_required_binds()).unwrap_or(Vec::new()) {
+                write!(ninja, " --bind-fun {}", bind)?;
+            }
+
 
             // Create the outputargs variable. This is similar to outputs,
             // except with -o in front of each one.
@@ -269,13 +344,13 @@ impl BuildConfig {
             write!(ninja, "\n\n")?;
 
             // Generate rules for building Rust dependencies.
-            if info.generated_rust_rules.insert(poni_gc_bin_path.clone()) {
+            if info.generated_rust_rules.insert(runtime_artefact_path.clone()) {
                 let cargotoml = poni_src_path.join("Cargo.toml");
-                writeln!(ninja, "build {} : cargo-{name}-{profile}", poni_gc_bin_path.display())?;
+                writeln!(ninja, "build {} : cargo-{name}-{profile}", runtime_artefact_path.display())?;
                     // We could depend on the cargo.toml path... seems a bit
                     // silly...
                     //cargotoml.display())?;
-                writeln!(ninja, "  package = poniescript-gc")?;
+                writeln!(ninja, "  package = {}", runtime_lib)?;
                 writeln!(ninja, "  cargotoml = {}", cargotoml.display())?;
                 writeln!(ninja, "")?;
             }

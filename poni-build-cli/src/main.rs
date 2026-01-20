@@ -248,6 +248,7 @@ fn main() {
             let project = Project {
                 files: vec![PathBuf::from(format!("{name}.poni"))],
                 imports: vec![],
+                kind: None,
             };
 
             cfg.projects.insert(name.clone(), project);

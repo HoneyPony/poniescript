@@ -129,6 +129,7 @@ fn reload_gc_functions(library: &Library) -> Option<()> {
     Some(())
 }
 
+#[cfg(feature = "hotreload")]
 fn call_init_hook(library: &Library, name: &str, gc: &mut GcContext) -> Option<()> {
     let hook: libloading::Symbol<fn(&mut GcContext)> = unsafe { library.get(name).ok()? };
     hook(gc);
@@ -286,6 +287,19 @@ mod globals {
 impl HotReload {
     #[inline(always)]
     pub fn new(game_script_path: &str, gc: &mut GcContext) -> Option<Self> {
+        // We need to call the script initialization here, as that's what
+        // the hot reloader would do.
+
+        unsafe extern "C" {
+            fn poni_init_strings(_ctx: &mut GcContext);
+            fn poni_init_globals(_ctx: &mut GcContext);
+        }
+
+        unsafe {
+            poni_init_strings(gc);
+            poni_init_globals(gc);
+        }
+
         Some(Self {})
     }
 
