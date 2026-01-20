@@ -48,6 +48,12 @@ pub enum Tok {
 
 	Some, Nil,
 
+	// (#ff00ff00)
+	// (#fff)
+	// (#0000)
+	// #(ff00ff)
+	ColorLiteral,
+
 	DocComment,
 
 	Eof
@@ -465,7 +471,32 @@ impl Lexer {
 		// case first, so that we can have a big match at the end.
 
 		let ty = match c {
-			'(' => Tok::LeftParen,
+			'(' => {
+				if self.next_char == '#' {
+					self.advance(db)?;
+					let mut len = 0;
+					for i in 0..8 {
+						if !matches!(self.next_char, '0'..'9' | 'a'..'f' | 'A'..'F') {
+							break;
+						}
+						// Eat digits & hex characters.
+						self.advance(db)?;
+						len += 1;
+					}
+					if self.next_char != ')' {
+						self.error(db, "Expected ')' at end of color literal.".into());
+					}
+					self.advance(db)?; // Eat the )
+					if !matches!(len, 3 | 4 | 6 | 8) {
+						self.error(db, "Color literal should be 3, 4, 6, or 8 numerals.".into());
+					}
+
+					return self.mk_token_res(db, Tok::ColorLiteral);
+				}
+				else {
+					Tok::LeftParen
+				}
+			}
 			')' => Tok::RightParen,
 			'{' => Tok::LeftBrace,
 			'}' => Tok::RightBrace,

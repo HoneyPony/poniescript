@@ -932,6 +932,65 @@ impl<'b> Parser<'b> {
 				self.number()
 			},
 
+			Tok::ColorLiteral => {
+				let lit = self.advance()?;
+
+				let subslice = {
+					let string = self.db.get(lit.lexeme);
+					// Unfortunately, we create a new String to avoid the borrow.
+					let subslice = &string[2..string.len() - 1];
+					subslice.to_string()
+				};
+
+				let mut values = Vec::new();
+
+				fn conv(x: char) -> u32 {
+					match x {
+						'0'..='9' => { x as u32 - '0' as u32 }
+						'a'..='f' => { x as u32 - 'a' as u32 + 10 }
+						'A'..='F' => { x as u32 - 'A' as u32 + 10 }
+						_ => unreachable!("ICE: Bad color literal")
+					}
+				}
+
+				if subslice.len() <= 4 {
+					for c in subslice.chars() {
+						let value = conv(c);
+						let value = value * 16 + value;
+						let value = value as f32 / 255.0;
+						let literal = format!("{}", value);
+						let literal = self.db.put_str(&literal);
+						values.push(Expr::put_numliteral(self.ast, lit.location.clone(),
+							self.db.synthetic_id(literal),
+							self.db.types.float));
+					}
+				}
+				else {
+					let mut on_even = false;
+					let mut current: u32 = 0;
+					for c in subslice.chars() {
+						let value = conv(c);
+						current = current * 16 + value;
+						
+						if on_even {
+							let value = value as f32 / 255.0;
+							let literal = format!("{}", value);
+							let literal = self.db.put_str(&literal);
+							values.push(Expr::put_numliteral(self.ast, lit.location.clone(),
+								self.db.synthetic_id(literal),
+								self.db.types.float));
+
+							current = 0;
+						}
+
+						on_even = !on_even;
+					}
+				}
+				
+				let typ = if values.len() == 3 { self.db.types.vec3 } else { self.db.types.vec4 };
+				return Expr::put_maketuple_ok(self.ast, lit.location.clone(), values, typ);
+			}
+
 			Tok::Print => self.expr_print_or_str(true),
 			Tok::Str => self.expr_print_or_str(false),
 

@@ -206,6 +206,7 @@ pub fn generate(tests_file: &mut File) {
 		("lerp/", "tuple"),
 		("lerp/", "tuple_nest"),
 
+		("lexer/", "color_literal"),
 		("lexer/", "err_unterminated_string"),
 		("lexer/", "string_lit_basic_escapes"),
 		("lexer/", "utf8"),
