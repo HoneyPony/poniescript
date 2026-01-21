@@ -305,7 +305,7 @@ impl BuildConfig {
 
             // TODO: Is this the same on windows? :)
             let runtime_lib = project.kind.as_ref().map(|p| p.get_runtime_lib())
-                .unwrap_or("poniescript_gc");
+                .unwrap_or("poniescript_rt");
             let runtime_artefact_path = poni_gc_path.join(format!("lib{}.a", runtime_lib));
             write!(ninja, " | {}", runtime_artefact_path.display())?;
 
@@ -394,7 +394,7 @@ impl BuildConfig {
                     // We could depend on the cargo.toml path... seems a bit
                     // silly...
                     //cargotoml.display())?;
-                writeln!(ninja, "  package = {}", runtime_lib)?;
+                writeln!(ninja, "  package = {}", runtime_lib.replace("_", "-"))?;
                 writeln!(ninja, "  cargotoml = {}", cargotoml.display())?;
                 writeln!(ninja, "")?;
             }
