@@ -12,3 +12,4 @@ clap = { workspace = true, features = ["derive"] }
 # Not really needed, but useful for inf_write! and inf_writeln!
 ufmt = "0.2.0"
 poni-arena = { version = "0.1.0", path = "../poni-arena" }
+poni-build = { version = "0.1.0", path = "../poni-build" }

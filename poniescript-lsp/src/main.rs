@@ -124,9 +124,9 @@ struct Backend {
     store: Mutex<DocumentStore>,
 }
 
-fn supports_utf8_encoding(params: InitializeParams) -> bool {
-    if let Some(general) = params.capabilities.general {
-        if let Some(encodings) = general.position_encodings {
+fn supports_utf8_encoding(params: &InitializeParams) -> bool {
+    if let Some(general) = &params.capabilities.general {
+        if let Some(encodings) = &general.position_encodings {
             for e in encodings {
                 if e.as_str() == "utf-8" {
                     return true;
@@ -158,7 +158,7 @@ impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
         let mut encoding = PositionEncodingKind::UTF8;
 
-        if !supports_utf8_encoding(params) {
+        if !supports_utf8_encoding(&params) {
             // In the case that the server does not support utf-8 position encodings:
             //
             // We just lie and say we support utf16, even though we don't. I really
@@ -175,6 +175,19 @@ impl LanguageServer for Backend {
             //     message: Cow::from("PonieScript only supports utf-8 encoding"),
             //     data: None
             // });
+        }
+
+        if let Some(uri) = &params.root_uri {
+            if let Ok(path) = uri.to_file_path() {
+                let maybe_poni_toml = path.join("ponies.toml");
+                eprintln!("checking for possible ponies.toml: {}", maybe_poni_toml.display());
+                if let Ok(as_uri) = Url::from_file_path(&maybe_poni_toml) {
+                    if let Ok(text) = std::fs::read_to_string(&maybe_poni_toml) {
+                        let mut doc = self.store.lock().await;
+                        doc.initialize_projects_from_toml(&as_uri, text);
+                    }
+                }
+            }
         }
 
         Ok(InitializeResult {

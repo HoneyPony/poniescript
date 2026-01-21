@@ -509,6 +509,13 @@ pub fn read_build_config_precise(build_config_search_path: &Path) -> Result<Buil
     Ok(build)
 }
 
+pub fn read_build_config_from_string(text: &str) -> Result<BuildConfig, ConfigReadError> {
+    let build: BuildConfig = toml::from_str(text)
+        .map_err(|err| ConfigReadError::BadPoniesToml(err.to_string()))?;
+
+    Ok(build)
+}
+
 pub fn read_configs(build_config_search_path: &Path) -> Result<(BuildConfig, EnvironmentConfig), ConfigReadError> {
     let app = XdgApp::new("poniescript")?;
 

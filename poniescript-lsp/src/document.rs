@@ -267,7 +267,92 @@ impl DocumentStore {
         }
     }
 
+    pub fn initialize_projects_from_toml(&mut self, url: &Url, toml: String) -> Option<()> {
+        eprintln!("initializing from toml: {}", url);
+        let build = poni_build::read_build_config_from_string(&toml)
+            .map_err(|e| {
+                match e {
+                    poni_build::ConfigReadError::NoPoniesToml => eprintln!("-- no such toml"),
+                    poni_build::ConfigReadError::BadPoniesToml(err) => eprintln!("-- parse error: {err}"),
+                    poni_build::ConfigReadError::NoEnvironmentToml(path_buf) => eprintln!("-- no env toml: {}", path_buf.display()),
+                    poni_build::ConfigReadError::BadEnvironmentToml(err) => eprintln!("-- bad env toml: {err}"),
+                    poni_build::ConfigReadError::XdgError(_) => eprintln!("-- xdg error"),
+                    poni_build::ConfigReadError::FsError => eprintln!("-- file system error"),
+                }
+                
+            }).ok()?;
+        eprintln!("-- successfully parsed ponies.toml: {} projects", build.projects.len());
+
+        // There is no need to modify the url -- url.join() already overwrites
+        // the last segment.
+        // let mut my_url = url.clone();
+        // my_url.path_segments_mut().ok()?
+        //     .pop_if_empty()
+        //     .pop();
+        // eprintln!("-- successfully extracted url");
+
+        for (name, project) in &build.projects {
+            eprintln!("initializing project: '{}'", name);
+            let mut proj = Project {
+                cache: Mutex::new(None),
+                files: Vec::new()
+            };
+
+            for file in &project.files {
+                eprintln!("-- trying to process: {}", file.display());
+                // Skip file paths we can't process
+                let Some(str) = file.to_str() else { continue; };
+
+                // Skip file paths we can't process
+                let Ok(url) = url.join(str) else { continue; };
+
+                eprintln!("-- got url: {}", url);
+                if let Some(document) = self.get_or_create_document(&url) {
+                    proj.files.push(document.clone());
+                }
+            }
+
+            let proj = Arc::new(proj);
+
+            for file in &proj.files {
+                // Map each of the project's files to this project
+                self.projects.insert(file.url.clone(), proj.clone());
+            }
+        }
+
+        Some(())
+    }
+
+    fn get_or_create_document(&mut self, url: &Url) -> Option<Arc<Document>> {
+        if self.documents.contains_key(url) {
+            return self.documents.get(url).cloned();
+        }
+
+        if let Ok(file_path) = url.to_file_path() {
+            let contents = std::fs::read_to_string(file_path).ok()?;
+            let document = Arc::new(Document {
+                text: Mutex::new(contents),
+                url: url.clone(),
+            });
+
+            self.documents.insert(url.clone(), document.clone());
+            return Some(document);
+        }
+        
+        return None;
+    }
+
     pub fn update(&mut self, url: &Url, text: String) {
+        eprintln!("update: {}", url);
+        if let Some(segments) = url.path_segments() {
+            if let Some(last) = segments.last() {
+                if last == "ponies.toml" {
+                    self.initialize_projects_from_toml(url, text);
+                    return;
+                }
+            }
+        }
+
         let doc = self.documents.entry(url.clone())
             .or_insert_with(|| {
                 // For now, if we are getting a new Document, also create a new
