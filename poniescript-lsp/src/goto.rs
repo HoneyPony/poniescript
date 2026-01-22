@@ -108,6 +108,9 @@ pub fn goto_definition(store: &mut DocumentStore, params: GotoDefinitionParams) 
             Semantic::Class(class_id) => {
                 helper.goto_class(ast, db, class_id, origin_selection_range);
             },
+            Semantic::Print => {
+                // Currently nowhere to go, but we might open docs in the future.
+            }
         }
     });
     

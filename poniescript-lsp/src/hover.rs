@@ -9,11 +9,11 @@ use poniescript_core::{
 
 use crate::document::DocumentStore;
 use crate::document::*;
+use crate::semantic_locate;
+use crate::semantic_locate::Semantic;
 
-struct HoverVisitor<'map> {
+struct HoverHelper {
     response: Option<Hover>,
-
-    id_to_url_map: &'map HashMap<SourceId, Url>
 }
 
 fn build_hover(code: &str, doc: Option<String>, range: Option<Range>) -> Hover {
@@ -48,7 +48,7 @@ fn build_hover(code: &str, doc: Option<String>, range: Option<Range>) -> Hover {
     
 }
 
-impl<'map> HoverVisitor<'map> {
+impl HoverHelper {
     /// Converts a vector of tokens into a String.
     /// 
     /// Not the most efficient, but that's OK.
@@ -120,57 +120,40 @@ impl<'map> HoverVisitor<'map> {
     }
 }
 
-fn cursor_on(cursor: &SourceLocation, target: &SourceLocation) -> bool {
-    if cursor.offset < target.offset { return false; }
-    if cursor.offset > target.offset + target.length { return false; }
-    return true;
-}
+pub fn hover(store: &mut DocumentStore, params: HoverParams) -> Option<Hover> {
+    let Some(project) = store.projects.get(&params.text_document_position_params.text_document.uri) else {
+        return None;
+    };
 
-impl<'a> LocateAst for HoverVisitor<'a> {
-    fn locate_assign(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Assign) {
-        // TODO: We could just not even do an origin_selection_range here as the
-        // default should be correct...?
-        if cursor_on(_loc, &it.var_name) {
-            self.hover_var(ast, db, it.identity, Some(&it.var_name));
-        }
-    }
+    let cached = project.get_cache(store);
+    let cached = cached.lock().unwrap();
 
-    fn locate_variable(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Variable) {
-        self.hover_var(ast, db, it.identity, Some(&it.location));
-    }
+    let Some(id) = cached.url_to_id_map.get(&params.text_document_position_params.text_document.uri) else {
+        return None;
+    };
 
-    fn locate_get(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Get) {
-        //self.hover_var(ast, db, it.var, Some(&it.location));
-    }
+    let source_loc = inverse_convert_position(&cached.ast, *id, &params.text_document_position_params.position);
 
-    fn locate_set(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Set) {
-        //self.hover_var(ast, db, it.var, Some(&it.identifier.location)); //?
-    }
+    let mut helper = HoverHelper {
+        response: None,
+    };
 
-    fn locate_new(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &New) {
-        eprintln!("it.identifier.location: {} ? {} ? {}",
-            it.identifier.location.offset,
-            loc.offset,
-            it.identifier.location.offset + it.identifier.location.length);
-        if cursor_on(loc, &it.identifier.location) {
-            self.hover_class(ast, db, it.class, Some(&it.identifier.location));
-        }
-    }
+    let db = &cached.db;
+    let ast = &cached.ast;
 
-    fn locate_funcall(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCall) {
-        if cursor_on(loc, &it.fn_name) {
-            self.hover_fun(ast, db, it.identity, Some(&it.fn_name))
-        }
-    }
-
-    fn locate_funcapture(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCapture) {
-        if cursor_on(loc, &it.fn_name) {
-            self.hover_fun(ast, db, it.identity, Some(&it.fn_name));
-        }
-    }
-
-    fn locate_print(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &Print) {
-        self.build_hover(ast, "print(args: ...) -> <first>",
+    semantic_locate::semantic_locate(ast, db, source_loc, |semantic, origin_selection_range| {
+        match semantic {
+            Semantic::Var(var_id) => {
+                helper.hover_var(ast, db, var_id, origin_selection_range);
+            },
+            Semantic::Fun(fun_id) => {
+                helper.hover_fun(ast, db, fun_id, origin_selection_range);
+            },
+            Semantic::Class(class_id) => {
+                helper.hover_class(ast, db, class_id, origin_selection_range);
+            },
+            Semantic::Print => {
+                helper.build_hover(ast, "print(args: ...) -> <first>",
 Some("Prints out any series of expressions. Each expression is printed to the console
 in order. The print will be terminated by a newline.
 
@@ -191,31 +174,10 @@ intersperse print() with existing logic, such as:
 if print(a > b) {
     do_high_a_logic();
 }
-```".into()), Some(&it.location)); // TODO: Store only the print keyword location
-    }
-}
+```".into()), origin_selection_range)
+            }
+        }
+    });
 
-pub fn hover(store: &mut DocumentStore, params: HoverParams) -> Option<Hover> {
-    let Some(project) = store.projects.get(&params.text_document_position_params.text_document.uri) else {
-        return None;
-    };
-
-    let cached = project.get_cache(store);
-    let cached = cached.lock().unwrap();
-
-    let Some(id) = cached.url_to_id_map.get(&params.text_document_position_params.text_document.uri) else {
-        return None;
-    };
-
-    let source_loc = inverse_convert_position(&cached.ast, *id, &params.text_document_position_params.position);
-
-    let mut visitor = HoverVisitor {
-        response: None,
-
-        id_to_url_map: &cached.id_to_url_map
-    };
-
-    visitor.visit_ast(&cached.ast, &cached.db, &source_loc);
-
-    visitor.response
+    helper.response
 }

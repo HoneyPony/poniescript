@@ -15,6 +15,7 @@ pub enum Semantic {
     Var(VarId),
     Fun(FunId),
     Class(ClassId),
+    Print,
 }
 
 // pub struct SemanticRanges<'tok> {
@@ -91,6 +92,11 @@ impl<F: FnMut(Semantic, Option<&SourceLocation>)> LocateAst for SemanticLocate<F
         if cursor_on(loc, &it.fn_name) {
             self.got_fun(ast, db, it.identity, Some(&it.fn_name));
         }
+    }
+
+    fn locate_print(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &Print) {
+        // TODO: cursor_on(it.fn_name)
+        (self.callback)(Semantic::Print, Some(&it.location));
     }
 }
 
