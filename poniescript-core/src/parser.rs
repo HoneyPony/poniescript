@@ -492,8 +492,8 @@ impl<'b> Parser<'b> {
 				log::trace!("new unbound fun capture: {} object.is_some(): {}",
 					self.db.get(ident.lexeme), object.is_some());
 
-				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
-				Expr::put_valcall_ok(self.ast, location, call, args, self.db.sig_unassigned)
+				let capt = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
+				Expr::put_valcall_ok(self.ast, self.end(location), capt, args, self.db.sig_unassigned)
 			}
 		}
 	}
