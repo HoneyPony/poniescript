@@ -3,6 +3,7 @@ mod inlay_hint;
 mod goto;
 mod hover;
 mod color;
+mod completion;
 mod semantic_locate;
 
 use std::path::PathBuf;
@@ -246,15 +247,9 @@ impl LanguageServer for Backend {
         Ok(())
     }
 
-    async fn completion(&self, _: CompletionParams) -> Result<Option<CompletionResponse>> {
-        let mut print = CompletionItem::new_simple("print".to_string(), "Print out any series of expressions.".to_string());
-        print.kind = Some(CompletionItemKind::FUNCTION);
-        let mut str = CompletionItem::new_simple("str".to_string(), "Convert any series of expressions to a new StrBuf.".to_string());
-        str.kind = Some(CompletionItemKind::FUNCTION);
-
-        Ok(Some(CompletionResponse::Array(vec![
-            print, str
-        ])))
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let mut store = self.store.lock().await;
+        Ok(completion::completion(&mut store, params))
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
