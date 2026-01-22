@@ -15,6 +15,10 @@ pub struct Parser<'b> {
 	last_location: SourceLocation,
 
 	pub had_error: bool,
+
+    /// Store a Vec of the normal Token for the doc comment, just like the
+    /// PonieScript parser.
+    prev_doc_comment: Vec<crate::lexer::Token>,
 }
 
 // TODO: Deduplicate this with the other parser? Maybe build a small general
@@ -134,6 +138,8 @@ impl<'b> Parser<'b> {
 			},
 
 			had_error: false,
+
+            prev_doc_comment: Vec::new(),
 		};
 
 		Ok(parser)
@@ -165,10 +171,38 @@ impl<'b> Parser<'b> {
 
 	fn advance(&mut self) -> Result<GlueToken> {
 		self.last_location = self.current.location.clone();
-		let next = self.lexer
+
+        let mut cur_doc_comment = Vec::new();
+
+        let next = loop {
+			let next = self.lexer
 			.next_token(self.db)
 			.map_err(|err| ParseErr::IoErr(err))?;
+
+			if matches!(next.typ, GlueTok::DocComment) {
+                // We're able to mutate between the token types because they
+                // both have a DocComment kind.
+				cur_doc_comment.push(crate::lexer::Token {
+                    typ: crate::lexer::Tok::DocComment,
+                    lexeme: next.lexeme,
+                    location: next.location,
+                });
+			}
+			else {
+				self.prev_doc_comment = cur_doc_comment;
+				break next;
+			}
+		};
+
 		Ok(std::mem::replace(&mut self.current, next))
+	}
+
+    fn get_doc_comment(&mut self) -> Option<Vec<crate::lexer::Token>> {
+		let doc_comment = std::mem::take(&mut self.prev_doc_comment);
+		if !doc_comment.is_empty() {
+			return Some(doc_comment);
+		}
+		return None;
 	}
 
 	fn is_at_end(&self) -> bool {
@@ -192,6 +226,7 @@ impl<'b> Parser<'b> {
     }
 
     fn class(&mut self) -> Result<()> {
+        let doc_comment = self.get_doc_comment();
         let location = self.start();
         expected!(self, GlueTok::AnnotateClass, "PS_CLASS")?;
 
@@ -259,8 +294,7 @@ impl<'b> Parser<'b> {
             // as unconstructible from PonieScript.
             mandatory_vars: FxHashSet::default(),
             location,
-            // TODO: Doc comments for imported functions
-            doc_comment: None,
+            doc_comment,
         });
 
         for var in vars {
@@ -276,6 +310,7 @@ impl<'b> Parser<'b> {
     }
 
     fn fun(&mut self) -> Result<()> {
+        let doc_comment = self.get_doc_comment();
         let location = self.start();
         expected!(self, GlueTok::AnnotateFun, "PS_FUN")?;
 
@@ -341,8 +376,7 @@ impl<'b> Parser<'b> {
             class: None,
             expression: None,
             location,
-            // TODO: Doc comments for imported functions
-            doc_comment: None,
+            doc_comment,
         });
 
         for param in params_for_fun {
@@ -405,6 +439,7 @@ impl<'b> Parser<'b> {
     }
 
     fn var(&mut self) -> Result<VarId> {
+        let doc_comment = self.get_doc_comment();
         let location = self.start();
         expected!(self, GlueTok::AnnotateVar, "PS_VAR")?;
 
@@ -428,8 +463,7 @@ impl<'b> Parser<'b> {
         };
 
         let var = self.db.new_var(var_name, c_type, false, None, None, None, self.end(location),
-            // TOOD: Doc comments, at least for classes.
-            None);
+            doc_comment);
         self.db.know_var_cname(var, self.db.get(c_name.lexeme));
 
         // TODO: Handle name collisions here as well?

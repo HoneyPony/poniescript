@@ -4,15 +4,25 @@
 #include "poni/poni.h"
 #include "poni/poni_glue.h"
 
+/// Clear the screen, filling it with the given color.
 PS_FUN() void clear_background(PONI_ABI(ps_vec4 color));
 
+/// Draw a solid line between the two points.
 PS_FUN() void draw_line(PONI_ABI(ps_vec2 from, ps_vec2 to, ps_float thickness, ps_vec4 color));
+
+/// Fill a rectangle with the given color, at the given location, with the given
+/// size.
 PS_FUN() void draw_rectangle(PONI_ABI(ps_vec2 at, ps_vec2 size, ps_vec4 color));
+/// Draw text to the screen, using the given font size and color.
 PS_FUN() ps_vec3 draw_text(PONI_ABI(ps_strbuf *text, ps_vec2 at, ps_float size, ps_vec4 color));
 
+/// Returns the width of the screen.
 PS_FUN() ps_float screen_width(PONI_ABI());
+/// Returns the height of the screen.
 PS_FUN() ps_float screen_height(PONI_ABI());
 
+/// A 2 dimensional texture that can be drawn to the screen. Lives on the GPU
+/// and so cannot be directly modified.
 PS_CLASS("Texture2D")
 struct texture2d {
     ps_object header;
