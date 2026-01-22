@@ -128,6 +128,26 @@ impl<F: FnMut(Semantic, Option<&SourceLocation>)> LocateAst for SemanticLocate<F
 		self.locate_classdeclare(ast, db, loc, &stmt);
 		return true;
 	}
+
+    // For now, also manually implement new, to visit the inner initializers.
+    fn visit_new(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, expr: &New) -> bool {
+		let own_loc = &expr.location;
+		eprintln!("visit New: {} ? {} ? {}", own_loc.offset, loc.offset, own_loc.offset + own_loc.length);
+		if loc.offset < own_loc.offset { return false; }
+		if loc.offset >= own_loc.offset + own_loc.length { return false; }
+        for init in &expr.initializers {
+            if cursor_on(loc, &init.ident.location) {
+                self.got_var(ast, db, init.var, Some(&init.ident.location));
+                return true;
+            }
+            if self.visit_expr(ast, db, loc, init.value) {
+                return true;
+            }
+        }
+		eprintln!("-> found @ New");
+		self.locate_new(ast, db, loc, &expr);
+		return true;
+	}
 }
 
 pub fn semantic_locate<F: FnMut(Semantic, Option<&SourceLocation>)>(ast: &Ast, db: &Db, target: SourceLocation, callback: F) {
