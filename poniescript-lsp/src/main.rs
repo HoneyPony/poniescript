@@ -343,7 +343,7 @@ impl LanguageServer for Backend {
     }
 
     async fn document_color(&self, params: DocumentColorParams) -> Result<Vec<ColorInformation>> {
-        let mut lock = self.store.lock().await;
+        let lock = self.store.lock().await;
 
         let Some(project) = lock.projects.get(&params.text_document.uri) else {
             return Ok(Vec::new());

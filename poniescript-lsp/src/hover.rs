@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-
 use poniescript_core::lexer::Token;
 use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
-    db::*, expr::*, inf_write, source::*
+    db::*, inf_write, source::*
 };
 
 use crate::document::DocumentStore;

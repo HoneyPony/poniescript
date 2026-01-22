@@ -4,7 +4,6 @@ use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
     db::*,
-    expr::*,
     source::*,
 };
 

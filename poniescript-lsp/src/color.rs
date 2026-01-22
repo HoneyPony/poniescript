@@ -1,16 +1,9 @@
-use std::collections::HashMap;
-
 use poniescript_core::lexer::Token;
 use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
     db::*,
-    expr::*,
-    source::*,
 };
-
-use crate::document::DocumentStore;
-use crate::document::*;
 
 pub fn convert_color(db: &Db, token: &Token) -> Color {
     let subslice = {

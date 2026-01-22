@@ -234,7 +234,7 @@ impl Project {
             args.hot = true;
             args.engine = true;
 
-            if let Some(output) = &store.c_output {
+            if let Some(_output) = &store.c_output {
                 //ast = do_finish_compile(&mut db, ast, output, &args);
             }
         }

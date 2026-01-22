@@ -2,14 +2,10 @@ use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
     db::*,
-    expr::*,
-    source::*,
     lexer::Token,
 };
 
 use crate::document::DocumentStore;
-use crate::semantic_locate::Semantic;
-use crate::{document::*, semantic_locate};
 
 /// Converts a vector of tokens into a String.
 /// 
