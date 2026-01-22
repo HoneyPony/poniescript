@@ -57,6 +57,11 @@ enum CliCommand {
         target: Option<String>
     },
 
+    /// Generate documentation for the given project.
+    Doc {
+        project: String,
+    },
+
     /// Create a new project in the current directory's ponies.toml, or
     /// create a new ponies.toml if there is none. Generates a single file to
     /// begin with that includes the project's name.
@@ -276,6 +281,45 @@ fn handle_build_cmd(cmd: CliCommand) {
                     .unwrap_or_else(|_| show_error_msg("couldn't wait for child process."));
             }
         },
+        CliCommand::Doc { project } => {
+            let Some(proj) = build.projects.get(&project) else {
+                eprintln!("error: no such project '{}'", project);
+                std::process::exit(1);
+            };
+
+            let mut doc_cmd = Command::new("poni-doc-cli");
+            doc_cmd.arg("--output-path").arg(format!(".build/doc/{}", project));
+            for file in &proj.files {
+                // TODO: We should probably prefix these with something so the user
+                // isn't messed up if they have a file called "-i"
+                doc_cmd.arg(file);
+            }
+            for import in &proj.imports {
+                doc_cmd.arg("-i").arg(import);
+            }
+
+            if let Some(kind) = &proj.kind {
+                for file in &kind.get_poniescripts() {
+                    doc_cmd.arg(env.poni_src_path.join(file));
+                }
+                for import in &kind.get_imports() {
+                    doc_cmd.arg(env.poni_src_path.join(import));
+                }
+            }
+
+            let mut child = doc_cmd.spawn().map_err(|e| {
+                eprintln!("error spawning poni-doc-cli: {}", e);
+                std::process::exit(1);
+            }).unwrap();
+
+            child.wait().map_err(|e| {
+                eprintln!("error waiting for poni-doc-cli: {}", e);
+            });
+
+            // Done.
+            // We could also consider not even waiting for the poni-doc-cli
+            // child...
+        }
         _ => unreachable!()
     }
 }
@@ -284,7 +328,7 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        CliCommand::Regenerate | CliCommand::Build { .. } | CliCommand::HotBuild { .. } | CliCommand::Run { .. } => {
+        CliCommand::Regenerate | CliCommand::Build { .. } | CliCommand::HotBuild { .. } | CliCommand::Run { .. } | CliCommand::Doc { .. } => {
             handle_build_cmd(cli.command);
         },
         CliCommand::New { name } => {

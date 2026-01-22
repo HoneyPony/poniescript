@@ -344,6 +344,23 @@ fn parse_modules(ast: &mut Ast, db: &mut Db, input_paths: &Vec<PathBuf>) {
 	}
 }
 
+fn parse_imports(ast: &mut Ast, db: &mut Db, input_paths: &Vec<PathBuf>) {
+	for path in input_paths {
+		let source_id = ast.new_source(path.clone());
+		match poniescript_core::glue::parser::parse_import_2(ast, db, source_id) {
+			Ok(false) => { },
+			Ok(true) => {
+                // TODO: Return a Result instead of exiting the process. :(
+				std::process::exit(1);
+			}
+			Err(err) => {
+				eprintln!("Unable to parse source file {}: {err}", path.display());
+				std::process::exit(1);
+			}
+		}
+	}
+}
+
 fn convert_doc_comment(db: &Db, doc_comment: &Option<Vec<Token>>) -> String {
     let mut markdown = String::new();
 
@@ -362,11 +379,12 @@ fn convert_doc_comment(db: &Db, doc_comment: &Option<Vec<Token>>) -> String {
 
 /// Generates docs to the given output path. Note that this will always create
 /// the given output path, due to the way it creates the interior paths.
-pub fn generate_docs(input_paths: &Vec<PathBuf>, output_path: &Path) -> std::io::Result<()> {
+pub fn generate_docs(input_paths: &Vec<PathBuf>, import_paths: &Vec<PathBuf>, output_path: &Path) -> std::io::Result<()> {
     let mut ast = Ast::new();
     let mut db = Db::new(&mut ast);
 
     parse_modules(&mut ast, &mut db, input_paths);
+    parse_imports(&mut ast, &mut db, input_paths);
 
     // TODO: How to distribute directories for these files?
     let generated = output_path.join("generated");
