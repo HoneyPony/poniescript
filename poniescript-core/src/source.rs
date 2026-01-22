@@ -2,7 +2,7 @@
 
 use std::sync::RwLock;
 use std::{fs::File, path::PathBuf};
-use std::io::{self, Read};
+use std::io::{self, Cursor, Read};
 use crate::db::*;
 use crate::module::Module;
 
@@ -318,7 +318,11 @@ impl SourceProvider for PathBufFileSource {
 
 impl SourceProvider for SyntheticSource {
 	fn to_reader(&self) -> io::Result<Box<dyn Read>> {
-		panic!("ICE: Trying to read from SyntheticSource")
+		// For now, for Language Server reasons, don't panic, although I'm
+		// not actually sure what is resulting in these source ids...?
+		log::warn!("trying to read from SyntheticSource");
+		Ok(Box::new(Cursor::new([])))
+		//panic!("ICE: Trying to read from SyntheticSource")
 	}
 
 	fn repr_path(&self) -> String {

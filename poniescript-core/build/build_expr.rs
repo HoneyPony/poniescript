@@ -469,6 +469,27 @@ pub fn generate(file: &mut File) {
 		}}
 	}}").unwrap();
 
+	// We don't quite have a good way to do this yet.
+	writeln!(visit_immut_trait, "	fn visit_ast_for_source(&mut self, ast: &Ast, db: &Db, source: SourceId) {{
+		let source = ast.sources.get(source);
+		let module = &source.module;
+
+		for it in &module.globals {{
+			if let Some(expr) = it.value {{
+				self.visit_expr(ast, db, expr);
+			}}
+		}}
+
+		for it in &module.functions {{
+			self.visit_expr(ast, db, it.value);
+		}}
+
+		// TODO
+		// for it in &module.classes {{
+		// 	self.visit_classdeclare(ast, db, it);
+		// }}
+	}}").unwrap();
+
 	writeln!(locate_trait, "}}").unwrap();
 	writeln!(visit_trait, "}}").unwrap();
 	writeln!(visit_immut_trait, "}}").unwrap();

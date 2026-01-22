@@ -5,6 +5,7 @@ mod hover;
 mod color;
 mod completion;
 mod semantic_locate;
+mod semantic_tokens;
 
 use std::path::PathBuf;
 
@@ -23,103 +24,6 @@ use poniescript_core::{
 };
 
 use crate::document::*;
-
-
-
-struct SemanticTokenVisitor {
-    tokens: Vec<SemanticToken>,
-    cursor_start: u64,
-    cursor_line: u64,
-}
-
-impl SemanticTokenVisitor {
-    fn push_token(&mut self, ast: &Ast, _db: &Db, location: &SourceLocation, token_type: u32, token_modifiers_bitset: u32) {
-        let (line, col) = ast.sources.get(location.source).get_line_column(location);
-        let (line, col) = (line - 1, col - 1);
-
-        let mut delta_line: u32 = 0;
-        let delta_start: u32;
-
-        if line == self.cursor_line {
-            delta_start = (col - self.cursor_start) as u32;
-        }
-        else {
-            if line < self.cursor_line {
-                // TODO: Apparently our visit is not necessarily in-order.
-                // We need to do stuff to fix that (probably sort all the tokens)
-                eprintln!("bad semantic token");
-                return;
-            }
-            delta_line = (line - self.cursor_line) as u32;
-            delta_start = col as u32;
-        }
-
-        self.cursor_line = line;
-        self.cursor_start = col;
-
-        eprintln!("{}:{}: length: {}", self.cursor_line, self.cursor_start, location.length);
-
-        self.tokens.push(SemanticToken { delta_line, delta_start, length: location.length as u32, token_type, token_modifiers_bitset });
-    }
-
-    fn push_var(&mut self, ast: &Ast, db: &Db, location: &SourceLocation, id: VarId) {
-        let is_param = db.get(id).fun.is_some();
-
-        self.push_token(ast, db, location, if is_param { 1 } else { 0 }, 0);
-    }
-
-    fn push_fun(&mut self, ast: &Ast, db: &Db, location: &SourceLocation) {
-        eprintln!("push fun: {}", location.length);
-        self.push_token(ast, db, location, 2, 0);
-    }
-}
-
-// TODO: Deduplicate this
-macro_rules! into {
-    ($value:expr, $variant:ident) => {
-        {
-            let Expr::$variant(v) = $value else { unreachable!() };
-            v
-        }
-    };
-}
-
-// TODO: Consider making VisitAst visit each node strongly-typed or something..?
-impl poniescript_core::expr::VisitAst for SemanticTokenVisitor {
-    fn visit_assign(&mut self, ast: &Ast, db: &mut Db, id: ExprId) {
-        // TODO: Visit nested
-        let binding = ast.get_expr(id);
-        let assign = into!(binding.as_ref(), Assign);
-
-        self.push_var(ast, db, &assign.var_name, assign.identity);
-        self.visit_expr(ast, db, assign.value);
-    }
-
-    fn visit_variable(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
-        let binding = ast.get_expr(id);
-        let var = into!(binding.as_ref(), Variable);
-
-        self.push_var(ast, db, &var.location, var.identity);
-    }
-
-    fn visit_funcapture(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
-        let binding = ast.get_expr(id);
-        let capt = into!(binding.as_ref(), FunCapture);
-
-        self.push_fun(ast, db, &capt.fn_name);
-    }
-
-    fn visit_funcall(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
-        let binding = ast.get_expr(id);
-        let call = into!(binding.as_ref(), FunCall);
-
-        self.push_fun(ast, db, &call.fn_name);
-
-        for arg in &call.args {
-            self.visit_expr(ast, db, *arg);
-        }
-    }
-}
 
 struct Backend {
     client: Client,
@@ -198,7 +102,7 @@ impl LanguageServer for Backend {
                 position_encoding: Some(encoding),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions::default()),
-                semantic_tokens_provider: None, /*Some(
+                semantic_tokens_provider: Some(
                     SemanticTokensServerCapabilities::SemanticTokensOptions(
                         SemanticTokensOptions {
                             legend: SemanticTokensLegend {
@@ -206,6 +110,8 @@ impl LanguageServer for Backend {
                                     SemanticTokenType::VARIABLE,
                                     SemanticTokenType::PARAMETER,
                                     SemanticTokenType::FUNCTION,
+                                    SemanticTokenType::PROPERTY,
+                                    SemanticTokenType::METHOD,
                                 ],
                                 token_modifiers: vec![],
                             },
@@ -214,7 +120,7 @@ impl LanguageServer for Backend {
                             work_done_progress_options: Default::default(),
                         },
                     )
-                ),*/
+                ),
 
                 inlay_hint_provider: Some(OneOf::Left(true)),
 
@@ -279,7 +185,6 @@ impl LanguageServer for Backend {
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
-        return Ok(None);
         // Disable semantic tokens for now. They're not very useful and the LSP
         // is pretty unstable.
         //const ENABLE_SEMANTIC_TOKEN_SUPPORT: bool = false;
@@ -287,25 +192,9 @@ impl LanguageServer for Backend {
 
         //  TODO: Make semantic tokens work with new Project setup.
         // self.client.log_message(MessageType::INFO, format!("Semantic tokens requested for {}", params.text_document.uri)).await;
-
-        // let mut lock = self.store.lock().await;
+         let mut store = self.store.lock().await;
+        Ok(semantic_tokens::semantic_tokens(&mut store, params))
         
-        // let (db, ast, ..) = lock.get_cached_stuff();
-
-        // let mut visitor = SemanticTokenVisitor { tokens: vec![], cursor_line: 0, cursor_start: 0 };
-
-        // for source in ast.sources.iter() {
-        //     let source = ast.sources.get(source);
-        //     let module = &source.module;
-        //     for fun in &module.functions {
-        //         visitor.visit_expr(&ast, db, fun.value);
-        //     }
-        // }
-
-        // let tokens = SemanticTokens { result_id: None, data: visitor.tokens };
-
-        // self.client.log_message(MessageType::INFO, format!("Found {} semantic tokens", tokens.data.len())).await;
-        // Ok(Some(SemanticTokensResult::Tokens(tokens)))
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
