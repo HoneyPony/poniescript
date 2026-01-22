@@ -64,6 +64,10 @@ pub fn completion(store: &mut DocumentStore, params: CompletionParams) -> Option
 
         completions.push(CompletionItem {
             label: db.get(var.name).to_string(),
+            label_details: Some(CompletionItemLabelDetails {
+                detail: Some(format!(": {}", db.repr_type(var.typ))),
+                description: None
+            }),
             kind: Some(kind),
             documentation: inefficient_doc_lsp(db, &var.doc_comment),
             ..Default::default()
@@ -81,6 +85,10 @@ pub fn completion(store: &mut DocumentStore, params: CompletionParams) -> Option
 
         completions.push(CompletionItem {
             label: db.get(name).to_string(),
+            label_details: Some(CompletionItemLabelDetails {
+                detail: Some(format!(" {}", db.repr_sig(fun.sig).to_string())),
+                description: None
+            }),
             kind: Some(kind),
             documentation: inefficient_doc_lsp(db, &fun.doc_comment),
             ..Default::default()

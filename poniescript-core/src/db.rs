@@ -305,6 +305,7 @@ pub struct Db {
 	/// TODO: Supposedly RwLock is needed for LSP stuff. Do we really need it
 	/// here?
 	type_repr_cache: RwLock<FxHashMap<TypId, &'static str>>,
+	sig_repr_cache: RwLock<FxHashMap<SigId, &'static str>>,
 
 	fun_cparams_cache: Vec<&'static str>,
 
@@ -460,6 +461,7 @@ impl Db {
 			imported_classes: Vec::new(),
 
 			type_repr_cache: RwLock::new(FxHashMap::default()),
+			sig_repr_cache: RwLock::new(FxHashMap::default()),
 			fun_cparams_cache: Vec::new(),
 
 			var_cname_cache: Vec::new(),
@@ -1354,6 +1356,38 @@ impl Db {
 
 	pub fn repr_var_type(&self, var: VarId) -> &'static str {
 		self.repr_type(self.get(var).typ)
+	}
+
+	pub fn repr_sig(&self, sig_id: SigId) -> &'static str {
+		use crate::inf_write;
+
+		{
+			let lock = self.sig_repr_cache.read().unwrap();
+			if let Some(&cached) = lock.get(&sig_id) {
+				return cached;
+			}
+		}
+
+		let mut repr = String::from("fun(");
+		let sig = self.get(sig_id);
+		let mut comma = false;
+		for typ in &sig.parameters {
+			if comma { inf_write!(repr, ", "); };
+			inf_write!(repr, "{}", self.repr_type(*typ));
+			comma = true;
+		}
+
+		inf_write!(repr, ")");
+		if sig.return_type != self.types.void {
+			inf_write!(repr, " -> ");
+			inf_write!(repr, "{}", self.repr_type(sig.return_type));
+		}
+
+		let repr = repr.leak();
+		let mut lock = self.sig_repr_cache.write().unwrap();
+		lock.insert(sig_id, repr);
+
+		repr
 	}
 
 	pub fn repr_type(&self, typ: TypId) -> &'static str {
