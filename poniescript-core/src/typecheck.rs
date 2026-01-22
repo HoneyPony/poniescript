@@ -2341,13 +2341,16 @@ impl<'db> TypeChecker<'db> {
 				match iter_ty {
 					Type::RangeOf(a, b, typ) if *typ == self.db.types.int => {
 						let _a = *a; let b = *b;
+						// Use a 0-width location for all the synthesized nodes,
+						// so that we don't take up space.
+						let inner_loc = for_.location.begin();
 						// Desugar the for loop into the following:
 						// var <var> = <start>
 						// while <var> < <end> {
 						//    inner
 						//    var = var + 1;
 						// }
-						let initializer = Expr::push_get(ast, for_.location.clone(),
+						let initializer = Expr::push_get(ast, inner_loc.clone(),
 							vec![Token::synthesize_ident_from(self.db, "left")],
 							for_.iterator, vec![self.db.get_range_left(iterable)]);
 						// NOTE: For now, in order to make for loops work with
@@ -2357,50 +2360,53 @@ impl<'db> TypeChecker<'db> {
 						// What we should do instead is probably synthesize a label
 						// at the *end* of the loop, that we jump to in the continue
 						// statement.
-						let one = Expr::push_numliteral(ast, for_.location.clone(),
+						let one = Expr::push_numliteral(ast, inner_loc.clone(),
 							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
 							self.db.types.int);
-						let sub = Expr::push_binary(ast, for_.location.clone(),
+						let sub = Expr::push_binary(ast, inner_loc.clone(),
 							Tok::Minus, initializer, one, self.db.types.int);
-						let declare = Stmt::push_declare(ast, for_.location.clone(),
+						// Make the declare have its own location...?
+						let declare = Stmt::push_declare(ast, for_.ident.clone(),
 							for_.ident.clone(), for_.identity, Some(sub), for_.has_explicit_type);
 						
-						let read = Expr::push_variable(ast, for_.location.clone(),
+						let read = Expr::push_variable(ast, inner_loc.clone(),
 							for_.identity);
-						let one = Expr::push_numliteral(ast, for_.location.clone(),
+						let one = Expr::push_numliteral(ast, inner_loc.clone(),
 							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
 							self.db.types.int);
-						let add = Expr::push_binary(ast, for_.location.clone(),
+						let add = Expr::push_binary(ast, inner_loc.clone(),
 							Tok::Plus, read, one, self.db.types.int);
-						let assign = Expr::push_assign(ast, for_.location.clone(),
+						let assign = Expr::push_assign(ast, inner_loc.clone(),
 							self.db.srcloc_dummy(), for_.identity, add, Tok::Equal);
 
-						let inner_stmt = Stmt::push_expression(ast, for_.location.clone(),
+						// Grab location from the inner
+						let inner_stmt_loc = for_.inner.location(ast);
+						let inner_stmt = Stmt::push_expression(ast, inner_stmt_loc.clone(),
 							for_.inner);
-						let assign_stmt = Stmt::push_expression(ast, for_.location.clone(),
+						let assign_stmt = Stmt::push_expression(ast, inner_loc.clone(),
 							assign);
 							
 						// AWKWARD/TODO: Once we care about the value of the while block,
 						// this is not going to be it...?
-						let inner_block = Expr::push_block(ast, for_.location.clone(),
+						let inner_block = Expr::push_block(ast,  inner_stmt_loc,
 							// Due to our 'continue' jank, the assign has to come
 							// before the inner.
 							vec![assign_stmt, inner_stmt], self.db.types.void);
 
 						// Rhs of the comparison.
-						let rhs = Expr::push_get(ast, for_.location.clone(),
+						let rhs = Expr::push_get(ast, inner_loc.clone(),
 							vec![Token::synthesize_ident_from(self.db, "right")],
 							for_.iterator, vec![self.db.get_range_right(iterable)]);
 						// More 'continue' JANK: synthesize a -1 for the RHS
 						// of the loop as well.
-						let one = Expr::push_numliteral(ast, for_.location.clone(),
+						let one = Expr::push_numliteral(ast, inner_loc.clone(),
 							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
 							self.db.types.int);
-						let rhs = Expr::push_binary(ast, for_.location.clone(),
+						let rhs = Expr::push_binary(ast, inner_loc.clone(),
 							Tok::Minus, rhs, one, self.db.types.int);
 						// TODO: Can we re-used the read above? For now, synthesize
 						// two nodes.
-						let read = Expr::push_variable(ast, for_.location.clone(),
+						let read = Expr::push_variable(ast, inner_loc.clone(),
 							for_.identity);
 
 						// Switch comparison based on the range type.
@@ -2409,9 +2415,10 @@ impl<'db> TypeChecker<'db> {
 							RangeEnd::Exclusive => Tok::Less,
 							RangeEnd::Unbounded => todo!(),
 						};
-						let comparison = Expr::push_comparison(ast, for_.location.clone(),
+						let comparison = Expr::push_comparison(ast, inner_loc.clone(),
 							compare_type, read, rhs, self.db.types.int);
 
+						// These muse encompas the entire for loop in terms of location.
 						let while_loop = Expr::push_whileloop(ast, for_.location.clone(),
 							comparison, inner_block, self.db.types.void, Vec::new());
 						
