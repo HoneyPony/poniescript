@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use poni_arena::ArenaKey;
 use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
@@ -43,6 +44,7 @@ impl<F: FnMut(Semantic, Option<&SourceLocation>)> SemanticLocate<F> {
     }
 
     fn got_var(&mut self, ast: &Ast, db: &Db, var: VarId, origin_selection_range: Option<&SourceLocation>) {
+        // eprintln!("located var: {}", var.to_index());
         // Don't callback for unassigned var
         if var == db.var_unassigned {
             return;
@@ -69,11 +71,21 @@ impl<F: FnMut(Semantic, Option<&SourceLocation>)> LocateAst for SemanticLocate<F
     }
 
     fn locate_get(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Get) {
-        //self.goto_var(ast, db, it.var, Some(&it.identifier.location));
+        for (val, var) in it.chain.iter().zip(it.vars.iter()) {
+            if cursor_on(_loc, &val.location) {
+                self.got_var(ast, db, *var, Some(&val.location));
+                return;
+            }
+        }
     }
 
     fn locate_set(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Set) {
-        //self.goto_var(ast, db, it.var, Some(&it.identifier.location));
+        for (val, var) in it.chain.iter().zip(it.vars.iter()) {
+            if cursor_on(_loc, &val.location) {
+                self.got_var(ast, db, *var, Some(&val.location));
+                return;
+            }
+        }
     }
 
     fn locate_new(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &New) {
