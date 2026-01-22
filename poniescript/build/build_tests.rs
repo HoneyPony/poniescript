@@ -236,6 +236,7 @@ pub fn generate(tests_file: &mut File) {
 		("loop/", "while_with_continue"),
 		("loop/", "for_with_continue"),
 
+		("misc/", "panicking_color_literal"),
 		("misc/", "array_of_str"),
 		("misc/", "array_of_strbuf"),
 		("misc/", "array_of_tuple_of_opt_class_opt_strbuf"),

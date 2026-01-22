@@ -1,0 +1,7 @@
+// This script (hopefully, used to) crash the language server, due to .unwrap()'ing
+// the first inner type inside a tuple in db.use_tuple(). Not sure exactly how..?
+//
+// Must be something to do with what happens when we keep going after parsing fails. 
+fun init() {
+    var x = (#)
+}

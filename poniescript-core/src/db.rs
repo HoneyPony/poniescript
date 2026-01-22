@@ -981,8 +981,17 @@ impl Db {
 
 		self.value_types.push(tuple_ty);
 
-		// It should not be possible to have an empty tuple, I think...?
-		let first = inner.first().unwrap();
+		// .unwrap()'ing here occasionally panics the language server, specifically
+		// when we write a color literal like '(#)'. Not sure the exact cause,
+		// but it should be safe to just not do anything for these types, as
+		// we currently don't support 0-element tuples.
+		//
+		// (If we did support 0-element tuples, we could make them a synonym
+		// for void).
+		let Some(first) = inner.first() else {
+			log::warn!("tried to use_tuple a 0-element tuple");
+			return;
+		};
 		let all_same_ty = inner.iter().all(|t| *t == *first);
 
 		for (idx, ty) in inner.iter().enumerate() {
