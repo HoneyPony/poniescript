@@ -108,6 +108,30 @@ impl poniescript_core::expr::VisitAstImmut for SemanticTokenVisitor {
             self.visit_expr(ast, db, *arg);
         }
     }
+
+    fn visit_get(&mut self, ast: &Ast, db: &Db, id: ExprId) {
+        let binding = ast.get_expr(id);
+        let get = into!(binding.as_ref(), Get);
+
+        self.visit_expr(ast, db, get.lhs);
+
+        for (tok, var) in get.chain.iter().zip(get.vars.iter()) {
+            self.push_var(ast, db, &tok.location, *var);
+        }
+    }
+
+    fn visit_set(&mut self, ast: &Ast, db: &Db, id: ExprId) {
+        let binding = ast.get_expr(id);
+        let set = into!(binding.as_ref(), Set);
+
+        self.visit_expr(ast, db, set.lhs);
+
+        for (tok, var) in set.chain.iter().zip(set.vars.iter()) {
+            self.push_var(ast, db, &tok.location, *var);
+        }
+
+        self.visit_expr(ast, db, set.rhs);
+    }
 }
 
 pub fn semantic_tokens(store: &mut DocumentStore, params: SemanticTokensParams) -> Option<SemanticTokensResult> {
