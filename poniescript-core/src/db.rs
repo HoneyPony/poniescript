@@ -585,8 +585,37 @@ impl Db {
 			return_type: db.types.unassigned
 		});
 
-		// TODO: Maybe make class_unassigned a special value...?
-		// For now it's going to cause some unsafety..
+		let unknown_class = db.put_str("<unknown class>");
+		let unknown_var = db.put_str("<unknown var>");
+
+		// It is important to use a real variable and class for the unassigned
+		// var and class. Otherwise, the language server will mix them up with
+		// real classes.
+		//
+		// This also prevents us from having memory unsafety if we forget to
+		// check for an unassigned variable, in the language server.
+		db.class_unassigned = db.push(Class {
+			name: unknown_class,
+			vars: Vec::new(),
+			funs: Vec::new(),
+			mandatory_vars: FxHashSet::default(),
+			import_kind: crate::expr::ImportKind::Not,
+			var_map: FxHashMap::default(),
+			fun_map: FxHashMap::default(),
+			location: db.synthetic(),
+			doc_comment: None,
+		});
+
+		db.var_unassigned = db.push(Var {
+			name: unknown_var,
+			typ: db.types.unassigned,
+			readonly: false,
+			class: None,
+			fun: None,
+			initializer: None,
+			location: db.synthetic(),
+			doc_comment: None,
+		});
 
 		db.types.fun_sig_unassigned = db.put_type(Type::Fun(db.sig_unassigned));
 
