@@ -209,7 +209,7 @@ impl<'b> Parser<'b> {
 	pub fn new(input: Box<dyn std::io::Read>, source_id: SourceId, db: &'b mut Db, ast: &'b mut Ast) -> std::io::Result<Self> {
 		// TODO: Technically we only need one of this, even with multiple parsers...
 		let range_types = RangeTypes::build(db);
-		let mut lexer = Lexer::new(input, source_id);
+		let lexer = Lexer::new(input, source_id);
 
 		// TODO: Move File initialization to Lexer
 

@@ -740,8 +740,8 @@ impl<'a> Codegen<'a> {
 
 			define_val!(self, into, val, ";\n");
 
-			let lhs_scalar = (left.typ == self.db.types.int || left.typ == self.db.types.float);
-			let rhs_scalar = (right.typ == self.db.types.int || right.typ == self.db.types.float);
+			let lhs_scalar = left.typ == self.db.types.int || left.typ == self.db.types.float;
+			let rhs_scalar = right.typ == self.db.types.int || right.typ == self.db.types.float;
 
 			let postfix = "".to_string();
 			self.compile_partial_binary((lhs_scalar, rhs_scalar), &val, &left, &right, 
@@ -2353,7 +2353,9 @@ impl<'a> Codegen<'a> {
 	// }
 
 	fn compile_stmt(&mut self, ast: &AstReadonly, stmt: StmtId, into: &mut String) -> Option<TypedVal> {
-		let indent = self.indent();
+		// We currently do not use the indenter at all in this function!
+		// let indent = self.indent();
+
 		match ast.stmts.get(stmt) {
 			Stmt::Declare(declare) => {
 				if let Some(value) = declare.value {
