@@ -94,7 +94,9 @@ impl<'db> Binder<'db> {
 	/// Gets a new SelfVal if appropriate.
 	fn get_selfval(&mut self, ast: &AstProxy, location: SourceLocation, selfval: bool) -> Option<ExprId> {
 		if selfval {
-			Some(Expr::push_selfval(ast, location, self.db.types.unassigned))
+			// Shrink the location to just its beginning, so that it doesn't hog
+			// the tokens when we're using our visit trait.
+			Some(Expr::push_selfval(ast, location.begin(), self.db.types.unassigned))
 		}
 		else { None }
 	}
