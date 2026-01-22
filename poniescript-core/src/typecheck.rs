@@ -1827,7 +1827,7 @@ impl<'db> TypeChecker<'db> {
 						// ValCall(FunCapture).
 						let as_funcall = FunCall {
 							location: call.location.clone(),
-							fn_name: capt.location.clone(),
+							fn_name: capt.fn_name.clone(),
 							identity: capt.identity,
 							args: std::mem::take(&mut call.args),
 							object: capt.object
@@ -1845,7 +1845,7 @@ impl<'db> TypeChecker<'db> {
 						log::trace!("ValCall>BuiltinCapture => BuiltinCall");
 						let as_builtincall = BuiltinCall {
 							location: call.location.clone(),
-							fn_name: capt.location.clone(),
+							fn_name: capt.fn_name.clone(),
 							// TODO: Can I just pass the function pointers themselves?
 							// Arc seems unnecessary.
 							ptr: Arc::clone(&capt.ptr),
