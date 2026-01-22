@@ -534,3 +534,14 @@ pub fn parse_import(ast: &mut Ast, db: &mut Db, path: &Path) -> std::io::Result<
 
 	Ok(had_error)
 }
+
+pub fn parse_import_2(ast: &mut Ast, db: &mut Db, source_id: SourceId) -> std::io::Result<bool> {
+    let file = ast.sources.get(source_id).to_reader()?;
+
+	let mut parser = Parser::new(file, source_id, db)?;
+	parser.parse()?;
+
+	let had_error = parser.had_error;
+
+	Ok(had_error)
+}

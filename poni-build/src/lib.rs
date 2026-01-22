@@ -121,7 +121,7 @@ pub enum ProjectKind {
 impl ProjectKind {
     /// Gets additional C imports that this project kind requires. These are
     /// local to the poni_src_path.
-    fn get_imports(&self) -> Vec<PathBuf> {
+    pub fn get_imports(&self) -> Vec<PathBuf> {
         match self {
             ProjectKind::Ponyquad => vec!["ponyquad/ponyquad.h".into()],
         }
@@ -129,7 +129,7 @@ impl ProjectKind {
 
     /// Gets additional scripts that this project kind requires. These are
     /// local to the poni_src_path.
-    fn get_poniescripts(&self) -> Vec<PathBuf> {
+    pub fn get_poniescripts(&self) -> Vec<PathBuf> {
         match self {
             ProjectKind::Ponyquad => vec!["ponyquad/keycodes.poni".into()],
         }
@@ -514,6 +514,20 @@ pub fn read_build_config_from_string(text: &str) -> Result<BuildConfig, ConfigRe
         .map_err(|err| ConfigReadError::BadPoniesToml(err.to_string()))?;
 
     Ok(build)
+}
+
+pub fn read_environment_config() -> Result<EnvironmentConfig, ConfigReadError> {
+    let app = XdgApp::new("poniescript")?;
+
+    let build_cfg_path = app.app_config_file("build-config.toml")?;
+
+    let config_str = fs::read_to_string(&build_cfg_path)
+        .map_err(|_| ConfigReadError::NoEnvironmentToml(build_cfg_path))?;
+
+    let env: EnvironmentConfig = toml::from_str(&config_str)
+        .map_err(|err| ConfigReadError::BadEnvironmentToml(err.to_string()))?;
+
+    return Ok(env);
 }
 
 pub fn read_configs(build_config_search_path: &Path) -> Result<(BuildConfig, EnvironmentConfig), ConfigReadError> {

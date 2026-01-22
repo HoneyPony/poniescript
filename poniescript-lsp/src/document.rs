@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::{Arc, Mutex}, time::SystemT
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 use poniescript_core::{
-    binder, db::*, init_ordering, module::{self}, source::*, typecheck, Args
+    Args, binder, db::*, glue, init_ordering, module::{self}, source::*, typecheck
 };
 use poni_arena::IndexCell;
 
@@ -33,6 +33,23 @@ fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId,
 			}
 		}
 	}
+
+    for doc in &project.imports {
+        let source = LSPSource::new(doc.clone());
+        let source_id = ast.sources.push(Source::new(source));
+
+        url_to_id_map.insert(doc.url.clone(), source_id);
+        id_to_url_map.insert(source_id, doc.url.clone());
+
+        doc_map.insert(source_id, doc.clone());
+
+        match glue::parser::parse_import_2(ast, db, source_id) {
+            Ok(_) => {},
+            Err(_) => {
+                todo!("Report I/O errors to LSP?");
+            }
+        }
+    }
 }
 
 // TODO: Respect utf-16, utf-8, etc
@@ -155,6 +172,8 @@ pub struct Project {
     cache: Mutex<Option<Arc<Mutex<ProjectCache>>>>,
 
     files: Vec<Arc<Document>>,
+
+    imports: Vec<Arc<Document>>,
 }
 
 impl Project {
@@ -295,7 +314,8 @@ impl DocumentStore {
             eprintln!("initializing project: '{}'", name);
             let mut proj = Project {
                 cache: Mutex::new(None),
-                files: Vec::new()
+                files: Vec::new(),
+                imports: Vec::new(),
             };
 
             for file in &project.files {
@@ -309,6 +329,56 @@ impl DocumentStore {
                 eprintln!("-- got url: {}", url);
                 if let Some(document) = self.get_or_create_document(&url) {
                     proj.files.push(document.clone());
+                }
+            }
+
+            for import in &project.imports {
+                eprintln!("-- trying to process import: {}", import.display());
+
+                // Skip file paths we can't process
+                let Some(str) = import.to_str() else { continue; };
+
+                // Skip file paths we can't process
+                let Ok(url) = url.join(str) else { continue; };
+                eprintln!("-- got import url: {}", url);
+                if let Some(document) = self.get_or_create_document(&url) {
+                    proj.imports.push(document);
+                }
+            }
+
+            // If we have an environment config, we can also add the system
+            // imports.
+            if let Some(kind) = &project.kind {
+                eprintln!("importing non-standalone project");
+                if let Ok(env) = poni_build::read_environment_config() {
+                    eprintln!("-- succesfully read environment config");
+                    // Note: We don't reverse-index these. That is, we don't
+                    // map them to a specific project in our DocumentStore. That
+                    // is because these (both the imports and the scripts) do
+                    // not belong to any specific project, at least right now.
+                    for import in kind.get_imports() {
+                        let full_path = env.poni_src_path.join(&import);
+                        let Ok(url) = Url::from_file_path(full_path) else { continue; };
+
+                        // TODO: How do we make the LSP refresh these files?
+                        // Maybe we have to manually check it...?
+                        if let Some(document) = self.get_or_create_document(&url) {
+                            eprintln!("-- added extern import document: {}", url);
+                            proj.imports.push(document);
+                        }
+                    }
+
+                    for script in kind.get_poniescripts() {
+                        let full_path = env.poni_src_path.join(&script);
+                        let Ok(url) = Url::from_file_path(full_path) else { continue; };
+
+                        // TODO: How do we make the LSP refresh these files?
+                        // Maybe we have to manually check it...?
+                        if let Some(document) = self.get_or_create_document(&url) {
+                            eprintln!("-- added extern poniescript document: {}", url);
+                            proj.files.push(document);
+                        }
+                    }
                 }
             }
 
@@ -361,7 +431,8 @@ impl DocumentStore {
             
                 let project = Project {
                     cache: Mutex::new(None),
-                    files: vec![Arc::clone(&doc)]
+                    files: vec![Arc::clone(&doc)],
+                    imports: Vec::new(),
                 };
 
                 self.projects.insert(url.clone(), Arc::new(project));
