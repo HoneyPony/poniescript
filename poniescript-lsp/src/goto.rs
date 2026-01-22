@@ -9,15 +9,15 @@ use poniescript_core::{
 };
 
 use crate::document::DocumentStore;
-use crate::document::*;
+use crate::semantic_locate::Semantic;
+use crate::{document::*, semantic_locate};
 
-struct GotoDefinitionVisitor<'map> {
+struct GotoDefinitionHelper<'map> {
     response: Option<GotoDefinitionResponse>,
-
     id_to_url_map: &'map HashMap<SourceId, Url>
 }
 
-impl<'map> GotoDefinitionVisitor<'map> {
+impl<'map> GotoDefinitionHelper<'map> {
     fn set_link(&mut self, ast: &Ast, origin_selection_range: Option<&SourceLocation>, target_range: &SourceLocation, target_selection_range: &SourceLocation) {
         let Some(target_uri) = self.id_to_url_map.get(&target_range.source) else {
             // Nothing found.
@@ -40,11 +40,6 @@ impl<'map> GotoDefinitionVisitor<'map> {
     }
 
     fn goto_class(&mut self, ast: &Ast, db: &Db, class: ClassId, origin_selection_range: Option<&SourceLocation>) {
-        if class == db.class_unassigned {
-            eprintln!("no class :(");
-            return;
-        }
-
         let class = db.get(class);
 
         // Target selection range TODO.
@@ -55,8 +50,6 @@ impl<'map> GotoDefinitionVisitor<'map> {
     }
 
     fn goto_fun(&mut self, ast: &Ast, db: &Db, fun: FunId, origin_selection_range: Option<&SourceLocation>) {
-        // No unassigned funs...?
-
         let fun = db.get(fun);
 
         self.set_link(ast, origin_selection_range,
@@ -65,10 +58,6 @@ impl<'map> GotoDefinitionVisitor<'map> {
     }
 
     fn goto_var(&mut self, ast: &Ast, db: &Db, var: VarId, origin_selection_range: Option<&SourceLocation>) {
-        if var == db.var_unassigned {
-            return;
-        }
-
         // Some TODO:
         // - The origin_selection_range should be fine here.
         // - THe target_uri is TODO.
@@ -80,54 +69,6 @@ impl<'map> GotoDefinitionVisitor<'map> {
         self.set_link(ast, origin_selection_range,
             &var.location,
             &var.location);
-    }
-}
-
-fn cursor_on(cursor: &SourceLocation, target: &SourceLocation) -> bool {
-    if cursor.offset < target.offset { return false; }
-    if cursor.offset > target.offset + target.length { return false; }
-    return true;
-}
-
-impl<'a> LocateAst for GotoDefinitionVisitor<'a> {
-    fn locate_assign(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Assign) {
-        // TODO: We could just not even do an origin_selection_range here as the
-        // default should be correct...?
-        self.goto_var(ast, db, it.identity,  Some(&it.var_name));
-    }
-
-    fn locate_variable(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Variable) {
-        self.goto_var(ast, db, it.identity, Some(&it.location));
-    }
-
-    fn locate_get(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Get) {
-        //self.goto_var(ast, db, it.var, Some(&it.identifier.location));
-    }
-
-    fn locate_set(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Set) {
-        //self.goto_var(ast, db, it.var, Some(&it.identifier.location));
-    }
-
-    fn locate_new(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &New) {
-        eprintln!("it.identifier.location: {} ? {} ? {}",
-            it.identifier.location.offset,
-            loc.offset,
-            it.identifier.location.offset + it.identifier.location.length);
-        if cursor_on(loc, &it.identifier.location) {
-            self.goto_class(ast, db, it.class, Some(&it.identifier.location));
-        }
-    }
-
-    fn locate_funcall(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCall) {
-        if cursor_on(loc, &it.fn_name) {
-            self.goto_fun(ast, db, it.identity, Some(&it.fn_name))
-        }
-    }
-
-    fn locate_funcapture(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCapture) {
-        if cursor_on(loc, &it.fn_name) {
-            self.goto_fun(ast, db, it.identity, Some(&it.fn_name));
-        }
     }
 }
 
@@ -148,13 +89,27 @@ pub fn goto_definition(store: &mut DocumentStore, params: GotoDefinitionParams) 
 
     let source_loc = inverse_convert_position(&cached.ast, *id, &params.text_document_position_params.position);
 
-    let mut visitor = GotoDefinitionVisitor {
+    let mut helper = GotoDefinitionHelper {
         response: None,
-
         id_to_url_map: &cached.id_to_url_map
     };
 
-    visitor.visit_ast(&cached.ast, &cached.db, &source_loc);
+    let ast = &cached.ast;
+    let db = &cached.db;
 
-    visitor.response
+    semantic_locate::semantic_locate(ast, db, source_loc, |semantic, origin_selection_range| {
+        match semantic {
+            Semantic::Var(var_id) => {
+                helper.goto_var(ast, db, var_id, origin_selection_range);
+            },
+            Semantic::Fun(fun_id) => {
+                helper.goto_fun(ast, db, fun_id, origin_selection_range);
+            },
+            Semantic::Class(class_id) => {
+                helper.goto_class(ast, db, class_id, origin_selection_range);
+            },
+        }
+    });
+    
+    helper.response
 }

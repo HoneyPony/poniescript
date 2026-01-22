@@ -3,6 +3,7 @@ mod inlay_hint;
 mod goto;
 mod hover;
 mod color;
+mod semantic_locate;
 
 use std::path::PathBuf;
 
