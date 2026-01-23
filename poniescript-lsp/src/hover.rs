@@ -7,6 +7,7 @@ use poniescript_core::{
 
 use crate::document::DocumentStore;
 use crate::document::*;
+use crate::documentation;
 use crate::semantic_locate;
 use crate::semantic_locate::Semantic;
 
@@ -47,21 +48,6 @@ fn build_hover(code: &str, doc: Option<String>, range: Option<Range>) -> Hover {
 }
 
 impl HoverHelper {
-    /// Converts a vector of tokens into a String.
-    /// 
-    /// Not the most efficient, but that's OK.
-    fn inefficient_doc(db: &Db, tokens: &Option<Vec<Token>>) -> Option<String> {
-        tokens.as_ref().map(|tokens| {
-            let mut doc = String::new();
-
-            for tok in tokens {
-                doc.push_str(db.get(tok.lexeme));
-            }
-
-            doc
-        })
-    }
-
     fn build_hover(&mut self, ast: &Ast, title: &str, doc: Option<String>, range: Option<&SourceLocation>) {
         let range = range.map(|r| convert_range(ast, r));
         self.response = Some(build_hover(title, doc, range));
@@ -73,7 +59,7 @@ impl HoverHelper {
         let mut class_sig = String::new();
         inf_write!(class_sig, "class {}", db.get(class.name));
 
-        self.build_hover(ast, &class_sig, Self::inefficient_doc(db, &class.doc_comment), range);
+        self.build_hover(ast, &class_sig, documentation::inefficient_doc(db, &class.doc_comment), range);
     }
 
     fn hover_fun(&mut self, ast: &Ast, db: &Db, fun: FunId, range: Option<&SourceLocation>) {
@@ -105,7 +91,7 @@ impl HoverHelper {
             inf_write!(fun_sig, " -> {}", db.repr_type(fun.return_type));
         }
 
-        self.build_hover(ast, &fun_sig, Self::inefficient_doc(db, &fun.doc_comment), range);
+        self.build_hover(ast, &fun_sig, documentation::inefficient_doc(db, &fun.doc_comment), range);
     }
 
     fn hover_var(&mut self, ast: &Ast, db: &Db, var: VarId, range: Option<&SourceLocation>) {
@@ -114,7 +100,7 @@ impl HoverHelper {
         let mut var_sig = String::new();
         inf_write!(var_sig, "var {}: {}", db.get(var.name), db.repr_type(var.typ));
 
-        self.build_hover(ast, &var_sig, Self::inefficient_doc(db, &var.doc_comment), range);
+        self.build_hover(ast, &var_sig, documentation::inefficient_doc(db, &var.doc_comment), range);
     }
 }
 

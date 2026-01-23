@@ -6,6 +6,8 @@ mod color;
 mod completion;
 mod semantic_locate;
 mod semantic_tokens;
+mod signature_help;
+mod documentation;
 
 use std::path::PathBuf;
 
@@ -130,6 +132,12 @@ impl LanguageServer for Backend {
                 
                 color_provider: Some(ColorProviderCapability::ColorProvider(ColorProviderOptions{})),
 
+                signature_help_provider: Some(SignatureHelpOptions {
+                    trigger_characters: Some(vec!["(".into(), ",".into()]),
+                    retrigger_characters: None,
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                }),
+
                 ..Default::default()
             },
             ..Default::default()
@@ -229,6 +237,14 @@ impl LanguageServer for Backend {
     ) -> Result<Option<GotoDefinitionResponse>> {
         let mut lock = self.store.lock().await;
         Ok(goto::goto_definition(&mut lock, params))
+    }
+
+    async fn signature_help(
+        &self,
+        params: SignatureHelpParams
+    ) -> Result<Option<SignatureHelp>> {
+        let mut store = self.store.lock().await;
+        Ok(signature_help::signature_help(&mut store, params))
     }
 
     async fn document_color(&self, params: DocumentColorParams) -> Result<Vec<ColorInformation>> {

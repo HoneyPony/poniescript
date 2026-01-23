@@ -5,31 +5,7 @@ use poniescript_core::{
     lexer::Token,
 };
 
-use crate::document::DocumentStore;
-
-/// Converts a vector of tokens into a String.
-/// 
-/// Not the most efficient, but that's OK.
-/// 
-/// TODO: Deduplicate this...
-fn inefficient_doc(db: &Db, tokens: &Option<Vec<Token>>) -> Option<String> {
-    tokens.as_ref().map(|tokens| {
-        let mut doc = String::new();
-
-        for tok in tokens {
-            doc.push_str(db.get(tok.lexeme));
-        }
-
-        doc
-    })
-}
-
-fn inefficient_doc_lsp(db: &Db, tokens: &Option<Vec<Token>>) -> Option<Documentation> {
-    inefficient_doc(db, tokens).map(|s| Documentation::MarkupContent(MarkupContent {
-        kind: MarkupKind::Markdown,
-        value: s,
-    }))
-}
+use crate::{document::DocumentStore, documentation};
 
 pub fn completion(store: &mut DocumentStore, params: CompletionParams) -> Option<CompletionResponse> {
     let Some(project) = store.projects.get(&params.text_document_position.text_document.uri) else {
@@ -65,7 +41,7 @@ pub fn completion(store: &mut DocumentStore, params: CompletionParams) -> Option
                 description: None
             }),
             kind: Some(kind),
-            documentation: inefficient_doc_lsp(db, &var.doc_comment),
+            documentation: documentation::inefficient_doc_lsp(db, &var.doc_comment),
             ..Default::default()
         })
     }
@@ -86,7 +62,7 @@ pub fn completion(store: &mut DocumentStore, params: CompletionParams) -> Option
                 description: None
             }),
             kind: Some(kind),
-            documentation: inefficient_doc_lsp(db, &fun.doc_comment),
+            documentation: documentation::inefficient_doc_lsp(db, &fun.doc_comment),
             ..Default::default()
         })
     }
@@ -97,7 +73,7 @@ pub fn completion(store: &mut DocumentStore, params: CompletionParams) -> Option
         completions.push(CompletionItem {
             label: db.get(class.name).to_string(),
             kind: Some(CompletionItemKind::CLASS),
-            documentation: inefficient_doc_lsp(db, &class.doc_comment),
+            documentation: documentation::inefficient_doc_lsp(db, &class.doc_comment),
             ..Default::default()
         })
     }
