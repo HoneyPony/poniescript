@@ -24,6 +24,10 @@ impl SemanticTokenVisitor {
         let delta_start: u32;
 
         if line == self.cursor_line {
+            if col < self.cursor_start {
+                eprintln!("bad semantic token");
+                return;
+            }
             delta_start = (col - self.cursor_start) as u32;
         }
         else {
@@ -73,6 +77,15 @@ macro_rules! into {
     };
 }
 
+macro_rules! into_stmt {
+    ($value:expr, $variant:ident) => {
+        {
+            let Stmt::$variant(v) = $value else { unreachable!() };
+            v
+        }
+    };
+}
+
 // TODO: Consider making VisitAst visit each node strongly-typed or something..?
 impl poniescript_core::expr::VisitAstImmut for SemanticTokenVisitor {
     fn visit_assign(&mut self, ast: &Ast, db: &Db, id: ExprId) {
@@ -89,6 +102,16 @@ impl poniescript_core::expr::VisitAstImmut for SemanticTokenVisitor {
         let var = into!(binding.as_ref(), Variable);
 
         self.push_var(ast, db, &var.location, var.identity);
+    }
+
+    fn visit_declare(&mut self, ast: &Ast, db: &Db, id: StmtId) {
+        let binding = ast.get_stmt(id);
+        let declare = into_stmt!(binding.as_ref(), Declare);
+
+        self.push_var(ast, db, &declare.ident, declare.identity);
+        if let Some(value) = declare.value {
+            self.visit_expr(ast, db, value);
+        }
     }
 
     fn visit_funcapture(&mut self,ast: &Ast, db: &Db,id:ExprId) {
