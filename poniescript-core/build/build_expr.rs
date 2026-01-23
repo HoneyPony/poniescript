@@ -398,7 +398,7 @@ pub fn generate(file: &mut File) {
 	UnboundFunCapture : Token identifier, Option<Expr> object
 	Print         : Vec<Expr> exprs, TypId typ
 	Str           : Vec<Expr> exprs
-	New           : Token identifier, ClassId class, TypId typ, Vec<NewInitElem> initializers
+	New           : Vec<Token> identifiers, ClassId class, TypId typ, Vec<NewInitElem> initializers
 	Get           : Vec<Token> chain, Expr lhs, Vec<VarId> vars
 	Set           : Vec<Token> chain, Expr lhs, Vec<VarId> vars, Expr rhs, Tok op
 	SelfVal       : TypId typ
@@ -426,7 +426,7 @@ pub fn generate(file: &mut File) {
 	
 	Declare      : SourceLocation ident, VarId identity, Option<Expr> value, bool has_explicit_type
 	Expression   : Expr expression
-	ClassDeclare : ClassId identity, Vec<FunDeclare> funs, Vec<Declare> vars
+	ClassDeclare : ClassId identity, Vec<FunDeclare> funs, Vec<Declare> vars, Vec<ClassDeclare> classes
 
 	"#;
 

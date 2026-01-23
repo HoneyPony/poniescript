@@ -805,6 +805,13 @@ impl<'b> Parser<'b> {
 		let key_new = expected!(self, Tok::New, "'new'")?;
 		let name = expected_after!(self, Tok::Identifier, key_new, "class name after 'new'")?;
 
+		let mut chain = vec![name];
+
+		while let Some(dot) = self.match_(Tok::Dot)? {
+			let next = expected_after!(self, Tok::Identifier, dot, "class name after '.'")?;
+			chain.push(next);
+		}
+
 		let mut initializers = Vec::new();
 
 		expected!(self, Tok::LeftBrace, "'{{' in 'new' expression")?;
@@ -812,7 +819,7 @@ impl<'b> Parser<'b> {
 		while !self.at(Tok::RightBrace) && !self.is_at_end() {
 			let location = self.start();
 			let ident = expected!(self, Tok::Identifier, "identifier inside 'new' block")?;
-			expected_after!(self, Tok::Colon, name, "':' after member name")?;
+			expected_after!(self, Tok::Colon, ident, "':' after member name")?;
 
 			let value = self.expression()?;
 			initializers.push(NewInitElem { var: self.db.var_unassigned, ident, value, location: self.end(location) });
@@ -822,7 +829,7 @@ impl<'b> Parser<'b> {
 		// TODO: Parse inner arguments, etc.
 		expected!(self, Tok::RightBrace, "'}}' in 'new' expression")?;
 
-		Expr::put_new_ok(self.ast, self.end(location), name, 
+		Expr::put_new_ok(self.ast, self.end(location), chain, 
 			self.db.class_unassigned,
 			self.db.types.unassigned,
 			initializers)
@@ -1761,7 +1768,7 @@ impl<'b> Parser<'b> {
 		return None;
 	}
 
-	fn class_declaration(&mut self) -> Result<ClassDeclare> {
+	fn class_declaration(&mut self, annotations: Vec<Token>) -> Result<ClassDeclare> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let key_class = expected!(self, Tok::Class, "'class'")?;
@@ -1775,17 +1782,25 @@ impl<'b> Parser<'b> {
 
 		let mut declare_funs = Vec::<FunDeclare>::new();
 		let mut declare_vars = Vec::<Declare>::new();
+		let mut declare_classes = Vec::<ClassDeclare>::new();
 
 		let mut funs = Vec::<FunId>::new();
 		let mut vars = Vec::<VarId>::new();
+		let mut classes = Vec::<ClassId>::new();
 
 		let mut var_map = FxHashMap::default();
 		let mut fun_map = FxHashMap::default();
+		let mut class_map = FxHashMap::default();
 
 		let mut mandatory_vars = FxHashSet::default();
 
+		let mut annotations = Vec::new();
+
 		loop {
 			match self.peek_typ() {
+				Tok::Annotation => {
+					annotations.push(self.advance()?);
+				}
 				Tok::Var => {
 					// Disallow 'self' in member initializers.
 					let enclosing_in_member = self.in_member_initializer;
@@ -1806,6 +1821,8 @@ impl<'b> Parser<'b> {
 					declare_vars.push(declare);
 
 					self.in_member_initializer = enclosing_in_member;
+
+					let _ = std::mem::take(&mut annotations);
 				},
 				Tok::Fun => {
 					let fun = self.fun_declaration(true)?;
@@ -1813,9 +1830,15 @@ impl<'b> Parser<'b> {
 					// We require name so this must have a name.
 					fun_map.insert(*self.db.get(fun.identity).name.as_ref().unwrap(), fun.identity);
 					declare_funs.push(fun);
+
+					let _ = std::mem::take(&mut annotations);
 				},
 				Tok::Class => {
-					todo!("nested class support")
+					let class = self.class_declaration(std::mem::take(&mut annotations))?;
+					class_map.insert(self.db.get(class.identity).name, class.identity);
+					classes.push(class.identity);
+
+					declare_classes.push(class);
 				}
 				Tok::RightBrace => {
 					break;
@@ -1837,8 +1860,11 @@ impl<'b> Parser<'b> {
 			name: name_str,
 			vars,
 			funs,
+			classes,
+			parent: None,
 			var_map,
 			fun_map,
+			class_map,
 			import_kind: ImportKind::Not,
 			mandatory_vars,
 			location: name.location,
@@ -1857,7 +1883,7 @@ impl<'b> Parser<'b> {
 
 		self.scope_put_entry(name_str, ScopeEntry::Class(identity));
 
-		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars)
+		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars, declare_classes)
 	}
 
 	fn get_source(&self) -> ArenaBorrowMut<'_, Source, SourceId> {
@@ -1865,8 +1891,14 @@ impl<'b> Parser<'b> {
 	}
 
 	fn parse_top_level(&mut self) -> Result<()> {
+		let mut annotations = Vec::new();
+
 		match self.peek_typ() {
 			Tok::Eof => { },
+
+			Tok::Annotation => {
+				annotations.push(self.advance()?);
+			}
 
 			Tok::Var => {
 				// Global variables require initializers.
@@ -1883,7 +1915,7 @@ impl<'b> Parser<'b> {
 			}
 
 			Tok::Class => {
-				let class = self.class_declaration()?;
+				let class = self.class_declaration(annotations)?;
 				self.get_source().module.classes.push(class);
 			}
 

@@ -53,6 +53,8 @@ pub enum Tok {
 	// #(ff00ff)
 	ColorLiteral,
 
+	Annotation,
+
 	DocComment,
 
 	Eof
@@ -375,6 +377,15 @@ impl Lexer {
 		return Ok(token);
 	}
 
+	fn annotation(&mut self, db: &mut Db) -> std::io::Result<Token> {
+		self.advance(db)?; // Move past '@'
+
+		// The dummy next char at eof will terminate this automatically.
+		while is_ident(self.peek()) { self.advance(db)?; }
+
+		self.mk_token_res(db, Tok::Annotation)
+	}
+
 	fn number(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		while is_num(self.peek()) { self.advance(db)?; }
 
@@ -589,6 +600,10 @@ impl Lexer {
 			'a'..='z' | 'A'..='Z' | '_' => {
 				return self.ident(db);
 			},
+
+			'@' => {
+				return self.annotation(db);
+			}
 
 			'0'..='9' => {
 				return self.number(db);

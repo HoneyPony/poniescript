@@ -600,10 +600,13 @@ impl Db {
 			name: unknown_class,
 			vars: Vec::new(),
 			funs: Vec::new(),
+			classes: Vec::new(),
+			parent: None,
 			mandatory_vars: FxHashSet::default(),
 			import_kind: crate::expr::ImportKind::Not,
 			var_map: FxHashMap::default(),
 			fun_map: FxHashMap::default(),
+			class_map: FxHashMap::default(),
 			location: db.synthetic(),
 			doc_comment: None,
 		});

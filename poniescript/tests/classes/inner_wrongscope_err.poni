@@ -1,0 +1,22 @@
+class Animals {
+    var dummy = 0;
+
+    class Horse {
+        var name: StrBuf = "hello";
+    }
+}
+
+//? Unknown class name 'Horse'
+//? Unknown named type 'Horse'
+
+fun make_horse() -> Horse {
+    return new Horse {
+        name: "Make Horse"
+    };
+}
+
+fun init() {
+    var horse = make_horse();
+
+    print(horse.name);
+}

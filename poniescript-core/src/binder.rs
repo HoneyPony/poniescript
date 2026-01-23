@@ -384,7 +384,36 @@ impl<'db> Binder<'db> {
 			},
 
 			Expr::New(new) => {
-				new.class = self.resolve_class_name(new.identifier.lexeme, &new.location)?;
+				// SAFETY: We always parse at least one identifier.
+				let (first, rest) = new.identifiers.split_first().unwrap();
+
+				// TODO: We actually want to store the entire chain of classes, for the LSP.
+				let mut class_id = self.resolve_class_name(first.lexeme, &new.location)?;
+				for tok in rest {
+					let class = self.db.get(class_id);
+					let next = class.class_map.get(&tok.lexeme);
+
+					let next = match next {
+						Some(next) => next,
+						None => {
+							self.db.report_error(Error::simple(
+								format!("Class '{}' has no such inner class '{}'",
+								self.db.repr_class(class_id),
+								self.db.get(tok.lexeme)),
+								tok.location.clone()
+							));
+							
+							self.had_error = true;
+
+							class_id = self.db.class_unassigned;
+							break;
+						}
+					};
+
+					class_id = *next;
+				}
+
+				new.class = class_id;
 				// Set the type here, so we don't have to mess with it again.
 				new.typ = self.db.put_type(Type::Class(new.class));
 

@@ -81,9 +81,9 @@ impl<F: FnMut(Semantic, Option<&SourceLocation>)> LocateAst for SemanticLocate<F
     }
 
     fn locate_new(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &New) {
-        if cursor_on(loc, &it.identifier.location) {
-            self.got_class(ast, db, it.class, Some(&it.identifier.location));
-        }
+        // if cursor_on(loc, &it.identifier.location) {
+        //     self.got_class(ast, db, it.class, Some(&it.identifier.location));
+        // }
     }
 
     fn locate_funcall(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCall) {

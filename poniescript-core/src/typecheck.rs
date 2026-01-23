@@ -2480,6 +2480,10 @@ impl<'db> TypeChecker<'db> {
 			self.check_fun_declare(ast, fun)?;
 		}
 
+		for class in &mut class_declare.classes {
+			self.check_class(ast, class)?;
+		}
+
 		self.current_class = enclosing_class;
 
 		Ok(())

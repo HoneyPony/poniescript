@@ -217,6 +217,12 @@ pub struct Class {
 	pub name: StrId,
 	pub vars: Vec<VarId>,
 	pub funs: Vec<FunId>,
+	/// Any class that is scoped inside this class, including @inner ones
+	/// and "static" ones.
+	pub classes: Vec<ClassId>,
+
+	/// Optional parent for this class. Applies for inner classes.
+	pub parent: Option<ClassId>,
 
 	/// Variables that new{} expressions are mandated to initialize.
 	/// 
@@ -228,6 +234,7 @@ pub struct Class {
 
 	pub var_map: FxHashMap<StrId, VarId>,
 	pub fun_map: FxHashMap<StrId, FunId>,
+	pub class_map: FxHashMap<StrId, ClassId>,
 
 	/// Location pointing to where the class is declared/defined.
 	pub location: SourceLocation,

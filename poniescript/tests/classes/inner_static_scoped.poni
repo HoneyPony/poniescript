@@ -1,0 +1,20 @@
+class Animals {
+    var dummy = 0;
+
+    class Horse {
+        var name: StrBuf = "hello";
+    }
+
+    fun make_horse() -> Horse {
+        return new Horse {
+            name: "Make Horse"
+        };
+    }
+}
+
+fun init() {
+    var animals = new Animals{};
+    var horse = animals.make_horse();
+
+    print(horse.name); //! Orse
+}

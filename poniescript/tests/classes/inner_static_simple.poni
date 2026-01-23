@@ -1,0 +1,13 @@
+class Animals {
+    class Horse {
+        var name: StrBuf = "hello";
+    }
+}
+
+fun init() {
+    var horse = new Animals.Horse {
+        name: "Orse"
+    };
+
+    print(horse.name); //! Orse
+}

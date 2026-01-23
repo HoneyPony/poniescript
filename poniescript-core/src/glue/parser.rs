@@ -286,8 +286,11 @@ impl<'b> Parser<'b> {
             name: class_name,
             vars: vars.clone(),
             funs,
+            classes: Vec::new(),
+            parent: None,
             var_map,
             fun_map,
+            class_map: FxHashMap::default(),
             import_kind: ImportKind::CHeader,
             // TODO: For imported classes, we need both the ability to mark
             // which vars are mandatory, and ALSO a way to mark the class

@@ -301,6 +301,11 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "noout_pure_data_initializers"),
 		("classes/", "noout_pure_data"),
 
+		("classes/", "inner_static_simple"),
+		("classes/", "inner_static_scoped"),
+		("classes/", "inner_wrongscope_err"),
+		("classes/", "inner_wrongscope_fullname"),
+
 		("classes/", "err_assign_to_class"),
 		("classes/", "err_get_nonexistent_member"),
 		("classes/", "err_new_unknown_property"),
