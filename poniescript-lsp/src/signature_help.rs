@@ -75,6 +75,30 @@ impl poniescript_core::expr::LocateAst for SignatureHelpVisitor {
         // WIP: Pretend that we are always on the first parameter.
         self.found_fun(db, it.identity, param);
     }
+
+    fn visit_funcall(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, expr: &FunCall) -> bool {
+        let own_loc = &expr.location;
+		eprintln!("visit FunCall: {} ? {} ? {}", own_loc.offset, loc.offset, own_loc.offset + own_loc.length);
+		if loc.offset < own_loc.offset { return false; }
+		if loc.offset >= own_loc.offset + own_loc.length { return false; }
+		for item in &expr.args {
+			if self.visit_expr(ast, db, loc, *item) {
+                // We don't want to return true by default, because we want
+                // to keep seeing the signature help while we're typing inner
+                // expressions.
+                //
+                // But, if we did end up getting a result thanks to visiting
+                // an inner expression, we don't need to keep visiting this one.
+                if self.result.is_some() {
+                    return true;
+                }
+            }
+		}
+		if let Some(inner) = expr.object { if self.visit_expr(ast, db, loc, inner) { return true; } }
+		eprintln!("-> found @ FunCall");
+		self.locate_funcall(ast, db, loc, &expr);
+		return true;
+    }
 }
 
 pub fn signature_help(store: &mut DocumentStore, params: SignatureHelpParams) -> Option<SignatureHelp> {
