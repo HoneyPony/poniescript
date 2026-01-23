@@ -1271,7 +1271,7 @@ impl Db {
 		}
 
 		// Didn't get the type -- give a helpful panic message.
-		let ty_name = self.get(typ).to_string(self);
+		let ty_name = self.get(typ).to_string(self, typ);
 		panic!("ICE: Tried to get invalid type in get_ctype: {} (TypId {})", ty_name, typ.to_index());
 
 		// Safety: AS LONG AS we don't call new_id outside of put_type,
@@ -1396,15 +1396,7 @@ impl Db {
 			return cached;
 		}
 
-		let value = match typ {
-			t if t == self.types.vec2 => "vec2".into(),
-			t if t == self.types.vec3 => "vec3".into(),
-			t if t == self.types.vec4 => "vec4".into(),
-			t if t == self.types.vec2i => "vec2i".into(),
-			t if t == self.types.vec3i => "vec3i".into(),
-			t if t == self.types.vec4i => "vec4i".into(),
-			_ => self.get(typ).to_string(self)
-		}.leak();
+		let value = self.get(typ).to_string(self, typ).leak();
 
 		// Note: Using &'static str as the hash map value makes it possible
 		// to do this with interior mutability. Maybe we should also do that
