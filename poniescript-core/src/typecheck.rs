@@ -1613,7 +1613,8 @@ impl<'db> TypeChecker<'db> {
 				// we've implemented.
 				if assign.op != Tok::Equal {
 					// Read from the variable
-					let read = Expr::push_variable(ast, assign.location.clone(),
+					let null_location = assign.location.begin();
+					let read = Expr::push_variable(ast, null_location,
 						assign.identity);
 					// Perform a binary op, with RHS the assign's current value
 					let binop = Expr::push_binary(ast, assign.location.clone(),
@@ -2159,7 +2160,8 @@ impl<'db> TypeChecker<'db> {
 					// a double evaluation of call_fun().
 
 					// Read from the variable
-					let read = Expr::push_get(ast, set.location.clone(),
+					let null_location = set.location.begin();
+					let read = Expr::push_get(ast, null_location,
 						set.chain.clone(), set.lhs, set.vars.clone());
 					// Perform a binary op, with RHS the assign's current value
 					let binop = Expr::push_binary(ast, set.location.clone(),
