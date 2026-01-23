@@ -149,14 +149,16 @@ macro_rules! semantic_error_with {
 
 macro_rules! parse_error {
 	($parser:ident, $($arg:tt)*) => {
-		// For now, just eprintln()... TODO Implement error handling system
-		$parser.had_error = true;
+		{
+			// For now, just eprintln()... TODO Implement error handling system
+			$parser.had_error = true;
 
-		if $parser.should_report_errors() {
-			$parser.db.report_error(Error::simple(
-				format!($($arg)*),
-				$parser.current.location.clone()
-			)) 
+			if $parser.should_report_errors() {
+				$parser.db.report_error(Error::simple(
+					format!($($arg)*),
+					$parser.current.location.clone()
+				)) 
+			}
 		}
     };
 }
@@ -173,12 +175,29 @@ macro_rules! consume {
     };
 }
 
+macro_rules! consume_no_err {
+    ($parser:ident, $ty:expr, $($arg:tt)*) => {
+        if($parser.peek_typ() != $ty) {
+			let _ = parse_error!($parser, $($arg)*);
+        }
+		else {
+			$parser.advance()?;
+		}
+    };
+}
+
 // Note: A somewhat helpful regex for finding places where we forgot the question
 // mark:
 //    expected(_after)?!\([^;]+\);
 macro_rules! expected {
 	($parser:ident, $ty:expr, $($arg:tt)*) => {
 		consume!($parser, $ty, "Expected {}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()))
+	}
+}
+
+macro_rules! expected_no_err {
+	($parser:ident, $ty:expr, $($arg:tt)*) => {
+		consume_no_err!($parser, $ty, "Expected {}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()))
 	}
 }
 
@@ -440,7 +459,7 @@ impl<'b> Parser<'b> {
 			arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 		}
 
-		expected!(self, Tok::RightParen, "')' after argument list")?;
+		expected_no_err!(self, Tok::RightParen, "')' after argument list");
 		arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 
 		// Note: This is handled by expr_prefix() now.
@@ -737,13 +756,13 @@ impl<'b> Parser<'b> {
 						self.eat_comma(Tok::RightParen)?;
 					}
 
-					expected!(self, Tok::RightParen, "')' after tuple items")?;
+					expected_no_err!(self, Tok::RightParen, "')' after tuple items");
 
 					return Expr::put_maketuple_ok(self.ast, self.end(begin), inner, self.db.types.unassigned);
 				}
 
 				// Expect right paren after expression
-				expected!(self, Tok::RightParen, "')' after parenthesized expression")?;
+				expected_no_err!(self, Tok::RightParen, "')' after parenthesized expression");
 				Ok(inner)
 			}
 
@@ -848,14 +867,14 @@ impl<'b> Parser<'b> {
 							arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 						}
 
-						expected!(self, Tok::RightParen, "')' after argument list")?;
+						expected_no_err!(self, Tok::RightParen, "')' after argument list");
 						arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 						inner = Expr::put_valcall(self.ast, self.end(location.clone()), inner, args, self.db.sig_unassigned, arg_boundaries);
 					}
 					while self.match_(Tok::LeftSquare)?.is_some() {
 						// TODO: Can the index take multiple args?
 						let index = self.expression()?;
-						expected!(self, Tok::RightSquare, "']' after index expression")?;
+						expected_no_err!(self, Tok::RightSquare, "']' after index expression");
 
 						if self.match_(Tok::Equal)?.is_some() {
 							let rhs = self.expression()?;
