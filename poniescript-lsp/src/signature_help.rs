@@ -32,6 +32,8 @@ impl SignatureHelpVisitor {
 
             let start_idx = signature.len();
             signature.push_str(db.get(var.name));
+            signature.push_str(": ");
+            signature.push_str(db.repr_type(var.typ));
             let end_idx = signature.len();
             
             parameters.push(ParameterInformation {
