@@ -1830,7 +1830,8 @@ impl<'db> TypeChecker<'db> {
 							fn_name: capt.fn_name.clone(),
 							identity: capt.identity,
 							args: std::mem::take(&mut call.args),
-							object: capt.object
+							object: capt.object,
+							arg_boundaries: std::mem::take(&mut call.arg_boundaries),
 						};
 
 						*expr = Expr::FunCall(as_funcall);

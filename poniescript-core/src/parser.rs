@@ -428,15 +428,20 @@ impl<'b> Parser<'b> {
 	fn expr_call_finish(&mut self, location: SourceLocation, ident: Token, object: Option<ExprId>) -> Result<ExprId> {
 		let mut args = Vec::new();
 
+		let mut arg_boundaries = Vec::new();
+		arg_boundaries.push((self.current.location.offset - location.offset) as u32);
+
 		while !self.at(Tok::RightParen) && !self.is_at_end() {
 			args.push(self.expression()?);
 
 			// TODO: Make sure we require a Comma after every param but the
 			// last.
 			self.match_(Tok::Comma)?;
+			arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 		}
 
 		expected!(self, Tok::RightParen, "')' after argument list")?;
+		arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 
 		// Note: This is handled by expr_prefix() now.
 		//if self.match_(Tok::LeftParen)?.is_some() {
@@ -454,7 +459,7 @@ impl<'b> Parser<'b> {
 		match lookup {
 			ScopeEntry::Var(v) => {
 				let inner = Expr::put_variable(self.ast, location.clone(), v);
-				return Expr::put_valcall_ok(self.ast, self.end(location), inner, args, self.db.sig_unassigned)
+				return Expr::put_valcall_ok(self.ast, self.end(location), inner, args, self.db.sig_unassigned, arg_boundaries)
 			},
 
 			// It may seem in poor taste to have a specific Expr for function
@@ -465,14 +470,14 @@ impl<'b> Parser<'b> {
 			ScopeEntry::Fun(fun) => {
 				log::trace!("new bound fun: {} object.is_some(): {}",
 					self.db.get(ident.lexeme), object.is_some());
-				Expr::put_funcall_ok(self.ast, self.end(location), ident.location, fun, args, None)
+				Expr::put_funcall_ok(self.ast, self.end(location), ident.location, fun, args, None, arg_boundaries)
 			}
 			ScopeEntry::Class(_) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), self.current.location.clone()));
 
 				// Just return an UnboundCall, as we have a semantic error rather than parse error.
 				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
-				Expr::put_valcall_ok(self.ast, self.end(location), call, args, self.db.sig_unassigned)
+				Expr::put_valcall_ok(self.ast, self.end(location), call, args, self.db.sig_unassigned, arg_boundaries)
 			}
 
 			ScopeEntry::None => {
@@ -493,7 +498,7 @@ impl<'b> Parser<'b> {
 					self.db.get(ident.lexeme), object.is_some());
 
 				let capt = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
-				Expr::put_valcall_ok(self.ast, self.end(location), capt, args, self.db.sig_unassigned)
+				Expr::put_valcall_ok(self.ast, self.end(location), capt, args, self.db.sig_unassigned, arg_boundaries)
 			}
 		}
 	}
@@ -831,6 +836,8 @@ impl<'b> Parser<'b> {
 					while self.match_(Tok::LeftParen)?.is_some() {
 						// Parse args
 						let mut args = Vec::new();
+						let mut arg_boundaries = Vec::new();
+						arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 
 						while !self.at(Tok::RightParen) && !self.is_at_end() {
 							args.push(self.expression()?);
@@ -838,10 +845,12 @@ impl<'b> Parser<'b> {
 							// TODO: Make sure we require a Comma after every param but the
 							// last.
 							self.match_(Tok::Comma)?;
+							arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 						}
 
 						expected!(self, Tok::RightParen, "')' after argument list")?;
-						inner = Expr::put_valcall(self.ast, self.end(location.clone()), inner, args, self.db.sig_unassigned);
+						arg_boundaries.push((self.current.location.offset - location.offset) as u32);
+						inner = Expr::put_valcall(self.ast, self.end(location.clone()), inner, args, self.db.sig_unassigned, arg_boundaries);
 					}
 					while self.match_(Tok::LeftSquare)?.is_some() {
 						// TODO: Can the index take multiple args?

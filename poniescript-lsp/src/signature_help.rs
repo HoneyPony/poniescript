@@ -60,8 +60,20 @@ impl SignatureHelpVisitor {
 
 impl poniescript_core::expr::LocateAst for SignatureHelpVisitor {
     fn locate_funcall(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, it: &FunCall) {
+        let fun = db.get(it.identity);
+
+        // Default to last parameter ..?
+        let mut param = (fun.parameters.len() - 1) as u32;
+
+        let offset = (loc.offset - it.location.offset) as u32;
+        for i in 0..it.arg_boundaries.len() - 1 {
+            if offset >= it.arg_boundaries[i] && offset <= it.arg_boundaries[i + 1] {
+                param = i as u32;
+            }
+        }
+
         // WIP: Pretend that we are always on the first parameter.
-        self.found_fun(db, it.identity, 0);
+        self.found_fun(db, it.identity, param);
     }
 }
 
