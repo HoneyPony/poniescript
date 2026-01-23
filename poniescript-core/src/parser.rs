@@ -1386,7 +1386,12 @@ impl<'b> Parser<'b> {
 					return Ok(self.db.put_type(self.range_types.into_type(tok.lexeme, inner)));
 				}
 
-				self.db.put_type(Type::UnboundIdent(tok.lexeme))
+				let mut idents = vec![tok.lexeme];
+				while let Some(dot) = self.match_(Tok::Dot)? {
+					let next = expected_after!(self, Tok::Identifier, dot, "identifier after '.'")?;
+					idents.push(next.lexeme);
+				}
+				self.db.put_type(Type::UnboundIdent(idents))
 			},
 
 			Tok::Fun => {

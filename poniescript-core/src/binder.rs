@@ -389,9 +389,13 @@ impl<'db> Binder<'db> {
 
 				// TODO: We actually want to store the entire chain of classes, for the LSP.
 				let mut class_id = self.resolve_class_name(first.lexeme, &new.location)?;
+				
+				log::trace!("bind: got class {} for Expr::New", self.db.get(self.db.get(class_id).name));
 				for tok in rest {
 					let class = self.db.get(class_id);
 					let next = class.class_map.get(&tok.lexeme);
+
+					log::trace!("bind: resolving inner class: {} -> is_some? {}", self.db.get(tok.lexeme), next.is_some());
 
 					let next = match next {
 						Some(next) => next,
@@ -568,24 +572,55 @@ impl<'db> Binder<'db> {
 			self.visit_var_type(var.identity);
 		}
 
+		for class in &mut class_declare.classes {
+			self.visit_class(ast, class);
+		}
+
 		self.checkers.pop();
 		self.in_class = enclosing_in_class;
 	}
 
-	fn resolve_type(&mut self, name: StrId, location: &SourceLocation) -> Option<Type> {
+	fn resolve_type_members(&mut self, mut class: ClassId, rest: &[StrId], location: &SourceLocation) -> Option<Type> {
+		for member in rest {
+			let class_ = self.db.get(class);
+
+			let Some(next) = class_.class_map.get(member) else {
+				self.db.report_error(Error::simple(
+					format!("Class '{}' has no such inner class '{}'",
+						self.db.get(class_.name),
+						self.db.get(*member)),
+						location.clone()
+				));
+				
+				self.had_error = true;
+				return None;
+			};
+
+			class = *next;
+		}
+
+		Some(Type::Class(class))
+	}
+
+	fn resolve_type(&mut self, name: &Vec<StrId>, location: &SourceLocation) -> Option<Type> {
+		// Safety: Types should always have at least one identifier.
+		let (first, rest) = name.split_first().unwrap();
+
 		for checker in self.checkers.iter_mut().rev() {
-			match checker.check(self.db, name) {
+			match checker.check(self.db, *first) {
 				ScopeEntry::Var(_) => break, // TODO: Figure out an ergonomic way to do this.
 				ScopeEntry::Fun(_) => break,
 				ScopeEntry::Class(class) => {
-					return Some(Type::Class(class))
+					// Ok, we identified the class type. Now look up any inner
+					// members.
+					return self.resolve_type_members(class, rest, location);
 				}
 				ScopeEntry::None => continue,
 			}
 		}
 
 		self.db.report_error(Error::simple(
-			format!("Unknown named type '{}'", self.db.get(name)),
+			format!("Unknown named type '{}'", self.db.get(*first)),
 			location.clone()
 		));
 		
@@ -598,7 +633,7 @@ impl<'db> Binder<'db> {
 
 		match ty {
 			Type::UnboundIdent(str_id) => {
-				let ty = self.resolve_type(str_id, location);
+				let ty = self.resolve_type(&str_id, location);
 
 				// If we successfully resolved the type, return that; otherwise,
 				// we already reported the error, so just hang on to the unknown

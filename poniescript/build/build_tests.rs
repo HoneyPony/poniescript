@@ -305,6 +305,7 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "inner_static_scoped"),
 		("classes/", "inner_wrongscope_err"),
 		("classes/", "inner_wrongscope_fullname"),
+		("classes/", "inner_many_scopes"),
 
 		("classes/", "err_assign_to_class"),
 		("classes/", "err_get_nonexistent_member"),
