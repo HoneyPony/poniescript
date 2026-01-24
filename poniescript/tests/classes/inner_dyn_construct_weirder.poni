@@ -21,7 +21,7 @@ class Other {
         fun make_inner() -> Outer.Inner {
             var outer = new Outer{ property: (x, y) };
 
-            var inner = outer.new Outer.Inner {};
+            var inner = outer.new Inner {};
 
             inner
         }
@@ -30,8 +30,7 @@ class Other {
 
 fun init() {
     var other = new Other{};
-    // TODO: Change how names are bound for .new
-    var other2 = other.new Other.Other2{};
+    var other2 = other.new Other2 {};
 
     var inner = other2.make_inner();
     print(inner.property, " ",  inner.inner_property); //! (5, 20) (8, 24)

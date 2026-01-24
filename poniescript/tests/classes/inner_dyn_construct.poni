@@ -15,7 +15,7 @@ fun init() {
     var outer = new Outer{};
     var inner = outer.make_inner();
 
-    print(inner.property, " ", inner.inner_property); //! (1, 2) (3, 6)
+    print(inner.property, " ", inner.inner_property); //! (1, 2) (4, 6)
 
     outer.property = (10, 20);
     inner = outer.make_inner();

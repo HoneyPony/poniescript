@@ -384,42 +384,47 @@ impl<'db> Binder<'db> {
 			},
 
 			Expr::New(new) => {
-				// SAFETY: We always parse at least one identifier.
-				let (first, rest) = new.identifiers.split_first().unwrap();
+				// Resolve non-parented new chains here. For .new, we can
+				// only ever refer to child classes of the given object, so
+				// bind it in the typechecker.
+				if new.parent.is_none() {
+					// SAFETY: We always parse at least one identifier.
+					let (first, rest) = new.identifiers.split_first().unwrap();
 
-				// TODO: We actually want to store the entire chain of classes, for the LSP.
-				let mut class_id = self.resolve_class_name(first.lexeme, &new.location)?;
-				
-				log::trace!("bind: got class {} for Expr::New", self.db.get(self.db.get(class_id).name));
-				for tok in rest {
-					let class = self.db.get(class_id);
-					let next = class.class_map.get(&tok.lexeme);
+					// TODO: We actually want to store the entire chain of classes, for the LSP.
+					let mut class_id = self.resolve_class_name(first.lexeme, &new.location)?;
+					
+					log::trace!("bind: got class {} for Expr::New", self.db.get(self.db.get(class_id).name));
+					for tok in rest {
+						let class = self.db.get(class_id);
+						let next = class.class_map.get(&tok.lexeme);
 
-					log::trace!("bind: resolving inner class: {} -> is_some? {}", self.db.get(tok.lexeme), next.is_some());
+						log::trace!("bind: resolving inner class: {} -> is_some? {}", self.db.get(tok.lexeme), next.is_some());
 
-					let next = match next {
-						Some(next) => next,
-						None => {
-							self.db.report_error(Error::simple(
-								format!("Class '{}' has no such inner class '{}'",
-								self.db.repr_class(class_id),
-								self.db.get(tok.lexeme)),
-								tok.location.clone()
-							));
-							
-							self.had_error = true;
+						let next = match next {
+							Some(next) => next,
+							None => {
+								self.db.report_error(Error::simple(
+									format!("Class '{}' has no such inner class '{}'",
+									self.db.repr_class(class_id),
+									self.db.get(tok.lexeme)),
+									tok.location.clone()
+								));
+								
+								self.had_error = true;
 
-							class_id = self.db.class_unassigned;
-							break;
-						}
-					};
+								class_id = self.db.class_unassigned;
+								break;
+							}
+						};
 
-					class_id = *next;
+						class_id = *next;
+					}
+
+					new.class = class_id;
+					// Set the type here, so we don't have to mess with it again.
+					new.typ = self.db.put_type(Type::Class(new.class));
 				}
-
-				new.class = class_id;
-				// Set the type here, so we don't have to mess with it again.
-				new.typ = self.db.put_type(Type::Class(new.class));
 
 				for init in &mut new.initializers {
 					self.visit_expr(ast, init.value);

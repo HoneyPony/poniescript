@@ -1967,6 +1967,46 @@ impl<'db> TypeChecker<'db> {
 			},
 
 			Expr::New(new) => {
+				// If the new is a .new, then the typechecker must figure out
+				// the class. This is because it depends on the parent class.
+				let mut parent_ty = None;
+				if let Some(mut parent) = new.parent {
+					self.check_expr(ast, parent, true)?;
+
+					// I believe this is correct...?
+					let typ = self.promote_from_unassigned(ast, &mut parent);
+					new.parent = Some(parent);
+
+					// Save this for later
+					parent_ty = Some(typ);
+
+					// Now, bind the actual class name using the resolved type.
+					let Type::Class(class) = self.db.get(typ) else {
+						type_error!(self,
+							new.location,
+							".new can only be called on a class (got {}).",
+							self.db.repr_type(typ));
+					};
+
+					let [name] = new.identifiers.as_slice() else {
+						type_error!(self,
+							new.location,
+							".new expects exactly one class name.");
+					};
+
+					let Some(inner) = self.db.get(*class).class_map.get(&name.lexeme) else {
+						type_error!(self,
+							new.location,
+							"Class {} has no such inner class {}.",
+							self.db.repr_class(*class),
+							self.db.get(name.lexeme));
+					};
+
+					// Ok, we've resolved the class type.
+					new.class = *inner;
+					new.typ = self.db.put_type(Type::Class(new.class));
+				}
+
 				if new.typ == self.db.types.unassigned {
 					if PANIC_ON_BAD_NODE {
 						panic!("ICE: New expression has unassigned type from Binder");
@@ -1987,23 +2027,10 @@ impl<'db> TypeChecker<'db> {
 				// Check whether the new expression was called on the correct
 				// parent object.
 				{
-					let inner = match new.parent {
-						Some(mut exp) => {
-							let typ = self.check_expr(ast, exp, true)?;
-
-							// I believe this is correct...?
-							self.promote_from_unassigned(ast, &mut exp);
-							new.parent = Some(exp);
-
-							Some(typ)
-						}
-						None => None
-					};
-
 					let class = self.db.get(class_id);
 					match class.parent {
 						Some(parent) => {
-							let Some(inner) = inner else {
+							let Some(inner) = parent_ty else {
 								type_error!(self,
 									new.location,
 									"@inner class can only be constructed with .new on its parent");
@@ -2019,7 +2046,7 @@ impl<'db> TypeChecker<'db> {
 							}
 						}
 						None => {
-							if inner.is_some() {
+							if parent_ty.is_some() {
 								type_error!(self,
 									new.location,
 									".new construction is only available for @inner classes");
