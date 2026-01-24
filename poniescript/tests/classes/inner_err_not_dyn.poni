@@ -1,0 +1,15 @@
+class Outer {
+    var property = (1, 2);
+
+    class Inner {
+        //? Can't access 'property.'
+        var inner_property = property + (3, 4);
+    }
+}
+
+fun init() {
+    var outer = new Outer{};
+    var inner = new Outer.Inner{};
+
+    print(inner.inner_property);
+}

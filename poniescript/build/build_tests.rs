@@ -311,6 +311,8 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "inner_dyn_construct"),
 		("classes/", "inner_dyn_construct_weirder"),
 
+		("classes/", "inner_err_not_dyn"),
+
 		("classes/", "err_assign_to_class"),
 		("classes/", "err_get_nonexistent_member"),
 		("classes/", "err_new_unknown_property"),
