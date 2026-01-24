@@ -20,10 +20,15 @@ struct NameChecker {
 	// For now, this simply represents whether this scope should involve a
 	// new SelfVal bound to any function calls/variables, or not.
 	self_val: bool,
+
+	// Whether this ScopeChecker is the "stopping point." For example, if we
+	// are a class that has not parent class, we are the upper bound (because
+	// accesses to our parent class would be wrong.)
+	is_upper_bound: bool,
 }
 
 impl NameChecker {
-	pub fn scoped(previous: &NameChecker, scope: &str, self_val: bool) -> Self {
+	pub fn scoped(previous: &NameChecker, scope: &str, self_val: bool, is_upper_bound: bool) -> Self {
 		// We add a dot after the scope, as that's what the names will
 		// look like.
 		//
@@ -32,11 +37,18 @@ impl NameChecker {
 		let buffer = format!("{}{}.", previous.buffer, scope);
 		let own_length = buffer.len();
 
-		return NameChecker { buffer, own_length, self_val };
+		return NameChecker { buffer, own_length, self_val, is_upper_bound };
 	}
 
 	pub fn global() -> Self {
-		return NameChecker { buffer: String::new(), own_length: 0, self_val: false };
+		return NameChecker {
+			buffer: String::new(),
+			own_length: 0,
+			self_val: false,
+			// For now, even though the global is technically an upper bound,
+			// we'll say it isn't so we can have better error messages.
+			is_upper_bound: false
+		};
 	}
 
 	pub fn check(&mut self, db: &Db, name: StrId) -> ScopeEntry {
@@ -101,10 +113,16 @@ impl<'db> Binder<'db> {
 		else { None }
 	}
 
-	fn resolve_unbound(&mut self, ast: &AstProxy, ident: StrId, location: SourceLocation) -> Option<Expr> {
+	fn resolve_unbound_inner(&mut self, ast: &AstProxy, ident: StrId, location: SourceLocation) -> (Option<Expr>, bool) {
+		let mut hit_upper_bound = false;
+
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
-				ScopeEntry::Var(var) => return Some(Expr::mk_variable(location, var)),
+				ScopeEntry::Var(var) => {
+					let expr = Some(Expr::mk_variable(location, var));
+
+					return (expr, hit_upper_bound);
+				}
 				ScopeEntry::Fun(fun) => {
 					log::trace!("resolved unbound '{}' to fun in scope '{}'; self_val: {}",
 						self.db.get(ident),
@@ -113,22 +131,47 @@ impl<'db> Binder<'db> {
 
 					let self_val = checker.self_val;
 					let self_val = self.get_selfval(ast, location.clone(), self_val);
-					return Some(Expr::mk_funcapture(location.clone(), location, fun, self.db.types.fun_sig_unassigned, 
-						self_val))
+					let expr = Some(Expr::mk_funcapture(location.clone(), location, fun, self.db.types.fun_sig_unassigned, 
+						self_val));
+
+					return (expr, hit_upper_bound);
 				}
 				ScopeEntry::Class(_) => {
 					todo!("what to do when we resolve an Unbound into a Class");
 				}
-				ScopeEntry::None => continue,
+				ScopeEntry::None => {
+					if checker.is_upper_bound { hit_upper_bound = true; }
+					continue;
+				}
 			}
 		}
 
-		self.db.report_error(Error::simple(
-			format!("Unknown identifier '{}'", self.db.get(ident)),
-			location.clone()
-		));
-		
-		self.had_error = true;
+		return (None, hit_upper_bound)
+	}
+
+	fn resolve_unbound(&mut self, ast: &AstProxy, ident: StrId, location: SourceLocation) -> Option<Expr> {
+		let (expr, hit_upper_bound) = self.resolve_unbound_inner(ast, ident, location.clone());
+
+		match (expr, hit_upper_bound) {
+			(Some(expr), false) => { return Some(expr); },
+			(Some(_), true) => {
+				self.db.report_error(Error::simple(
+					format!("Identifier '{}' is not available in this scope.", self.db.get(ident)),
+					location.clone()
+				).add_note(format!("Variables from outer classes are only available to @inner classes."), None));
+				
+				self.had_error = true;
+			}
+			(None, _) => {
+				self.db.report_error(Error::simple(
+					format!("Unknown identifier '{}'", self.db.get(ident)),
+					location.clone()
+				));
+				
+				self.had_error = true;
+			}
+		}
+
 		None
 	}
 
@@ -533,7 +576,12 @@ impl<'db> Binder<'db> {
 		self.in_class = true;
 
 		let name = self.db.get(self.db.get(id).name);
-		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name, true);
+		let new_scope = NameChecker::scoped(
+			self.checkers.last().expect("class"),
+			name,
+			true,
+			self.db.get(id).parent.is_none()
+		);
 		self.checkers.push(new_scope);
 
 		for i in 0..self.db.get(id).funs.len() {
@@ -561,7 +609,12 @@ impl<'db> Binder<'db> {
 
 		let class = self.db.get(class_declare.identity);
 		let name = self.db.get(class.name);
-		let new_scope = NameChecker::scoped(self.checkers.last().expect("class"), name, true);
+		let new_scope = NameChecker::scoped(
+			self.checkers.last().expect("class"),
+			name,
+			true,
+			self.db.get(class_declare.identity).parent.is_none()
+		);
 		self.checkers.push(new_scope);
 
 		for fun in &mut class_declare.funs {
