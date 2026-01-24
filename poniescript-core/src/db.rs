@@ -420,6 +420,8 @@ pub struct Db {
 	pub str_z: StrId,
 	pub str_w: StrId,
 
+	pub annotation_inner: StrId,
+
 	/// The list of globals. The initializer ordering pass will sort them.
 	pub globals: Vec<VarId>,
 
@@ -545,6 +547,8 @@ impl Db {
 			str_z: StrId::invalid(),
 			str_w: StrId::invalid(),
 
+			annotation_inner: StrId::invalid(),
+
 			prop_str: StrProperties {
 				length: VarId::invalid(),
 				length_key: StrId::invalid()
@@ -635,6 +639,8 @@ impl Db {
 		db.str_y = db.put_str("y");
 		db.str_z = db.put_str("z");
 		db.str_w = db.put_str("w");
+
+		db.annotation_inner = db.put_str("@inner");
 
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,

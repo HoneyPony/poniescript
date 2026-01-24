@@ -1,0 +1,40 @@
+class Outer {
+    var hello: int = 5;
+
+    @inner
+    class Inner {
+        var xyz: int = 20;
+
+        fun sum() -> int {
+            hello + xyz
+        }
+
+        fun set_hello(x: int) {
+            hello = x;
+        }
+
+        fun set_xyz(x: int) {
+            xyz = x;
+        }
+    }
+
+    fun make_inner() -> Inner {
+        self.new Inner{}
+    }
+}
+
+fun init() {
+    var outer = new Outer{};
+    var inner = outer.make_inner();
+
+    print(inner.sum()); //! 25
+    outer.hello = 30;
+    print(inner.sum()); //! 50
+    inner.xyz = 18;
+    print(inner.sum()); //! 48
+
+    inner.set_hello(20);
+    print(inner.sum()); //! 38
+    inner.set_xyz(3);
+    print(inner.sum()); //! 23
+}

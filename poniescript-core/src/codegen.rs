@@ -85,6 +85,10 @@ impl CodegenCoordinator {
 		// Write the struct definition.
 		inf_writeln!(out.struct_define, "struct {} {{", self.db.get_class_cname(class));
 
+		if let Some(parent) = self.db.get(class).parent {
+			inf_writeln!(out.struct_define, "\tstruct {} *parent;", self.db.get_class_cname(parent));
+		}
+
 		for var in &self.db.get(class).vars {
 			// Compile the variable declaration into the struct.
 			inf_writeln!(out.struct_define, "\t{} {};", self.db.get_var_ctype(*var), self.db.get_cname(*var));

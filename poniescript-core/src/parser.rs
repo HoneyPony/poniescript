@@ -799,7 +799,7 @@ impl<'b> Parser<'b> {
 	}
 
 	/// Parses a 'new' expression, e.g. new Example {}
-	fn new_(&mut self) -> Result<ExprId> {
+	fn new_(&mut self, object: Option<ExprId>) -> Result<ExprId> {
 		let location = self.start();
 
 		let key_new = expected!(self, Tok::New, "'new'")?;
@@ -832,7 +832,8 @@ impl<'b> Parser<'b> {
 		Expr::put_new_ok(self.ast, self.end(location), chain, 
 			self.db.class_unassigned,
 			self.db.types.unassigned,
-			initializers)
+			initializers,
+		object)
 	}
 
 	fn array_literal(&mut self) -> Result<ExprId> {
@@ -901,6 +902,15 @@ impl<'b> Parser<'b> {
 					while self.match_(Tok::Dot)?.is_some() {
 						let mut chain = Vec::new();
 						loop {
+							if self.at(Tok::New) {
+								let inner = if chain.is_empty() {
+									inner
+								}
+								else {
+									Expr::put_get(self.ast, self.end(location.clone()), chain, inner, Vec::new())
+								};
+								return self.new_(Some(inner));
+							}
 							if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
 								got!(self, "Expected identifier after '.'");
 							}
@@ -1085,7 +1095,7 @@ impl<'b> Parser<'b> {
 			}
 
 			Tok::New => {
-				self.new_()
+				self.new_(None)
 			}
 
 			Tok::KeySelf => {
@@ -1230,6 +1240,15 @@ impl<'b> Parser<'b> {
 				// into binary expressions.
 				let mut chain = Vec::new();
 				loop {
+					if self.at(Tok::New) {
+						let inner = if chain.is_empty() {
+							lhs
+						}
+						else {
+							Expr::put_get_ok(self.ast, self.end(location.clone()), chain, lhs, Vec::new())?
+						};
+						return self.new_(Some(inner));
+					}
 					if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
 						got!(self, "Expected identifier after '.'");
 					}
@@ -1783,6 +1802,19 @@ impl<'b> Parser<'b> {
 
 		let pushed_name = self.push_name(&name);
 
+		let mut parent = None;
+		for annotation in annotations {
+			if annotation.lexeme == self.db.annotation_inner {
+				parent = Some(self.db.class_unassigned);
+			}
+			else {
+				semantic_error_with!(self,
+					Error::simple(format!("Unknown annotation '{}'", self.db.get(annotation.lexeme)),
+					self.current.location.clone()
+				));
+			}
+		}
+
 		expected!(self, Tok::LeftBrace, "'{{' at beginning of class")?;
 
 		let mut declare_funs = Vec::<FunDeclare>::new();
@@ -1866,7 +1898,7 @@ impl<'b> Parser<'b> {
 			vars,
 			funs,
 			classes,
-			parent: None,
+			parent,
 			var_map,
 			fun_map,
 			class_map,
@@ -1882,6 +1914,14 @@ impl<'b> Parser<'b> {
 
 		for fun in &declare_funs {
 			self.db.get_mut(fun.identity).class = Some(identity);
+		}
+
+		for class in &declare_classes {
+			let class = self.db.get_mut(class.identity);
+			if class.parent.is_some() {
+				// Replace parent with actual ID
+				class.parent = Some(identity);
+			}
 		}
 
 		self.pop_name(pushed_name);
@@ -1921,7 +1961,15 @@ impl<'b> Parser<'b> {
 
 			Tok::Class => {
 				let class = self.class_declaration(annotations)?;
+				let id = class.identity;
 				self.get_source().module.classes.push(class);
+
+				let class = self.db.get(id);
+				if class.parent.is_some() {
+					semantic_error_with!(self,
+						Error::simple("Top level class can't be @inner.".into(),
+						class.location.clone()));
+				}
 			}
 
 			_ => {

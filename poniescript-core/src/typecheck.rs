@@ -1977,19 +1977,63 @@ impl<'db> TypeChecker<'db> {
 					}
 				}
 
-				let Type::Class(class_id) = self.db.get(new.typ) else {
+				let Type::Class(class_id) = *self.db.get(new.typ) else {
 					if PANIC_ON_BAD_NODE {
 						panic!("ICE: New expression with non-class type");
 					}
 					return Ok(new.typ);
 				};
 
+				// Check whether the new expression was called on the correct
+				// parent object.
+				{
+					let inner = match new.parent {
+						Some(mut exp) => {
+							let typ = self.check_expr(ast, exp, true)?;
+
+							// I believe this is correct...?
+							self.promote_from_unassigned(ast, &mut exp);
+							new.parent = Some(exp);
+
+							Some(typ)
+						}
+						None => None
+					};
+
+					let class = self.db.get(class_id);
+					match class.parent {
+						Some(parent) => {
+							let Some(inner) = inner else {
+								type_error!(self,
+									new.location,
+									"@inner class can only be constructed with .new on its parent");
+							};
+
+							let target_typ = self.db.put_type(Type::Class(parent));
+							if target_typ != inner {
+								type_error!(self,
+									new.location,
+									"Expected parent object of type {}, got {}",
+									self.db.repr_type(target_typ),
+									self.db.repr_type(inner));
+							}
+						}
+						None => {
+							if inner.is_some() {
+								type_error!(self,
+									new.location,
+									".new construction is only available for @inner classes");
+							}
+						}
+					}
+				}
+
 				// We create a copy of the mandatory vars set so that we can
 				// "check" them off as we go through the initializers.
 				//
 				// This might be slightly less performant than some other
 				// strategies but I believe it should be OK.
-				let mut checklist = self.db.get(*class_id).mandatory_vars.clone();
+				let mut checklist = self.db.get(class_id).mandatory_vars.clone();
 
 				for init in &mut new.initializers {
 					self.check_assign(ast, &init.location, init.var, &mut init.value, false)?;

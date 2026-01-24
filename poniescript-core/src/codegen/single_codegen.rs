@@ -186,9 +186,9 @@ impl ufmt::uDisplay for Val {
 						// AST nodes of some sort.
 						uwrite!(f, "this->")?;
 					}
-					let depth_loop = depth - 1;
+					let mut depth_loop = depth - 1;
 					while depth_loop > 0 {
-						todo!("nested class support");
+						uwrite!(f, "parent->")?;
 						depth_loop -= 1;
 					}
 				}
@@ -238,9 +238,9 @@ impl std::fmt::Display for Val {
 						// AST nodes of some sort.
 						write!(f, "this->")?;
 					}
-					let depth_loop = depth - 1;
+					let mut depth_loop = depth - 1;
 					while depth_loop > 0 {
-						todo!("nested class support");
+						write!(f, "parent->")?;
 						depth_loop -= 1;
 					}
 				}
@@ -461,6 +461,36 @@ pub struct Codegen<'a> {
 	/// In order to keep parallelism decent, we build up a single buffer of
 	/// stuff and send it when it is a reasonable size.
 	current_buffer: String,
+}
+
+fn lookup_var_in_parent(db: &Db, var: VarId, parent: TypId) -> (usize, &str, &str) {
+	let arrow = db.get_c_member_lookup(parent);		
+	let varname = db.get_cname(var);
+
+	log::trace!("looking up {} in {}", db.repr_var(var), db.repr_type(parent));
+
+	let Some(var_class) = db.get(var).class else {
+		return (0, arrow, varname);
+	};
+
+	let mut depth = 0;
+	let mut parent = match db.get(parent) {
+		Type::Class(class) => { *class },
+		// TODO: Consider panicking here?
+		_ => { return (0, arrow, varname) }
+	};
+
+	loop {
+		if parent == var_class {
+			log::trace!("identified member in class: {} (depth {})", db.repr_class(parent), depth);
+			return (depth, arrow, varname);
+		}
+
+		depth += 1;
+
+		parent = db.get(parent).parent.unwrap_or_else(||
+			panic!("ICE: Trying to lookup a chained var that doesn't have any more parents."));
+	}
 }
 
 impl<'a> Codegen<'a> {
@@ -1476,29 +1506,7 @@ impl<'a> Codegen<'a> {
 				// Note that, if the type checking and binding stages are correct,
 				// this code should be fine, as the varaible should be bound to
 				// a variable inside a class that we are also inside now.
-
-				let mut depth = 0;
-
-				if let Some(class) = self.db.get(variable.identity).class {
-					for inside in self.inside_class.iter().rev() {
-						// Depth is at least one, because we're in a class, so
-						// increment before checking.
-						depth += 1;
-						if *inside == class {
-							break;
-						}
-					}
-
-					// TODO: Panic if we run out of classes before finding the
-					// right one.
-				}
-
-				// For GC Slots, DirectVars are special.
-				//
-				// The variable itself should already have a gc slot. So the
-				// DirectVar does not need any additional slots.
-				Val::DirectVar { this_val: self.this_val, name: self.db.get_cname(variable.identity), depth }
-					.typed(self.db.get_var_type(variable.identity), None)
+				self.get_direct_var(variable.identity)
 			},
 			Expr::Assign(assign) => {
 				self.compile_assign(ast, assign.identity, assign.value, into, false)
@@ -1779,6 +1787,14 @@ impl<'a> Codegen<'a> {
 				// which is terrible, but it's a start.
 				define_val!(self, into, val, " = poni_gc_alloc_tagged(ctx, sizeof(struct {}), {});\n",
 					self.db.get_class_cname(new.class), self.db.get_type_ctag(new.typ));
+
+				let parent = match new.parent {
+					Some(parent) => {
+						Some(self.expr(ast, parent, into))
+					}
+					None => None
+				};
+
 				// Initialize the value.
 				if val.needs_storage() {
 					// Note: The value is a pointer-to-struct cl_Thing, so
@@ -1794,6 +1810,11 @@ impl<'a> Codegen<'a> {
 					let Val::Tmp(idx) = val.val else {
 						panic!("ICE: New class val wasn't a Tmp");
 					};
+
+					// First-first, initialize the parent..?
+					if let Some(parent) = parent {
+						inf_writeln!(into, "{}{}->parent = {};", indent, val, parent);
+					}
 
 					// Run all the initializers from the new{} first.
 					for init in &new.initializers {
@@ -1866,13 +1887,17 @@ impl<'a> Codegen<'a> {
 				// (The chain starts with the lhs.)
 				define_val!(self, into, val, " = {}", lhs);
 
+				
+
 				let mut lhs = lhs.typ;
 				if val.needs_storage() {
 					for var in &get.vars {
+						let (depth, arrow, varname) = lookup_var_in_parent(&self.db, *var, lhs);
+
 						// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
-						let arrow = self.db.get_c_member_lookup(lhs);
-						
-						let varname = self.db.get_cname(*var);
+						for _ in 0..depth {
+							inf_write!(into, "->parent");
+						}
 
 						inf_write!(into, "{}{}", arrow, varname);
 						// Walk the tree of types
@@ -1902,10 +1927,12 @@ impl<'a> Codegen<'a> {
 				let mut lhs = lhs.typ;
 				if val.needs_storage() {
 					for var in &set.vars {
+						let (depth, arrow, varname) = lookup_var_in_parent(&self.db, *var, lhs);
+
 						// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
-						let arrow = self.db.get_c_member_lookup(lhs);
-						
-						let varname = self.db.get_cname(*var);
+						for _ in 0..depth {
+							inf_write!(into, "->parent");
+						}
 
 						inf_write!(into, "{}{}", arrow, varname);
 						// Walk the tree of types
@@ -2420,7 +2447,11 @@ impl<'a> Codegen<'a> {
 		let mut depth = 0;
 
 		if let Some(class) = self.db.get(var).class {
+			log::trace!("codegen assign to class member {}.{} using Expr::Assign",
+				self.db.repr_class(class),
+				self.db.repr_var(var));
 			for inside in self.inside_class.iter().rev() {
+				log::trace!("- checking class {}", self.db.repr_class(*inside));
 				// Depth is at least one, because we're in a class, so
 				// increment before checking.
 				depth += 1;
@@ -2428,6 +2459,7 @@ impl<'a> Codegen<'a> {
 					break;
 				}
 			}
+			log::trace!("--> depth = {}", depth);
 
 			// TODO: Panic if we run out of classes before finding the
 			// right one.
@@ -2465,6 +2497,22 @@ impl<'a> Codegen<'a> {
 		var_lvalue
 	}
 
+	fn get_class_list(db: &Db, fun: FunId) -> Vec<ClassId> {
+		let mut list = Vec::new();
+
+		let mut class = db.get(fun).class;
+		while let Some(actual) = class {
+			list.push(actual);
+			class = db.get(actual).parent;
+		}
+
+		// This is a little awkward, but this is what the rest of the code
+		// is expecting for now.
+		list.reverse();
+
+		list
+	}
+
 	// Does not generate the code for a function declaration (e.g. assigning
 	// it to a local).
 	fn compile_function(&mut self, ast: &AstReadonly, fun: FunId) {
@@ -2473,8 +2521,7 @@ impl<'a> Codegen<'a> {
         let Some(body) = self.db.get(fun).expression else { return; };
 
         // Necessary due to the new structure of the code
-        self.inside_class = self.db.get(fun).class.iter().copied().collect();
-
+        self.inside_class = Self::get_class_list(&self.db, fun);
 		let is_init = Some(fun) == self.db.fun_init;
 
 		let enclosing_val = self.val_idx;
