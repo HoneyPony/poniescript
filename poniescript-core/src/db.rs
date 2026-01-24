@@ -1916,7 +1916,7 @@ impl Db {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
 					let result = *val.get();
 					*val.get_mut() += 1;
-					format!("v_{}{}", self.get(str_id), result)
+					format!("v{}_{}", result, self.get(str_id))
 				},
 				std::collections::hash_map::Entry::Vacant(val) => {
 					val.insert(0);
@@ -1957,7 +1957,11 @@ impl Db {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
 					let result = *val.get();
 					*val.get_mut() += 1;
-					format!("cl_{}{}", self.get(str_id), result)
+					// Note: it is important that the order is prefix<num>_<name>.
+					// If the order is prefix_<name><num>, than something like
+					// function (num = 2) can collide with function2 (num = none).
+					// Doing it in the other order completely prevents this.
+					format!("cl{}_{}", result, self.get(str_id))
 				},
 				std::collections::hash_map::Entry::Vacant(val) => {
 					val.insert(0);
@@ -1991,7 +1995,7 @@ impl Db {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
 					let result = *val.get();
 					*val.get_mut() += 1;
-					format!("f_{}{}", self.get(cname_id), result)
+					format!("f{}_{}", result, self.get(cname_id))
 				},
 				std::collections::hash_map::Entry::Vacant(val) => {
 					val.insert(0);
