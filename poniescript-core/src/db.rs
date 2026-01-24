@@ -1504,9 +1504,17 @@ impl Db {
 				None
 			}
 			Type::Class(class_id) => {
-				let class = self.get(*class_id);
-				let result = class.var_map.get(&propname).copied();
-				result
+				let mut class_id = *class_id;
+				loop {
+					let class = self.get(class_id);
+					let result = class.var_map.get(&propname).copied();
+					if result.is_some() { return result; }
+
+					let Some(next) = class.parent else {
+						return None;
+					};
+					class_id = next;
+				}
 			},
 			Type::Tuple(typs) => {
 				// Look up the property index based on name ('0' => 0)
