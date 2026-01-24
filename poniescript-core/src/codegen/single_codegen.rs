@@ -1839,7 +1839,11 @@ impl<'a> Codegen<'a> {
 					// are the default initializers.
 					let enclosing_this_val = self.this_val;
 					self.this_val = Some(idx);
-					self.inside_class.push(new.class);
+
+					// Need to fetch the class list / scope from the class, as
+					// that's the static syntantical context for its constructor.
+					let enclosing_inside_class = std::mem::take(&mut self.inside_class);
+					self.inside_class = Self::get_class_list_class(&self.db, new.class);
 
 					// Run all the initializers from the class second.
 					for var in &self.db.get(new.class).vars {
@@ -1857,7 +1861,7 @@ impl<'a> Codegen<'a> {
 						}
 					}
 
-					self.inside_class.pop();
+					self.inside_class = enclosing_inside_class;
 					self.this_val = enclosing_this_val;
 				}
 
@@ -2501,6 +2505,22 @@ impl<'a> Codegen<'a> {
 		let mut list = Vec::new();
 
 		let mut class = db.get(fun).class;
+		while let Some(actual) = class {
+			list.push(actual);
+			class = db.get(actual).parent;
+		}
+
+		// This is a little awkward, but this is what the rest of the code
+		// is expecting for now.
+		list.reverse();
+
+		list
+	}
+
+	fn get_class_list_class(db: &Db, class: ClassId) -> Vec<ClassId> {
+		let mut list = Vec::new();
+		let mut class = Some(class);
+
 		while let Some(actual) = class {
 			list.push(actual);
 			class = db.get(actual).parent;

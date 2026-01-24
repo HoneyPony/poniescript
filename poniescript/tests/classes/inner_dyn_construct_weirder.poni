@@ -34,5 +34,5 @@ fun init() {
     var other2 = other.new Other.Other2{};
 
     var inner = other2.make_inner();
-    print(inner.property, " ",  inner.inner_property); //! (3, 5) (6, 9)
+    print(inner.property, " ",  inner.inner_property); //! (5, 20) (8, 24)
 }
