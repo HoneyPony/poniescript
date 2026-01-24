@@ -3,5 +3,6 @@
 //
 // Must be something to do with what happens when we keep going after parsing fails. 
 fun init() {
+    //? Parse error: Color literal should be 3, 4, 6, or 8 numerals.
     var x = (#)
 }
