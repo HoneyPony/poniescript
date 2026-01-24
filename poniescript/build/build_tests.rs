@@ -308,6 +308,7 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "inner_many_scopes"),
 
 		("classes/", "inner_dyn_simple"),
+		("classes/", "inner_dyn_construct"),
 
 		("classes/", "err_assign_to_class"),
 		("classes/", "err_get_nonexistent_member"),

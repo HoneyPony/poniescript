@@ -1,0 +1,24 @@
+class Outer {
+    var property = (1, 2);
+
+    @inner
+    class Inner {
+        var inner_property = property + (3, 4);
+    }
+
+    fun make_inner() -> Inner {
+        self.new Inner{}
+    }
+}
+
+fun init() {
+    var outer = new Outer{};
+    var inner = outer.make_inner();
+
+    print(inner.property, " ", inner.inner_property); //! (1, 2) (3, 6)
+
+    outer.property = (10, 20);
+    inner = outer.make_inner();
+
+    print(inner.property, " ", inner.inner_property); //! (10, 20) (13, 24)
+}
