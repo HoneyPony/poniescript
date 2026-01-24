@@ -1,0 +1,38 @@
+class Outer {
+    var property = (1, 2);
+
+    @inner
+    class Inner {
+        var inner_property = property + (3, 4);
+    }
+
+    fun make_inner() -> Inner {
+        self.new Inner{}
+    }
+}
+
+class Other {
+    var x: int = 5;
+
+    @inner
+    class Other2 {
+        var y: int = 20;
+
+        fun make_inner() -> Outer.Inner {
+            var outer = new Outer{ property: (x, y) };
+
+            var inner = outer.new Outer.Inner {};
+
+            inner
+        }
+    }
+}
+
+fun init() {
+    var other = new Other{};
+    // TODO: Change how names are bound for .new
+    var other2 = other.new Other.Other2{};
+
+    var inner = other2.make_inner();
+    print(inner.property, " ",  inner.inner_property); //! (3, 5) (6, 9)
+}
