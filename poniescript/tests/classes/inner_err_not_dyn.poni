@@ -2,7 +2,7 @@ class Outer {
     var property = (1, 2);
 
     class Inner {
-        //? Can't access 'property.'
+        //? Identifier 'property' is not available in this scope.
         var inner_property = property + (3, 4);
     }
 }

@@ -1,17 +1,13 @@
-fun get_name() -> StrBuf {
+// This test is like nested_initializers.poni, but instead of having both a 
+// global and local get_name() with the same name, the global one is called
+// global_get_name().
+
+fun global_get_name() -> StrBuf {
     str("h", "o", "r", "s", "e")
 }
 
 class StuffedHorse {
-    // TODO:
-    // Right now the binder is resolving this to our own get_name, which is
-    // sort of reasonable, but does make this not compile.
-    //
-    // Do we want unbound function calls to resolve based on:
-    // - Their entire signature
-    // - Their arity
-    // - Just their name?
-    var name: StrBuf = get_name();
+    var name: StrBuf = global_get_name();
 
     fun get_name(concat: StrConst) -> StrBuf {
         str(name, " ", concat);

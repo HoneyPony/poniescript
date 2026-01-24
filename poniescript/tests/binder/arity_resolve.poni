@@ -1,0 +1,21 @@
+fun test(x: int) {
+    print("global test");
+}
+
+class Test {
+    fun test() {
+        print("local test");
+    }
+
+    fun call_test() {
+        // For this version of the resolve to pass, we would expect Binder to
+        // resolve based on arity.
+
+        test(5); //! global test
+    }
+}
+
+fun init() {
+    var test = new Test{};
+    test.call_test();
+}

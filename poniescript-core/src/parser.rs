@@ -320,16 +320,32 @@ impl<'b> Parser<'b> {
 		}
 	}
 
-	fn scope_put_entry(&mut self, name: StrId, entry: ScopeEntry) {
+	fn scope_put_entry(
+		&mut self,
+		name: StrId,
+		entry: ScopeEntry,
+		// Whether this entry should also be put into the parser's symbol table.
+		// If it is, the parser will attempt to resolve it when it sees it.
+		// 
+		// Should not be done for e.g. class members, as they may not actually
+		// be valid to resolve.
+		include_parser: bool
+	) {
 		log::trace!("scope: put entry with name {}", self.db.get(name));
 		match self.scopes.last_mut() {
 			Some(last) => {
 				// For local scopes, it is OK to redefine the name with a new
 				// value -- that's just shadowing.
-				last.map.insert(name, entry);
+				if include_parser {
+					last.map.insert(name, entry);
+				}
+
+				log::trace!("scope: put entry into scope {}", self.scopes.len());
 			},
 			None => {
-				self.global_scope.map.insert(name, entry);
+				if include_parser {
+					self.global_scope.map.insert(name, entry);
+				}
 
 				// TODO: Can this concatenation be made more efficient..?
 				// Maybe the DB could have a buffer for this purpose...
@@ -344,6 +360,8 @@ impl<'b> Parser<'b> {
 					note!(error, Some(self.location_of(&old)), "Previous definition was here");
 					semantic_error_with!(self, error);
 				}
+
+				log::trace!("scope: put entry into global scope with name {}", full_name);
 			}
 		}
 	}
@@ -723,7 +741,7 @@ impl<'b> Parser<'b> {
 			// Currently, the for loop variable can't have a doc comment?
 			// This could be changed.
 			None);
-		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
+		self.scope_put_entry(name_str, ScopeEntry::Var(identity), true);
 
 		let inner = self.block()?;
 		self.pop_scope();
@@ -782,7 +800,7 @@ impl<'b> Parser<'b> {
 			}
 
 			Tok::Fun => {
-				let fun = self.fun_declaration(false)?;
+				let fun = self.fun_declaration(false, true)?;
 				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
 			}
 
@@ -1474,7 +1492,7 @@ impl<'b> Parser<'b> {
 		})
 	}
 
-	fn var_declaration(&mut self, require_initializer: bool) -> Result<Declare> {
+	fn var_declaration(&mut self, require_initializer: bool, add_to_scope: bool) -> Result<Declare> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let key_var = expected!(self, Tok::Var, "'var''")?;
@@ -1531,7 +1549,10 @@ impl<'b> Parser<'b> {
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
-		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
+		//
+		// For globals and class members, we don't want to add them to the
+		// Parser's own scope, which is the purpose of add_to_scope.
+		self.scope_put_entry(name_str, ScopeEntry::Var(identity), add_to_scope);
 
 		return Stmt::new_declare_ok(self.end(location), name_loc, identity, initializer, has_explicit_type);
 	}
@@ -1603,7 +1624,7 @@ impl<'b> Parser<'b> {
 		match self.peek_typ() {
 			Tok::Var => {
 				// Var declarations in general require initializers
-				let inner = self.var_declaration(true)?;
+				let inner = self.var_declaration(true, true)?;
 				Ok(self.ast.stmts.push(Stmt::Declare(inner)))
 			},
 			_ => {
@@ -1648,12 +1669,12 @@ impl<'b> Parser<'b> {
 			name.location,
 			// Currenlty, doc comments are not supported for parameters.
 			None);
-		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
+		self.scope_put_entry(name_str, ScopeEntry::Var(identity), true);
 
 		Ok(identity)
 	}
 
-	fn fun_declaration(&mut self, require_name: bool) -> Result<FunDeclare> {
+	fn fun_declaration(&mut self, require_name: bool, add_to_parser: bool) -> Result<FunDeclare> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let _key_fun = expected!(self, Tok::Fun, "'fun'")?;
@@ -1746,7 +1767,7 @@ impl<'b> Parser<'b> {
 		// TODO: Do we want to be able to have mutually recursive functions local
 		// to a function...?
 		if let Some(name_str) = name_str {
-			self.scope_put_entry(name_str, ScopeEntry::Fun(identity));
+			self.scope_put_entry(name_str, ScopeEntry::Fun(identity), add_to_parser);
 
 			// TODO: Function names that are nested should be <something>.<something>,
 			// so this will work even for methods and other nestedly-named functions.
@@ -1847,7 +1868,9 @@ impl<'b> Parser<'b> {
 					//
 					// If a var doesn't have an initializer, it must be provided
 					// when the class is constructed.
-					let declare = self.var_declaration(false)?;
+					//
+					// Don't add these variables to the scope.
+					let declare = self.var_declaration(false, false)?;
 					vars.push(declare.identity);
 					if declare.value.is_none() {
 						// Add any variable without an initializer to the mandatory
@@ -1862,7 +1885,7 @@ impl<'b> Parser<'b> {
 					let _ = std::mem::take(&mut annotations);
 				},
 				Tok::Fun => {
-					let fun = self.fun_declaration(true)?;
+					let fun = self.fun_declaration(true, false)?;
 					funs.push(fun.identity);
 					// We require name so this must have a name.
 					fun_map.insert(*self.db.get(fun.identity).name.as_ref().unwrap(), fun.identity);
@@ -1926,7 +1949,7 @@ impl<'b> Parser<'b> {
 
 		self.pop_name(pushed_name);
 
-		self.scope_put_entry(name_str, ScopeEntry::Class(identity));
+		self.scope_put_entry(name_str, ScopeEntry::Class(identity), false);
 
 		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars, declare_classes)
 	}
@@ -1947,7 +1970,7 @@ impl<'b> Parser<'b> {
 
 			Tok::Var => {
 				// Global variables require initializers.
-				let global = self.var_declaration(true)?;
+				let global = self.var_declaration(true, false)?;
 				self.db.globals.push(global.identity);
 				self.get_source().module.globals.push(global);
 			},
@@ -1955,7 +1978,7 @@ impl<'b> Parser<'b> {
 			Tok::Fun => {
 				// At the top level, unless preceded by a var .. = , a function
 				// must have a name.
-				let fun = self.fun_declaration(true)?;
+				let fun = self.fun_declaration(true, false)?;
 				self.get_source().module.functions.push(fun);
 			}
 

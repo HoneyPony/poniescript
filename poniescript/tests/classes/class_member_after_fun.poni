@@ -1,0 +1,12 @@
+class Test {
+    fun do_stuff() {
+        print(member);
+    }
+
+    var member = 30;
+}
+
+fun init() {
+    var test = new Test{};
+    test.do_stuff(); //! 30
+}

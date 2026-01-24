@@ -113,17 +113,17 @@ impl<'db> Binder<'db> {
 		else { None }
 	}
 
-	fn resolve_unbound_inner(&mut self, ast: &AstProxy, ident: StrId, location: SourceLocation) -> (Option<Expr>, bool) {
+	fn resolve_unbound_inner(&mut self, ast: &AstProxy, ident: StrId, location: SourceLocation) -> (Option<Expr>, bool, ScopeEntry) {
 		let mut hit_upper_bound = false;
 
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
-				ScopeEntry::Var(var) => {
+				entry @ ScopeEntry::Var(var) => {
 					let expr = Some(Expr::mk_variable(location, var));
 
-					return (expr, hit_upper_bound);
+					return (expr, hit_upper_bound, entry);
 				}
-				ScopeEntry::Fun(fun) => {
+				entry @ ScopeEntry::Fun(fun) => {
 					log::trace!("resolved unbound '{}' to fun in scope '{}'; self_val: {}",
 						self.db.get(ident),
 						checker.buffer,
@@ -134,9 +134,9 @@ impl<'db> Binder<'db> {
 					let expr = Some(Expr::mk_funcapture(location.clone(), location, fun, self.db.types.fun_sig_unassigned, 
 						self_val));
 
-					return (expr, hit_upper_bound);
+					return (expr, hit_upper_bound, entry);
 				}
-				ScopeEntry::Class(_) => {
+				_entry @ ScopeEntry::Class(_) => {
 					todo!("what to do when we resolve an Unbound into a Class");
 				}
 				ScopeEntry::None => {
@@ -146,11 +146,33 @@ impl<'db> Binder<'db> {
 			}
 		}
 
-		return (None, hit_upper_bound)
+		return (None, hit_upper_bound, ScopeEntry::None)
+	}
+
+	/// Determines if a hit_upper_bound condition really is true.
+	/// 
+	/// In particular, the upper bound does not matter for a function or variable
+	/// if that function or variable has no parent class. In that case, it is
+	/// a global function/static function/variable, and so it is always valid
+	/// to resolve to it.
+	/// 
+	/// I believe this is also true for classes.
+	fn fix_upper_bound(&self, hit_upper_bound: bool, entry: ScopeEntry) -> bool {
+		// If we didn't hit the upper bound, it doesn't matter anyway.
+		if !hit_upper_bound { return false; };
+
+		match entry {
+			ScopeEntry::Var(var_id) => return self.db.get(var_id).class.is_some(),
+			ScopeEntry::Fun(fun_id) => return self.db.get(fun_id).class.is_some(),
+			ScopeEntry::Class(class_id) => return self.db.get(class_id).parent.is_some(),
+			ScopeEntry::None => return true,
+		}
 	}
 
 	fn resolve_unbound(&mut self, ast: &AstProxy, ident: StrId, location: SourceLocation) -> Option<Expr> {
-		let (expr, hit_upper_bound) = self.resolve_unbound_inner(ast, ident, location.clone());
+		let (expr, hit_upper_bound, entry) = self.resolve_unbound_inner(ast, ident, location.clone());
+
+		let hit_upper_bound = self.fix_upper_bound(hit_upper_bound, entry);
 
 		match (expr, hit_upper_bound) {
 			(Some(expr), false) => { return Some(expr); },
@@ -158,7 +180,7 @@ impl<'db> Binder<'db> {
 				self.db.report_error(Error::simple(
 					format!("Identifier '{}' is not available in this scope.", self.db.get(ident)),
 					location.clone()
-				).add_note(format!("Variables from outer classes are only available to @inner classes."), None));
+				).add_note(format!("Membes of outer classes are only available to @inner classes."), None));
 				
 				self.had_error = true;
 			}
@@ -175,18 +197,30 @@ impl<'db> Binder<'db> {
 		None
 	}
 
-	fn resolve_unbound_assign(&mut self, ident: StrId, location: SourceLocation, ident_location: SourceLocation, expr: ExprId, op: Tok) -> Option<Expr> {
+	fn resolve_unbound_assign_inner(
+		&mut self,
+		ident: StrId,
+		location: SourceLocation,
+		ident_location: SourceLocation,
+		expr: ExprId,
+		op: Tok
+	) -> (Option<Expr>, bool, ScopeEntry, bool) {
+		let mut hit_upper_bound = false;
+
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, ident) {
-				ScopeEntry::Var(var) => return Some(Expr::mk_assign(location, ident_location, var, expr, op)),
-				ScopeEntry::Fun(_) => {
+				entry @ ScopeEntry::Var(var) => {
+					let expr =  Some(Expr::mk_assign(location, ident_location, var, expr, op));
+					return (expr, hit_upper_bound, entry, false);
+				}
+				entry @ ScopeEntry::Fun(_) => {
 					self.db.report_error(Error::simple(
 						format!("Cannot assign to a function."),
 						location.clone()
 					));
 
 					self.had_error = true;
-					return None;
+					return (None, hit_upper_bound, entry, true);
 				},
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
@@ -195,28 +229,74 @@ impl<'db> Binder<'db> {
 					));
 
 					self.had_error = true;
-					return None;
+					return (None, hit_upper_bound, ScopeEntry::None, true);
 				}
-				ScopeEntry::None => continue,
+				ScopeEntry::None => {
+					if checker.is_upper_bound {
+						hit_upper_bound = true;
+					}
+					continue;
+				}
 			}
 		}
 
-		self.db.report_error(Error::simple(
-			format!("Unknown identifier '{}'", self.db.get(ident)),
-			location.clone()
-		));
+		return (None, hit_upper_bound, ScopeEntry::None, false)
+	}
 
-		self.had_error = true;
+	fn resolve_unbound_assign(
+		&mut self,
+		ident: StrId,
+		location: SourceLocation,
+		ident_location: SourceLocation,
+		expr: ExprId,
+		op: Tok
+	) -> Option<Expr> {
+		let (expr, hit_upper_bound, entry, already_reported_error) = self.resolve_unbound_assign_inner(
+			ident, location.clone(), ident_location, expr, op);
+
+		let hit_upper_bound = self.fix_upper_bound(hit_upper_bound, entry);
+
+		match (expr, hit_upper_bound) {
+			(Some(expr), false) => { return Some(expr); },
+			(Some(_), true) => {
+				if !already_reported_error {
+					self.db.report_error(Error::simple(
+						format!("Identifier '{}' is not available in this scope.", self.db.get(ident)),
+						location.clone()
+					).add_note(format!("Members of outer classes are only available to @inner classes."), None));
+					
+					self.had_error = true;
+				}
+			}
+			(None, _) => {
+				if !already_reported_error {
+					self.db.report_error(Error::simple(
+						format!("Unknown identifier '{}'", self.db.get(ident)),
+						location.clone()
+					));
+
+					self.had_error = true;
+				}
+			}
+		}
+		
 		None
 	}
 
-	fn resolve_unbound_funcapture(&mut self, ast: &AstProxy, unbound: &mut UnboundFunCapture) -> Option<Expr> {
+	fn resolve_unbound_funcapture_inner(
+		&mut self,
+		ast: &AstProxy,
+		unbound: &mut UnboundFunCapture
+	) -> (Option<Expr>, bool, ScopeEntry, bool) {
+		let mut hit_upper_bound = false;
+
 		for checker in self.checkers.iter_mut().rev() {
 			match checker.check(self.db, unbound.identifier.lexeme) {
-				ScopeEntry::Var(v) => {
-					return Some(Expr::mk_variable(unbound.location.clone(), v));
+				entry @ ScopeEntry::Var(v) => {
+					let expr = Some(Expr::mk_variable(unbound.location.clone(), v));
+					return (expr, hit_upper_bound, entry, false);
 				}
-				ScopeEntry::Fun(fun) => {
+				entry @ ScopeEntry::Fun(fun) => {
 					// The Binder is not equipped to handle ANY name resolution
 					// on a bound object. That MUST wait until type checking.
 					//
@@ -241,8 +321,9 @@ impl<'db> Binder<'db> {
 					let self_val = checker.self_val;
 					let self_val = self.get_selfval(ast, unbound.location.clone(), self_val);
 
-					return Some(Expr::mk_funcapture(unbound.location.clone(), unbound.identifier.location.clone(), fun, self.db.types.unassigned, 
-						self_val))
+					let expr = Some(Expr::mk_funcapture(unbound.location.clone(), unbound.identifier.location.clone(), fun, self.db.types.unassigned, 
+						self_val));
+					return (expr, hit_upper_bound, entry, false);
 				}
 				ScopeEntry::Class(_) => {
 					self.db.report_error(Error::simple(
@@ -251,9 +332,44 @@ impl<'db> Binder<'db> {
 					));
 
 					self.had_error = true;
-					return None;
+					return (None, hit_upper_bound, ScopeEntry::None, /* already reported this error. */ true);
 				}
-				ScopeEntry::None => continue,
+				ScopeEntry::None => {
+					hit_upper_bound = true;
+					continue;
+				}
+			}
+		}
+
+		(None, hit_upper_bound, ScopeEntry::None, false)
+	}
+
+	fn resolve_unbound_funcapture(&mut self, ast: &AstProxy, unbound: &mut UnboundFunCapture) -> Option<Expr> {
+		let (expr, hit_upper_bound, entry, already_reported_error) = self.resolve_unbound_funcapture_inner(ast, unbound);
+
+		let hit_upper_bound = self.fix_upper_bound(hit_upper_bound, entry);
+
+		match (expr, hit_upper_bound) {
+			(Some(expr), false) => { return Some(expr); },
+			(Some(_), true) => {
+				if !already_reported_error {
+					self.db.report_error(Error::simple(
+						format!("Identifier '{}' is not available in this scope.", self.db.get(unbound.identifier.lexeme)),
+						unbound.location.clone()
+					).add_note(format!("Members of outer classes are only available to @inner classes."), None));
+					
+					self.had_error = true;
+				}
+			}
+			(None, _) => {
+				if !already_reported_error {
+					self.db.report_error(Error::simple(
+						format!("Unknown identifier '{}'", self.db.get(unbound.identifier.lexeme)),
+						unbound.location.clone()
+					));
+
+					self.had_error = true;
+				}
 			}
 		}
 

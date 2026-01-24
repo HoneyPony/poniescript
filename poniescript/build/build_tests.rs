@@ -58,6 +58,8 @@ pub fn generate(tests_file: &mut File) {
 		("binary/", "modulo"),
 
 		("binder/", "sneaky"),
+		("binder/", "arity_resolve"),
+		("binder/", "type_resolve"),
 
 		("cyclic/", "class_members_and_fun_thru_param"),
 		("cyclic/", "err_class_members_and_fun_thru_param"),
@@ -194,6 +196,7 @@ pub fn generate(tests_file: &mut File) {
 		("new/", "new_bad_self_str"),
 		("new/", "fun_call"),
 		("new/", "nested_initializers"),
+		("new/", "nested_initializers_unique_fun_names"),
 
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants"),
@@ -301,6 +304,8 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "noout_pure_data_initializers"),
 		("classes/", "noout_pure_data"),
 
+		("classes/", "class_member_after_fun"),
+
 		("classes/", "inner_static_simple"),
 		("classes/", "inner_static_scoped"),
 		("classes/", "inner_wrongscope_err"),
@@ -313,6 +318,7 @@ pub fn generate(tests_file: &mut File) {
 
 		("classes/", "inner_err_not_dyn"),
 		("classes/", "inner_err_not_dyn_get"),
+		("classes/", "inner_err_not_dyn_set"),
 
 		("classes/", "err_assign_to_class"),
 		("classes/", "err_get_nonexistent_member"),
