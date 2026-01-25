@@ -1754,7 +1754,9 @@ impl<'b> Parser<'b> {
 		}
 		let value = self.block()?;
 		let value = Expr::put_allocateclosure(self.ast,
-			value.location(self.ast), closure, value, self.db.types.unassigned);
+			value.location(self.ast), closure, value, self.db.types.unassigned,
+			// Function closures should copy params.
+			true);
 
 		self.pop_scope();
 		self.closure = enclosing_closure;

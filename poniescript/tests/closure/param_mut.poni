@@ -1,0 +1,19 @@
+fun make_funs(x: int) -> (fun(int) -> int, fun(int)) {
+    var result = (fun(y: int) -> int {
+        x + y
+    }, fun(y: int) { x += y; });
+
+    x += 10;
+
+    result
+}
+
+fun init() {
+    var funs = make_funs(10);
+
+    // 10 + 10 + 5
+    print(funs.0(5)); //! 25
+
+    funs.1(-10);
+    print(funs.0(5)); //! 15
+}

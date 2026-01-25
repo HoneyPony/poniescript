@@ -2334,6 +2334,20 @@ impl<'a> Codegen<'a> {
 						self.db.get_class_cname(class),
 						self.db.get_class_ctag(class));
 
+					if ac.copy_params {
+						for var in &self.db.get(class).vars {
+							if self.db.get(*var).param_for.is_some() {
+								let cname = self.db.get_cname(*var);
+								// This feels a little jank but I think it is
+								// totally legit. The only thing we will have to
+								// worry about is if we ever change the calling
+								// convention for e.g. structs.
+								inf_writeln!(into, "{}\tthis->{} = {};",
+									indent, cname, cname);
+							}
+						}
+					}
+
 					let inner_val = self.expr(ast, ac.inner, into);
 					self.indent_level -= 1;
 					inf_writeln!(into, "{}\t{} = {};", indent, val, inner_val);

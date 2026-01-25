@@ -281,6 +281,7 @@ pub fn generate(tests_file: &mut File) {
 		("closure/", "simple_no_param_psuedo_obj"),
 		("closure/", "for_loop"),
 		("closure/", "while_loop"),
+		("closure/", "param_mut"),
 
 		("classes/", "basic_class"),
 		("classes/", "basic_new_inferred_get"),
