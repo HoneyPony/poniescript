@@ -103,7 +103,11 @@ impl LanguageServer for Backend {
                 // We only support UTF-8 position encoding.
                 position_encoding: Some(encoding),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
-                completion_provider: Some(CompletionOptions::default()),
+                completion_provider: Some(CompletionOptions {
+                    // Include @ as a trigger character for annotations
+                    trigger_characters: Some(vec!["@".into()]),
+                    ..Default::default()
+                }),
                 semantic_tokens_provider: Some(
                     SemanticTokensServerCapabilities::SemanticTokensOptions(
                         SemanticTokensOptions {
