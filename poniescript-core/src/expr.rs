@@ -265,4 +265,9 @@ pub struct Class {
 /// closure allocation.
 pub struct Closure {
 	pub class: Option<ClassId>,
+	/// Parent ClosureId. May end up being the closure that is relevant for
+	/// a particular function.
+	pub parent: Option<ClosureId>,
+
+	pub parent_class: Option<ClassId>,
 }

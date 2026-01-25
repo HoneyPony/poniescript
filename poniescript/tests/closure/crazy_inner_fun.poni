@@ -1,0 +1,21 @@
+fun maker() -> fun() -> int {
+    var x = 50;
+
+    fun inner_maker() -> fun() -> int {
+        fun the_one() -> int {
+            x += 50;
+            return x;
+        }
+    }
+
+    x += 50;
+
+    inner_maker()
+}
+
+fun init() {
+    var myfun = maker();
+    print(myfun()); //! 150
+    print(myfun()); //! 200
+    print(myfun()); //! 250
+}

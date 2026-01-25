@@ -1719,7 +1719,7 @@ impl<'b> Parser<'b> {
 		expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
 
 		let enclosing_closure = self.closure;
-		let closure = self.db.push(Closure { class: None });
+		let closure = self.db.push(Closure { class: None, parent: enclosing_closure, parent_class: None });
 		self.closure = Some(closure);
 		let enclosing_vars = std::mem::take(&mut self.fun_vars);
 		self.push_scope();
@@ -1970,6 +1970,9 @@ impl<'b> Parser<'b> {
 
 		for fun in &declare_funs {
 			self.db.get_mut(fun.identity).class = Some(identity);
+			if let Some(closure) = self.db.get(fun.identity).closure {
+				self.db.get_mut(closure).parent_class = Some(identity);
+			}
 		}
 
 		for class in &declare_classes {

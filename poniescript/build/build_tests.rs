@@ -282,6 +282,7 @@ pub fn generate(tests_file: &mut File) {
 		("closure/", "for_loop"),
 		("closure/", "while_loop"),
 		("closure/", "param_mut"),
+		("closure/", "crazy_inner_fun"),
 
 		("classes/", "basic_class"),
 		("classes/", "basic_new_inferred_get"),

@@ -142,26 +142,54 @@ fn replace_vars(ast: &mut Ast, db: &mut Db) {
                     *ast.exprs.get_mut(expr) = Expr::Get(get);
                 }
             },
-            Expr::FunDeclare(declare) => {
-                let fun = db.get(declare.identity);
-                if let Some(closure) = fun.closure {
-                    if let Some(class) = db.get(closure).class {
-                        db.get_mut(declare.identity).class = Some(class);
-                    }
-                }
-            },
+            // Expr::FunDeclare(declare) => {
+            //     let fun = db.get(declare.identity);
+            //     // The logic here is this:
+            //     // We 
+            //     if fun.closure.is_some() {
+            //         if let Some(class) = db.get(closure).class {
+            //             db.get_mut(declare.identity).class = Some(class);
+            //         }
+            //     }
+            // },
             Expr::FunCapture(capt) => {
                 let fun = db.get(capt.identity);
-                if let Some(closure) = fun.closure {
-                    // Rewrite these separately from the FunDeclare, don't
-                    // touch the function itself.
-                    if let Some(class) = db.get(closure).class {
+                // The logic here is this:
+                // We already precisely computed the correct classes for each
+                // function in identify_function_classes. Now we simply have to
+                // synthesized the SelfVals for those.
+                //
+                // But, we only do this for functions that BOTH have a class and
+                // a closure; functions that already have a class have already
+                // been handled by the nature of being a class function.
+                if fun.closure.is_some() {
+                    // We need to look up the FUNCTION class, not hte CLOSURE
+                    // class, because the FUNCTION class might have been the
+                    // closure's parent.
+                    if let Some(class) = fun.class {
                         drop(binding);
                         let selfval = Expr::put_selfval(ast, db.synthetic(), db.put_type(Type::Class(class)));
 
                         let mut binding = ast.exprs.get_mut(expr);
                         let Expr::FunCapture(capt) = binding.as_mut() else { unreachable!() };
                         capt.object = Some(selfval);
+                    }
+                }
+            },
+            Expr::FunCall(call) => {
+                // Same idea as above.
+                let fun = db.get(call.identity);
+                if fun.closure.is_some() {
+                    // We need to look up the FUNCTION class, not hte CLOSURE
+                    // class, because the FUNCTION class might have been the
+                    // closure's parent.
+                    if let Some(class) = fun.class {
+                        drop(binding);
+                        let selfval = Expr::put_selfval(ast, db.synthetic(), db.put_type(Type::Class(class)));
+
+                        let mut binding = ast.exprs.get_mut(expr);
+                        let Expr::FunCall(call) = binding.as_mut() else { unreachable!() };
+                        call.object = Some(selfval);
                     }
                 }
             }
@@ -205,6 +233,45 @@ fn replace_vars(ast: &mut Ast, db: &mut Db) {
     }
 }
 
+// An important note about this chain walking algorithm is that it will identify
+// a class for a function even if that function did not itself touch any variables.
+//
+// For example,
+//     fun outer() {
+//         var x = 20;
+//         fun mid() {
+//             fun inner() { x += 30; }
+//         }
+//     }
+//
+// Even though mid() does not refer to x at all, because x gets put into a closure,
+// and mid's ClosureId points to outer's ClosureId, mid will end up having its
+// class set to the correct value.
+fn identify_class_for_function_closure(ast: &mut Ast, db: &mut Db, mut closure: ClosureId) -> Option<ClassId> {
+    loop {
+        let cur = db.get(closure);
+        if let Some(class) = cur.class {
+            return Some(class);
+        }
+
+        if let Some(parent) = cur.parent {
+            closure = parent;
+            continue;
+        }
+
+        return None;
+    }
+}
+
+fn identify_function_classes(ast: &mut Ast, db: &mut Db) {
+    for fun_id in db.iter_fun() {
+        let fun = db.get(fun_id);
+        if let Some(closure) = fun.closure {
+            db.get_mut(fun_id).class = identify_class_for_function_closure(ast, db, closure);
+        }
+    }
+}
+
 pub fn convert_closures(ast: &mut Ast, db: &mut Db) {
     let mut convert = ClosureConvert {
         ast: ast,
@@ -227,8 +294,7 @@ pub fn convert_closures(ast: &mut Ast, db: &mut Db) {
         db.get_mut(*closure).class = Some(*class);
     }
 
-    // We don't have this...?
-    // convert.visit_ast(ast, db);
+    identify_function_classes(ast, db);
 
     // Then do the variable replacement pass.
     replace_vars(ast, db);
