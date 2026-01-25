@@ -335,7 +335,9 @@ impl<'db> Binder<'db> {
 					return (None, hit_upper_bound, ScopeEntry::None, /* already reported this error. */ true);
 				}
 				ScopeEntry::None => {
-					hit_upper_bound = true;
+					if checker.is_upper_bound {
+						hit_upper_bound = true;
+					}
 					continue;
 				}
 			}
