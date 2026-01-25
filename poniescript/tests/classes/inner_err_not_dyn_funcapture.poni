@@ -1,0 +1,23 @@
+class Outer {
+    var hello: int = 5;
+
+    class Inner {
+        var xyz: int = 20;
+
+        fun caller() {
+            //? Identifier 'my_fun' is not available in this scope.
+            my_fun();
+        }
+    }
+
+    fun my_fun() {
+        print(hello);
+    }
+}
+
+fun init() {
+    var outer = new Outer{};
+    var inner = new Outer.Inner{};
+
+    inner.caller();
+}

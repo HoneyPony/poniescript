@@ -315,10 +315,12 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "inner_dyn_simple"),
 		("classes/", "inner_dyn_construct"),
 		("classes/", "inner_dyn_construct_weirder"),
+		("classes/", "inner_dyn_funcapture"),
 
 		("classes/", "inner_err_not_dyn"),
 		("classes/", "inner_err_not_dyn_get"),
 		("classes/", "inner_err_not_dyn_set"),
+		("classes/", "inner_err_not_dyn_funcapture"),
 
 		("classes/", "err_assign_to_class"),
 		("classes/", "err_get_nonexistent_member"),
