@@ -2447,6 +2447,27 @@ impl<'db> TypeChecker<'db> {
 						// Use a 0-width location for all the synthesized nodes,
 						// so that we don't take up space.
 						let inner_loc = for_.location.begin();
+
+						// To properly desugar the for loop, we need two variables,
+						// in case of closures.
+						//
+						// We basically want to desugar it into:
+						//
+						// <local_identity> = ...
+						// while(...) {
+						//     AllocateClosure {
+						//         <for_.identity> = <local_identity>
+						//     }
+						//     <local_identity> = f(<local_identity>)
+						// }
+						//
+						// This will properly get us a new closure identity
+						// each time through the loop.
+						let local_identity: VarId = {
+							let var = self.db.get(for_.identity);
+							let local = var.clone();
+							self.db.push(local)
+						};
 						// Desugar the for loop into the following:
 						// var <var> = <start>
 						// while <var> < <end> {
@@ -2470,20 +2491,23 @@ impl<'db> TypeChecker<'db> {
 							Tok::Minus, initializer, one, self.db.types.int);
 						// Make the declare have its own location...?
 						let declare = Stmt::push_declare(ast, for_.ident.clone(),
-							for_.ident.clone(), for_.identity, Some(sub), for_.has_explicit_type);
+							for_.ident.clone(), local_identity, Some(sub), for_.has_explicit_type);
 						
 						let read = Expr::push_variable(ast, inner_loc.clone(),
-							for_.identity);
+							local_identity);
 						let one = Expr::push_numliteral(ast, inner_loc.clone(),
 							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
 							self.db.types.int);
 						let add = Expr::push_binary(ast, inner_loc.clone(),
 							Tok::Plus, read, one, self.db.types.int);
 						let assign = Expr::push_assign(ast, inner_loc.clone(),
-							self.db.srcloc_dummy(), for_.identity, add, Tok::Equal);
+							self.db.srcloc_dummy(), local_identity, add, Tok::Equal);
 
 						// Grab location from the inner
 						let inner_stmt_loc = for_.inner.location(ast);
+						let ident_read = Expr::push_variable(ast, inner_loc.clone(), local_identity);
+						let ident_declare = Stmt::push_declare(ast, inner_stmt_loc.clone(),
+							for_.ident.clone(), for_.identity, Some(ident_read), for_.has_explicit_type);
 						let inner_stmt = Stmt::push_expression(ast, inner_stmt_loc.clone(),
 							for_.inner);
 						let assign_stmt = Stmt::push_expression(ast, inner_loc.clone(),
@@ -2491,10 +2515,17 @@ impl<'db> TypeChecker<'db> {
 							
 						// AWKWARD/TODO: Once we care about the value of the while block,
 						// this is not going to be it...?
-						let inner_block = Expr::push_block(ast,  inner_stmt_loc,
+						let inner_block = Expr::push_block(ast,  inner_stmt_loc.clone(),
 							// Due to our 'continue' jank, the assign has to come
 							// before the inner.
-							vec![assign_stmt, inner_stmt], self.db.types.void);
+							//
+							// It also has to come before ident_declare for our
+							// closure variable.
+							vec![assign_stmt, ident_declare, inner_stmt], self.db.types.void);
+						// The inner block is the thing that needs its own closure scope,
+						// so do that now.
+						let inner_block = Expr::push_allocateclosure(ast, inner_stmt_loc,
+							for_.closure, inner_block, self.db.types.void, false);
 
 						// Rhs of the comparison.
 						let rhs = Expr::push_get(ast, inner_loc.clone(),
@@ -2510,7 +2541,7 @@ impl<'db> TypeChecker<'db> {
 						// TODO: Can we re-used the read above? For now, synthesize
 						// two nodes.
 						let read = Expr::push_variable(ast, inner_loc.clone(),
-							for_.identity);
+							local_identity);
 
 						// Switch comparison based on the range type.
 						let compare_type = match b {

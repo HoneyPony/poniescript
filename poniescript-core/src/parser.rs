@@ -778,8 +778,8 @@ impl<'b> Parser<'b> {
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity), true);
 
 		let inner = self.block()?;
-		let inner = Expr::put_allocateclosure(self.ast, self.end(location.clone()), closure,
-			inner, self.db.types.unassigned, false);
+		// For now, for loops do not have an AllocateClosure created by the parser,
+		// instead it is created during desugaring.
 
 		self.pop_scope();
 
@@ -788,7 +788,7 @@ impl<'b> Parser<'b> {
 		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
 		
 		return Expr::put_forloop_ok(self.ast, self.end(location), name_loc, identity, iterable, has_explicit_type,
-			inner);
+			inner, closure);
 	}
 
 	fn expr_prefix_callable(&mut self) -> Result<ExprId> {

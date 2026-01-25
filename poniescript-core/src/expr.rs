@@ -158,6 +158,7 @@ impl Expr {
 }
 
 /// Information for a variable.
+#[derive(Clone)]
 pub struct Var {
 	pub name: StrId,
 	pub typ: TypId,

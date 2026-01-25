@@ -417,7 +417,7 @@ pub fn generate(file: &mut File) {
 	Continue      : 
 	Return        : Option<Expr> expression
 	WhileLoop     : Expr condition, Expr inner, TypId typ, Vec<ExprId> breaks
-	ForLoop       : SourceLocation ident, VarId identity, Expr iterator, bool has_explicit_type, Expr inner
+	ForLoop       : SourceLocation ident, VarId identity, Expr iterator, bool has_explicit_type, Expr inner, ClosureId closure
 	Undefined     : 
 
 	"#;
