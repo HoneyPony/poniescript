@@ -2367,12 +2367,14 @@ impl<'a> Codegen<'a> {
 
 					let inner_val = self.expr(ast, ac.inner, into);
 					self.indent_level -= 1;
-					inf_writeln!(into, "{}\t{} = {};", indent, val, inner_val);
+					if val.needs_storage() {
+						inf_writeln!(into, "{}\t{} = {};", indent, val, inner_val);
+					}
 					inf_writeln!(into, "{}}}", indent);
 
 					log::trace!("inside_class: popping closure -> {}", self.inside_class.len());
 					self.inside_class.pop();
-					val
+					self.tmp_to_used_val(val)
 				}
 				else {
 					// TODO: Allocate the class for the closure if there is one.

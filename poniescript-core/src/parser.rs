@@ -684,7 +684,15 @@ impl<'b> Parser<'b> {
 			got!(self, "'{{' after loop keyword");
 		}
 
+		let enclosing_closure = self.closure;
+		let closure = self.db.push(Closure { class: None, parent: enclosing_closure, parent_class: None });
+		self.closure = Some(closure);
+
 		let inner = self.block()?;
+		let inner = Expr::put_allocateclosure(self.ast, self.end(location.clone()), closure,
+			inner, self.db.types.unassigned, false);
+
+		self.closure = enclosing_closure;
 
 		// Loops are infinite (i.e. Never) until proven otherwise...
 		Expr::put_loop_ok(self.ast, self.end(location), inner, self.db.types.bottom, Vec::new())
@@ -700,7 +708,16 @@ impl<'b> Parser<'b> {
 		if !self.at(Tok::LeftBrace) {
 			got!(self, "'{{' after while condition");
 		}
+		// For while loops, the closure comes after the expression, before the block.
+		let enclosing_closure = self.closure;
+		let closure = self.db.push(Closure { class: None, parent: enclosing_closure, parent_class: None });
+		self.closure = Some(closure);
+
 		let inner = self.block()?;
+		let inner = Expr::put_allocateclosure(self.ast, self.end(location.clone()), closure,
+			inner, self.db.types.unassigned, false);
+
+		self.closure = enclosing_closure;
 
 		return Expr::put_whileloop_ok(self.ast, self.end(location), condition, inner,
 			self.db.types.unassigned, Vec::new())
@@ -709,6 +726,10 @@ impl<'b> Parser<'b> {
 	fn expr_for(&mut self) -> Result<ExprId> {
 		let location = self.start();
 		let key_for = expected!(self, Tok::For, "'for'")?;
+
+		let enclosing_closure = self.closure;
+		let closure = self.db.push(Closure { class: None, parent: enclosing_closure, parent_class: None });
+		self.closure = Some(closure);
 
 		let name = expected_after!(self, Tok::Identifier, key_for,
 			"variable name")?;
@@ -757,7 +778,12 @@ impl<'b> Parser<'b> {
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity), true);
 
 		let inner = self.block()?;
+		let inner = Expr::put_allocateclosure(self.ast, self.end(location.clone()), closure,
+			inner, self.db.types.unassigned, false);
+
 		self.pop_scope();
+
+		self.closure = enclosing_closure;
 
 		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
 		
