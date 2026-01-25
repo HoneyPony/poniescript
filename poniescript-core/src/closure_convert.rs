@@ -121,6 +121,12 @@ fn replace_vars(ast: &mut Ast, db: &mut Db) {
             Expr::Variable(var) => {
                 let id = var.identity;
                 let var = db.get(var.identity);
+
+                // NOTE: It is critical that we use the closure type of the
+                // function that the variable is accessed from as the selfval
+                // type. This is actually impossible to do with a flat
+                // iteration, currently. We need to use another tree-based
+                // visitor.
                 if let Some(class) = var.class {
                     let location = var.location.clone();
                     drop(binding);
@@ -292,6 +298,15 @@ pub fn convert_closures(ast: &mut Ast, db: &mut Db) {
     // Now that we have the map, push that info into the db.
     for (closure, class) in &convert.class_map {
         db.get_mut(*closure).class = Some(*class);
+
+        if let Some(parent) = db.get(*closure).parent {
+            if let Some(parent_class) = convert.class_map.get(&parent) {
+                db.get_mut(*class).parent = Some(*parent_class);
+            }
+        }
+        else if let Some(parent_class) = db.get(*closure).parent_class {
+            db.get_mut(*class).parent = Some(parent_class);
+        }
     }
 
     identify_function_classes(ast, db);

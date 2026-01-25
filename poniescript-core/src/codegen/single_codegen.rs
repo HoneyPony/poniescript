@@ -467,11 +467,14 @@ fn lookup_var_in_parent(db: &Db, var: VarId, parent: TypId) -> (usize, &str, &st
 	let arrow = db.get_c_member_lookup(parent);		
 	let varname = db.get_cname(var);
 
-	log::trace!("looking up {} in {}", db.repr_var(var), db.repr_type(parent));
+	log::trace!("looking up {} in {} ({})", db.repr_var(var),
+		db.repr_type(parent), parent.to_index());
 
 	let Some(var_class) = db.get(var).class else {
 		return (0, arrow, varname);
 	};
+
+	log::trace!("var class = {}", var_class.to_index());
 
 	let mut depth = 0;
 	let mut parent = match db.get(parent) {

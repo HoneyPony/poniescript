@@ -635,6 +635,7 @@ impl Db {
 		db.types.fun_sig_unassigned = db.put_type(Type::Fun(db.sig_unassigned));
 
 		db.str_anonymous = db.put_str("<anonymous>");
+		db.str_closure = db.put_str("closure");
 		db.str_lambda = db.put_str("lambda");
 		db.str_lerp = db.put_str("lerp");	
 
