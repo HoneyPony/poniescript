@@ -1766,6 +1766,8 @@ impl<'b> Parser<'b> {
 			name: name_str,
 			parameters,
 			return_type,
+			// The closure for this function is the enclosing closure.
+			closure: enclosing_closure,
 			sig: self.db.sig_unassigned,
 			class: None, // Class is not assigned for now, the class parser will assign it later.
 			expression: Some(value),

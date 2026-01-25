@@ -840,6 +840,14 @@ impl Db {
 		return id;
 	}
 
+	// TODO: Consider just making put_type take a non-mut reference?
+	pub fn get_class_type_or_panic(&self, class: ClassId) -> TypId {
+		let Some(existing) = self.type_side_map.get(&Type::Class(class)) else {
+			panic!("trying to lookup class type that hasn't been put_type'd")
+		};
+		return *existing
+	}
+
 	pub fn put_type(&mut self, typ: Type) -> TypId {
 		if let Some(existing) = self.type_side_map.get(&typ) {
 			return *existing;

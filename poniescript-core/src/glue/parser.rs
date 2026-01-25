@@ -377,6 +377,7 @@ impl<'b> Parser<'b> {
             parameters: params,
             return_type: c_ret_type,
             class: None,
+            closure: None,
             expression: None,
             location,
             doc_comment,

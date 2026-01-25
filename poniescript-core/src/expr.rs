@@ -197,6 +197,12 @@ pub struct Fun {
 
 	pub class: Option<ClassId>,
 
+	/// The closure that this function would be attached to.
+	/// 
+	/// Global functions have no closure. Functions that are inside another
+	/// function get that function's closure.
+	pub closure: Option<ClosureId>,
+
 	/// Should be Some() if this is a function we are compiling, or None if
 	/// this is an imported function from a C module.
 	pub expression: Option<ExprId>,

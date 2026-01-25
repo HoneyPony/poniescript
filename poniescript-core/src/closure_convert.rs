@@ -131,6 +131,29 @@ fn replace_vars(ast: &mut Ast, db: &mut Db) {
                     *ast.exprs.get_mut(expr) = Expr::Get(get);
                 }
             },
+            Expr::FunDeclare(declare) => {
+                let fun = db.get(declare.identity);
+                if let Some(closure) = fun.closure {
+                    if let Some(class) = db.get(closure).class {
+                        db.get_mut(declare.identity).class = Some(class);
+                    }
+                }
+            },
+            Expr::FunCapture(capt) => {
+                let fun = db.get(capt.identity);
+                if let Some(closure) = fun.closure {
+                    // Rewrite these separately from the FunDeclare, don't
+                    // touch the function itself.
+                    if let Some(class) = db.get(closure).class {
+                        drop(binding);
+                        let selfval = Expr::put_selfval(ast, db.synthetic(), db.put_type(Type::Class(class)));
+
+                        let mut binding = ast.exprs.get_mut(expr);
+                        let Expr::FunCapture(capt) = binding.as_mut() else { unreachable!() };
+                        capt.object = Some(selfval);
+                    }
+                }
+            }
             _ => {
 
             }

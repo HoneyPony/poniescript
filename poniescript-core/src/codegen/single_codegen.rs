@@ -1807,10 +1807,23 @@ impl<'a> Codegen<'a> {
 				// matter here..?
 				let val = self.new_val_typed(declare.typ);
 
+				let closure = match self.db.get(declare.identity).class {
+					// TODO: Is no gc slots really correct here?
+					Some(class) => Some(Val::DirectSelf.typed(self.db.get_class_type_or_panic(class), None)),
+					None => None
+				};
+
 				define_val!(self, into, val,
-					" = ({}) {{ .fun = {}, .closure = NULL }};\n",
+					" = ({}) {{ .fun = {}, .closure = ",
 					self.db.get_ctype(declare.typ), // TODO: Maybe use a sig-specific fucntion
 					self.db.get_fun_cname(declare.identity));
+
+				if val.needs_storage() {
+					match closure {
+						Some(closure) => inf_writeln!(into, "{} }};", closure),
+						None          => inf_writeln!(into, "NULL }};")
+					}
+				}
 
 				val
 			},
@@ -2316,14 +2329,14 @@ impl<'a> Codegen<'a> {
 
 					inf_writeln!(into, "{}{{", indent);
 					self.indent_level += 1;
-					inf_writeln!(into, "{}struct {} *const this = poni_gc_alloc_tagged(ctx, sizeof(struct {}), {});",
+					inf_writeln!(into, "{}\tstruct {} *const this = poni_gc_alloc_tagged(ctx, sizeof(struct {}), {});",
 						indent, self.db.get_class_cname(class),
 						self.db.get_class_cname(class),
 						self.db.get_class_ctag(class));
 
 					let inner_val = self.expr(ast, ac.inner, into);
 					self.indent_level -= 1;
-					inf_writeln!(into, "{} = {};", val, inner_val);
+					inf_writeln!(into, "{}\t{} = {};", indent, val, inner_val);
 					inf_writeln!(into, "{}}}", indent);
 
 					self.inside_class.pop();
