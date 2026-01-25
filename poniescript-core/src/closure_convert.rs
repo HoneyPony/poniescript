@@ -1,7 +1,7 @@
 use poni_arena::{ArenaKey, IndexCell};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{db::{Ast, AstAbstract, ClassId, ClosureId, Db, FunId, IdFuncs, VarId}, expr::{Class, Expr, FunDeclare, Get, VisitAst}, typ::Type};
+use crate::{db::{Ast, AstAbstract, ClassId, ClosureId, Db, FunId, IdFuncs, VarId}, expr::{Class, Expr, Expression, FunDeclare, Get, Stmt, VisitAst}, lexer::Tok, typ::Type};
 
 struct ClosureConvert<'a> {
     ast: &'a Ast,
@@ -24,7 +24,7 @@ impl<'a> ClosureConvert<'a> {
             .or_insert_with(|| {
                 log::trace!("creating new closure class for var {}", db.repr_var(var));
                 let class = Class {
-                    name: db.str_anonymous,
+                    name: db.str_closure,
                     vars: Vec::new(),
                     funs: Vec::new(),
                     classes: Vec::new(),
@@ -136,6 +136,39 @@ fn replace_vars(ast: &mut Ast, db: &mut Db) {
             }
         }
     }
+
+    for stmt in ast.stmts.iter_existing() {
+        let binding = ast.stmts.get(stmt);
+        match binding.as_ref() {
+            Stmt::Declare(declare) => {
+                let id = declare.identity;
+                let var = db.get(declare.identity);
+                // Not a possible candidate
+                if var.fun.is_none() { continue; }
+
+                if let Some(class) = var.class {
+                    let location = var.location.clone();
+                    let value = declare.value.unwrap();
+                    drop(binding);
+
+                    // Rewrite variable into an Expr::Set on SelfVal.
+                    let selfval = Expr::put_selfval(ast,
+                        db.synthetic(), 
+                        db.put_type(Type::Class(class)));
+
+                    let set = Expr::put_set(ast,
+                        db.synthetic(), Vec::new(),
+                            selfval, vec![id], value, Tok::Equal);
+
+                    *ast.stmts.get_mut(stmt) = Stmt::Expression(Expression {
+                        location,
+                        expression: set,
+                    });
+                }
+            },
+            _ => {}
+        }
+    }
 }
 
 pub fn convert_closures(ast: &mut Ast, db: &mut Db) {
@@ -153,6 +186,11 @@ pub fn convert_closures(ast: &mut Ast, db: &mut Db) {
         for fun in &module.functions {
             convert.visit_fundeclare_any(ast, db, fun);
         }
+    }
+
+    // Now that we have the map, push that info into the db.
+    for (closure, class) in &convert.class_map {
+        db.get_mut(*closure).class = Some(*class);
     }
 
     // We don't have this...?

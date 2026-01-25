@@ -2304,8 +2304,35 @@ impl<'a> Codegen<'a> {
 			}
 
 			Expr::AllocateClosure(ac) => {
-				// TODO: Allocate the class for the closure if there is one.
-				self.expr(ast, ac.inner, into)
+				if let Some(class) = self.db.get(ac.id).class {
+					self.inside_class.push(class);
+
+					// To get the val in the right scope.
+					// What might be cleaner is to not introduce a new scope
+					// at all, and instead have a better SelfVal system.
+					let val = self.new_val_typed_tmp(ac.typ);
+
+					define_val!(self, into, val, ";\n");
+
+					inf_writeln!(into, "{}{{", indent);
+					self.indent_level += 1;
+					inf_writeln!(into, "{}struct {} *const this = poni_gc_alloc_tagged(ctx, sizeof(struct {}), {});",
+						indent, self.db.get_class_cname(class),
+						self.db.get_class_cname(class),
+						self.db.get_class_ctag(class));
+
+					let inner_val = self.expr(ast, ac.inner, into);
+					self.indent_level -= 1;
+					inf_writeln!(into, "{} = {};", val, inner_val);
+					inf_writeln!(into, "{}}}", indent);
+
+					self.inside_class.pop();
+					val
+				}
+				else {
+					// TODO: Allocate the class for the closure if there is one.
+					self.expr(ast, ac.inner, into)
+				}
 			}
 		}
 	}

@@ -1786,6 +1786,13 @@ impl Db {
 		}
 	}
 
+	pub fn get_class_ctag(&self, class: ClassId) -> &'static str {
+		let typ = Type::Class(class);
+		let Some(inner) = self.type_side_map.get(&typ) else { return "<compile-err:invalid-tag>"; };
+
+		self.get_type_ctag(*inner)
+	}
+
 	pub fn generate_codegen_caches(&mut self, args: &Args) {
 		// The order matters, as e.g. var cnames are used for fun cparams.
 		self.generate_class_cnames_cache();

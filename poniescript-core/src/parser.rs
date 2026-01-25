@@ -1751,7 +1751,7 @@ impl<'b> Parser<'b> {
 		}
 		let value = self.block()?;
 		let value = Expr::put_allocateclosure(self.ast,
-			value.location(self.ast), closure, value);
+			value.location(self.ast), closure, value, self.db.types.unassigned);
 
 		self.pop_scope();
 		self.closure = enclosing_closure;

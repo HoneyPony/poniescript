@@ -640,7 +640,8 @@ impl<'db> TypeChecker<'db> {
 
 		match expr {
 			Expr::AllocateClosure(ac) => {
-				self.promote_expr(ast, ac.inner, promote_to)
+				self.promote_expr(ast, ac.inner, promote_to);
+				ac.typ = ac.inner.typ(ast, self.db);
 			}
 
 			Expr::Binary(binary) => {
@@ -1024,7 +1025,10 @@ impl<'db> TypeChecker<'db> {
 		let result = Ok(match expr {
 			Expr::AllocateClosure(ac) => {
 				// Merely a wrapper
-				self.check_expr(ast, ac.inner, value_used)?
+				let typ = self.check_expr(ast, ac.inner, value_used)?;
+				// Store this here for now as it was the most convenient way
+				ac.typ = typ;
+				typ
 			}
 
 			Expr::Binary(binary) => {
