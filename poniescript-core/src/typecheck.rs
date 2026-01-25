@@ -1762,6 +1762,13 @@ impl<'db> TypeChecker<'db> {
 					self.do_promote_expr(ast, &mut call.args[i], computed);
 				}
 
+				if let Some(mut object) = call.object {
+					// Always check & promote the value ?
+					let _ = self.check_expr(ast, object, true);
+					self.promote_from_unassigned(ast, &mut object);
+					call.object = Some(object);
+				}
+
 				self.db.get_fun_ret_type(call.identity)
 			},
 
@@ -1815,6 +1822,8 @@ impl<'db> TypeChecker<'db> {
 				// if it is a FunCapture or BuiltinCapture, which are the cases
 				// that matter.
 				let value = self.check_expr(ast, call.value, true)?;
+
+				log::trace!("Expr::ValCall => {}", self.db.repr_type(value));
 
 				{
 					// Optimization + semantics: if we are a ValCall of a FunCapture, replace
@@ -1936,6 +1945,13 @@ impl<'db> TypeChecker<'db> {
 
 				// Make sure we use this sig.
 				self.db.use_sig(sig);
+
+				if let Some(mut object) = capt.object {
+					// Always check & promote the value ?
+					let _ = self.check_expr(ast, object, true);
+					self.promote_from_unassigned(ast, &mut object);
+					capt.object = Some(object);
+				}
 
 				// TODO: Also support FunRaw captures.
 				capt.typ = self.db.put_type(Type::Fun(sig));

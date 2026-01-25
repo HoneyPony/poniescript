@@ -493,6 +493,33 @@ fn lookup_var_in_parent(db: &Db, var: VarId, parent: TypId) -> (usize, &str, &st
 	}
 }
 
+fn find_function_depth(db: &Db, typ: TypId, fun: FunId) -> usize {
+	let mut depth = 0;
+
+	log::trace!("looking up {} in {}", db.get_fun_name(fun), db.repr_type(typ));
+	let mut class = match db.get(typ) {
+		Type::Class(class) => { *class },
+		// Non-classes can't have parents (for now).
+		_ => { return 0; }
+	};
+
+	// Freestanding functions don't have a class.
+	let Some(fun_class) = db.get(fun).class else  { return 0; };
+
+	loop {
+		// NOTE: This will have to change with virtual functions...
+		if class == fun_class {
+			log::trace!("identified function in class: {} (depth {})", db.repr_class(class), depth);
+			return depth;
+		}
+
+		depth += 1;
+
+		class = db.get(class).parent.unwrap_or_else(||
+			panic!("ICE: Trying to lookup a function's parents but we ran out."));
+	}
+}
+
 impl<'a> Codegen<'a> {
 	pub fn new(db: &'a Db, send: channel::Sender<String>) -> Self {
 		return Codegen {
@@ -1551,7 +1578,12 @@ impl<'a> Codegen<'a> {
 				}
 				// TODO: Implement closure, gc scoping, etc
 				if let Some(object) = object {
-					inf_writeln!(into, "{}{});", comma, object);
+					let depth = find_function_depth(&self.db, object.typ, call.identity);
+					inf_write!(into, "{}{}", comma, object);
+					for _ in 0..depth {
+						inf_write!(into, "->parent");
+					}
+					inf_writeln!(into, ");");
 				}
 				else {
 					inf_writeln!(into, "{}NULL);", comma);
@@ -1700,7 +1732,12 @@ impl<'a> Codegen<'a> {
 					if let Some(closure) = closure {
 						// TODO: We need to promote Closure into essentially
 						// the class type for the function?
-						inf_writeln!(into, ".closure = {} }};", closure.val);
+						let depth = find_function_depth(&self.db, closure.typ, capt.identity);
+						inf_write!(into, ".closure = {}", closure);
+						for _ in 0..depth {
+							inf_write!(into, "->parent");
+						}
+						inf_writeln!(into, "}};");
 					}
 					else {
 						inf_writeln!(into, ".closure = NULL }};");
