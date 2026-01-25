@@ -319,6 +319,10 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "inner_dyn_funcall"),
 		("classes/", "inner_dyn_funcapture_getter"),
 		("classes/", "inner_dyn_funcall_getter"),
+		("classes/", "inner_dyn2_funcapture"),
+		("classes/", "inner_dyn2_funcall"),
+		("classes/", "inner_dyn2_funcapture_getter"),
+		("classes/", "inner_dyn2_funcall_getter"),
 
 		("classes/", "inner_err_not_dyn"),
 		("classes/", "inner_err_not_dyn_get"),

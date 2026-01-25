@@ -1,0 +1,25 @@
+class Outer {
+    var hello: int = 5;
+
+    @inner
+    class Inner {
+        @inner
+        class Inner {
+            
+        }
+    }
+
+    fun my_fun() {
+        print(hello);
+    }
+}
+
+fun init() {
+    var outer = new Outer{};
+    var inner = outer.new Inner{};
+    var inner2 = inner.new Inner{};
+
+    // This is a weird one: We want to be able to also call the Outer class's
+    // functions using a dotted expression.
+    inner2.my_fun(); //! 5
+}
