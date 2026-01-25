@@ -275,6 +275,11 @@ pub fn generate(tests_file: &mut File) {
 		("call/", "uses_fun_with_class_retval"),
 		("call/", "uses_fun_with_class_param"),
 
+		("closure/", "simple"),
+		("closure/", "simple_class"),
+		("closure/", "for_loop"),
+		("closure/", "while_loop"),
+
 		("classes/", "basic_class"),
 		("classes/", "basic_new_inferred_get"),
 		("classes/", "basic_new_inferred_get_promote"),

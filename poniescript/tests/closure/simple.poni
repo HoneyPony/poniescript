@@ -1,0 +1,17 @@
+fun adder(x: int) -> fun(int) -> int {
+    fun(y: int) -> int {
+        x + y
+    }
+}
+
+fun init() {
+    var add = adder(5);
+    print(add(10)); //! 15
+    print(add(20)); //! 25
+
+    var add2 = adder(10);
+    print(add2(3)); //! 13
+    print(add2(4)); //! 14
+
+    print(add(add2(5))); //! 20
+}

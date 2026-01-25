@@ -1,0 +1,31 @@
+fun make_funs() -> DynArray[fun() -> int] {
+    var funs: DynArray[fun() -> int] = [];
+
+    var i = 0;
+    while i < 5 {
+        // Must create a new binding to i inside the loop. This is the most
+        // consistent way to make this make sense.
+        var i = i;
+
+        funs.push(fun() -> int {
+            return i * i;
+        });
+
+        i += 1;
+    }
+
+    funs
+}
+
+fun init() {
+    var funs = make_funs();
+
+    //! 0
+    //! 1
+    //! 4
+    //! 9
+    //! 16
+    for i in 0..funs.length {
+        print(funs[i]());
+    }
+}
