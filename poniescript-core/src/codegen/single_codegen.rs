@@ -2332,10 +2332,23 @@ impl<'a> Codegen<'a> {
 
 					inf_writeln!(into, "{}{{", indent);
 					self.indent_level += 1;
+
+					// If we have a parent class, generate an initializer for
+					// it. This should be the enclosing 'this' value.
+					if let Some(parent) = self.db.get(class).parent {
+						inf_writeln!(into, "{}\tstruct {} *const parent = this;",
+							indent, self.db.get_class_cname(parent));
+					}
+
 					inf_writeln!(into, "{}\tstruct {} *const this = poni_gc_alloc_tagged(ctx, sizeof(struct {}), {});",
 						indent, self.db.get_class_cname(class),
 						self.db.get_class_cname(class),
 						self.db.get_class_ctag(class));
+
+					if self.db.get(class).parent.is_some() {
+						// Set the parent member.
+						inf_writeln!(into, "{}\tthis->parent = parent;", indent);
+					}
 
 					if ac.copy_params {
 						for var in &self.db.get(class).vars {

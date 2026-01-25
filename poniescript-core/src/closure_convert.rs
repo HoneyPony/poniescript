@@ -42,7 +42,10 @@ impl<'a> ClosureConvert<'a> {
                     doc_comment: None,
                 };
 
-                db.push(class)
+                let id = db.push(class);
+                // To ensure we can refer to it later
+                db.put_type(Type::Class(id));
+                id
             });
 
         // Add the variable into the class.
@@ -118,36 +121,18 @@ fn replace_vars(ast: &mut Ast, db: &mut Db) {
     for expr in ast.exprs.iter_existing() {
         let binding = ast.exprs.get(expr);
         match binding.as_ref() {
-            Expr::Variable(var) => {
-                let id = var.identity;
-                let var = db.get(var.identity);
+            // Awkward but true:
+            // If we want to convert Expr::Variable here to Expr::Get, we need
+            // to keep track of the enclosing function, because we need to
+            // synthesize a SelfVal with whatever the *current scoped* function
+            // is, not wahtever class the variable belongs to, because *in this
+            // scope* the variable might be a ->parent->parent.
+            //
+            // However.. The codegen is currently setup to treat Expr::Variable
+            // and Expr::Assign, etc, to implicitly be an Expr::Get or Expr::Set,
+            // for the class currently in scope. So we can actually just do
+            // *nothing* to the Expr::Variable, and it should work for now.
 
-                // NOTE: It is critical that we use the closure type of the
-                // function that the variable is accessed from as the selfval
-                // type. This is actually impossible to do with a flat
-                // iteration, currently. We need to use another tree-based
-                // visitor.
-                if let Some(class) = var.class {
-                    let location = var.location.clone();
-                    drop(binding);
-
-                    // Rewrite variable into an Expr::Get on SelfVal.
-                    let selfval = Expr::put_selfval(ast,
-                        db.synthetic(), 
-                        db.put_type(Type::Class(class)));
-
-                    let get = Get {
-                        location,
-                        // Technically, we don't need the chain, as this is a
-                        // rewriting pass, and we shouldn't need it anymore.
-                        chain: Vec::new(),
-                        lhs: selfval,
-                        vars: vec![id],
-                    };
-
-                    *ast.exprs.get_mut(expr) = Expr::Get(get);
-                }
-            },
             // Expr::FunDeclare(declare) => {
             //     let fun = db.get(declare.identity);
             //     // The logic here is this:
@@ -220,6 +205,11 @@ fn replace_vars(ast: &mut Ast, db: &mut Db) {
                     drop(binding);
 
                     // Rewrite variable into an Expr::Set on SelfVal.
+                    //
+                    // Unlike the note mentioned above, it is safe to just use
+                    // the variable's class for this selfval, as we are in
+                    // the scope where the variable is defined, which should
+                    // always line up.
                     let selfval = Expr::put_selfval(ast,
                         db.synthetic(), 
                         db.put_type(Type::Class(class)));
