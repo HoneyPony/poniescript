@@ -286,6 +286,19 @@ pub fn generate(tests_file: &mut File) {
 		("closure/", "crazy_inner_fun_both_levels"),
 		("closure/", "funs_of_funs"),
 
+		// old closure tests
+		("closure/", "capture_fun_lambda"),
+		("closure/", "capture_fun_with_closure_lambda"),
+		("closure/", "capture_fun_with_closure"),
+		("closure/", "capture_fun"),
+		("closure/", "capture_strbuf"),
+		("closure/", "double_nested_param"),
+		("closure/", "double_nested"),
+		("closure/", "nested_param"),
+		("closure/", "nested_var"),
+		("closure/", "returns_closure_notinit"),
+		("closure/", "returns_closure"),
+
 		("classes/", "basic_class"),
 		("classes/", "basic_new_inferred_get"),
 		("classes/", "basic_new_inferred_get_promote"),
