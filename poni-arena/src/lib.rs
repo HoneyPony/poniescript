@@ -415,6 +415,14 @@ impl<Ty, Key: ArenaKey> ArenaCell<Ty, Key> {
     pub fn iter(&self) -> ArenaCellIterator<'_, Ty, Key> {
         ArenaCellIterator { current: 0, arena: self }
     }
+
+    pub fn iter_existing(&self) -> ArenaCellExistingIterator<Ty, Key> {
+        ArenaCellExistingIterator {
+            current: 0,
+            len: unsafe { self.objects.get().as_ref().unwrap().len() },
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<Ty, Key: ArenaKey> IndexCell<Ty, Key> for ArenaCell<Ty, Key> {
@@ -615,6 +623,12 @@ pub struct ArenaCellIterator<'ar, Ty, Key: ArenaKey> {
     arena: &'ar ArenaCell<Ty, Key>
 }
 
+pub struct ArenaCellExistingIterator<Ty, Key: ArenaKey> {
+    current: usize,
+    len: usize,
+    phantom: PhantomData<(Ty, Key)>,
+}
+
 pub struct ArenaCellProxyIterator<'p, 'ar, Ty, Key: ArenaKey> {
     current: usize,
     arena: &'p ArenaCellProxy<'ar, Ty, Key>
@@ -627,6 +641,20 @@ impl <'ar, Ty, Key: ArenaKey>  Iterator for ArenaCellIterator<'ar, Ty, Key> {
         unsafe {
             let cur_idx = self.current;
             if cur_idx >= self.arena.objects.get().as_ref().unwrap().len() { return None; }
+
+            self.current += 1;
+            return Some(Key::from_index(cur_idx))
+        }
+    }
+}
+
+impl <Ty, Key: ArenaKey> Iterator for ArenaCellExistingIterator<Ty, Key> {
+    type Item = Key;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            let cur_idx = self.current;
+            if cur_idx >= self.len { return None; }
 
             self.current += 1;
             return Some(Key::from_index(cur_idx))

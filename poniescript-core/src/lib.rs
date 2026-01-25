@@ -1,5 +1,6 @@
 #[macro_use]
 pub mod builtins;
+pub mod closure_convert;
 pub mod db;
 pub mod expr;
 pub mod typ;

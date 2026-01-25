@@ -36,6 +36,7 @@ include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 define_arena_key!(ExprId);
 define_arena_key!(StmtId);
 define_arena_key!(SourceId);
+define_arena_key!(ClosureId);
 
 impl ExprId {
 	// TODO: Get this back to returning a &SourceLocation, or at least some kind
