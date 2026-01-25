@@ -750,6 +750,9 @@ impl<'b> Parser<'b> {
 			// Currently, the for loop variable can't have a doc comment?
 			// This could be changed.
 			None);
+		// TODO: Consider making our own helper function for vars so we don't
+		// forget this in the future.
+		self.fun_vars.push(identity);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity), true);
 
 		let inner = self.block()?;

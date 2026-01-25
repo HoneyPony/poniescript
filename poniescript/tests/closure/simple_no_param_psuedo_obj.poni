@@ -1,0 +1,52 @@
+fun make_horse() -> (fun(StrBuf), fun() -> StrBuf, fun(int), fun() -> int, fun() -> StrBuf) {
+    var name: StrBuf = "Horse";
+    var teeth: int = 20;
+
+    fun set_name(x: StrBuf) {
+        name = x;
+    }
+
+    fun get_name() -> StrBuf {
+        name
+    }
+
+    fun set_teeth(x: int) {
+        teeth = x;
+    }
+
+    fun get_teeth() -> int {
+        return teeth;
+    }
+
+    fun get_name_and_teeth() -> StrBuf {
+        str(name, " ", teeth)
+    };
+
+    (set_name, get_name, set_teeth, get_teeth, get_name_and_teeth)
+}
+
+fun init() {
+    var horse = make_horse();
+
+    print(horse.1()); //! Horse
+    print(horse.3()); //! 20
+    print(horse.4()); //! Horse 20
+
+    horse.0("Twilight");
+    horse.2(10);
+
+    print(horse.1()); //! Twilight
+    print(horse.3()); //! 10
+    print(horse.4()); //! Twilight 10
+    print(horse.1()); //! Twilight
+    print(horse.3()); //! 10
+    print(horse.4()); //! Twilight 10
+
+    //! Twilight 0
+    //! Twilight 1
+    //! Twilight 2
+    for i in 0..3 {
+        horse.2(i);
+        print(horse.4());
+    }
+}

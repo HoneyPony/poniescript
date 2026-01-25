@@ -64,10 +64,21 @@ impl<'a> ClosureConvert<'a> {
             return;
         }
 
+        if db.get(var).fun.is_none() {
+            // I believe this would always be incorrect...?
+            log::trace!("refusing to convert non-fun var {}", db.repr_var(var));
+            return;
+        }
+
         // Otherwise, convert the var. If it is already in the map, we're done.
         if self.var_set.contains(&var) {
             return;
         }
+
+        log::trace!("converting var: {} (in fun {}, var belongs to {})",
+            db.repr_var(var),
+            in_fn.map(|f| db.get_fun_name(f)).unwrap_or("<none>"),
+            db.get(var).fun.map(|f| db.get_fun_name(f)).unwrap_or("<none>"));
 
         // So now we actually convert the var.
         self.actually_convert_var(db, var);
