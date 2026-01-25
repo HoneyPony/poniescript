@@ -1605,8 +1605,17 @@ impl Db {
 		let ty = self.get(typ);
 		match ty {
 			Type::Class(class_id) => {
-				let class = self.get(*class_id);
-				class.fun_map.get(&propname).copied()
+				let mut class_id = *class_id;
+				loop {
+					let class = self.get(class_id);
+					let result = class.fun_map.get(&propname).copied();
+					if result.is_some() { return result; }
+
+					let Some(next) = class.parent else {
+						return None;
+					};
+					class_id = next;
+				}
 			}
 
 			_ => None
