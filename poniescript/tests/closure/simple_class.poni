@@ -12,6 +12,8 @@ fun init() {
     var horse = new Horse{};
     var func = horse.neigh("!!!!");
 
+    horse.greeting = "greeting";
+
     print(func(5)); //! greeting !!!! 5
     print(func(7)); //! greeting !!!! 7
 }
