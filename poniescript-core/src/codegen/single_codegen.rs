@@ -2302,6 +2302,11 @@ impl<'a> Codegen<'a> {
 				// Right now, this is nothing but nil, which cannot need a GC frame.
 				Val::DirectNull.typed(sum.typ, None) 
 			}
+
+			Expr::AllocateClosure(ac) => {
+				// TODO: Allocate the class for the closure if there is one.
+				self.expr(ast, ac.inner, into)
+			}
 		}
 	}
 

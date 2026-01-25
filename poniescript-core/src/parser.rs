@@ -99,6 +99,12 @@ pub struct Parser<'b> {
 	scope_name: String,
 	global_scope: Scope,
 
+	/// The current closure that we're in.
+	closure: Option<ClosureId>,
+
+	/// List of VarId's local to the current function.
+	fun_vars: Vec<VarId>,
+
 	/// Tracks whether we are currently in a member initializer. If so, we
 	/// forbid the 'self' keyword as a straightforward way to keep things
 	/// more correct.
@@ -244,6 +250,9 @@ impl<'b> Parser<'b> {
 			source_id,
 
 			range_types,
+
+			closure: None,
+			fun_vars: Vec::new(),
 
 			scopes: Vec::new(),
 			// TODO: Push and pop things from this name
@@ -737,7 +746,7 @@ impl<'b> Parser<'b> {
 		// class.
 		//
 		// TODO: Readonly variables..?
-		let identity = self.db.new_var(name.lexeme, typ, false, None, None, None, name.location, 
+		let identity = self.db.new_var(name.lexeme, typ, false, None, None, self.closure, None, None, name.location, 
 			// Currently, the for loop variable can't have a doc comment?
 			// This could be changed.
 			None);
@@ -1543,9 +1552,10 @@ impl<'b> Parser<'b> {
 		//
 		// TODO: Readonly variables...?
 		let identity = self.db.new_var(name.lexeme,
-			typ, false, None, None,
+			typ, false, None, None, self.closure, None,
 			initializer, name.location,
 			doc_comment);
+		self.fun_vars.push(identity);
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
@@ -1665,10 +1675,14 @@ impl<'b> Parser<'b> {
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name.lexeme, typ, false, None, None, None,
+		let identity = self.db.new_var(name.lexeme, typ, false,
+			// We will fix up fun and param_for later.
+			None, None,
+			self.closure, None, None,
 			name.location,
 			// Currenlty, doc comments are not supported for parameters.
 			None);
+		self.fun_vars.push(identity);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity), true);
 
 		Ok(identity)
@@ -1701,6 +1715,10 @@ impl<'b> Parser<'b> {
 
 		expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
 
+		let enclosing_closure = self.closure;
+		let closure = self.db.push(Closure { class: None });
+		self.closure = Some(closure);
+		let enclosing_vars = std::mem::take(&mut self.fun_vars);
 		self.push_scope();
 
 		let mut parameters = vec![];
@@ -1732,8 +1750,11 @@ impl<'b> Parser<'b> {
 			got!(self, "Expected '{{' after function parameter list");
 		}
 		let value = self.block()?;
+		let value = Expr::put_allocateclosure(self.ast,
+			value.location(self.ast), closure, value);
 
 		self.pop_scope();
+		self.closure = enclosing_closure;
 
 		let name_str = name.as_ref().map(|t| t.lexeme);
 
@@ -1756,8 +1777,13 @@ impl<'b> Parser<'b> {
 		});
 
 		for param in parameters_for_set {
-			self.db.get_mut(param).fun = Some(identity);
+			self.db.get_mut(param).param_for = Some(identity);
 		}
+		
+		for var in &self.fun_vars {
+			self.db.get_mut(*var).fun = Some(identity);
+		}
+		self.fun_vars = enclosing_vars;
 
 		// We must pop our pushed_name before we put the function name in the scope.
 		self.pop_name(pushed_name);

@@ -50,7 +50,7 @@ impl SemanticTokenVisitor {
     }
 
     fn push_var(&mut self, ast: &Ast, db: &Db, location: &SourceLocation, id: VarId) {
-        let is_param = db.get(id).fun.is_some();
+        let is_param = db.get(id).param_for.is_some();
         let is_field = db.get(id).class.is_some();
         let typ = match (is_param, is_field) {
             (_, true) => 3,

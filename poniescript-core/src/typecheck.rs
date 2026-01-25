@@ -639,6 +639,10 @@ impl<'db> TypeChecker<'db> {
 		let expr = binding.as_mut();
 
 		match expr {
+			Expr::AllocateClosure(ac) => {
+				self.promote_expr(ast, ac.inner, promote_to)
+			}
+
 			Expr::Binary(binary) => {
 				// Promote children to own type if we already have a concrete type,
 				// otherwise to the incoming type (in which case that becomes our
@@ -1018,6 +1022,11 @@ impl<'db> TypeChecker<'db> {
 		let expr = binding.as_mut();
 		log::trace!("check_expr: {:?}", expr);
 		let result = Ok(match expr {
+			Expr::AllocateClosure(ac) => {
+				// Merely a wrapper
+				self.check_expr(ast, ac.inner, value_used)?
+			}
+
 			Expr::Binary(binary) => {
 				let left = self.check_expr(ast, binary.left, true)?;
 				let right = self.check_expr(ast, binary.right, true)?;

@@ -91,6 +91,7 @@ pub fn generate(db_file: &mut File) {
 		("TypId", "Type"),
 		("SigId", "Sig"),
 		("ClassId", "Class"),
+		("ClosureId", "Closure"),
 	];
 
 	generate_impl(db_file, &pairs);

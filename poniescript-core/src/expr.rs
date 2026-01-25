@@ -64,6 +64,10 @@ impl Expr {
 	// (either alongside the class or instead of), but should we...?
 	pub fn typ(&self, ast: &impl AstAbstract, db: &Db) -> TypId {
 		match self {
+			Expr::AllocateClosure(c) => {
+				// These are never nested particularly deeply, so just defer.
+				c.inner.typ(ast, db)
+			}
 			Expr::ArrayLit(lit) => {
 				lit.arr_typ
 			}
@@ -164,7 +168,14 @@ pub struct Var {
 	/// If this variable is a member of a class, this stores the class id.
 	pub class: Option<ClassId>,
 	/// If this variable is a function parameter, this stores the function id.
+	pub param_for: Option<FunId>,
+
+	/// If this is a local variable for a function, this stores the ID.
+	/// (necessary for closure conversion (?))
 	pub fun: Option<FunId>,
+
+	/// The closure for this variable.
+	pub closure: Option<ClosureId>,
 
 	/// The initializer for this variable.
 	pub initializer: Option<ExprId>,
@@ -241,4 +252,11 @@ pub struct Class {
 
 	/// Doc comment for this class.
 	pub doc_comment: Option<Vec<Token>>,
+}
+
+/// Type that maps to ClosureIds. Used to track the synthesized classes associated
+/// with each closure. Also allows for Expr::AllocateClosure to perform the actual
+/// closure allocation.
+pub struct Closure {
+	pub class: Option<ClassId>,
 }

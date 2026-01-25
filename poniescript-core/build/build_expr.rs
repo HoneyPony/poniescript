@@ -376,6 +376,7 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 pub fn generate(file: &mut File) {
 	let expr_spec = r#"
 
+	AllocateClosure : ClosureId id, Expr inner
 	Binary        : Tok op, Expr left, Expr right, TypId typ
 	Unary         : Tok op, Expr inner, TypId typ
 	Comparison    : Tok op, Expr left, Expr right, TypId compare_as

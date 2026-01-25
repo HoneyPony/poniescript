@@ -89,6 +89,10 @@ impl<'db> DeadCodeElim<'db> {
         let expr = binding.as_mut();
 
         match expr {
+            Expr::AllocateClosure(ac) => {
+                self.elim_expr(ast, &mut ac.inner)
+            }
+
             Expr::Binary(binary) => {
                 if self.elim_expr(ast, &mut binary.left) {
                     let left = binary.left;

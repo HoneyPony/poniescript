@@ -384,6 +384,11 @@ impl<'db> Binder<'db> {
 			// For most expression types, we simply visit each inner expression
 			// and then return.
 
+			Expr::AllocateClosure(ac) => {
+				self.visit_expr(ast, ac.inner);
+				return None;
+			}
+
 			Expr::Binary(binary) => {
 				self.visit_expr(ast, binary.left);
 				self.visit_expr(ast, binary.right);

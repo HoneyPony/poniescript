@@ -1,11 +1,10 @@
 use poni_arena::{ArenaKey, IndexCell};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{db::{Ast, AstAbstract, ClassId, ClosureId, Db, FunId, IdFuncs, VarId}, expr::{Class, Expr, Get, VisitAst}, typ::Type};
+use crate::{db::{Ast, AstAbstract, ClassId, ClosureId, Db, FunId, IdFuncs, VarId}, expr::{Class, Expr, FunDeclare, Get, VisitAst}, typ::Type};
 
 struct ClosureConvert<'a> {
     ast: &'a Ast,
-    db: &'a mut Db,
 
     /// Maps closures to ClassIds.
     class_map: FxHashMap<ClosureId, ClassId>,
@@ -17,14 +16,15 @@ struct ClosureConvert<'a> {
 }
 
 impl<'a> ClosureConvert<'a> {
-    fn actually_convert_var(&mut self, var: VarId) {
-        // TODO: Get var closure_id.
-        let closure_id = unsafe { ClosureId::from_index(0) };
+    fn actually_convert_var(&mut self, db: &mut Db, var: VarId) {
+        // TODO: also add it to the var_set if it doesn't have closure...?
+        let Some(closure_id) = db.get(var).closure else { return; };
 
         let class = *self.class_map.entry(closure_id)
             .or_insert_with(|| {
+                log::trace!("creating new closure class for var {}", db.repr_var(var));
                 let class = Class {
-                    name: self.db.str_anonymous,
+                    name: db.str_anonymous,
                     vars: Vec::new(),
                     funs: Vec::new(),
                     classes: Vec::new(),
@@ -38,25 +38,29 @@ impl<'a> ClosureConvert<'a> {
                     var_map: FxHashMap::default(),
                     fun_map: FxHashMap::default(),
                     class_map: FxHashMap::default(),
-                    location: self.db.synthetic(),
+                    location: db.synthetic(),
                     doc_comment: None,
                 };
 
-                self.db.push(class)
+                db.push(class)
             });
 
         // Add the variable into the class.
-        self.db.get_mut(class).vars.push(var);
+        db.get_mut(class).vars.push(var);
         // Ensure the variable knows its own class.
-        self.db.get_mut(var).class = Some(class);
+        db.get_mut(var).class = Some(class);
+
+        log::trace!("adding variable to closure: {}", db.repr_var(var));
+
+        self.var_set.insert(var);
     }
 
-    fn maybe_convert_var(&mut self, var: VarId) {
+    fn maybe_convert_var(&mut self, db: &mut Db, var: VarId) {
         let in_fn = self.current_fun;
 
         // If we're in the same function that this variable is defined in, 
         // then it does not need to be put into a closure.
-        if self.db.get(var).fun == in_fn {
+        if db.get(var).fun == in_fn {
             return;
         }
 
@@ -66,7 +70,17 @@ impl<'a> ClosureConvert<'a> {
         }
 
         // So now we actually convert the var.
-        self.actually_convert_var(var);
+        self.actually_convert_var(db, var);
+    }
+
+    fn visit_fundeclare_any(&mut self, ast: &Ast, db: &mut Db, declare: &FunDeclare) {
+        log::trace!("closure: visit {}", db.get_fun_name(declare.identity));
+        let enclosing = self.current_fun;
+        self.current_fun = Some(declare.identity);
+
+        self.visit_expr(ast, db, declare.value);
+
+        self.current_fun = enclosing;
     }
 }
 
@@ -75,19 +89,14 @@ impl<'a> VisitAst for ClosureConvert<'a> {
         let binding = ast.get_expr(id);
         let Expr::FunDeclare(declare) = binding.as_ref() else { unreachable!() };
 
-        let enclosing = self.current_fun;
-        self.current_fun = Some(declare.identity);
-
-        self.visit_expr(ast, db, declare.value);
-
-        self.current_fun = enclosing;
+        self.visit_fundeclare_any(ast, db, declare);
     }
 
     fn visit_variable(&mut self, ast: &Ast, db: &mut Db, id: crate::db::ExprId) {
         let binding = ast.get_expr(id);
         let Expr::Variable(var) = binding.as_ref() else { unreachable!() };
 
-        self.maybe_convert_var(var.identity);
+        self.maybe_convert_var(db, var.identity);
     }
 }
 
@@ -130,13 +139,21 @@ fn replace_vars(ast: &mut Ast, db: &mut Db) {
 }
 
 pub fn convert_closures(ast: &mut Ast, db: &mut Db) {
-    let convert = ClosureConvert {
+    let mut convert = ClosureConvert {
         ast: ast,
-        db,
         class_map: FxHashMap::default(),
         var_set: FxHashSet::default(),
         current_fun: None,
     };
+
+    for source in ast.sources.iter_existing() {
+        let source = ast.sources.get(source);
+        let module = &source.module;
+
+        for fun in &module.functions {
+            convert.visit_fundeclare_any(ast, db, fun);
+        }
+    }
 
     // We don't have this...?
     // convert.visit_ast(ast, db);

@@ -338,7 +338,7 @@ impl<'b> Parser<'b> {
             // We could possibly skip variable names, but for now it's easy
             // enough to require them.
             let var_cname = expected!(self, GlueTok::Identifier, "Parameter name")?;
-            let identity = self.db.new_var(var_cname.lexeme, c_type, false, None, None, None,
+            let identity = self.db.new_var(var_cname.lexeme, c_type, false, None, None, None, None, None,
 			    self.last_location.clone(),
                 // No doc comments for function params for now
                 None);
@@ -383,7 +383,7 @@ impl<'b> Parser<'b> {
         });
 
         for param in params_for_fun {
-            self.db.get_mut(param).fun = Some(fun);
+            self.db.get_mut(param).param_for = Some(fun);
         }
 
         // TODO: Handle name collisions here as well?
@@ -465,7 +465,7 @@ impl<'b> Parser<'b> {
             None => c_name.lexeme
         };
 
-        let var = self.db.new_var(var_name, c_type, false, None, None, None, self.end(location),
+        let var = self.db.new_var(var_name, c_type, false, None, None, None, None, None, self.end(location),
             doc_comment);
         self.db.know_var_cname(var, self.db.get(c_name.lexeme));
 

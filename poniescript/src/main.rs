@@ -1,14 +1,5 @@
 use poniescript_core::{
-    db::*,
-    db,
-    module,
-    glue,
-    binder,
-    init_ordering,
-    typecheck,
-    dead_code,
-    codegen,
-    Args
+    Args, binder, closure_convert, codegen, db::{self, *}, dead_code, glue, init_ordering, module, typecheck
 };
 
 use mimalloc::MiMalloc;
@@ -422,6 +413,10 @@ fn main() {
 		}
 		exit(0);
 	}
+
+	closure_convert::convert_closures(&mut ast, &mut db);
+
+	let timer = duration(timer, "closure convert", &mut duration_set);
 
 	// Pass 5: Codegen
 	// Generate any caches that require type checking info.

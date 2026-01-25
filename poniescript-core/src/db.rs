@@ -16,6 +16,7 @@ use crate::expr::Fun;
 use crate::expr::Sig;
 use crate::expr::Class;
 use crate::expr::Var;
+use crate::expr::Closure;
 use crate::typ::RangeEnd;
 use crate::typ::Type;
 use crate::source::{PathBufFileSource, Source, SourceLocation, SyntheticSource};
@@ -36,7 +37,6 @@ include!(concat!(env!("OUT_DIR"), "/db.arenas.rs"));
 define_arena_key!(ExprId);
 define_arena_key!(StmtId);
 define_arena_key!(SourceId);
-define_arena_key!(ClosureId);
 
 impl ExprId {
 	// TODO: Get this back to returning a &SourceLocation, or at least some kind
@@ -410,6 +410,8 @@ pub struct Db {
 	// pub arr_declare_code: String,
 
 	pub str_anonymous: StrId,
+	/// c-valid name for closure classes.
+	pub str_closure: StrId,
 	pub str_lambda: StrId,
 	pub str_lerp: StrId,
 
@@ -537,6 +539,7 @@ impl Db {
 			tag_cname_cache: FxHashMap::default(),
 
 			str_anonymous: StrId::invalid(),
+			str_closure: StrId::invalid(),
 			str_lambda: StrId::invalid(),
 			str_lerp: StrId::invalid(),
 
@@ -622,9 +625,11 @@ impl Db {
 			readonly: false,
 			class: None,
 			fun: None,
+			param_for: None,
 			initializer: None,
 			location: db.synthetic(),
 			doc_comment: None,
+			closure: None,
 		});
 
 		db.types.fun_sig_unassigned = db.put_type(Type::Fun(db.sig_unassigned));
@@ -680,6 +685,8 @@ impl Db {
 			typ,
 			readonly,
 			fun: None,
+			param_for: None,
+			closure: None,
 			class: None,
 			initializer: None,
 			location: self.synthetic(),
@@ -1251,12 +1258,14 @@ impl Db {
 		self.known_c_structs.get(&name).copied()
 	}
 
-	pub fn new_var(&mut self, name: StrId, typ: TypId, readonly: bool, fun: Option<FunId>, class: Option<ClassId>, initializer: Option<ExprId>, location: SourceLocation, doc_comment: Option<Vec<Token>>) -> VarId {
+	pub fn new_var(&mut self, name: StrId, typ: TypId, readonly: bool, fun: Option<FunId>, param_for: Option<FunId>, closure: Option<ClosureId>, class: Option<ClassId>, initializer: Option<ExprId>, location: SourceLocation, doc_comment: Option<Vec<Token>>) -> VarId {
 		let var = Var {
 			name,
 			typ,
 			readonly,
 			fun,
+			param_for,
+			closure,
 			class,
 			initializer,
 			location,
