@@ -1,0 +1,59 @@
+fun funny_fun() -> (
+    fun(),
+    fun() -> fun(),
+    fun(fun()),
+    fun(StrBuf)
+) {
+    var callback = fun() {
+        print("hello");
+    };
+
+    fun call() {
+        callback();
+    }
+
+    fun get() -> fun() {
+        callback
+    }
+
+    fun set_callback(f: fun()) {
+        callback = f;
+    }
+
+    fun set_callback_s(s: StrBuf) {
+        callback = fun() {
+            print(s);
+        }
+    };
+
+    (call, get, set_callback, set_callback_s)
+}
+
+fun init() {
+    var obj = funny_fun();
+    obj.0(); //! hello
+
+    var hello = obj.1();
+
+    obj.2(fun() {
+        print("chonk");
+    });
+    obj.0(); //! chonk
+
+    hello(); //! hello
+
+    var chonk = obj.1();
+
+    obj.3("funny fun");
+    obj.0(); //! funny fun
+
+    hello(); //! hello
+    chonk(); //! chonk
+    obj.0(); //! funny fun
+
+    var funny = obj.1();
+    funny(); //! funny fun
+
+    obj.2(hello);
+    obj.0(); //! hello
+}

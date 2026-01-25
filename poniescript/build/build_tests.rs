@@ -284,6 +284,7 @@ pub fn generate(tests_file: &mut File) {
 		("closure/", "param_mut"),
 		("closure/", "crazy_inner_fun"),
 		("closure/", "crazy_inner_fun_both_levels"),
+		("closure/", "funs_of_funs"),
 
 		("classes/", "basic_class"),
 		("classes/", "basic_new_inferred_get"),
