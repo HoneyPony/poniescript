@@ -1,17 +1,19 @@
 fun make_funs() -> DynArray[fun() -> int] {
     var funs: DynArray[fun() -> int] = [];
 
-    var i = 0;
-    while i < 5 {
+    var i_ = 0;
+    while i_ < 5 {
         // Must create a new binding to i inside the loop. This is the most
         // consistent way to make this make sense.
-        var i = i;
+        var i = i_;
 
         funs.push(fun() -> int {
             return i * i;
         });
 
-        i += 1;
+        // Note: We need to increment the OUTER i variable. So they actually
+        // have to have different names.
+        i_ += 1;
     }
 
     funs
