@@ -1,6 +1,7 @@
 use std::io;
 use std::sync::Arc;
 
+use poni_arena::ArenaKey;
 use rustc_hash::FxHashMap;
 
 use poni_arena::ArenaBorrowMut;
@@ -812,7 +813,7 @@ impl<'b> Parser<'b> {
 			}
 
 			Tok::Fun => {
-				let fun = self.fun_declaration(false, true)?;
+				let (fun, _closure) = self.fun_declaration(false, true)?;
 				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
 			}
 
@@ -1691,7 +1692,7 @@ impl<'b> Parser<'b> {
 		Ok(identity)
 	}
 
-	fn fun_declaration(&mut self, require_name: bool, add_to_parser: bool) -> Result<FunDeclare> {
+	fn fun_declaration(&mut self, require_name: bool, add_to_parser: bool) -> Result<(FunDeclare, ClosureId)> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let _key_fun = expected!(self, Tok::Fun, "'fun'")?;
@@ -1813,7 +1814,10 @@ impl<'b> Parser<'b> {
 			}
 		}
 
-		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned, )
+		Ok((Expr::new_fundeclare(self.end(location), identity, value, self.db.types.unassigned),
+		// We need the own closure ID for the function so we can backpatch
+		// its parent_class.
+			closure))
 	}
 
 	fn push_name(&mut self, name: &Token) -> usize {
@@ -1879,6 +1883,8 @@ impl<'b> Parser<'b> {
 		let mut vars = Vec::<VarId>::new();
 		let mut classes = Vec::<ClassId>::new();
 
+		let mut fun_closures = Vec::<ClosureId>::new();
+
 		let mut var_map = FxHashMap::default();
 		let mut fun_map = FxHashMap::default();
 		let mut class_map = FxHashMap::default();
@@ -1918,8 +1924,9 @@ impl<'b> Parser<'b> {
 					let _ = std::mem::take(&mut annotations);
 				},
 				Tok::Fun => {
-					let fun = self.fun_declaration(true, false)?;
+					let (fun, closure) = self.fun_declaration(true, false)?;
 					funs.push(fun.identity);
+					fun_closures.push(closure);
 					// We require name so this must have a name.
 					fun_map.insert(*self.db.get(fun.identity).name.as_ref().unwrap(), fun.identity);
 					declare_funs.push(fun);
@@ -1970,9 +1977,11 @@ impl<'b> Parser<'b> {
 
 		for fun in &declare_funs {
 			self.db.get_mut(fun.identity).class = Some(identity);
-			if let Some(closure) = self.db.get(fun.identity).closure {
-				self.db.get_mut(closure).parent_class = Some(identity);
-			}
+		}
+
+		for closure in &fun_closures {
+			log::trace!("setting parent class for closure {} to {}", closure.to_index(), identity.to_index());
+			self.db.get_mut(*closure).parent_class = Some(identity);
 		}
 
 		for class in &declare_classes {
@@ -2014,7 +2023,7 @@ impl<'b> Parser<'b> {
 			Tok::Fun => {
 				// At the top level, unless preceded by a var .. = , a function
 				// must have a name.
-				let fun = self.fun_declaration(true, false)?;
+				let (fun, _closure) = self.fun_declaration(true, false)?;
 				self.get_source().module.functions.push(fun);
 			}
 

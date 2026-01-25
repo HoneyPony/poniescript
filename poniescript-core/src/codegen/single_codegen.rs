@@ -2322,6 +2322,7 @@ impl<'a> Codegen<'a> {
 			Expr::AllocateClosure(ac) => {
 				if let Some(class) = self.db.get(ac.id).class {
 					self.inside_class.push(class);
+					log::trace!("inside_class now includes closure; len = {}", self.inside_class.len());
 
 					// To get the val in the right scope.
 					// What might be cleaner is to not introduce a new scope
@@ -2369,6 +2370,7 @@ impl<'a> Codegen<'a> {
 					inf_writeln!(into, "{}\t{} = {};", indent, val, inner_val);
 					inf_writeln!(into, "{}}}", indent);
 
+					log::trace!("inside_class: popping closure -> {}", self.inside_class.len());
 					self.inside_class.pop();
 					val
 				}

@@ -1,7 +1,7 @@
 use poni_arena::{ArenaKey, IndexCell};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{db::{Ast, AstAbstract, ClassId, ClosureId, Db, FunId, IdFuncs, VarId}, expr::{Class, Expr, Expression, FunDeclare, Get, Stmt, VisitAst}, lexer::Tok, typ::Type};
+use crate::{db::{Ast, AstAbstract, ClassId, ClosureId, Db, FunId, IdFuncs, VarId}, expr::{Class, ClassDeclare, Expr, Expression, FunDeclare, Get, Stmt, VisitAst}, lexer::Tok, typ::Type};
 
 struct ClosureConvert<'a> {
     ast: &'a Ast,
@@ -88,13 +88,29 @@ impl<'a> ClosureConvert<'a> {
     }
 
     fn visit_fundeclare_any(&mut self, ast: &Ast, db: &mut Db, declare: &FunDeclare) {
-        log::trace!("closure: visit {}", db.get_fun_name(declare.identity));
+        log::trace!("closure: visit fun {}", db.get_fun_name(declare.identity));
         let enclosing = self.current_fun;
         self.current_fun = Some(declare.identity);
 
         self.visit_expr(ast, db, declare.value);
 
         self.current_fun = enclosing;
+    }
+
+    fn visit_classdeclare_any(&mut self, ast: &Ast, db: &mut Db, declare: &ClassDeclare) {
+        log::trace!("closure: visit class {}", db.get(db.get(declare.identity).name));
+
+        for fun in &declare.funs {
+            self.visit_fundeclare_any(ast, db, &fun);
+        }
+        for class in &declare.classes {
+            self.visit_classdeclare_any(ast, db, &class);
+        }
+        for var in &declare.vars {
+            if let Some(value) = var.value {
+                self.visit_expr(ast, db, value);
+            }
+        }
     }
 }
 
@@ -111,6 +127,13 @@ impl<'a> VisitAst for ClosureConvert<'a> {
         let Expr::Variable(var) = binding.as_ref() else { unreachable!() };
 
         self.maybe_convert_var(db, var.identity);
+    }
+
+    fn visit_classdeclare(&mut self, ast: &Ast, db: &mut Db, id: crate::db::StmtId) {
+        let binding = ast.get_stmt(id);
+        let Stmt::ClassDeclare(declare) = binding.as_ref() else { unreachable!() };
+
+        self.visit_classdeclare_any(ast, db, declare);
     }
 }
 
@@ -259,11 +282,51 @@ fn identify_class_for_function_closure(ast: &mut Ast, db: &mut Db, mut closure: 
     }
 }
 
+/// Identifies the parent class for a closure.
+fn identify_parent_class_for_closure(ast: &mut Ast, db: &mut Db, mut closure: ClosureId) -> Option<ClassId> {
+    let mut first_loop = true;
+
+    log::trace!("identifying parent class for {}", closure.to_index());
+
+    loop {
+        let cur = db.get(closure);
+        if !first_loop {
+            if let Some(class) = cur.class {
+                log::trace!("identified parent closure class: {}", class.to_index());
+                return Some(class);
+            }
+        }
+        first_loop = false;
+
+        if let Some(class) = cur.parent_class {
+            log::trace!("identified parent regular class: {}", class.to_index());
+            return Some(class);
+        }
+
+        if let Some(parent) = cur.parent {
+            log::trace!("checking parent closure {}", parent.to_index());
+            closure = parent;
+            continue;
+        }
+
+        return None;
+    }
+}
+
 fn identify_function_classes(ast: &mut Ast, db: &mut Db) {
     for fun_id in db.iter_fun() {
         let fun = db.get(fun_id);
         if let Some(closure) = fun.closure {
             db.get_mut(fun_id).class = identify_class_for_function_closure(ast, db, closure);
+        }
+    }
+}
+
+fn identify_closure_parent_classes(ast: &mut Ast, db: &mut Db) {
+    for closure_id in db.iter_closure() {
+        let closure = db.get(closure_id);
+        if let Some(class) = closure.class {
+            db.get_mut(class).parent = identify_parent_class_for_closure(ast, db, closure_id);
         }
     }
 }
@@ -283,22 +346,35 @@ pub fn convert_closures(ast: &mut Ast, db: &mut Db) {
         for fun in &module.functions {
             convert.visit_fundeclare_any(ast, db, fun);
         }
+
+        for class in &module.classes {
+            convert.visit_classdeclare_any(ast, db, class);
+        }
+
+        for var in &module.globals {
+            if let Some(value) = var.value {
+                convert.visit_expr(ast, db, value);
+            }
+        }
     }
 
     // Now that we have the map, push that info into the db.
     for (closure, class) in &convert.class_map {
         db.get_mut(*closure).class = Some(*class);
 
-        if let Some(parent) = db.get(*closure).parent {
-            if let Some(parent_class) = convert.class_map.get(&parent) {
-                db.get_mut(*class).parent = Some(*parent_class);
-            }
-        }
-        else if let Some(parent_class) = db.get(*closure).parent_class {
-            db.get_mut(*class).parent = Some(parent_class);
-        }
+        // if let Some(parent) = db.get(*closure).parent {
+        //     log::trace!("closure chain: checking parent closure");
+        //     if let Some(parent_class) = convert.class_map.get(&parent) {
+        //         lo
+        //         db.get_mut(*class).parent = Some(*parent_class);
+        //     }
+        // }
+        // else if let Some(parent_class) = db.get(*closure).parent_class {
+        //     db.get_mut(*class).parent = Some(parent_class);
+        // }
     }
 
+    identify_closure_parent_classes(ast, db);
     identify_function_classes(ast, db);
 
     // Then do the variable replacement pass.
