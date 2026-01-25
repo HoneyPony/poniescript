@@ -1,0 +1,36 @@
+class Stable {
+    var name: StrBuf = "Big Barn";
+
+    @inner
+    class Horse {
+        var greeting: StrBuf = "neigh";
+
+        fun how_to_greet(entity: StrBuf) -> fun(StrBuf) {
+            fun(additional_greet: StrBuf) {
+                print(greeting, additional_greet, ", " entity, "! i'm from ", name)
+            }
+        }
+    }
+}
+
+fun init() {
+    var stable = new Stable{};
+    var horse = stable.new Horse{};
+
+    var greeter = horse.how_to_greet("john");
+    greeter(".."); //! neigh.., john! i'm from Big Barn
+
+    // Change should reflect in greeter
+    stable.name = "Small Barn";
+    greeter(",,"); //! neigh,,, john! i'm from Small Barn
+
+    var second_horse = stable.new Horse {};
+    // TODO: Fix .new{} variable resolution
+    second_horse.greeting = "eeee";
+    second_horse.how_to_greet("jane")("aaaa"); //! eeeeaaaa, jane! i'm from Small Barn
+
+    // This should also affect the first horse
+    second_horse.name = "Medium Barn";
+
+    greeter(",,"); //! neigh,,, john! i'm from Medium Barn
+}

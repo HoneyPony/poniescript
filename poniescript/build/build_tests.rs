@@ -285,6 +285,7 @@ pub fn generate(tests_file: &mut File) {
 		("closure/", "crazy_inner_fun"),
 		("closure/", "crazy_inner_fun_both_levels"),
 		("closure/", "funs_of_funs"),
+		("closure/", "nested_class"),
 
 		// old closure tests
 		("closure/", "capture_fun_lambda"),
