@@ -111,6 +111,83 @@ impl<'a> VisitAst for ClosureConvert<'a> {
     }
 }
 
+struct ReplaceVars {
+    current_fun: Option<FunId>,
+}
+
+impl ReplaceVars {
+    fn visit_fundeclare_any(&mut self, ast: &Ast, db: &mut Db, declare: &FunDeclare) {
+        log::trace!("replace-vars: visit {}", db.get_fun_name(declare.identity));
+        let enclosing = self.current_fun;
+        self.current_fun = Some(declare.identity);
+
+        self.visit_expr(ast, db, declare.value);
+
+        self.current_fun = enclosing;
+    }
+}
+
+impl VisitAst for ReplaceVars {
+    fn visit_fundeclare(&mut self, ast: &Ast, db: &mut Db, id: crate::db::ExprId) {
+        let binding = ast.get_expr(id);
+        let Expr::FunDeclare(declare) = binding.as_ref() else { unreachable!() };
+
+        self.visit_fundeclare_any(ast, db, declare);
+    }
+
+    fn visit_variable(&mut self, ast: &Ast, db: &mut Db, id: crate::db::ExprId) {
+        let binding = ast.get_expr(id);
+        let Expr::Variable(var) = binding.as_ref() else { unreachable!() };
+
+        self.maybe_convert_var(db, var.identity);
+    }
+
+    fn visit_funcall(&mut self, ast: &Ast, db: &mut Db, id: crate::db::ExprId) {
+        let fun = db.get(call.identity);
+                if fun.closure.is_some() {
+                    // We need to look up the FUNCTION class, not hte CLOSURE
+                    // class, because the FUNCTION class might have been the
+                    // closure's parent.
+                    if let Some(class) = fun.class {
+                        drop(binding);
+                        let selfval = Expr::put_selfval(ast, db.synthetic(), db.put_type(Type::Class(class)));
+
+                        let mut binding = ast.exprs.get_mut(expr);
+                        let Expr::FunCall(call) = binding.as_mut() else { unreachable!() };
+                        call.object = Some(selfval);
+                    }
+                }
+    }
+
+    fn visit_funcapture(&mut self, ast: &Ast, db: &mut Db, id: crate::db::ExprId) {
+        let binding = ast.exprs.get(id);
+        let Expr::FunCapture(capt) = binding.as_ref() else { unreachable!() };
+
+        let fun = db.get(capt.identity);
+        // The logic here is this:
+        // We already precisely computed the correct classes for each
+        // function in identify_function_classes. Now we simply have to
+        // synthesized the SelfVals for those.
+        //
+        // But, we only do this for functions that BOTH have a class and
+        // a closure; functions that already have a class have already
+        // been handled by the nature of being a class function.
+        if fun.closure.is_some() {
+            // We need to look up the FUNCTION class, not hte CLOSURE
+            // class, because the FUNCTION class might have been the
+            // closure's parent.
+            if let Some(class) = fun.class {
+                drop(binding);
+                let selfval = Expr::put_selfval(ast, db.synthetic(), db.put_type(Type::Class(class)));
+
+                let mut binding = ast.exprs.get_mut(expr);
+                let Expr::FunCapture(capt) = binding.as_mut() else { unreachable!() };
+                capt.object = Some(selfval);
+            }
+        }
+    }
+}
+
 /// Second pass for rewriting any references to now-closed variables with
 /// Expr::Get and Expr::Set instead.
 fn replace_vars(ast: &mut Ast, db: &mut Db) {
@@ -159,45 +236,11 @@ fn replace_vars(ast: &mut Ast, db: &mut Db) {
             //     }
             // },
             Expr::FunCapture(capt) => {
-                let fun = db.get(capt.identity);
-                // The logic here is this:
-                // We already precisely computed the correct classes for each
-                // function in identify_function_classes. Now we simply have to
-                // synthesized the SelfVals for those.
-                //
-                // But, we only do this for functions that BOTH have a class and
-                // a closure; functions that already have a class have already
-                // been handled by the nature of being a class function.
-                if fun.closure.is_some() {
-                    // We need to look up the FUNCTION class, not hte CLOSURE
-                    // class, because the FUNCTION class might have been the
-                    // closure's parent.
-                    if let Some(class) = fun.class {
-                        drop(binding);
-                        let selfval = Expr::put_selfval(ast, db.synthetic(), db.put_type(Type::Class(class)));
-
-                        let mut binding = ast.exprs.get_mut(expr);
-                        let Expr::FunCapture(capt) = binding.as_mut() else { unreachable!() };
-                        capt.object = Some(selfval);
-                    }
-                }
+                
             },
             Expr::FunCall(call) => {
                 // Same idea as above.
-                let fun = db.get(call.identity);
-                if fun.closure.is_some() {
-                    // We need to look up the FUNCTION class, not hte CLOSURE
-                    // class, because the FUNCTION class might have been the
-                    // closure's parent.
-                    if let Some(class) = fun.class {
-                        drop(binding);
-                        let selfval = Expr::put_selfval(ast, db.synthetic(), db.put_type(Type::Class(class)));
-
-                        let mut binding = ast.exprs.get_mut(expr);
-                        let Expr::FunCall(call) = binding.as_mut() else { unreachable!() };
-                        call.object = Some(selfval);
-                    }
-                }
+                
             }
             _ => {
 
