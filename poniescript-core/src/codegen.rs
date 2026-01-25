@@ -68,7 +68,7 @@ impl CodegenOutputs {
 
 impl CodegenCoordinator {
 	fn compile_class_declare(&mut self, class: ClassId, out: &mut CodegenOutputs) {
-		if(class == self.db.class_unassigned) { return; }
+		if class == self.db.class_unassigned { return; }
 		
 		// Write the struct declaration. These must come before signature declarations
 		// in case the signature needs to use the struct; The signature declarations
@@ -77,7 +77,7 @@ impl CodegenCoordinator {
 	}
 
 	fn compile_class_define(&mut self, class: ClassId, out: &mut CodegenOutputs) {
-		if(class == self.db.class_unassigned) { return; }
+		if class == self.db.class_unassigned { return; }
 		
 		// Don't generate struct definitinos for CHeader imports, for now.
 		if matches!(self.db.get(class).import_kind, ImportKind::CHeader) { return; }
