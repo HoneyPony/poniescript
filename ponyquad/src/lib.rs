@@ -2,8 +2,10 @@ mod bindings;
 mod hot;
 
 use macroquad::prelude::*;
+use macroquad::logging::*;
 
 use poniescript_gc::gc_spawn;
+use poniescript_gc::gc_spawn_nothread;
 
 // unsafe extern "C" {
 //     // The PonieScript update function that we want to call into.
@@ -17,10 +19,29 @@ use poniescript_gc::gc_spawn;
 // manually do what it does (which is just calling a constructor on
 // macroquad::Window).
 #[unsafe(no_mangle)]
-#[cfg(not(feature = "hotreload"))]
-pub fn main() {
-    macroquad::Window::new("Game", macroquad_main());
+pub extern "C" fn main() {
+    info!("ponyquad: we got this far!");
+    // set_panic_handler(async |a, b| {
+    //     info!("ponyquad: panic: {} {}", a, b);
+    // });
+    info!("ponyquad: another message! :)");
+    
+    macroquad::Window::new("Game", async { macroquad_main().await });
+    info!("ponyquad: idk what this means!");
 }
+
+#[unsafe(no_mangle)]
+#[cfg(not(feature = "hotreload"))]
+#[cfg(target_arch = "wasm32")]
+pub extern "C" fn _start() {
+    main();
+}
+
+// #[cfg(not(feature = "hotreload"))]
+// #[macroquad::main("Game")]
+// async fn main() {
+//     macroquad_main().await
+// }
 
 /// Should be called by the hotreload host.
 #[cfg(feature = "hotreload")]
@@ -29,7 +50,8 @@ pub fn ponyquad_main() {
 }
 
 async fn macroquad_main() {
-    let mut gc_handle = gc_spawn();
+    info!("ponyquad: got to macroquad_main!");
+    let mut gc_handle = gc_spawn_nothread();
     let mut ctx = gc_handle.create_context_for_existing();
 
     let ctx = ctx.as_mut();
@@ -41,6 +63,8 @@ async fn macroquad_main() {
         hot.poll(ctx);
 
         bindings::texture::process_queue().await;
+
+        //clear_background(BEIGE);
 
         next_frame().await
     }

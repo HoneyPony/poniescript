@@ -1,11 +1,7 @@
 #ifndef PONI_H
 #define PONI_H
 
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <inttypes.h>
+#include "poni_cstd.h"
 
 #include "poni_gc.h"
 

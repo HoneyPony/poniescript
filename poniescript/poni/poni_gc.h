@@ -1,10 +1,7 @@
 #ifndef PONI_GC_H
 #define PONI_GC_H
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <time.h>
+#include "poni_cstd.h"
 
 // TCC unfortunately does not define STDC_NO_ATOMICS, even though it doesn't
 // support atomics.
@@ -23,7 +20,7 @@ extern uint64_t poni_gc_flags;
 
 #else
 
-#include <stdatomic.h>
+
 
 extern _Atomic uint64_t poni_gc_flags;
 

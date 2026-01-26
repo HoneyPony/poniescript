@@ -649,11 +649,21 @@ impl<'a> GcHandle<'a> {
 
     #[export_name = "poni_gc_create_context_for_existing"]
     pub fn create_context_for_existing(&mut self) -> Box<GcContext<'_>> {
-        let mut avail = self.shared.available_threads.lock().unwrap();
+        let mut avail = self.shared.available_threads.lock().expect("available threads lock");
         *avail += 1;
 
         Box::new(GcContext { frame_list: null(), shared: self.shared, flag: 0, own_allocs: Vec::new() })
     }
+}
+
+pub extern "C" fn gc_spawn_nothread() -> Box<GcHandle<'static>> {
+    let shared = Box::new(GcShared::new());
+    let shared = Box::leak(shared);
+
+    Box::new(GcHandle {
+        join_handle: None,
+        shared,
+    })
 }
 
 #[export_name = "poni_gc_spawn"]
