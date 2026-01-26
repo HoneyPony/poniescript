@@ -244,6 +244,8 @@ impl<'b> Parser<'b> {
 		let mut var_map = FxHashMap::default();
 		let fun_map = FxHashMap::default();
 
+        let mut mandatory_vars = FxHashSet::default();
+
         // If there's a semicolon, this is a completely opaque class (which is
         // fine). Otherwise, we can look for member variables in the struct
         // definition.
@@ -261,6 +263,8 @@ impl<'b> Parser<'b> {
                     let var = self.var()?;
                     vars.push(var);
                     var_map.insert(self.db.get(var).name, var);
+
+                    mandatory_vars.insert(var);
                 }
                 else {
                     self.advance()?;
@@ -295,7 +299,7 @@ impl<'b> Parser<'b> {
             // TODO: For imported classes, we need both the ability to mark
             // which vars are mandatory, and ALSO a way to mark the class
             // as unconstructible from PonieScript.
-            mandatory_vars: FxHashSet::default(),
+            mandatory_vars,
             location,
             doc_comment,
         });
