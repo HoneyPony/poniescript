@@ -41,9 +41,9 @@ pub fn ponyquad_main() {
     macroquad::Window::new("Game", macroquad_main());
 }
 
-use miniquad::log::__private_api_log_lit;
-
+#[cfg(target_arch = "wasm32")]
 struct LogConnector {}
+#[cfg(target_arch = "wasm32")]
 impl Log for LogConnector {
     fn enabled(&self, _metadata: &Metadata) -> bool {
         true
@@ -51,7 +51,7 @@ impl Log for LogConnector {
 
     fn log(&self, record: &Record) {
         let message = record.args().to_string();
-        __private_api_log_lit(&message, miniquad::log::Level::Info, &(
+        miniquad::log::__private_api_log_lit(&message, miniquad::log::Level::Info, &(
             record.target(), record.module_path_static().unwrap_or("unknown"),
             record.file_static().unwrap_or("unknown"), record.line().unwrap_or(0)
         ));
@@ -63,8 +63,11 @@ impl Log for LogConnector {
 }
 
 async fn macroquad_main() {
-    let _ = macroquad::logging::set_logger(&LogConnector{});
-    set_max_level(LevelFilter::Trace);
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = macroquad::logging::set_logger(&LogConnector{});
+        set_max_level(LevelFilter::Trace);
+    }
 
     let mut gc_handle = gc_spawn();
     let mut ctx = gc_handle.create_context_for_existing();
