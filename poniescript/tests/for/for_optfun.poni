@@ -1,0 +1,25 @@
+class Horse {
+    var name: StrBuf;
+}
+
+fun make_iterator(count: int) -> fun() -> Horse? {
+    var i = 0;
+    fun() -> Horse? {
+        if i >= count { nil } else {
+            var result = new Horse { name: str("Horse ", i) };
+            i += 1;
+            result
+        }
+    }
+}
+
+fun init() {
+    //! Horse 0
+    //! Horse 1
+    //! Horse 2
+    //! Horse 3
+    //! Horse 4
+    for horse in make_iterator(5) {
+        print(horse.name);
+    }
+}

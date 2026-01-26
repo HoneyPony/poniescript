@@ -499,6 +499,8 @@ pub fn generate(tests_file: &mut File) {
 		("for/", "for_basic_nospace"),
 		("for/", "for_closed_i_nospace"),
 		("for/", "for_closed_nospace"),
+
+		("for/", "for_optfun"),
 	];
 
 	let mut bt = BuiltTests {

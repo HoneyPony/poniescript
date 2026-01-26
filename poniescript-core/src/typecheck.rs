@@ -2574,6 +2574,94 @@ impl<'db> TypeChecker<'db> {
 
 						return self.check_expr(ast, expr_id, value_used);
 					},
+					Type::Fun(sig_id) => {
+						let sig_id = *sig_id;
+						let sig = self.db.get(sig_id);
+						if !sig.parameters.is_empty() {
+							type_error!(self,
+								&for_.location,
+								"Can only iterate over a function of the form fun() -> T?");
+						}
+
+						let ret = self.db.get(sig.return_type);
+						let inner = *match ret {
+							Type::Option(typ) => typ,
+							_ => {
+								type_error!(self,
+									&for_.location,
+									"Can only iterate over a function of the form fun() -> T?")
+							}
+						};
+
+						// Now we desugar it. The form of the loop is:
+						// var our_fun = <eval fun expression>;
+						// loop {
+						//     var the_var = our_fun() else { break; };
+						//     loop-body
+						// }
+
+						let own_var = self.db.get(for_.identity);
+						
+						let fun_obj_var: VarId = self.db.push(Var {
+							name: self.db.str_x,
+							typ: iterable,
+							readonly: false,
+							class: None,
+							param_for: None,
+							fun: own_var.fun,
+							closure: own_var.closure,
+							initializer: Some(for_.iterator),
+							location: own_var.location.clone(),
+							doc_comment: None,
+						});
+
+						let inner_stmt_loc = for_.location.clone();
+
+						let read_fun_obj = Expr::push_variable(ast, inner_stmt_loc.clone(),
+							fun_obj_var);
+						let call_fun = Expr::push_valcall(ast, inner_stmt_loc.clone(),
+							read_fun_obj, Vec::new(), sig_id, Vec::new());
+						let break_out = Expr::push_break(ast, inner_stmt_loc.clone(), None);
+						let call_else_break = Expr::push_optionelse(ast, inner_stmt_loc.clone(),
+							call_fun, break_out, inner);
+
+						let ident_declare = Stmt::push_declare(ast, inner_stmt_loc.clone(),
+							for_.ident.clone(), for_.identity, Some(call_else_break), for_.has_explicit_type);
+						let inner_stmt = Stmt::push_expression(ast, inner_stmt_loc.clone(),
+							for_.inner);
+							
+						// AWKWARD/TODO: Once we care about the value of the while block,
+						// this is not going to be it...?
+						let inner_block = Expr::push_block(ast,  inner_stmt_loc.clone(),
+							vec![ident_declare, inner_stmt], self.db.types.void);
+						// The inner block is the thing that needs its own closure scope,
+						let inner_block = Expr::push_allocateclosure(ast, inner_stmt_loc.clone(),
+							for_.closure, inner_block, self.db.types.void, false);
+
+						let inner_loop = Expr::push_loop(ast, inner_stmt_loc.clone(),
+							// I believe we don't have to explicitly set the breaks...?
+							inner_block, self.db.types.void, Vec::new());
+						
+						let own_declare = Stmt::push_declare(ast, inner_stmt_loc.clone(),
+							inner_stmt_loc.clone(), fun_obj_var, Some(for_.iterator), for_.has_explicit_type);
+						let inner_loop_stmt = Stmt::push_expression(ast, inner_stmt_loc.clone(),
+							inner_loop);
+						
+						let block = Block {
+							location: for_.location.clone(),
+							stmts: vec![own_declare, inner_loop_stmt],
+							typ: self.db.types.void,
+						};
+
+						// Now, drop the binding, modify ourselves to be the
+						// new block, and re-check it.
+						drop(binding);
+						let mut binding = ast.get_expr_mut(expr_id);
+						*binding = Expr::Block(block);
+						drop(binding);
+
+						return self.check_expr(ast, expr_id, value_used);
+					}
 					_ => {
 						type_error!(self,
 							&for_.location,
