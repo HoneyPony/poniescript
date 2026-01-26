@@ -349,8 +349,35 @@ poni_gc_get_allocation_size(void *object) {
 
 		for typ in self.db.iter_typ() {
 			if !self.db.is_cgen_safe(typ) { continue; }
-
 			let tag = self.db.get_type_ctag(typ);
+
+			let should_define_size = match self.db.get(typ) {
+				// Doesn't have a tag
+				Type::Void | Type::Bottom => false,
+				// Defined above
+				Type::Str | Type::StrConst | Type::StrBuf => false,
+				Type::ArrayOf(_) | Type::DynArrayOf(..) => false,
+				// For now this is false, but this will probably change..?
+				Type::Option(_) => false,
+				_ => true
+			};
+
+			let use_fun_size = match self.db.get(typ) {
+				Type::Fun(..) => true,
+				_ => false,
+			};
+
+			if should_define_size {
+				if use_fun_size {
+					inf_writeln!(allocation_size, "\tcase {}: return sizeof(struct {{ void *a, *b; }});", tag);
+				}
+				else {
+					let deref = if self.db.is_value_type(typ) { ("", "") } else { ("*(", ")(0)") };
+					inf_writeln!(allocation_size, "\tcase {}: return sizeof({}{}{});", tag, deref.0, self.db.get_ctype(typ), deref.1);
+				}
+			}
+
+			
 			match self.db.get(typ) {
 				Type::Class(id) => {
 					inf_writeln!(visit_object, "\tcase {}: {{", tag);

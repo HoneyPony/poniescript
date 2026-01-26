@@ -791,6 +791,7 @@ impl Db {
 			Type::Bottom => false,
 
 			Type::UnboundIdent(_) => false,
+			Type::UnboundCStructPtr(_) => false,
 			Type::ArrayOf(ty) => self.is_cgen_safe(*ty),
 			Type::Tuple(inner) => {
 				for ty in inner.iter() {
@@ -1590,6 +1591,8 @@ impl Db {
 			Type::Tuple(_) => true,
 			Type::Option(_) => true,
 			Type::RangeOf(..) => true,
+			// I believe this is right, although it's a bit weird.
+			Type::Fun(_) => true,
 			_ => false
 		}
 	}
