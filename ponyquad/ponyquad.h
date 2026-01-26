@@ -67,4 +67,24 @@ PS_FUN() void clear_canvas(PONI_ABI());
 /// Sets the default filter mode for textures.
 PS_FUN() void set_default_filter_mode(PONI_ABI(ps_int mode));
 
+// Until such time as these are language builtins, provide some useful math
+// functions.
+
+/// Length of a vec2.
+PS_FUN("len2") ps_float pq_len_vec2(PONI_ABI(ps_vec2 v));
+/// Length of a vec3.
+PS_FUN("len3") ps_float pq_len_vec3(PONI_ABI(ps_vec2 v));
+/// Length of a vec4.
+PS_FUN("len4") ps_float pq_len_vec4(PONI_ABI(ps_vec2 v));
+
+/// Normalize a vec2.
+PS_FUN("norm2") ps_vec2 pq_norm_vec2(PONI_ABI(ps_vec2 v));
+/// Normalize a vec3.
+PS_FUN("norm3") ps_vec3 pq_norm_vec3(PONI_ABI(ps_vec2 v));
+/// Normalize a vec4.
+PS_FUN("norm4") ps_vec4 pq_norm_vec4(PONI_ABI(ps_vec2 v));
+/// Get the atan2 (angle) of a given vector. Unlike some atan2 implementations,
+/// this is in x, y order (e.g. you can pass a vector to get its angle).
+PS_FUN("atan2") ps_float pq_atan2(PONI_ABI(ps_vec2 xy));
+
 #endif

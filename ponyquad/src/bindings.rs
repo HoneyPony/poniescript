@@ -1,6 +1,7 @@
 pub mod texture;
 pub mod input;
 pub mod canvas;
+pub mod math;
 
 use std::ffi::c_void;
 use poniescript_gc::{GcContext, Gp, PsFloat, PsInt};
