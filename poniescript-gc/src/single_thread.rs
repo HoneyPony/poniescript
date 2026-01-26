@@ -33,7 +33,7 @@ impl GcHandle {
              total_len: 0,
              // Set initial collection threshold. Set it to a few MB for now,
              // as at leastfor now we are targetting wasm.
-             collect_threshold: 8 * 1024 * 1024,
+             collect_threshold: 64,
              gc: Gc::new(),
              phantom: PhantomData,
         })
@@ -101,7 +101,7 @@ impl<'shared> GcContext<'shared> {
     fn collect(&mut self) {
         let mut frame = self.frame_list;
 
-        log::trace!("ctx {:?}: begin scan", self as *const _);
+        log::info!("ctx {:?}: begin scan", self as *const _);
 
         while !frame.is_null() {
             // Dereference the inner frame: We have checked that it's not NULL.
@@ -117,7 +117,7 @@ impl<'shared> GcContext<'shared> {
                 if !candidate.is_null() {
                     // Skip objects that have already been marked.
                     if unsafe { *candidate & 1 == 0 } {
-                        log::trace!("ctx {:?}: found mark candidate {:?}", self as *const _, candidate);
+                        log::info!("ctx {:?}: found mark candidate {:?}", self as *const _, candidate);
                         self.gc.queue.push_front(candidate);
                     }
                 }
@@ -127,7 +127,7 @@ impl<'shared> GcContext<'shared> {
             frame = inner_frame.prev;
         }
 
-        log::trace!("ctx {:?}: scan finished", self as *const _);
+        log::info!("ctx {:?}: scan finished", self as *const _);
 
         // Fire off the gc.
         self.gc.collect();
@@ -144,7 +144,7 @@ impl<'shared> GcContext<'shared> {
                     let size = poni_gc_get_allocation_size(ptr);
                     total_freed += size;
                     let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
-                    log::trace!("poni-gc: freeing {:?} ({} bytes, tag {:x})", ptr, size, *ptr);
+                    log::info!("poni-gc: freeing {:?} ({} bytes, tag {:x})", ptr, size, *ptr);
                     alloc::dealloc(ptr as *mut u8, layout);
                 }
 
@@ -162,7 +162,7 @@ impl<'shared> GcContext<'shared> {
         // Very janky update to collect threshold.
         if self.total_len > self.collect_threshold / 2 {
             self.collect_threshold = self.total_len * 2;
-            log::trace!("poni-gc: new collect threshold {}", self.collect_threshold);
+            log::info!("poni-gc: new collect threshold {}", self.collect_threshold);
         }
     }
 
@@ -184,11 +184,11 @@ impl<'shared> GcContext<'shared> {
         unsafe { *ptr = 0; }
 
         if GC_ALLOCATE_MARKED.load(Ordering::Relaxed) {
-            log::trace!("ctx {:?}: allocated {} bytes (marked)", self as *const _, size);
+            log::info!("ctx {:?}: allocated {} bytes (marked)", self as *const _, size);
             unsafe { *ptr |= 1; }
         }
         else {
-            log::trace!("ctx {:?}: allocated {} bytes (unmarked)", self as *const _, size);
+            log::info!("ctx {:?}: allocated {} bytes (unmarked)", self as *const _, size);
         }
 
         self.own_allocs.push(ptr);

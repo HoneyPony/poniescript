@@ -819,6 +819,7 @@ dependencies = [
  "fontdue",
  "glam",
  "image",
+ "log",
  "macroquad_macro",
  "miniquad",
  "quad-rand",

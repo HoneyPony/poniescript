@@ -238,8 +238,8 @@ impl<'a> GcContext<'a> {
         // self.own_allocs.clear();
     }
 
-    #[no_mangle]
-    extern "C" fn poni_gc_poll_slow(&mut self) {
+    #[unsafe(export_name = "poni_gc_poll_slow")]
+    pub extern "C" fn poll_slow(&mut self) {
         let cur_flags = GC_FLAGS.load(Ordering::Relaxed);
         //eprintln!("poni-gc: poll: self = {:b}, new = {:b}", self.flag, cur_flags);
         if cur_flags == self.flag {
@@ -295,7 +295,7 @@ impl<'a> GcContext<'a> {
         }
 
         loop {
-            self.poni_gc_poll_slow();
+            self.poll_slow();
             lock = self.shared.gc_flags_cv.wait(lock).unwrap();
 
             let busy = self.shared.gc_busy.lock().unwrap();
@@ -601,7 +601,7 @@ impl<'a> GcHandle<'a> {
 
                     // Otherwise, perform a safepoint. We might as well do it
                     // the slow way because we're just spinning anyway.
-                    context.poni_gc_poll_slow();
+                    context.poll_slow();
 
                     lock = context.shared.gc_flags_cv.wait(lock).unwrap();
                 }

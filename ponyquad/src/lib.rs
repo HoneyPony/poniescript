@@ -48,7 +48,31 @@ pub fn ponyquad_main() {
     macroquad::Window::new("Game", macroquad_main());
 }
 
+use miniquad::log::__private_api_log_lit;
+
+struct LogConnector {}
+impl Log for LogConnector {
+    fn enabled(&self, _metadata: &Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &Record) {
+        let message = record.args().to_string();
+        __private_api_log_lit(&message, miniquad::log::Level::Info, &(
+            record.target(), record.module_path_static().unwrap_or("unknown"),
+            record.file_static().unwrap_or("unknown"), record.line().unwrap_or(0)
+        ));
+    }
+
+    fn flush(&self) {
+        
+    }
+}
+
 async fn macroquad_main() {
+    let _ = macroquad::logging::set_logger(&LogConnector{});
+    set_max_level(LevelFilter::Trace);
+
     info!("ponyquad: got to macroquad_main!");
     let mut gc_handle = gc_spawn();
     let mut ctx = gc_handle.create_context_for_existing();
@@ -62,6 +86,10 @@ async fn macroquad_main() {
         hot.poll(ctx);
 
         bindings::texture::process_queue().await;
+
+        // Poll the gc. We are in theory going to compile the script code to NOT
+        // safepoint at all, so we have to do it here.
+        ctx.poll_slow();
 
         //clear_background(BEIGE);
 
