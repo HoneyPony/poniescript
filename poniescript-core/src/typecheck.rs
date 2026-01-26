@@ -2615,17 +2615,23 @@ impl<'db> TypeChecker<'db> {
 							doc_comment: None,
 						});
 
-						let inner_stmt_loc = for_.location.clone();
+						let loc_ignore = {
+							let mut loc = for_.location.begin();
+							loc.length = 0;
+							loc
+						};
 
-						let read_fun_obj = Expr::push_variable(ast, inner_stmt_loc.clone(),
+						let inner_stmt_loc = for_.inner.location(ast);
+
+						let read_fun_obj = Expr::push_variable(ast, loc_ignore.clone(),
 							fun_obj_var);
-						let call_fun = Expr::push_valcall(ast, inner_stmt_loc.clone(),
+						let call_fun = Expr::push_valcall(ast, loc_ignore.clone(),
 							read_fun_obj, Vec::new(), sig_id, Vec::new());
-						let break_out = Expr::push_break(ast, inner_stmt_loc.clone(), None);
-						let call_else_break = Expr::push_optionelse(ast, inner_stmt_loc.clone(),
+						let break_out = Expr::push_break(ast, loc_ignore.clone(), None);
+						let call_else_break = Expr::push_optionelse(ast, loc_ignore.clone(),
 							call_fun, break_out, inner);
 
-						let ident_declare = Stmt::push_declare(ast, inner_stmt_loc.clone(),
+						let ident_declare = Stmt::push_declare(ast, for_.ident.clone(),
 							for_.ident.clone(), for_.identity, Some(call_else_break), for_.has_explicit_type);
 						let inner_stmt = Stmt::push_expression(ast, inner_stmt_loc.clone(),
 							for_.inner);
@@ -2642,8 +2648,10 @@ impl<'db> TypeChecker<'db> {
 							// I believe we don't have to explicitly set the breaks...?
 							inner_block, self.db.types.void, Vec::new());
 						
-						let own_declare = Stmt::push_declare(ast, inner_stmt_loc.clone(),
-							inner_stmt_loc.clone(), fun_obj_var, Some(for_.iterator), for_.has_explicit_type);
+						let own_declare = Stmt::push_declare(ast, for_.iterator.location(ast),
+							// This always has an explicit type, so that no inlay hint is
+							// generated.
+							loc_ignore.clone(), fun_obj_var, Some(for_.iterator), true);
 						let inner_loop_stmt = Stmt::push_expression(ast, inner_stmt_loc.clone(),
 							inner_loop);
 						
