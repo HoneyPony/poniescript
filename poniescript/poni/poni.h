@@ -8,11 +8,11 @@
 #define PONI_TAG_FLOAT    0x8000000000000002ULL
 #define PONI_TAG_INT      0x8000000000000004ULL
 #define PONI_TAG_BOOL     0x8000000000000006ULL
-#define PONI_TAG_STRCONST 8
-#define PONI_TAG_STR      10
-#define PONI_TAG_STRBUF   12
-#define PONI_TAG_ARRAY    14
-#define PONI_TAG_DYNARRAY 16
+#define PONI_TAG_STRCONST 0x8
+#define PONI_TAG_STR      0xA
+#define PONI_TAG_STRBUF   0xC
+#define PONI_TAG_ARRAY    0xE
+#define PONI_TAG_DYNARRAY 0x10
 
 typedef float   ps_float;
 typedef int64_t ps_int;

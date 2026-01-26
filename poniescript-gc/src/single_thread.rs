@@ -169,8 +169,7 @@ impl<'shared> GcContext<'shared> {
     #[unsafe(export_name = "poni_gc_poll_slow")]
     pub fn poll_slow(&mut self) {
         if self.total_len > self.collect_threshold {
-            self.gc.collect();
-            self.total_len = 0
+            self.collect();
         }
     }
 
@@ -183,17 +182,19 @@ impl<'shared> GcContext<'shared> {
         // We must always reset the first 8-bytes to 0.
         unsafe { *ptr = 0; }
 
+        self.total_len += size;
+
         if GC_ALLOCATE_MARKED.load(Ordering::Relaxed) {
-            log::info!("ctx {:?}: allocated {} bytes (marked)", self as *const _, size);
+            //log::info!("ctx {:?}: allocated {} bytes (marked)   (total: {})", self as *const _, size, self.total_len);
             unsafe { *ptr |= 1; }
         }
         else {
-            log::info!("ctx {:?}: allocated {} bytes (unmarked)", self as *const _, size);
+            //log::info!("ctx {:?}: allocated {} bytes (unmarked) (total: {})", self as *const _, size, self.total_len);
         }
 
         self.own_allocs.push(ptr);
 
-        self.total_len += size;
+        
 
         ptr
     }
