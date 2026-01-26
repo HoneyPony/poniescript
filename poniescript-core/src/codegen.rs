@@ -274,6 +274,7 @@ poni_gc_visit_object(struct poni_gc *gc, void *object) {
 			// of this array. So, instead we directly mark the inner buffer,
 			// and then walk the children manually.
 			struct ps_array_header *inner = header->buffer;
+			poni_gc_mark(gc, inner);
 			char *elem_root = (char*)inner + sizeof(struct ps_array_header);
 
 			// Note that although the DynArray's length might be changed by
@@ -467,6 +468,26 @@ poni_gc_get_allocation_size(void *object) {
 		inf_writeln!(valuetype, "\t}}\n}}");
 		inf_writeln!(visit_object, "\t}}\n}}");
 		inf_writeln!(allocation_size, "\t}}\n}}");
+
+		for global in &self.db.globals {
+			let typ = self.db.get_var_type(*global);
+			let is_valty = self.db.is_value_type(typ);
+
+			if is_valty {
+				inf_writeln!(visit_roots, "\tponi_gc_visit_valuetype(gc, &{}, {});",
+					self.db.get_cname(*global), self.db.get_type_ctag(typ));
+			}
+			else {
+				inf_writeln!(visit_roots, "\tponi_gc_mark(gc, {});",
+					self.db.get_cname(*global));
+				inf_writeln!(visit_roots, "\tponi_gc_visit_object(gc, {});",
+					self.db.get_cname(*global));
+			}
+		}
+
+		for id in self.db.iter_strconst() {
+			inf_writeln!(visit_roots, "poni_gc_mark(gc, ps_str_const{});", id.to_index());
+		}
 
 		inf_writeln!(visit_roots, "}}");
 

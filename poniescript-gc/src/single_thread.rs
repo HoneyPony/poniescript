@@ -68,10 +68,16 @@ impl Gc {
     /// Called by the poni_gc_visit_object function.
     #[unsafe(export_name = "poni_gc_mark")]
     pub fn mark(&mut self, object: *mut u64) {
+        if object.is_null() { return; }
+
         let is_marked = unsafe { *object & 1 != 0 };
 
         if is_marked {
             return;
+        }
+
+        unsafe {
+            log::trace!("marking unmarked {:?} (tag {:x})", object, *object);
         }
 
         unsafe {
