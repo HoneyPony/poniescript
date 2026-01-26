@@ -94,6 +94,22 @@ pub extern "C" fn draw_texture_rot(_gc: &mut GcContext, texture: Gp<Texture2D>, 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn draw_texture_rot_scale(_gc: &mut GcContext, texture: Gp<Texture2D>, pos: Vec2, rotation: PsFloat, scale: PsFloat, color: Vec4, _closure: *mut c_void) {
+    let color = unsafe { std::mem::transmute(color) };
+    let mut size = texture.get_inner().inner.size();
+    size.x *= scale;
+    size.y *= scale;
+    macroquad::prelude::draw_texture_ex(&texture.get_inner().inner, pos.x, pos.y, color, DrawTextureParams {
+        dest_size: Some(size),
+        rotation,
+        ..Default::default()
+    });
+
+    //let inner = texture.get_inner();
+    //eprintln!("drew texture: {}x{} @ {} {}", inner.inner.width(), inner.inner.height(), pos.x, pos.y);
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn set_default_filter_mode(_gc: &mut GcContext, mode: PsInt, _closure: *mut c_void) {
     let mode = match mode {
         0 => macroquad::texture::FilterMode::Linear,
