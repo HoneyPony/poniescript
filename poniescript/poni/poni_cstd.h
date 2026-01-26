@@ -56,6 +56,7 @@ strlen(const char *str) {
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <inttypes.h> // for ps_panic
 
