@@ -125,6 +125,10 @@ pub struct EnvironmentConfig {
 
     pub default_profile: String,
     pub default_target: String,
+
+    /// Warning messages about the environment config.
+    #[serde(skip)]
+    pub warnings: Vec<String>,
 }
 
 impl EnvironmentConfig {
@@ -164,6 +168,31 @@ impl EnvironmentConfig {
         };
 
         Some(poni_gc_path.join(path))
+    }
+
+    fn generate_warnings(&mut self) {
+        let mut warnings = Vec::new();
+
+        for (target, set) in &self.toolchain {
+            for (profile, toolchain) in &set.0 {
+                match toolchain.target_platform {
+                    Platform::Web => {
+                        if !toolchain.linker.starts_with("wasm-ld") {
+                            warnings.push(format!("{}-{}: expected linker 'wasm-ld'",
+                                target, profile))
+                        }
+
+                        if !toolchain.cc.starts_with("clang") {
+                            warnings.push(format!("{}-{}: expected c compiler 'clang'",
+                                target, profile))
+                        }
+                    },
+                    _ => {}
+                }
+            }
+        }
+
+        self.warnings = warnings;
     }
 }
 
@@ -613,8 +642,10 @@ pub fn read_environment_config() -> Result<EnvironmentConfig, ConfigReadError> {
     let config_str = fs::read_to_string(&build_cfg_path)
         .map_err(|_| ConfigReadError::NoEnvironmentToml(build_cfg_path))?;
 
-    let env: EnvironmentConfig = toml::from_str(&config_str)
+    let mut env: EnvironmentConfig = toml::from_str(&config_str)
         .map_err(|err| ConfigReadError::BadEnvironmentToml(err.to_string()))?;
+
+    env.generate_warnings();
 
     return Ok(env);
 }
@@ -627,8 +658,9 @@ pub fn read_configs(build_config_search_path: &Path) -> Result<(BuildConfig, Env
     let config_str = fs::read_to_string(&build_cfg_path)
         .map_err(|_| ConfigReadError::NoEnvironmentToml(build_cfg_path))?;
 
-    let env: EnvironmentConfig = toml::from_str(&config_str)
+    let mut env: EnvironmentConfig = toml::from_str(&config_str)
         .map_err(|err| ConfigReadError::BadEnvironmentToml(err.to_string()))?;
+    env.generate_warnings();
 
     let build_str = fs::read_to_string(build_config_search_path.join("ponies.toml"))
         .map_err(|_| ConfigReadError::NoPoniesToml)?;

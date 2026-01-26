@@ -147,6 +147,11 @@ fn try_run_ninja(project: Option<&String>, toolchain: &String, hot: Option<&Path
 }
 
 fn do_regenerate(build: &BuildConfig, env: &EnvironmentConfig) {
+    // Print warnings only when we regenerate.
+    for warning in &env.warnings {
+        eprintln!("warning: {}", warning);
+    }
+
     // First, create the .build folder and the build.ninja file.
     fs::create_dir_all(".build")
         .unwrap_or_else(|_| show_error_msg("couldn't create .build directory"));
