@@ -5,7 +5,6 @@ use macroquad::prelude::*;
 use macroquad::logging::*;
 
 use poniescript_gc::gc_spawn;
-use poniescript_gc::gc_spawn_nothread;
 
 // unsafe extern "C" {
 //     // The PonieScript update function that we want to call into.
@@ -51,7 +50,7 @@ pub fn ponyquad_main() {
 
 async fn macroquad_main() {
     info!("ponyquad: got to macroquad_main!");
-    let mut gc_handle = gc_spawn_nothread();
+    let mut gc_handle = gc_spawn();
     let mut ctx = gc_handle.create_context_for_existing();
 
     let ctx = ctx.as_mut();
