@@ -31,6 +31,29 @@ struct texture2d {
     char opaque[16];
 };
 
+PS_CLASS("Camera2D")
+struct camera2d {
+    ps_object header;
+
+    PS_VAR() ps_float rotation;
+    PS_VAR() ps_vec2 zoom;
+    PS_VAR() ps_vec2 target;
+    PS_VAR() ps_vec2 offset;
+
+    PS_VAR() PS_OPTION(struct camera_viewport*) viewport;
+};
+
+PS_CLASS("CameraViewport")
+struct camera_viewport {
+    ps_object header;
+
+    PS_VAR() ps_vec2 offset;
+    PS_VAR() ps_vec2 size;
+};
+
+PS_FUN() void set_camera(PONI_ABI(struct camera2d *camera));
+PS_FUN() void set_default_camera(PONI_ABI());
+
 PS_FUN() struct texture2d* load_texture(PONI_ABI(ps_strbuf *path));
 PS_FUN() void draw_texture(PONI_ABI(struct texture2d* texture, ps_vec2 position, ps_vec4 color));
 PS_FUN() void draw_texture_rot(PONI_ABI(struct texture2d* texture, ps_vec2 position, ps_float rotation, ps_vec4 color));

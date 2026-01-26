@@ -413,6 +413,13 @@ impl<'b> Parser<'b> {
             return Ok(self.db.put_type(Type::UnboundCStructPtr(struct_name.lexeme)));
         }
 
+        if self.match_(GlueTok::AnnotateOption)?.is_some() {
+            expected!(self, GlueTok::LeftParen, "'(' after PS_OPTION")?;
+            let inner = self.c_type()?;
+            expected!(self, GlueTok::RightParen, "')' after type name")?;
+            return Ok(self.db.put_type(Type::Option(inner)));
+        }
+
         let id = expected!(self, GlueTok::Identifier, "C type expression")?;
 
         if id.lexeme == self.db.put_str("ps_int") {

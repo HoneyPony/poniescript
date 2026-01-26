@@ -29,6 +29,22 @@ pub struct Gp<T: HasPsHeader> {
     inner: AtomicPtr<T>
 }
 
+#[repr(transparent)]
+pub struct GpMaybe<T: HasPsHeader> {
+    inner: AtomicPtr<T>
+}
+
+impl<T: HasPsHeader> GpMaybe<T> {
+    pub fn get_inner(&self) -> Option<&T> {
+        unsafe {
+            let ptr = self.inner.load(Ordering::Relaxed);
+            if ptr.is_null() { return None; }
+
+            Some(&*ptr)
+        }
+    }
+}
+
 impl<T: HasPsHeader> Gp<T> {
     pub unsafe fn from_ptr(ptr: *mut T) -> Self {
         Self {

@@ -1,6 +1,7 @@
 pub mod texture;
 pub mod input;
 pub mod canvas;
+pub mod camera;
 pub mod math;
 
 use std::ffi::c_void;

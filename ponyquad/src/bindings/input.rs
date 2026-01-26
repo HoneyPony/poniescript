@@ -52,6 +52,10 @@ fn vec2_m(x: macroquad::prelude::Vec2) -> Vec2 {
     Vec2 { x: x.x, y: x.y }
 }
 
+pub fn m_vec2(x: Vec2) -> macroquad::prelude::Vec2 {
+    macroquad::prelude::Vec2 { x: x.x, y: x.y }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn mouse_position(_gc: &mut GcContext, _closure: *mut c_void) -> Vec2 {
     vec2_t(macroquad::prelude::mouse_position())

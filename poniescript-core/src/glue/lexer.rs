@@ -44,6 +44,7 @@ pub enum GlueTok {
 	AnnotateClass,
     AnnotateMember,
 	AnnotateAbi,
+	AnnotateOption,
 
     Struct, Void, 
 
@@ -73,6 +74,7 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, GlueTok> {
     add("PS_VAR"   , GlueTok::AnnotateVar);
 	add("PS_CLASS" , GlueTok::AnnotateClass);
     add("PS_MEMBER", GlueTok::AnnotateMember);
+	add("PS_OPTION", GlueTok::AnnotateOption);
 	add("PONI_ABI"   , GlueTok::AnnotateAbi);
 	add("struct"   , GlueTok::Struct);
 

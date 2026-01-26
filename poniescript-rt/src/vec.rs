@@ -7,12 +7,14 @@ use poniescript_gc::{PsFloat, PsInt};
 // Also consider generating these with macros.
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Vec2 {
     pub x: PsFloat,
     pub y: PsFloat,
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Vec3 {
     pub x: PsFloat,
     pub y: PsFloat,
@@ -20,6 +22,7 @@ pub struct Vec3 {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Vec4 {
     pub x: PsFloat,
     pub y: PsFloat,
@@ -28,12 +31,14 @@ pub struct Vec4 {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Vec2i {
     pub x: PsInt,
     pub y: PsInt,
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Vec3i {
     pub x: PsInt,
     pub y: PsInt,
@@ -41,6 +46,7 @@ pub struct Vec3i {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Vec4i {
     pub x: PsInt,
     pub y: PsInt,
