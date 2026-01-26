@@ -3,7 +3,7 @@ use poniescript_gc::{GcContext, PsFloat};
 use poniescript_rt::{Vec2, Vec3, Vec4};
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_norm2(_gc: &mut GcContext, mut v: Vec2, _closure: *mut c_void) -> Vec2 {
+pub extern "C" fn pq_norm_vec2(_gc: &mut GcContext, mut v: Vec2, _closure: *mut c_void) -> Vec2 {
     let len = (v.x * v.x + v.y * v.y).sqrt();
 
     if len != 0.0 {
@@ -20,7 +20,7 @@ pub extern "C" fn pq_norm2(_gc: &mut GcContext, mut v: Vec2, _closure: *mut c_vo
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_norm3(_gc: &mut GcContext, mut v: Vec3, _closure: *mut c_void) -> Vec3 {
+pub extern "C" fn pq_norm_vec3(_gc: &mut GcContext, mut v: Vec3, _closure: *mut c_void) -> Vec3 {
     let len = (v.x * v.x + v.y * v.y + v.z * v.z).sqrt();
 
     if len != 0.0 {
@@ -39,7 +39,7 @@ pub extern "C" fn pq_norm3(_gc: &mut GcContext, mut v: Vec3, _closure: *mut c_vo
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_norm4(_gc: &mut GcContext, mut v: Vec4, _closure: *mut c_void) -> Vec4 {
+pub extern "C" fn pq_norm_vec4(_gc: &mut GcContext, mut v: Vec4, _closure: *mut c_void) -> Vec4 {
     let len = (v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w).sqrt();
 
     if len != 0.0 {
@@ -60,17 +60,17 @@ pub extern "C" fn pq_norm4(_gc: &mut GcContext, mut v: Vec4, _closure: *mut c_vo
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_len2(_gc: &mut GcContext, v: Vec2, _closure: *mut c_void) -> PsFloat {
+pub extern "C" fn pq_len_vec2(_gc: &mut GcContext, v: Vec2, _closure: *mut c_void) -> PsFloat {
     (v.x * v.x + v.y * v.y).sqrt()
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_len3(_gc: &mut GcContext, v: Vec3, _closure: *mut c_void) -> PsFloat {
+pub extern "C" fn pq_len_vec3(_gc: &mut GcContext, v: Vec3, _closure: *mut c_void) -> PsFloat {
     (v.x * v.x + v.y * v.y + v.z * v.z).sqrt()
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_len4(_gc: &mut GcContext, v: Vec4, _closure: *mut c_void) -> PsFloat {
+pub extern "C" fn pq_len_vec4(_gc: &mut GcContext, v: Vec4, _closure: *mut c_void) -> PsFloat {
     (v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w).sqrt()
 }
 
