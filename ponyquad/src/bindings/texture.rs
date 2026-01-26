@@ -1,6 +1,7 @@
 use std::{os::raw::c_void, sync::Mutex};
 
-use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PsObject};
+use macroquad::texture::DrawTextureParams;
+use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PsFloat, PsObject};
 use poniescript_rt::{PsStrBuf, Vec2, Vec4};
 
 #[repr(C)]
@@ -75,6 +76,18 @@ pub extern "C" fn load_texture(gc: &mut GcContext, path: Gp<PsStrBuf>, _closure:
 pub extern "C" fn draw_texture(_gc: &mut GcContext, texture: Gp<Texture2D>, pos: Vec2, color: Vec4, _closure: *mut c_void) {
     let color = unsafe { std::mem::transmute(color) };
     macroquad::prelude::draw_texture(&texture.get_inner().inner, pos.x, pos.y, color);
+
+    //let inner = texture.get_inner();
+    //eprintln!("drew texture: {}x{} @ {} {}", inner.inner.width(), inner.inner.height(), pos.x, pos.y);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn draw_texture_rot(_gc: &mut GcContext, texture: Gp<Texture2D>, pos: Vec2, rotation: PsFloat, color: Vec4, _closure: *mut c_void) {
+    let color = unsafe { std::mem::transmute(color) };
+    macroquad::prelude::draw_texture_ex(&texture.get_inner().inner, pos.x, pos.y, color, DrawTextureParams {
+        rotation,
+        ..Default::default()
+    });
 
     //let inner = texture.get_inner();
     //eprintln!("drew texture: {}x{} @ {} {}", inner.inner.width(), inner.inner.height(), pos.x, pos.y);
