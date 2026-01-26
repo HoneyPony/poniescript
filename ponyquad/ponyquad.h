@@ -57,4 +57,13 @@ PS_FUN() ps_vec4 hsla_to_rgba(PONI_ABI(ps_vec4 hsla));
 PS_FUN() ps_vec3 rgb_to_hsl(PONI_ABI(ps_vec3 rgb));
 PS_FUN() ps_vec4 rgba_to_hsla(PONI_ABI(ps_vec4 rgba));
 
+/// Sets a 2D canvas (using the macroquad_canvas crate). This is good for games
+/// with a fixed resolution.
+PS_FUN() void set_canvas(PONI_ABI(ps_vec2 size));
+/// Clears any 2D canvas set by set_canvas().
+PS_FUN() void clear_canvas(PONI_ABI());
+
+/// Sets the default filter mode for textures.
+PS_FUN() void set_default_filter_mode(PONI_ABI(ps_int mode));
+
 #endif

@@ -826,6 +826,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "macroquad-canvas"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78bc63d8a6c6c5e91a56e1a0c3ac586f0475b1c3e86d149de2d467b9351b6e2f"
+dependencies = [
+ "macroquad",
+]
+
+[[package]]
 name = "macroquad_macro"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1162,6 +1171,7 @@ version = "0.1.0"
 dependencies = [
  "libloading",
  "macroquad",
+ "macroquad-canvas",
  "notify",
  "poniescript-gc",
  "poniescript-rt",

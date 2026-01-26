@@ -125,3 +125,7 @@ var K_UNKNOWN = 511;
 var MOUSE_LEFT = 0;
 var MOUSE_MIDDLE = 1;
 var MOUSE_RIGHT = 2;
+
+
+var FILTER_LINEAR = 0;
+var FILTER_NEAREST = 1;

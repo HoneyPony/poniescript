@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::Mutex};
 
 use macroquad::texture::DrawTextureParams;
-use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PsFloat, PsObject};
+use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PsFloat, PsInt, PsObject};
 use poniescript_rt::{PsStrBuf, Vec2, Vec4};
 
 #[repr(C)]
@@ -91,4 +91,14 @@ pub extern "C" fn draw_texture_rot(_gc: &mut GcContext, texture: Gp<Texture2D>, 
 
     //let inner = texture.get_inner();
     //eprintln!("drew texture: {}x{} @ {} {}", inner.inner.width(), inner.inner.height(), pos.x, pos.y);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn set_default_filter_mode(_gc: &mut GcContext, mode: PsInt, _closure: *mut c_void) {
+    let mode = match mode {
+        0 => macroquad::texture::FilterMode::Linear,
+        _ => macroquad::texture::FilterMode::Nearest,
+    };
+
+    macroquad::prelude::set_default_filter_mode(mode);
 }

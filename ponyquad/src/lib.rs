@@ -2,7 +2,6 @@ mod bindings;
 mod hot;
 
 use macroquad::prelude::*;
-use macroquad::logging::*;
 
 use poniescript_gc::gc_spawn;
 
@@ -18,15 +17,9 @@ use poniescript_gc::gc_spawn;
 // manually do what it does (which is just calling a constructor on
 // macroquad::Window).
 #[unsafe(no_mangle)]
+#[cfg(not(feature = "hotreload"))]
 pub extern "C" fn main() {
-    info!("ponyquad: we got this far!");
-    // set_panic_handler(async |a, b| {
-    //     info!("ponyquad: panic: {} {}", a, b);
-    // });
-    info!("ponyquad: another message! :)");
-    
     macroquad::Window::new("Game", async { macroquad_main().await });
-    info!("ponyquad: idk what this means!");
 }
 
 #[unsafe(no_mangle)]
@@ -73,7 +66,6 @@ async fn macroquad_main() {
     let _ = macroquad::logging::set_logger(&LogConnector{});
     set_max_level(LevelFilter::Trace);
 
-    info!("ponyquad: got to macroquad_main!");
     let mut gc_handle = gc_spawn();
     let mut ctx = gc_handle.create_context_for_existing();
 
@@ -82,8 +74,12 @@ async fn macroquad_main() {
     let mut hot = hot::HotReload::new("./.build/hot/script-init.so", ctx).unwrap();
 
     loop {
+        bindings::canvas::frame_begin();
+
         hot::call_update(ctx, &mut hot);
         hot.poll(ctx);
+
+        bindings::canvas::frame_end();
 
         bindings::texture::process_queue().await;
 
