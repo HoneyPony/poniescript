@@ -1,9 +1,7 @@
 #ifndef PONI_CSTD_H
 #define PONI_CSTD_H
 
-#define WASM32
-
-#ifdef WASM32
+#ifdef PONI_WASM32
 
 // We assume a clang target for now.
 typedef __UINT64_TYPE__ uint64_t;

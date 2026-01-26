@@ -8,6 +8,64 @@ fn default_rust_profile() -> String {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Platform {
+    Windows,
+    Linux,
+    MacOS,
+    Web,
+
+    None,
+}
+
+impl Default for Platform {
+    fn default() -> Self {
+        Platform::None
+    }
+}
+
+impl Platform {
+    fn empty_args() -> &'static [&'static str] {
+        static EMPTY: &[&'static str] = &[];
+        EMPTY
+    }
+
+    /// Get platform-specific C arguments.
+    pub fn get_c_args(&self) -> &'static [&'static str] {
+        match self {
+            Platform::Web => {
+                static ARGS: &[&'static str] = &["-target", "wasm32", "-DPONI_WASM32", "-nostdinc", "-nostdlib"];
+                ARGS
+            },
+            _ => {
+                Self::empty_args()
+            }
+        }
+    }
+
+    pub fn get_link_args(&self) -> &'static [&'static str] {
+        match self {
+            Platform::Web => {
+                static ARGS: &[&'static str] = &[
+                    "--export-all",
+                    "--allow-undefined",
+                    // This arg taken from RustC
+                    "--no-demangle",
+                    // These args also taken from RustC
+                    "-z", "stack-size=1048576",
+                    "--stack-first",
+                ];
+                ARGS
+            },
+            _ => {
+                static LM: &[&str] = &["-lm"];
+                LM
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Toolchain {
     /// The command to use for compiling C files.
     pub cc: String,
@@ -40,6 +98,10 @@ pub struct Toolchain {
     /// else.)
     #[serde(default = "default_rust_profile")]
     pub rust_profile: String,
+
+    /// A known platform.
+    #[serde(default)]
+    pub target_platform: Platform,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -240,8 +302,12 @@ impl BuildConfig {
         //writeln!(ninja, "  poni_gc_path = {}", poni_gc_path.display())?;
 
         // For now, always add -lm, although this might be wrong.
-        writeln!(ninja, "  command = {} $in -o $out -L{} -l$runtime_lib -lm {}",
+        write!(ninja, "  command = {} $in -o $out -L{} -l$runtime_lib {}",
             toolchain.linker, poni_gc_path.display(), toolchain.linker_args_extra)?;
+        for arg in toolchain.target_platform.get_link_args() {
+            write!(ninja, " {}", arg)?;
+        }
+        writeln!(ninja, "")?;
         writeln!(ninja, "  description = {BLUE}link{RESET}{DIM}.{name}.{profile}{RESET} -> $outdesc")?;
 
         writeln!(ninja, "rule hot-link-{name}-{profile}")?;
@@ -250,7 +316,11 @@ impl BuildConfig {
         writeln!(ninja, "  description = {BLUE}hot {RESET}{DIM}.{name}.{profile}{RESET} -> $outdesc")?;
 
         writeln!(ninja, "rule cc-{name}-{profile}")?;
-        writeln!(ninja, "  command = {} -c $in -o $out -MD -MF $out.d -I$poni_h_path -I. {}", toolchain.cc, toolchain.cc_args_extra)?;
+        write!(ninja, "  command = {} -c $in -o $out -MD -MF $out.d -I$poni_h_path -I. {}", toolchain.cc, toolchain.cc_args_extra)?;
+        for arg in toolchain.target_platform.get_c_args() {
+            write!(ninja, " {}", arg)?;
+        }
+        writeln!(ninja, "")?;
         writeln!(ninja, "  depfile = $out.d")?;
         writeln!(ninja, "  deps = gcc")?;
         writeln!(ninja, "  description = {GREEN}cc  {RESET}{DIM}.{name}.{profile}{RESET} $indesc")?;
