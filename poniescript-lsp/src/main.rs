@@ -261,10 +261,18 @@ impl LanguageServer for Backend {
         let proj = project.get_cache(&lock);
         let proj = proj.lock().unwrap();
 
+        let Some(document) = proj.url_to_id_map.get(&params.text_document.uri) else {
+            return Ok(Vec::new());
+        };
+
         let mut colors = Vec::new();
 
         for color in &proj.db.color_tokens {
             let mut location = color.location.clone();
+            // Collect only color tokens for this document.
+            // Note that we expect there to be pretty few color tokens overall,
+            // so it shouldn't be hugely inefficient to filter them this way.
+            if location.source != *document { continue; }
             // Cut out the (#)
             location.offset += 2;
             location.length -= 3;
