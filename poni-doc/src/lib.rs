@@ -5,11 +5,13 @@ use std::path::PathBuf;
 use maud::Markup;
 use maud::PreEscaped;
 use maud::html;
+use poniescript_core::binder;
 use poniescript_core::db::Ast;
 use poniescript_core::db::Db;
 use poniescript_core::db::IdFuncs;
 use poniescript_core::inf_write;
 use poniescript_core::lexer::Token;
+use poniescript_core::typecheck;
 use pulldown_cmark::CowStr;
 use pulldown_cmark::HeadingLevel;
 use pulldown_cmark::Tag;
@@ -378,6 +380,12 @@ fn convert_doc_comment(db: &Db, doc_comment: &Option<Vec<Token>>) -> String {
     return markdown;
 }
 
+fn report_errors(ast: &Ast, db: &Db) {
+    for error in &db.errors {
+        poniescript_core::error::show_error(&error, ast);
+    }
+}
+
 /// Generates docs to the given output path. Note that this will always create
 /// the given output path, due to the way it creates the interior paths.
 pub fn generate_docs(input_paths: &Vec<PathBuf>, import_paths: &Vec<PathBuf>, output_path: &Path) -> std::io::Result<()> {
@@ -386,6 +394,23 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, import_paths: &Vec<PathBuf>, ou
 
     parse_modules(&mut ast, &mut db, input_paths);
     parse_imports(&mut ast, &mut db, input_paths);
+
+    // Note that we must both bind and typecheck, so that we can identify
+    // variable and class types that come from those passes.
+
+    binder::bind(&mut db, &mut ast);
+    if !db.errors.is_empty() {
+        // TODO: Return error instead of exiting.
+        report_errors(&ast, &db);
+        std::process::exit(1);
+    }
+
+    typecheck::typecheck(&mut db, &mut ast);
+    if !db.errors.is_empty() {
+        // TODO: Return error instead of exiting.
+        report_errors(&ast, &db);
+        std::process::exit(1);
+    }
 
     // TODO: How to distribute directories for these files?
     let generated = output_path.join("generated");
