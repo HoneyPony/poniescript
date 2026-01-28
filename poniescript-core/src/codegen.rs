@@ -384,6 +384,11 @@ poni_gc_get_allocation_size(void *object) {
 				Type::Class(id) => {
 					inf_writeln!(visit_object, "\tcase {}: {{", tag);
 					inf_writeln!(visit_object, "\t\tstruct {} *self = object;", self.db.get_class_cname(*id));
+					
+					if self.db.get(*id).parent.is_some() {
+						inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->parent);");
+					}
+
 					for field in &self.db.get(*id).vars {
 						let field_ty = self.db.get(*field).typ;
 
