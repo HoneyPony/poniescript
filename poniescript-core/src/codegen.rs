@@ -688,6 +688,7 @@ poni_gc_get_allocation_size(void *object) {
 			let send = sends[0].clone();
 			let ast = Arc::clone(&ast);
 			let db = self.db;
+			let disable_gc_frames = args.disable_gc_frames;
 			std::thread::spawn(move || {
 				// Distribute senders to the main codegen threads in a round-robin
 				// fashion. This should work decently well.
@@ -696,7 +697,7 @@ poni_gc_get_allocation_size(void *object) {
 				for (idx, task_set) in task_sets.into_iter().enumerate() {
 					// For the last task, we will just handle it ourselves.
 					if idx == thread_count - 1 {
-						let mut cg = Codegen::new(db, send.clone());
+						let mut cg = Codegen::new(db, send.clone(), disable_gc_frames);
 						cg.handle_tasks(Arc::clone(&ast), task_set);
 					}
 					// Otherwise, spawn more threads.
@@ -704,8 +705,9 @@ poni_gc_get_allocation_size(void *object) {
 						let send = sends[send_idx].clone();
 						send_idx = (send_idx + 1) % sends.len();
 						let ast = Arc::clone(&ast);
-						std::thread::spawn(|| {
-							let mut cg = Codegen::new(db, send);
+
+						std::thread::spawn(move || {
+							let mut cg = Codegen::new(db, send, disable_gc_frames);
 							cg.handle_tasks(ast, task_set);
 						});
 					}
@@ -731,7 +733,7 @@ poni_gc_get_allocation_size(void *object) {
 		// initializer (it shouldn't be able to GC).
 
 		// For any extras in the globals code, just send it to the 0th channel.
-		let mut cg = Codegen::new(&self.db, send0);
+		let mut cg = Codegen::new(&self.db, send0, args.disable_gc_frames);
 
 		cg.disable_gc_frames = true;
 

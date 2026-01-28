@@ -88,6 +88,17 @@ pub struct Args {
 	/// (no f_ prefix), which should mean it's guaranteed to refer to the global
 	/// function rather than e.g. a class member function of the same name.
 	pub bind_funs: Vec<String>,
+
+	#[arg(long="disable-gc-frames")]
+	/// Completely disable the generation of GC frames.
+	/// 
+	/// This prevents any GC-frame based backtrace for panic messages. However,
+	/// it also removes a lot of extra code for shuffling information around for
+	/// the GC.
+	/// 
+	/// This option is only appropriate if EVERY PonieScript thread in your program
+	/// will regularly safepoint.
+	pub disable_gc_frames: bool,
 }
 
 #[cfg(test)]

@@ -451,6 +451,13 @@ pub struct Codegen<'a> {
 	/// global initialization)
 	pub disable_gc_frames: bool,
 
+	/// A compile option for disabling GC frames entirely. In this case, GC frames
+	/// will not be generated at all, which saves a lot of shuffling around the
+	/// shadow stack.
+	/// 
+	/// Useful for game code where we can forcibly safepoint every game loop.
+	pub completely_disable_gc_frames: bool,
+
 	/// The 'return' value of the current Loop, if any.
 	loop_val: Option<TypedVal>,
 
@@ -524,7 +531,7 @@ fn find_function_depth(db: &Db, typ: TypId, fun: FunId) -> usize {
 }
 
 impl<'a> Codegen<'a> {
-	pub fn new(db: &'a Db, send: channel::Sender<String>) -> Self {
+	pub fn new(db: &'a Db, send: channel::Sender<String>, completely_disable_gc_frames: bool,) -> Self {
 		return Codegen {
 			return_types: Vec::new(),
 
@@ -542,6 +549,7 @@ impl<'a> Codegen<'a> {
 			block_scopes: Vec::new(),
 
 			disable_gc_frames: false,
+			completely_disable_gc_frames,
 
 			loop_val: None,
             send,
@@ -694,7 +702,7 @@ impl<'a> Codegen<'a> {
 	pub fn save_gc_values(&mut self, into: &mut String) {
 		// If we're disabling gc frames, trying to save the values will cause
 		// issues.
-		if self.disable_gc_frames { return; }
+		if self.disable_gc_frames || self.completely_disable_gc_frames { return; }
 
 		let saved = self.gc_frame.saved.borrow();
 		let indent = self.indent();
@@ -1425,8 +1433,6 @@ impl<'a> Codegen<'a> {
 				Val::Bottom.typed(self.db.types.bottom, None)
 			}
 			Expr::Return(ret) => {
-				inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
-
 				match &ret.expression {
 					Some(value) => {
 						let needed_type = *self.return_types.last().unwrap();
@@ -1438,11 +1444,18 @@ impl<'a> Codegen<'a> {
 							// If it's not bottom, check the typechecker's work.
 							assert!(val.typ == needed_type);
 
+							// This must occur right before the actual return statement.
+							if !self.completely_disable_gc_frames {
+								inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
+							}
 							inf_writeln!(into, "{}return {};",
 								indent, val);
 						}
 					},
 					None => {
+						if !self.completely_disable_gc_frames {
+							inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
+						}
 						inf_writeln!(into, "{}return;", indent);
 					}
 				}
@@ -2707,7 +2720,9 @@ impl<'a> Codegen<'a> {
 		let val = self.expr_block_unwrapped(ast, body, &mut own_buffer);
 
 		// Generate unconditional GC-frame pop
-		inf_writeln!(own_buffer, "{}ctx->frame = gc_frame.prev;", indent);
+		if !self.completely_disable_gc_frames {
+			inf_writeln!(own_buffer, "{}ctx->frame = gc_frame.prev;", indent);
+		}
 
 		if val.needs_storage() {
 			assert!(val.typ == own_return_type);
@@ -2731,9 +2746,11 @@ impl<'a> Codegen<'a> {
 		// inf_writeln!(own_buffer_beginning, "{}ctx->frame = (void*)&gc_frame;", indent);
 
 		// Instead of generating the code directly, use a macro.
-		inf_writeln!(own_buffer_beginning, "{}PONI_GC_FRAME({}, \"{}\");",
-			indent, gc_frame_count, self.db.get(
-				self.db.get(fun).name.unwrap_or(self.db.str_anonymous)));
+		if !self.completely_disable_gc_frames {
+			inf_writeln!(own_buffer_beginning, "{}PONI_GC_FRAME({}, \"{}\");",
+				indent, gc_frame_count, self.db.get(
+					self.db.get(fun).name.unwrap_or(self.db.str_anonymous)));
+		}
 		
 		// Pop type value
 		self.return_types.pop();
