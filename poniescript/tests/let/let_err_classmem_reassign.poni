@@ -1,0 +1,16 @@
+class MyConstants {
+    let x = 30;
+    let y = 40;
+    let z = 50;
+}
+
+fun init() {
+    var constants = new MyConstants {
+        x: 80,
+        y: 90,
+        z: 100,
+    };
+
+    //? Invalid assignment to property 'x', which cannot be written to.
+    constants.x = 40;
+}

@@ -1,0 +1,22 @@
+// To correctly typecheck this program, we have to realize that Sets on a value
+// type accessor cannot be allowed to happen, if that value type is itself
+// readonly.
+
+let my_tuple = (20, 30);
+
+class MyClass {
+    let tuple = (30, 40, 50);
+}
+
+fun init() {
+    // Invalid assignment to 'my_const': cannot be written to.
+    my_tuple.x = 40;
+
+    var instance = new MyClass{};
+    //? Invalid assignment to property 'tuple', which cannot be written to.
+    instance.tuple.y = 5;
+
+    let nested_tuple = ((10, 20), 30);
+    // Invalid assignment to 'nested_tuple': cannot be written to.
+    nested_tuple.0.0 = 25;
+}

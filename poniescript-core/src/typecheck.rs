@@ -904,7 +904,7 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
-	fn check_assign(&mut self, ast: &AstProxy, at: &SourceLocation, var: VarId, expr_id: &mut ExprId, assign_ty: bool) -> Result<TypId> {
+	fn check_assign(&mut self, ast: &AstProxy, at: &SourceLocation, var: VarId, expr_id: &mut ExprId, assign_ty: bool, override_readonly: bool) -> Result<TypId> {
 		let value = self.check_expr(ast, *expr_id, true)?;
 
 		if self.db.get_var_type(var) == self.db.types.unassigned && value == self.db.types.unassigned {
@@ -915,7 +915,7 @@ impl<'db> TypeChecker<'db> {
 			self.compute_assignable(self.db.get_var_type(var), value);
 
 		// TODO: This will have to NOT be done in certain new{} expressions.
-		if self.db.get(var).readonly {
+		if !override_readonly && self.db.get(var).readonly {
 			let readonly_error = Error::simple(
 				format!("Invalid assignment to '{}': cannot be written to.",
 					self.db.repr_var(var)),
@@ -1639,7 +1639,9 @@ impl<'db> TypeChecker<'db> {
 					// comment, nothing else in the code reads this though.)
 					assign.op = Tok::Equal;
 				}
-				self.check_assign(ast, &assign.location, assign.identity, &mut assign.value, false)?
+				self.check_assign(ast, &assign.location, assign.identity, &mut assign.value, false,
+					// Regular assignments cannot assign to readonly vars.
+					false)?
 			},
 			Expr::NumLiteral(lit) => {
 				lit.typ
@@ -2092,7 +2094,9 @@ impl<'db> TypeChecker<'db> {
 				let mut checklist = self.db.get(class_id).mandatory_vars.clone();
 
 				for init in &mut new.initializers {
-					self.check_assign(ast, &init.location, init.var, &mut init.value, false)?;
+					self.check_assign(ast, &init.location, init.var, &mut init.value, false,
+						// Initializers are allowed to assign to readonly variables.
+						true)?;
 					checklist.remove(&init.var);
 				}
 
@@ -2696,7 +2700,9 @@ impl<'db> TypeChecker<'db> {
 		for var in &vars {
 			if let Some(initializer) = self.db.get(*var).initializer {
 				let mut init = initializer;
-				self.check_assign(ast, &self.db.get(*var).location.clone(), *var, &mut init, true)?;
+				self.check_assign(ast, &self.db.get(*var).location.clone(), *var, &mut init, true,
+					// Declarations are allowed to assign to readonly variables.
+					true)?;
 				// Be sure to manually copy the expr back
 				self.db.get_mut(*var).initializer = Some(init);
 			}
@@ -2746,7 +2752,9 @@ impl<'db> TypeChecker<'db> {
 
 	fn check_declare(&mut self, ast: &AstProxy, declare: &mut Declare) -> Result<TypId> {
 		if let Some(value) = declare.value.as_mut() {
-			self.check_assign(ast, &declare.location, declare.identity, value, true)
+			self.check_assign(ast, &declare.location, declare.identity, value, true,
+				// Declarations are allowed to assign to readonly variables.
+				true)
 		}
 		else {
 			// In this case, we shiould (?) have had an explicit type from the
@@ -2877,7 +2885,10 @@ impl<'db> TypeChecker<'db> {
 					continue;
 				}
 			};
-			let _ = self.check_assign(ast, &self.db.get(*global).location.clone(), *global, &mut initializer, true);
+			let _ = self.check_assign(ast, &self.db.get(*global).location.clone(), *global, &mut initializer,
+				true,
+				// Declarations are allowed to assign to readonly variables.
+				true);
 			// Be sure to re-set the initializer
 			self.db.get_mut(*global).initializer = Some(initializer);
 		}

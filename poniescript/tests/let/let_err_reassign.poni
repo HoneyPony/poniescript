@@ -1,0 +1,8 @@
+// This one should not error.
+let my_const = 5;
+
+fun init() {
+    // This one should.
+    //? Invalid assignment to 'my_const': cannot be written to.
+    my_const = 7;
+}

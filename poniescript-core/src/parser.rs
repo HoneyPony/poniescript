@@ -171,8 +171,8 @@ macro_rules! parse_error {
 }
 
 macro_rules! consume {
-    ($parser:ident, $ty:expr, $($arg:tt)*) => {
-        if($parser.peek_typ() != $ty) {
+    ($parser:ident, $ty:pat, $($arg:tt)*) => {
+        if !matches!($parser.peek_typ(), $ty) {
 			parse_error!($parser, $($arg)*);
 			return Err(ParseErr::SyntaxErr);
         }
@@ -183,8 +183,8 @@ macro_rules! consume {
 }
 
 macro_rules! consume_no_err {
-    ($parser:ident, $ty:expr, $($arg:tt)*) => {
-        if($parser.peek_typ() != $ty) {
+    ($parser:ident, $ty:pat, $($arg:tt)*) => {
+        if !matches!($parser.peek_typ(), $ty) {
 			let _ = parse_error!($parser, $($arg)*);
         }
 		else {
@@ -197,13 +197,13 @@ macro_rules! consume_no_err {
 // mark:
 //    expected(_after)?!\([^;]+\);
 macro_rules! expected {
-	($parser:ident, $ty:expr, $($arg:tt)*) => {
+	($parser:ident, $ty:pat, $($arg:tt)*) => {
 		consume!($parser, $ty, "Expected {}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()))
 	}
 }
 
 macro_rules! expected_no_err {
-	($parser:ident, $ty:expr, $($arg:tt)*) => {
+	($parser:ident, $ty:pat, $($arg:tt)*) => {
 		consume_no_err!($parser, $ty, "Expected {}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()))
 	}
 }
@@ -218,7 +218,7 @@ macro_rules! got {
 }
 
 macro_rules! expected_after {
-	($parser:ident, $ty:expr, $prev_tok:expr, $($arg:tt)*) => {
+	($parser:ident, $ty:pat, $prev_tok:expr, $($arg:tt)*) => {
 		consume!($parser, $ty, "Expected {} after '{}', got '{}'",
 			format!($($arg)*),
 			$parser.db.get($prev_tok.lexeme),
@@ -604,9 +604,7 @@ impl<'b> Parser<'b> {
 		let kind = if is_print { "print" } else { "str" };
 
 		let location = self.start();
-		let key_print = expected!(self,
-			if is_print { Tok::Print } else { Tok::Str },
-			"'{kind}'")?;
+		let key_print = if is_print { expected!(self, Tok::Print, "'print'")? } else { expected!(self, Tok::Str, "'str'")? };
 
 		expected_after!(self, Tok::LeftParen, key_print, "'('")?;
 
@@ -1534,7 +1532,7 @@ impl<'b> Parser<'b> {
 	fn var_declaration(&mut self, require_initializer: bool, add_to_scope: bool) -> Result<Declare> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
-		let key_var = expected!(self, Tok::Var, "'var''")?;
+		let key_var = expected!(self, Tok::Var | Tok::Let, "'var' or 'let'")?;
 
 		let name = expected_after!(self, Tok::Identifier, key_var,
 			"variable name")?;
@@ -1576,13 +1574,16 @@ impl<'b> Parser<'b> {
 		
 		let name_str = name.lexeme;
 		let name_loc = name.location.clone();
+
+		let readonly = matches!(key_var.typ, Tok::Let);
+
 		// When we create variables, don't set the class yet, as we don't
 		// know what it is -- we wire it back in once we're done parsing a 
 		// class.
 		//
 		// TODO: Readonly variables...?
 		let identity = self.db.new_var(name.lexeme,
-			typ, false, None, None, self.closure, None,
+			typ, readonly, None, None, self.closure, None,
 			initializer, name.location,
 			doc_comment);
 		self.fun_vars.push(identity);
@@ -1662,7 +1663,7 @@ impl<'b> Parser<'b> {
 	fn stmt(&mut self) -> Result<StmtId> {
 		let location = self.start();
 		match self.peek_typ() {
-			Tok::Var => {
+			Tok::Var | Tok::Let => {
 				// Var declarations in general require initializers
 				let inner = self.var_declaration(true, true)?;
 				Ok(self.ast.stmts.push(Stmt::Declare(inner)))
@@ -1924,7 +1925,7 @@ impl<'b> Parser<'b> {
 				Tok::Annotation => {
 					annotations.push(self.advance()?);
 				}
-				Tok::Var => {
+				Tok::Var | Tok::Let => {
 					// Disallow 'self' in member initializers.
 					let enclosing_in_member = self.in_member_initializer;
 					self.in_member_initializer = true;
@@ -2039,7 +2040,7 @@ impl<'b> Parser<'b> {
 				annotations.push(self.advance()?);
 			}
 
-			Tok::Var => {
+			Tok::Var | Tok::Let => {
 				// Global variables require initializers.
 				let global = self.var_declaration(true, false)?;
 				self.db.globals.push(global.identity);

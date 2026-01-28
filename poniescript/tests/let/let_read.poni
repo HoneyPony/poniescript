@@ -1,0 +1,5 @@
+let my_const = 5;
+
+fun init() {
+    print(my_const); //! 5
+}

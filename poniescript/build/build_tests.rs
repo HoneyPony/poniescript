@@ -372,6 +372,12 @@ pub fn generate(tests_file: &mut File) {
 		("set/", "set_bottom_etc"),
 		("set/", "set_chain"),
 
+		("let/", "let_err_classmem_reassign"),
+		("let/", "let_err_reassign"),
+		("let/", "let_err_tuple"),
+		("let/", "let_new"),
+		("let/", "let_read"),
+
 		("promote/", "err_array_assign"),
 		("promote/", "err_array_assign_in_tuple"),
 		("promote/", "err_array_lit"),
