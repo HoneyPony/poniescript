@@ -10,6 +10,7 @@ use poniescript_core::db::Ast;
 use poniescript_core::db::Db;
 use poniescript_core::db::IdFuncs;
 use poniescript_core::inf_write;
+use poniescript_core::init_ordering;
 use poniescript_core::lexer::Token;
 use poniescript_core::typecheck;
 use pulldown_cmark::CowStr;
@@ -404,6 +405,23 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, import_paths: &Vec<PathBuf>, ou
         report_errors(&ast, &db);
         std::process::exit(1);
     }
+
+    // We also need to do the topological sort, in order to typecheck properly.
+    let mut globals = std::mem::take(&mut db.globals);
+	init_ordering::topological_sort(&mut globals, &ast, &mut db);
+
+	for class in db.iter_class() {
+		let mut vars = std::mem::take(&mut db.get_mut(class).vars);
+
+		init_ordering::topological_sort(&mut vars, &ast, &mut db);
+
+		db.get_mut(class).vars = vars;
+	}
+	db.globals = globals;
+    if !db.errors.is_empty() {
+		report_errors(&ast, &db);
+		std::process::exit(1);
+	}
 
     typecheck::typecheck(&mut db, &mut ast);
     if !db.errors.is_empty() {
