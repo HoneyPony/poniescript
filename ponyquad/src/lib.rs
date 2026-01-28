@@ -69,6 +69,8 @@ async fn macroquad_main() {
         set_max_level(LevelFilter::Trace);
     }
 
+    env_logger::init();
+
     let mut gc_handle = gc_spawn();
     let mut ctx = gc_handle.create_context_for_existing();
 

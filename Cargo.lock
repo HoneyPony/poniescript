@@ -1169,6 +1169,7 @@ dependencies = [
 name = "ponyquad"
 version = "0.1.0"
 dependencies = [
+ "env_logger",
  "libloading",
  "macroquad",
  "macroquad-canvas",
