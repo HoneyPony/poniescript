@@ -13,8 +13,8 @@ libloading = "0.9.0"
 macroquad = { version = "0.4.14", features = ["backtrace", "log", "log-rs"] }
 macroquad-canvas = "0.4.1"
 notify = "8.2.0"
-poniescript-gc = { version = "0.1.0", path = "../poniescript-gc", features = ["hotreload"] }
+poniescript-gc = { version = "0.1.0", path = "../poniescript-gc", features = ["single-threaded"] }
 poniescript-rt = { version = "0.1.0", path = "../poniescript-rt" }
 
 [features]
-hotreload = []
+hotreload = ["poniescript-gc/hotreload"]

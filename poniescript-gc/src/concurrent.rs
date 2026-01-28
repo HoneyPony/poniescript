@@ -1,49 +1,8 @@
 use std::{alloc::{self, Layout}, collections::VecDeque, marker::PhantomData, mem::MaybeUninit, ptr::null, sync::{Condvar, Mutex, atomic::{AtomicBool, AtomicPtr, AtomicU64, AtomicUsize, Ordering}}, thread::{self, JoinHandle}};
 
 use crate::{GC_ALLOCATE_MARKED, GC_FLAGS, GcFrame, Gp, HasPsHeader, HasPsType};
-
-#[cfg(not(feature = "hotreload"))]
-extern "C" {
-    fn poni_gc_visit_object(gc: &mut Gc, ptr: *mut u64);
-    fn poni_gc_visit_roots(gc: &mut Gc);
-    fn poni_gc_get_allocation_size(ptr: *mut u64) -> usize;
-}
-
-struct PsuedoAtomicFnPtr<T> {
-    inner: AtomicUsize,
-    phantom: PhantomData<T>
-}
-
-impl<T> PsuedoAtomicFnPtr<T> {
-    fn store(&self, ptr: T) {
-        self.inner.store(unsafe { std::mem::transmute_copy(&ptr) }, Ordering::Relaxed)
-    }
-
-    fn load(&self) -> T {
-        let val = self.inner.load(Ordering::Relaxed);
-        if val == 0 { panic!("null pointer"); }
-        unsafe { std::mem::transmute_copy(&val) }
-    }
-
-    const fn null() -> Self {
-        PsuedoAtomicFnPtr { inner: AtomicUsize::new(0), phantom: PhantomData }
-    }
-}
-
-#[cfg(feature = "hotreload")]
-static GC_VISIT_OBJECT: PsuedoAtomicFnPtr<fn(&mut Gc, *mut u64)> = PsuedoAtomicFnPtr::null();
-#[cfg(feature = "hotreload")]
-static GC_VISIT_ROOTS: PsuedoAtomicFnPtr<fn(&mut Gc)> = PsuedoAtomicFnPtr::null();
-#[cfg(feature = "hotreload")]
-static GC_GET_ALLOCATION_SIZE: PsuedoAtomicFnPtr<fn(*mut u64) -> usize> = PsuedoAtomicFnPtr::null();
-
-/// Provide dynamically loaded GC runtime functions.
-#[cfg(feature = "hotreload")]
-pub fn load_gc_functions(visit_obj: fn(&mut Gc, *mut u64), visit_roots: fn(&mut Gc), allocation_size: fn(*mut u64) -> usize) {
-    GC_VISIT_OBJECT.store(visit_obj);
-    GC_VISIT_ROOTS.store(visit_roots);
-    GC_GET_ALLOCATION_SIZE.store(allocation_size);
-}
+// Garbage collection hooks
+use crate::hot_reload::{gc_get_allocation_size, gc_visit_object, gc_visit_roots};
 
 const GC_FLAG_SCAN: u64 = 2;
 const GC_FLAG_HANDOFF_ALLOCS: u64 = 1;
@@ -354,23 +313,6 @@ impl GcAllocator {
         // should save some time.
         let mut new_allocations: Vec<AtomicPtr<u64>> = vec![];
 
-        unsafe fn get_allocation_size(ptr: *mut u64) -> usize {
-            #[cfg(feature = "hotreload")]
-            unsafe {
-                //eprintln!("poni-gc: visit: {next:?}");
-                let gc_get_allocation_size = GC_GET_ALLOCATION_SIZE.load();
-                // This is a little slow, but oh well. One thing we could consider
-                // in terms of linking against a shared library is that this
-                // is not actually necessary unless we are *reloading* the
-                // symbols.
-                gc_get_allocation_size(ptr)
-            }
-            #[cfg(not(feature = "hotreload"))]
-            unsafe {
-                poni_gc_get_allocation_size(ptr)
-            }
-        }
-
         for alloc_set in &self.allocations {
             for alloc in alloc_set { 
                 let alloc = alloc.load(Ordering::Relaxed);
@@ -378,7 +320,7 @@ impl GcAllocator {
                 // Free & skip any alloccations that aren't marked.
                 if unsafe { *alloc & 1 == 0 } {
                     unsafe { 
-                        let size = get_allocation_size(alloc);
+                        let size = gc_get_allocation_size(alloc);
                         let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
                         log::trace!("poni-gc: freeing {:?} ({} bytes, tag {:x})", alloc, size, *alloc);
                         alloc::dealloc(alloc as *mut u8, layout);
@@ -468,20 +410,7 @@ impl<'a> Gc<'a> {
 
         self.handshake(GC_FLAG_HANDOFF_ALLOCS);
 
-        #[cfg(feature = "hotreload")]
-        unsafe {
-            //eprintln!("poni-gc: visit: {next:?}");
-            let gc_visit_roots = GC_VISIT_ROOTS.load();
-            // This is a little slow, but oh well. One thing we could consider
-            // in terms of linking against a shared library is that this
-            // is not actually necessary unless we are *reloading* the
-            // symbols.
-            gc_visit_roots(self);
-        }
-        #[cfg(not(feature = "hotreload"))]
-        unsafe {
-            poni_gc_visit_roots(self);
-        }
+        gc_visit_roots(self);
 
         let mut toggle = GC_FLAG_DUMMY;
 
@@ -531,22 +460,7 @@ impl<'a> Gc<'a> {
                 break;
             };
 
-            // We assume objects that are in the mark queue have already been
-            // marked, and so will unconditionally be visited.
-            #[cfg(feature = "hotreload")]
-            unsafe {
-                //eprintln!("poni-gc: visit: {next:?}");
-                let gc_visit_object = GC_VISIT_OBJECT.load();
-                // This is a little slow, but oh well. One thing we could consider
-                // in terms of linking against a shared library is that this
-                // is not actually necessary unless we are *reloading* the
-                // symbols.
-                gc_visit_object(self, next.load(Ordering::Relaxed));
-            }
-            #[cfg(not(feature = "hotreload"))]
-            unsafe {
-                poni_gc_visit_object(self, next.load(Ordering::Relaxed));
-            }
+            gc_visit_object(next.load(Ordering::Relaxed));
         }
     }
 

@@ -1,19 +1,24 @@
 mod pointers;
 mod primitives;
+mod hot_reload;
+
+// Provide the hook for loading gc functions
+#[cfg(feature = "hotreload")]
+pub use hot_reload::load_gc_functions;
 
 use std::sync::atomic::{AtomicBool, AtomicU64};
 
 pub use pointers::*;
 pub use primitives::*;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(feature = "single-threaded"))]
 mod concurrent;
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "single-threaded")]
 mod single_thread;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(feature = "single-threaded"))]
 pub use concurrent::*;
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "single-threaded")]
 pub use single_thread::*;
 
 #[cfg(feature = "mimalloc")]

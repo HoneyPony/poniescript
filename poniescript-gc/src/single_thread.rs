@@ -1,12 +1,8 @@
 use std::{alloc::{self, Layout}, collections::VecDeque, marker::PhantomData, mem::MaybeUninit, os::raw::c_void, sync::atomic::Ordering};
 
 use crate::{GC_ALLOCATE_MARKED, GcFrame, Gp, HasPsHeader, HasPsType};
-
-extern "C" {
-    fn poni_gc_visit_object(gc: &mut Gc, ptr: *mut u64);
-    fn poni_gc_visit_roots(gc: &mut Gc);
-    fn poni_gc_get_allocation_size(ptr: *mut u64) -> usize;
-}
+// Garbage collection hooks
+use crate::hot_reload::{gc_get_allocation_size, gc_visit_object, gc_visit_roots};
 
 /// The object responsible for marking and sweeping.
 pub struct Gc {
@@ -94,10 +90,10 @@ impl Gc {
 
     fn collect(&mut self) {
         unsafe {
-            poni_gc_visit_roots(self);
+            gc_visit_roots(self);
 
             while let Some(next) = self.queue.pop_back() {
-                poni_gc_visit_object(self, next);
+                gc_visit_object(self, next);
             }
         }
     }
@@ -147,7 +143,7 @@ impl<'shared> GcContext<'shared> {
             // Free & skip any alloccations that aren't marked.
             if unsafe { *ptr & 1 == 0 } {
                 unsafe { 
-                    let size = poni_gc_get_allocation_size(ptr);
+                    let size = gc_get_allocation_size(ptr);
                     total_freed += size;
                     let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
                     log::info!("poni-gc: freeing {:?} ({} bytes, tag {:x})", ptr, size, *ptr);
