@@ -8,8 +8,10 @@ class MyClass {
     let tuple = (30, 40, 50);
 }
 
+class Horse{}
+
 fun init() {
-    // Invalid assignment to 'my_const': cannot be written to.
+    //? Invalid assignment to variable 'my_tuple', which cannot be written to.
     my_tuple.x = 40;
 
     var instance = new MyClass{};
@@ -17,6 +19,10 @@ fun init() {
     instance.tuple.y = 5;
 
     let nested_tuple = ((10, 20), 30);
-    // Invalid assignment to 'nested_tuple': cannot be written to.
+    //? Invalid assignment to variable 'nested_tuple', which cannot be written to.
     nested_tuple.0.0 = 25;
+
+    let horse = (new Horse{}, 5);
+    //? Invalid assignment to variable 'horse', which cannot be written to.
+    horse.0 = new Horse{};
 }

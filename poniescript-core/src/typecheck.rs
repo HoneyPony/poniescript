@@ -1015,6 +1015,28 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	fn verify_set_lhs_is_not_readonly(&mut self, ast: &AstProxy, expr_id: ExprId) {
+		let binding = ast.exprs.get(expr_id);
+		let expr = binding.as_ref();
+		match expr {
+			Expr::Variable(var) => {
+				let typ = self.db.get_var_type(var.identity);
+				if self.db.is_value_type(typ) && self.db.get(var.identity).readonly {
+					let readonly_error = Error::simple(
+						format!("Invalid assignment to variable '{}', which cannot be written to.",
+							self.db.repr_var(var.identity)),
+						var.location.clone()
+					);
+					self.had_error = true;
+					self.db.report_error(readonly_error);
+				}
+			},
+			_ => {}
+			// TODO: Do we also need to check for Expr::Get? Seems like we should
+			// maybe coalesce and LHS Expr::Get to just be part of an Expr::Set.
+		}
+	}
+
 	// TODO: We could, inside this function, just directly call
 	// promote_from_unassigned on any expr that has value_used = false -- we
 	// should consider if that would make sense.
@@ -2238,10 +2260,11 @@ impl<'db> TypeChecker<'db> {
 						self.db.get(last.lexeme));
 				};
 
-				// We only check the  last property for readonly, for now.
-				//
-				// I suppose we will also need to check any value types along
-				// the way for readonly.  Huh.
+				// We must actually store the looked-up property.
+				var_chain.push(property); //  Push the last property
+				set.vars = var_chain;
+
+				// Check the last propety for readonly.
 				if self.db.get(property).readonly {
 					let readonly_error = Error::simple(
 						format!("Invalid assignment to property '{}', which cannot be written to.",
@@ -2252,9 +2275,52 @@ impl<'db> TypeChecker<'db> {
 					self.db.report_error(readonly_error);
 				}
 
-				// We must actually store the looked-up property.
-				var_chain.push(property); //  Push the last property
-				set.vars = var_chain;
+				// Check parent properties to see if they are readonly value
+				// types.
+				//
+				// If any property along the chain is not a value type, we can stop
+				// looking for readonly ones, as the readonly-ness no longer
+				// carries forward.
+				let mut all_parents_are_value_types = true;
+				for property in set.vars[0..set.vars.len() - 1].iter().rev() {
+					let typ = self.db.get_var_type(*property);
+					// If this parent type is a class:
+					// class Parent {
+					//     var property;
+					// }
+					// Then the assignment is always valid, no matter how many
+					// other parent properties are readonly.
+					//
+					// If in the future we have "constant references" this will
+					// not necessarily be true, although I believe the iteration
+					// itself would still stop here.
+					if !self.db.is_value_type(typ) {
+						all_parents_are_value_types = false;
+						break;
+					}
+
+					if self.db.get(*property).readonly {
+						let readonly_error = Error::simple(
+							format!("Invalid assignment to property '{}', which cannot be written to.",
+								self.db.repr_var(*property)),
+							set.location.clone()
+						);
+						self.had_error = true;
+						self.db.report_error(readonly_error);
+
+						// No need to check further.
+						break;
+					}
+				}
+
+				log::trace!("set: all parents value types? {}", all_parents_are_value_types);
+
+				// Now, we also have to check the Set's LHS to see if it is
+				// readonly. This is because the LHS could be e.g. a reference
+				// to a readonly var.
+				if all_parents_are_value_types {
+					self.verify_set_lhs_is_not_readonly(ast, set.lhs);
+				}
 
 				if set.op != Tok::Equal {
 					// very important TODO: We actually need to store the

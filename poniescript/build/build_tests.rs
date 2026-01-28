@@ -377,6 +377,7 @@ pub fn generate(tests_file: &mut File) {
 		("let/", "let_err_tuple"),
 		("let/", "let_new"),
 		("let/", "let_read"),
+		("let/", "let_success_tuple"),
 
 		("promote/", "err_array_assign"),
 		("promote/", "err_array_assign_in_tuple"),
