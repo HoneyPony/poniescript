@@ -258,6 +258,13 @@ impl ProjectKind {
             ProjectKind::Ponyquad => Some("ponyquad-hot-host".into()),
         }
     }
+
+    pub fn get_poniescript_args(&self) -> Vec<&'static str> {
+        match self {
+            // Ponyquad is a single threaded runtime and does not need GC frames.
+            ProjectKind::Ponyquad => vec!["--disable-gc-frames"],
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -486,6 +493,9 @@ impl BuildConfig {
                 }
                 for bind in &project.kind.as_ref().map(|p| p.get_required_binds()).unwrap_or(Vec::new()) {
                     write!(ninja, " --bind-fun {}", bind)?;
+                }
+                for arg in &project.kind.as_ref().map(|p| p.get_poniescript_args()).unwrap_or(Vec::new()) {
+                    write!(ninja, " {}", arg)?;
                 }
 
 
