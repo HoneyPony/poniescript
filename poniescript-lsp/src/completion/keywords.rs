@@ -87,6 +87,12 @@ pub fn keyword_completions(completions: &mut Vec<CompletionItem>) {
         detail: Some("variable declaration".into()),
         ..Default::default()
     });
+    completions.push(CompletionItem {
+        label: "let".into(),
+        kind: Some(CompletionItemKind::KEYWORD),
+        detail: Some("constant declaration".into()),
+        ..Default::default()
+    });
 
     completions.push(CompletionItem {
         label: "self".into(),

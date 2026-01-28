@@ -98,7 +98,8 @@ impl HoverHelper {
         let var = db.get(var);
 
         let mut var_sig = String::new();
-        inf_write!(var_sig, "var {}: {}", db.get(var.name), db.repr_type(var.typ));
+        let keyword = if var.readonly { "let" } else { "var" };
+        inf_write!(var_sig, "{} {}: {}", keyword, db.get(var.name), db.repr_type(var.typ));
 
         self.build_hover(ast, &var_sig, documentation::inefficient_doc(db, &var.doc_comment), range);
     }
