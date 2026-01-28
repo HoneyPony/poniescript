@@ -308,7 +308,7 @@ fn handle_build_cmd(cmd: CliCommand) {
                     doc_cmd.arg(env.poni_src_path.join(file));
                 }
                 for import in &kind.get_imports() {
-                    doc_cmd.arg(env.poni_src_path.join(import));
+                    doc_cmd.arg("-i").arg(env.poni_src_path.join(import));
                 }
             }
 
