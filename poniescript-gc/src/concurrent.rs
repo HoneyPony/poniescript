@@ -341,7 +341,7 @@ impl GcAllocator {
 
                 if DO_STATS {
                     stats.objects_kept += 1;
-                    unsafe { stats.bytes_kept += get_allocation_size(alloc) as u64; }
+                    unsafe { stats.bytes_kept += gc_get_allocation_size(alloc) as u64; }
                 }
             }
         }
@@ -410,7 +410,7 @@ impl<'a> Gc<'a> {
 
         self.handshake(GC_FLAG_HANDOFF_ALLOCS);
 
-        gc_visit_roots(self);
+        unsafe { gc_visit_roots(self); }
 
         let mut toggle = GC_FLAG_DUMMY;
 
@@ -460,7 +460,7 @@ impl<'a> Gc<'a> {
                 break;
             };
 
-            gc_visit_object(next.load(Ordering::Relaxed));
+            unsafe { gc_visit_object(self, next.load(Ordering::Relaxed)); }
         }
     }
 

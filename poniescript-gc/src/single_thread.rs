@@ -178,7 +178,12 @@ impl<'shared> GcContext<'shared> {
     #[unsafe(export_name = "poni_gc_alloc")]
     pub fn alloc_raw_bytes(&mut self, size: usize) -> *mut u64 {
         let layout = Layout::from_size_align(size, align_of::<u64>()).unwrap();
-        let ptr = unsafe { alloc::alloc(layout) };
+        // We want to allocate zeroed. This is for a couple of reasons.
+        //
+        // The main one is to make it much more likely that if we see an uninitialized
+        // pointer, it will be NULL and we will crash or skip it instead of trying
+        // to mark it.
+        let ptr = unsafe { alloc::alloc_zeroed(layout) };
         let ptr = ptr as *mut u64;
 
         // We must always reset the first 8-bytes to 0.
