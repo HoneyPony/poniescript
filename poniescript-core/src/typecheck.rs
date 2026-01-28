@@ -2560,8 +2560,10 @@ impl<'db> TypeChecker<'db> {
 						let sub = Expr::push_binary(ast, inner_loc.clone(),
 							Tok::Minus, initializer, one, self.db.types.int);
 						// Make the declare have its own location...?
-						let declare = Stmt::push_declare(ast, for_.ident.clone(),
-							for_.ident.clone(), local_identity, Some(sub), for_.has_explicit_type);
+						let declare = Stmt::push_declare(ast, inner_loc.clone(),
+							// Our local_identity declare has an explicit type,
+							// so that it never shows an inlay hint.
+							inner_loc.clone(), local_identity, Some(sub), true);
 						
 						let read = Expr::push_variable(ast, inner_loc.clone(),
 							local_identity);
