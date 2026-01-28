@@ -1596,6 +1596,21 @@ impl Db {
 			_ => false
 		}
 	}
+	
+	pub fn is_primitive_type(&self, typ: TypId) -> bool {
+		match self.get(typ) {
+			Type::Int | Type::Float | Type::Bool | Type::Void => true,
+			Type::Tuple(inner) => inner.iter().all(|i| self.is_primitive_type(*i)),
+			Type::Option(inner) => self.is_primitive_type(*inner),
+			Type::RangeOf(.., typ) => self.is_primitive_type(*typ),
+
+			// Technically, FunRaw would be primitive as it is a pointer to something
+			// that can never be deallocated.
+			Type::FunRaw(_) => true,
+
+			_ => false
+		}
+	}
 
 	/// Returns whether it is likely inconsequential if we re-evaluate the
 	/// given type. This is mostly used for generating InlineExpr when possible.

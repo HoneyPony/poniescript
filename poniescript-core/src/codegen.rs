@@ -387,6 +387,9 @@ poni_gc_get_allocation_size(void *object) {
 					for field in &self.db.get(*id).vars {
 						let field_ty = self.db.get(*field).typ;
 
+						// Don't mark any primtive types.
+						if self.db.is_primitive_type(field_ty) { continue; }
+
 						match self.db.get(field_ty) {
 							Type::Int | Type::Float | Type::Bool => {}
 							Type::Void | Type::Bottom => {}
@@ -428,6 +431,12 @@ poni_gc_get_allocation_size(void *object) {
 				},
 
 				Type::Tuple(typs) => {
+					// Don't mark any primtive types.
+					if self.db.is_primitive_type(typ) {
+						inf_writeln!(valuetype, "\tcase {}: break;", tag);
+						continue;
+					}
+
 					inf_writeln!(valuetype, "\tcase {}: {{", tag);
 					inf_writeln!(valuetype, "\t\t{} *self = object;", self.db.get_ctype(typ));
 
@@ -503,6 +512,11 @@ poni_gc_get_allocation_size(void *object) {
 			let is_valty = self.db.is_value_type(typ);
 
 			if is_valty {
+				// Don't bother marking primitive types. (Primitives are a subset
+				// of value types).
+				if self.db.is_primitive_type(typ) {
+					continue;
+				}
 				inf_writeln!(visit_roots, "\tponi_gc_visit_valuetype(gc, &{}, {});",
 					self.db.get_cname(*global), self.db.get_type_ctag(typ));
 			}
