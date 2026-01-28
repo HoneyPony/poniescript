@@ -515,7 +515,7 @@ poni_gc_get_allocation_size(void *object) {
 		}
 
 		for id in self.db.iter_strconst() {
-			inf_writeln!(visit_roots, "poni_gc_mark(gc, ps_str_const{});", id.to_index());
+			inf_writeln!(visit_roots, "\tponi_gc_mark(gc, ps_str_const{});", id.to_index());
 		}
 
 		inf_writeln!(visit_roots, "}}");
