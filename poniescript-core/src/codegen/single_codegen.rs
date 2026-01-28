@@ -1586,6 +1586,9 @@ impl<'a> Codegen<'a> {
 				// for a function call, we have to be sure to always generate
 				// the cname separately.
 				define_val!(self, into, val, " = ");
+				// Commonly, for function calls, our define_val! does not need storage,
+				// in which case it does nothing. In those cases, manually add the indent.
+				if !val.needs_storage() { inf_write!(into, "{}", indent); }
 				inf_write!(into, "{}(ctx", self.db.get_fun_cname(call.identity));
 
 				let comma = ", ";
