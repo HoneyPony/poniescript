@@ -69,6 +69,7 @@ async fn macroquad_main() {
         set_max_level(LevelFilter::Trace);
     }
 
+    #[cfg(all(not(target_arch = "wasm32"), debug_assertions))]
     env_logger::init();
 
     let mut gc_handle = gc_spawn();
