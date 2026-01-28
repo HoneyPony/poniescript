@@ -528,8 +528,6 @@ poni_gc_get_allocation_size(void *object) {
 			else {
 				inf_writeln!(visit_roots, "\tponi_gc_mark(gc, {});",
 					self.db.get_cname(*global));
-				inf_writeln!(visit_roots, "\tponi_gc_visit_object(gc, {});",
-					self.db.get_cname(*global));
 			}
 		}
 
