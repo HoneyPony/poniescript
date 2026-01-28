@@ -25,8 +25,13 @@ typedef __UINTPTR_TYPE__ uintptr_t;
 inline void
 exit(int code) {
     volatile int i = 0;
-    // Infinite loop
-    while(i == 0) {}
+    // As a very janky way to kill the program, just try to immediately explode
+    // something. I believe WASM should be strict enough for this to die quickly.
+    for(;;) {
+        char *ptr = (char*)i;
+        *ptr = 0xAA;
+        i += 1;
+    }
 }
 
 #define abort() exit(-1)
