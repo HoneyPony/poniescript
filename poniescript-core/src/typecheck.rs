@@ -2535,7 +2535,8 @@ impl<'db> TypeChecker<'db> {
 						// each time through the loop.
 						let local_identity: VarId = {
 							let var = self.db.get(for_.identity);
-							let local = var.clone();
+							let mut local = var.clone();
+							local.readonly = false; // This variable is mutated.
 							self.db.push(local)
 						};
 						// Desugar the for loop into the following:

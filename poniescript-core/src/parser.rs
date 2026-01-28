@@ -764,9 +764,10 @@ impl<'b> Parser<'b> {
 		// When we create variables, don't set the class yet, as we don't
 		// know what it is -- we wire it back in once we're done parsing a 
 		// class.
-		//
-		// TODO: Readonly variables..?
-		let identity = self.db.new_var(name.lexeme, typ, false, None, None, self.closure, None, None, name.location, 
+		let identity = self.db.new_var(name.lexeme, typ,
+			// These are readonly.
+			true,
+			None, None, self.closure, None, None, name.location, 
 			// Currently, the for loop variable can't have a doc comment?
 			// This could be changed.
 			None);

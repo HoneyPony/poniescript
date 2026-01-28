@@ -496,6 +496,8 @@ pub fn generate(tests_file: &mut File) {
 
 		("readonly/", "readonly_properties"),
 
+		("for/", "err_assign_fun"),
+		("for/", "err_assign_range"),
 		("for/", "correct_scope"),
 		("for/", "correct_scope2"),
 		("for/", "for_basic_i"),
