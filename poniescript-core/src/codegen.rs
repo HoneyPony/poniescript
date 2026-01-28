@@ -116,8 +116,8 @@ impl CodegenCoordinator {
 	fn compile_string_constant_init(&mut self, declare: &mut String, define: &mut String, init: &mut String) {
 		inf_writeln!(init, "void poni_init_strings(struct poni_gc_context *ctx) {{");
 		for id in self.db.iter_strconst() {
-			inf_writeln!(declare, "extern const ps_str *ps_str_const{};", id.to_index());
-			inf_writeln!(define, "const ps_str* ps_str_const{} = NULL;", id.to_index());
+			inf_writeln!(declare, "extern ps_str *ps_str_const{};", id.to_index());
+			inf_writeln!(define, "ps_str* ps_str_const{} = NULL;", id.to_index());
 			inf_writeln!(init, "\tps_str_const{} = ps_str_from_literal(ctx, {});",
 				id.to_index(), self.db.get(id));
 		}
