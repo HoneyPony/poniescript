@@ -257,7 +257,8 @@ poni_gc_visit_object(struct poni_gc *gc, void *object) {
 				size_t stride = poni_get_type_stride(header->type);
 
 				for(ps_int i = 0; i < header->length; ++i) {
-					poni_gc_mark(gc, elem_root);
+					uintptr_t as_ptr = *(uintptr_t*)(elem_root);
+					poni_gc_mark(gc, (void*)as_ptr);
 					elem_root += stride;
 				}
 			}
@@ -307,7 +308,8 @@ poni_gc_visit_object(struct poni_gc *gc, void *object) {
 				size_t stride = poni_get_type_stride(header->type);
 
 				for(ps_int i = 0; i < length; ++i) {
-					poni_gc_mark(gc, elem_root);
+					uintptr_t as_ptr = *(uintptr_t*)(elem_root);
+					poni_gc_mark(gc, (void*)as_ptr);
 					elem_root += stride;
 				}
 			}
