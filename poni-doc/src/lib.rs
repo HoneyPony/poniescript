@@ -72,6 +72,7 @@ impl Identifier {
 
 struct Variable {
     name: String,
+    readonly: bool,
     type_repr: String,
     doc_markdown: String,
 }
@@ -289,7 +290,7 @@ impl DocPage {
                                     h2 id={"var-" (var.name)} {
                                         code {
                                             span .code-k {
-                                                "var"
+                                                @if var.readonly { "let" } @else { "var" }
                                             }
                                             " "
                                             (var.name)
@@ -411,6 +412,7 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, import_paths: &Vec<PathBuf>, ou
 
             let var = Variable {
                 name: name.to_string(),
+                readonly: var.readonly,
                 // TODO: Reduce number of to_string()'s here? There might be
                 // a way to just have stuff pointing into the Db.
                 type_repr: typ.to_string(),
