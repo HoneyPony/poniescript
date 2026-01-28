@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::Mutex};
 
 use macroquad::texture::DrawTextureParams;
-use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PsFloat, PsInt, PsObject};
+use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsFloat, PsInt, PsObject};
 use poniescript_rt::{PsStrBuf, Vec2, Vec4};
 
 #[repr(C)]
@@ -59,7 +59,8 @@ pub async fn process_queue() {
 #[unsafe(no_mangle)]
 pub extern "C" fn load_texture(gc: &mut GcContext, path: Gp<PsStrBuf>, _closure: *mut c_void) -> Gp<Texture2D> {
     let texture = Texture2D {
-        header: PsObject::from_type_id(0),
+        // Opaque, as we don't have any inner members.
+        header: PsObject::from_type_id(PONI_TAG_OPAQUE),
         inner: macroquad::prelude::Texture2D::empty()
     };
 

@@ -15,6 +15,11 @@ pub struct PsCamera {
     pub offset: Vec2,
 
     // It would be nice to make this an optional value type, but that's OK.
+    //
+    // TODO: We kiiiiind of need the Gc to be able to visit this...
+    //
+    // Note that one funny thing is that PonieScript does actually correctly
+    // generate the Gc fun for this. Lol...
     pub viewport: GpMaybe<PsCameraViewport>
 }
 

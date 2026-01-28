@@ -28,6 +28,8 @@ pub const PONI_TAG_FLOAT    : u64 = 0x8000000000000002;
 pub const PONI_TAG_INT      : u64 = 0x8000000000000004;
 pub const PONI_TAG_BOOL     : u64 = 0x8000000000000006;
 
+pub const PONI_TAG_OPAQUE   : u64 =               0x12;
+
 impl HasPsType for AtomicPsInt { const TYP: u64 = PONI_TAG_INT; }
 impl HasPsType for PsInt       { const TYP: u64 = PONI_TAG_INT; }
 impl HasPsType for PsFloat     { const TYP: u64 = PONI_TAG_FLOAT; }

@@ -13,6 +13,13 @@
 #define PONI_TAG_STRBUF   0xC
 #define PONI_TAG_ARRAY    0xE
 #define PONI_TAG_DYNARRAY 0x10
+// Tag for Opaque classes. These are essentially any class that:
+// - Does not refer to any other member
+// - Does not have its own unique type
+// They are essentially a hack so that we can "safely" implement the Gc for
+// certain bound-types without actually implementing all the logic to visit
+// them in the Gc.
+#define PONI_TAG_OPAQUE   0x12
 
 typedef float   ps_float;
 typedef int64_t ps_int;
