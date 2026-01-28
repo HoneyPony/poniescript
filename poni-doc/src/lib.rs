@@ -393,7 +393,7 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, import_paths: &Vec<PathBuf>, ou
     let mut db = Db::new(&mut ast);
 
     parse_modules(&mut ast, &mut db, input_paths);
-    parse_imports(&mut ast, &mut db, input_paths);
+    parse_imports(&mut ast, &mut db, import_paths);
 
     // Note that we must both bind and typecheck, so that we can identify
     // variable and class types that come from those passes.
