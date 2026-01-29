@@ -289,7 +289,7 @@ impl std::fmt::Display for TypedVal {
 }
 
 pub struct Indenter {
-	level: usize,
+	pub level: usize,
 }
 
 impl ufmt::uDisplay for Indenter {

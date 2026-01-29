@@ -1,5 +1,5 @@
 use poniescript_core::{
-    Args, binder, closure_convert, codegen, db::{self, *}, dead_code, glue, init_ordering, module, typecheck
+    Args, binder, closure_convert, codegen, db::{self, *}, dead_code, glue, init_ordering, module, pretty_print, typecheck
 };
 
 use mimalloc::MiMalloc;
@@ -330,6 +330,9 @@ fn main() {
 	let had_error = parse_all_modules(&mut ast, &mut db, &args);
 
 	if had_error {
+		if args.pretty_print {
+			pretty_print::pretty_print(&ast, &db);
+		}
 		report_errors(&ast, &db);
 		exit(1);
 	}
@@ -340,6 +343,9 @@ fn main() {
 	let had_error = binder::bind(&mut db, &mut ast);
 
 	if had_error {
+		if args.pretty_print {
+			pretty_print::pretty_print(&ast, &db);
+		}
 		report_errors(&ast, &db);
 		exit(2);
 	}
@@ -369,6 +375,9 @@ fn main() {
 	db.globals = globals;
 
 	if !db.errors.is_empty() {
+		if args.pretty_print {
+			pretty_print::pretty_print(&ast, &db);
+		}
 		report_errors(&ast, &db);
 		exit(3);
 	}
@@ -379,8 +388,16 @@ fn main() {
 	let had_error = typecheck::typecheck(&mut db, &mut ast);
 
 	if had_error {
+		if args.pretty_print {
+			pretty_print::pretty_print(&ast, &db);
+		}
 		report_errors(&ast, &db);
 		exit(4);
+	}
+
+	if args.pretty_print {
+		pretty_print::pretty_print(&ast, &db);
+		exit(0);
 	}
 
 	// After typechecking, validate that we have our bound methods.

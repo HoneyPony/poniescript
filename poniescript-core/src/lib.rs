@@ -15,6 +15,7 @@ pub mod binder;
 pub mod dead_code;
 pub mod init_ordering;
 pub mod glue;
+pub mod pretty_print;
 
 use std::path::PathBuf;
 
@@ -99,6 +100,12 @@ pub struct Args {
 	/// This option is only appropriate if EVERY PonieScript thread in your program
 	/// will regularly safepoint.
 	pub disable_gc_frames: bool,
+
+	#[arg(long = "pretty-print")]
+	/// Stop after semantic analysis and pretty-print the AST.
+	/// 
+	/// TODO: Also support printing it at other stages.
+	pub pretty_print: bool,
 }
 
 #[cfg(test)]
