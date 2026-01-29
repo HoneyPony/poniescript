@@ -222,7 +222,7 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 		writeln!(locate_trait, "\t\tlet own_loc = &{lname}.location;")?;
 		writeln!(locate_trait, "\t\teprintln!(\"visit {ty_name}: {{}} ? {{}} ? {{}}\", own_loc.offset, loc.offset, own_loc.offset + own_loc.length);")?;
 		writeln!(locate_trait, "\t\tif loc.offset < own_loc.offset {{ return false; }}")?;
-		writeln!(locate_trait, "\t\tif loc.offset >= own_loc.offset + own_loc.length {{ return false; }}")?;
+		writeln!(locate_trait, "\t\tif loc.offset > own_loc.offset + own_loc.length {{ return false; }}")?;
 		for field in &fields {
 			if field.0 == "ExprId" {
 				writeln!(visit_trait, "\t\tself.visit_expr(ast, db, {lname}.{});", field.1)?;
