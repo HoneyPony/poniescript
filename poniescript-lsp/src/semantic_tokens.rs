@@ -49,6 +49,9 @@ impl SemanticTokenVisitor {
         self.tokens.push(SemanticToken { delta_line, delta_start, length: location.length as u32, token_type, token_modifiers_bitset });
     }
 
+    // Used for token modifiers. Must line up with what we tell the text editor.
+    const MODIFIER_BIT_READONLY: u32 = 1;
+
     fn push_var(&mut self, ast: &Ast, db: &Db, location: &SourceLocation, id: VarId) {
         let is_param = db.get(id).param_for.is_some();
         let is_field = db.get(id).class.is_some();
@@ -58,7 +61,9 @@ impl SemanticTokenVisitor {
             _ => 0
         };
 
-        self.push_token(ast, db, location, typ, 0);
+        let modifiers = if db.get(id).readonly { Self::MODIFIER_BIT_READONLY } else { 0 };
+
+        self.push_token(ast, db, location, typ, modifiers);
     }
 
     fn push_fun(&mut self, ast: &Ast, db: &Db, location: &SourceLocation) {

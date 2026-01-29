@@ -119,7 +119,9 @@ impl LanguageServer for Backend {
                                     SemanticTokenType::PROPERTY,
                                     SemanticTokenType::METHOD,
                                 ],
-                                token_modifiers: vec![],
+                                token_modifiers: vec![
+                                    SemanticTokenModifier::READONLY,
+                                ],
                             },
                             full: Some(SemanticTokensFullOptions::Bool(true)),
                             range: None,
