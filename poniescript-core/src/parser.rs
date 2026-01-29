@@ -217,6 +217,14 @@ macro_rules! got {
 	}
 }
 
+macro_rules! got_no_err {
+	($parser:ident, $($arg:tt)*) => {
+		{
+			parse_error!($parser, "{}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()));
+		}
+	}
+}
+
 macro_rules! expected_after {
 	($parser:ident, $ty:pat, $prev_tok:expr, $($arg:tt)*) => {
 		consume!($parser, $ty, "Expected {} after '{}', got '{}'",
@@ -1306,7 +1314,10 @@ impl<'b> Parser<'b> {
 						return self.new_(Some(inner));
 					}
 					if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
-						got!(self, "Expected identifier after '.'");
+						got_no_err!(self, "Expected identifier after '.'");
+						// Break our get. But, we still made one; this helps us
+						// with completions in the language server.
+						break;
 					}
 					let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
 					chain.push(identifier);
@@ -1316,8 +1327,6 @@ impl<'b> Parser<'b> {
 					
 					break;
 				}
-
-				assert!(chain.len() >= 1);
 
 				// For get expressions, we can have '.0' and so forth
 				// for tuples.

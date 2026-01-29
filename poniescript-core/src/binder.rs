@@ -554,7 +554,8 @@ impl<'db> Binder<'db> {
 				// only ever refer to child classes of the given object, so
 				// bind it in the typechecker.
 				if new.parent.is_none() {
-					// SAFETY: We always parse at least one identifier.
+					// SAFETY: We always parse at least one identifier. This might
+					// change with completions in the LS.
 					let (first, rest) = new.identifiers.split_first().unwrap();
 
 					// TODO: We actually want to store the entire chain of classes, for the LSP.

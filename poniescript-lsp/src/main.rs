@@ -105,7 +105,7 @@ impl LanguageServer for Backend {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
                 completion_provider: Some(CompletionOptions {
                     // Include @ as a trigger character for annotations
-                    trigger_characters: Some(vec!["@".into()]),
+                    trigger_characters: Some(vec!["@".into(), ".".into()]),
                     ..Default::default()
                 }),
                 semantic_tokens_provider: Some(

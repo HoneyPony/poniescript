@@ -2173,10 +2173,11 @@ impl<'db> TypeChecker<'db> {
 					}
 				}
 
-				// Safety: We always have a non-empty chain.
-				//
 				// Clone this token just to make life easy. 
-				let last = get.chain.last().unwrap().clone();
+				let Some(last) = get.chain.last().cloned() else {
+					// This shouldn't happen except for in the language server.
+					type_error!(self, &get.location, "Empty getter");
+				};
 
 				// The last property is special. It might just be another var
 				// in the var chain, OR it might be a FunCapture.
@@ -2248,8 +2249,10 @@ impl<'db> TypeChecker<'db> {
 					}
 				}
 
-				// Safety: We always have a non-empty chain. 
-				let last = set.chain.last().unwrap();
+				let Some(last) = set.chain.last().cloned() else {
+					// This shouldn't happen except for in the language server.
+					type_error!(self, &set.location, "Empty setter");
+				};
 
 				let property = self.db.lookup_property(lhs, last.lexeme);
 				let Some(property) = property else {
