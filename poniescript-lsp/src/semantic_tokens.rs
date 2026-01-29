@@ -134,6 +134,10 @@ impl poniescript_core::expr::VisitAstImmut for SemanticTokenVisitor {
         let binding = ast.get_expr(id);
         let call = into!(binding.as_ref(), FunCall);
 
+        if let Some(obj) = call.object {
+            self.visit_expr(ast, db, obj);
+        }
+
         self.push_fun(ast, db, &call.fn_name);
 
         for arg in &call.args {
