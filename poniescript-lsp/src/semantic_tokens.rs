@@ -5,20 +5,28 @@ use poniescript_core::{
 };
 use poni_arena::IndexCell;
 
-use std::sync::Arc;
-
 use crate::document::DocumentStore;
 
-struct SemanticTokenVisitor {
-    tokens: Vec<SemanticToken>,
-    cursor_start: u64,
+struct SemanticTokenSorter {
+    tokens: Vec<(u64, u64, u32, u32, u32)>,
+
+    /// Helper for final construction
     cursor_line: u64,
+    /// Helper for final construction
+    cursor_start: u64,
 }
 
-impl SemanticTokenVisitor {
-    fn push_token(&mut self, ast: &Ast, _db: &Db, location: &SourceLocation, token_type: u32, token_modifiers_bitset: u32) {
-        let (line, col) = ast.sources.get(location.source).get_line_column(location);
-        let (line, col) = (line - 1, col - 1);
+impl SemanticTokenSorter {
+    fn new() -> Self {
+        SemanticTokenSorter {
+            tokens: Vec::new(),
+            cursor_line: 0,
+            cursor_start: 0
+        }
+    }
+
+    fn push_token(&mut self, out: &mut Vec<SemanticToken>, from: (u64, u64, u32, u32, u32)) {
+        let (line, col, length, token_type, token_modifiers_bitset) = from;
 
         let mut delta_line: u32 = 0;
         let delta_start: u32;
@@ -44,9 +52,42 @@ impl SemanticTokenVisitor {
         self.cursor_line = line;
         self.cursor_start = col;
 
-        eprintln!("{}:{}: length: {}", self.cursor_line, self.cursor_start, location.length);
+        eprintln!("{}:{}: length: {}", self.cursor_line, self.cursor_start, length);
 
-        self.tokens.push(SemanticToken { delta_line, delta_start, length: location.length as u32, token_type, token_modifiers_bitset });
+        out.push(SemanticToken { delta_line, delta_start, length, token_type, token_modifiers_bitset });
+    }
+
+    fn finalize(mut self) -> Vec<SemanticToken> {
+        self.tokens.sort_by(|a, b| {
+            // Sort by line, col
+            a.0.cmp(&b.0).then(a.1.cmp(&b.1))
+        });
+
+        let mut final_toks = Vec::new();
+        let from = std::mem::take(&mut self.tokens);
+        for tok in from {
+            self.push_token(&mut final_toks, tok);
+        }
+
+        final_toks
+    }
+
+    fn push(&mut self, line: u64, col: u64, length: u32, token_type: u32, token_modifiers_bitset: u32) {
+        self.tokens.push((line, col, length, token_type, token_modifiers_bitset))
+    }
+}
+
+struct SemanticTokenVisitor {
+    tokens: SemanticTokenSorter
+}
+
+impl SemanticTokenVisitor {
+    fn push_token(&mut self, ast: &Ast, _db: &Db, location: &SourceLocation, token_type: u32, token_modifiers_bitset: u32) {
+        let (line, col) = ast.sources.get(location.source).get_line_column(location);
+        let (line, col) = (line - 1, col - 1);
+
+        let length = location.length as u32;
+        self.tokens.push(line, col, length, token_type, token_modifiers_bitset);
     }
 
     // Used for token modifiers. Must line up with what we tell the text editor.
@@ -220,7 +261,9 @@ pub fn semantic_tokens(store: &mut DocumentStore, params: SemanticTokensParams) 
         return None;
     };
 
-    let mut visitor = SemanticTokenVisitor { tokens: vec![], cursor_line: 0, cursor_start: 0 };
+    let mut visitor = SemanticTokenVisitor {
+        tokens: SemanticTokenSorter::new()
+    };
 
     visitor.visit_ast_for_source(&cached.ast, &cached.db, *id);
     // for source in ast.sources.iter() {
@@ -231,7 +274,14 @@ pub fn semantic_tokens(store: &mut DocumentStore, params: SemanticTokensParams) 
     //     }
     // }
 
-    let tokens = SemanticTokens { result_id: None, data: visitor.tokens };
+    let tokens = SemanticTokens {
+        result_id: None,
+        // What we are doing here is just collecting the tokens in whatever order
+        // and then sorting them at the end.
+        //
+        // This is not the most principled possible thing but it does work.
+        data: visitor.tokens.finalize(),
+    };
 
     // self.client.log_message(MessageType::INFO, format!("Found {} semantic tokens", tokens.data.len())).await;
     // Ok(Some(SemanticTokensResult::Tokens(tokens)))
