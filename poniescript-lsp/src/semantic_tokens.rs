@@ -52,7 +52,7 @@ impl SemanticTokenSorter {
         self.cursor_line = line;
         self.cursor_start = col;
 
-        eprintln!("{}:{}: length: {}", self.cursor_line, self.cursor_start, length);
+        //eprintln!("{}:{}: length: {}", self.cursor_line, self.cursor_start, length);
 
         out.push(SemanticToken { delta_line, delta_start, length, token_type, token_modifiers_bitset });
     }

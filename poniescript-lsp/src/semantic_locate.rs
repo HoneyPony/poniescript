@@ -45,7 +45,7 @@ impl<F: FnMut(Semantic, Option<&SourceLocation>)> SemanticLocate<F> {
     }
 }
 
-fn cursor_on(cursor: &SourceLocation, target: &SourceLocation) -> bool {
+pub fn cursor_on(cursor: &SourceLocation, target: &SourceLocation) -> bool {
     if cursor.offset < target.offset { return false; }
     if cursor.offset > target.offset + target.length { return false; }
     return true;

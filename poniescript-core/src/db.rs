@@ -850,6 +850,10 @@ impl Db {
 		return *existing
 	}
 
+	pub fn try_get_class_type(&self, class: ClassId) -> Option<TypId> {
+		self.type_side_map.get(&Type::Class(class)).copied()
+	}
+
 	pub fn put_type(&mut self, typ: Type) -> TypId {
 		if let Some(existing) = self.type_side_map.get(&typ) {
 			return *existing;
