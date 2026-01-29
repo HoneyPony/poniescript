@@ -471,24 +471,32 @@ pub fn generate(file: &mut File) {
 	}}").unwrap();
 
 	// We don't quite have a good way to do this yet.
-	writeln!(visit_immut_trait, "	fn visit_ast_for_source(&mut self, ast: &Ast, db: &Db, source: SourceId) {{
+	writeln!(visit_immut_trait, 
+	"/// So in theory these should visit any Declare, whether it is associated
+	/// with an ExprId or not. In practice, we have not yet implemented this
+	/// for the tree itself; implementors must manually override visit_declare
+	/// to defer to this method (and similar with the other two). But, these methods
+	/// *are* called by visit_ast_for_source, allowing us to implement visitors
+	/// that visit everything.
+	fn visit_declare_any(&mut self, ast: &Ast, db: &Db, declare: &Declare) {{}}
+	fn visit_fundeclare_any(&mut self, ast: &Ast, db: &Db, fundeclare: &FunDeclare) {{}}
+	fn visit_classdeclare_any(&mut self, ast: &Ast, db: &Db, classdeclare: &ClassDeclare) {{}}
+
+	fn visit_ast_for_source(&mut self, ast: &Ast, db: &Db, source: SourceId) {{
 		let source = ast.sources.get(source);
 		let module = &source.module;
 
 		for it in &module.globals {{
-			if let Some(expr) = it.value {{
-				self.visit_expr(ast, db, expr);
-			}}
+			self.visit_declare_any(ast, db, it);
 		}}
 
 		for it in &module.functions {{
-			self.visit_expr(ast, db, it.value);
+			self.visit_fundeclare_any(ast, db, it);
 		}}
 
-		// TODO
-		// for it in &module.classes {{
-		// 	self.visit_classdeclare(ast, db, it);
-		// }}
+		for it in &module.classes {{
+			self.visit_classdeclare_any(ast, db, it);
+		}}
 	}}").unwrap();
 
 	writeln!(locate_trait, "}}").unwrap();

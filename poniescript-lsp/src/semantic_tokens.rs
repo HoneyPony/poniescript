@@ -70,34 +70,6 @@ impl SemanticTokenVisitor {
         eprintln!("push fun: {}", location.length);
         self.push_token(ast, db, location, 2, 0);
     }
-
-    fn visit_fundeclare_any(&mut self, ast: &Ast, db: &Db, decl: &FunDeclare) {
-        // Apparently, there is currently no token for the function name itself.
-        self.visit_expr(ast, db, decl.value);
-
-        // We could also visit the params but I don't know if there's any point...?
-    }
-
-    fn visit_declare_any(&mut self, ast: &Ast, db: &Db, declare: &Declare) {
-        self.push_var(ast, db, &declare.ident, declare.identity);
-        if let Some(value) = declare.value {
-            self.visit_expr(ast, db, value);
-        }
-    }
-
-    fn visit_classdeclare_any(&mut self, ast: &Ast, db: &Db, decl: &ClassDeclare) {
-        for decl in &decl.classes {
-            self.visit_classdeclare_any(ast, db, decl);
-        }
-
-        for decl in &decl.vars {
-            self.visit_declare_any(ast, db, decl);
-        }
-
-        for decl in &decl.funs {
-            self.visit_fundeclare_any(ast, db, decl);
-        }
-    }
 }
 
 // TODO: Deduplicate this
@@ -198,6 +170,34 @@ impl poniescript_core::expr::VisitAstImmut for SemanticTokenVisitor {
         let decl = into_stmt!(binding.as_ref(), ClassDeclare);
 
         self.visit_classdeclare_any(ast, db, decl);
+    }
+
+    fn visit_fundeclare_any(&mut self, ast: &Ast, db: &Db, decl: &FunDeclare) {
+        // Apparently, there is currently no token for the function name itself.
+        self.visit_expr(ast, db, decl.value);
+
+        // We could also visit the params but I don't know if there's any point...?
+    }
+
+    fn visit_declare_any(&mut self, ast: &Ast, db: &Db, declare: &Declare) {
+        self.push_var(ast, db, &declare.ident, declare.identity);
+        if let Some(value) = declare.value {
+            self.visit_expr(ast, db, value);
+        }
+    }
+
+    fn visit_classdeclare_any(&mut self, ast: &Ast, db: &Db, decl: &ClassDeclare) {
+        for decl in &decl.classes {
+            self.visit_classdeclare_any(ast, db, decl);
+        }
+
+        for decl in &decl.vars {
+            self.visit_declare_any(ast, db, decl);
+        }
+
+        for decl in &decl.funs {
+            self.visit_fundeclare_any(ast, db, decl);
+        }
     }
 }
 
