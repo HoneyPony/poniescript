@@ -44,7 +44,9 @@ impl poniescript_core::expr::LocateAst for CompletionLocator {
     fn locate_get(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Get) {
         eprintln!("completion: checking get");
         for (idx, var) in it.chain.iter().enumerate() {
-            if cursor_on(_loc, &var.location) {
+            // We also allow the location to be before us. This is a hack to get
+            // the initial '.' to work for this completion context.
+            if cursor_on(_loc, &var.location) || _loc.offset < var.location.offset {
                 eprintln!("trying to lookup completions for: {}", db.get(var.lexeme));
                 // Okay, try to auto complete based on this var's parents.
                 let typ = if idx >= 1 {
@@ -59,13 +61,17 @@ impl poniescript_core::expr::LocateAst for CompletionLocator {
                     self.context = CompletionContext::MembersOfType(typ)
                 }
             }
+            // To pair up with our hack above.
+            if _loc.offset > var.location.end().offset {
+                break;
+            }
         }
     }
 
     fn locate_set(&mut self, ast: &Ast, db: &Db, _loc: &SourceLocation, it: &Set) {
         eprintln!("completion: checking set");
         for (idx, var) in it.chain.iter().enumerate() {
-            if cursor_on(_loc, &var.location) {
+            if cursor_on(_loc, &var.location) || _loc.offset < var.location.offset {
                 eprintln!("trying to lookup completions for: {}", db.get(var.lexeme));
                 // Okay, try to auto complete based on this var's parents.
                 let typ = if idx >= 1 {
@@ -79,6 +85,9 @@ impl poniescript_core::expr::LocateAst for CompletionLocator {
                 if let Some(typ) = typ {
                     self.context = CompletionContext::MembersOfType(typ)
                 }
+            }
+            if _loc.offset > var.location.end().offset {
+                break;
             }
         }
     }
