@@ -85,8 +85,15 @@ impl CodegenCoordinator {
 		// Write the struct definition.
 		inf_writeln!(out.struct_define, "struct {} {{", self.db.get_class_cname(class));
 
-		// The object used for garbage collection / virtual dispatch.
-		inf_writeln!(out.struct_define, "\tstruct ps_object object;");
+		if let Some(superclass) = self.db.get(class).superclass {
+			// C struct inheritance.
+			inf_writeln!(out.struct_define, "\tstruct {} superclass;",
+				self.db.get_class_cname(superclass));
+		}
+		else {
+			// The object used for garbage collection / virtual dispatch.
+			inf_writeln!(out.struct_define, "\tstruct ps_object object;");
+		}
 
 		if let Some(parent) = self.db.get(class).parent {
 			inf_writeln!(out.struct_define, "\tstruct {} *parent;", self.db.get_class_cname(parent));
