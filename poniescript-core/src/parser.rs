@@ -1918,6 +1918,9 @@ impl<'b> Parser<'b> {
 				if let Some(dot) = self.match_(Tok::Dot)? {
 					superclass.push(expected_after!(self, Tok::Identifier, dot, "class name")?);
 				}
+				else {
+					break;
+				}
 			}
 		}
 
