@@ -379,6 +379,10 @@ pub fn generate(tests_file: &mut File) {
 		("let/", "let_read"),
 		("let/", "let_success_tuple"),
 
+		("inherit/", "basic"),
+		("inherit/", "basic2"),
+		("inherit/", "basic3"),
+
 		("promote/", "err_array_assign"),
 		("promote/", "err_array_assign_in_tuple"),
 		("promote/", "err_array_lit"),

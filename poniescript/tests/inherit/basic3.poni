@@ -1,0 +1,18 @@
+class Base {
+    var x: int = 80;
+    var y: int = 90;
+}
+
+class Subclass : Base {
+    var z: int = 100;
+}
+
+fun init() {
+    var sub = new Subclass {
+        super: { x: 50 }
+    };
+
+    print(sub.x); //! 50
+    print(sub.y); //! 90
+    print(sub.z); //! 100
+}
