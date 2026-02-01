@@ -17,6 +17,13 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
+enum VarAccessor {
+	/// Walk through the superclass.
+	Superclass,
+	/// Walk through the parent.
+	Parent
+}
+
 /// The Val is the way that we make generating code much easier.
 /// Instead of trying to generate good C code, we simply generate C code
 /// that uses a lot of temporary variables. Each one of these is given
@@ -44,7 +51,10 @@ pub enum Val {
 		// Assumption: Each function has a local variable "this" which lets
 		// us get to the current class members. Then, "this" also lets us
 		// get to the superclass.
-		depth: usize,
+		//
+		/// IMPORTANT: A length of 0 represents a variable  that is not a class
+		/// member. More than 0 represents a class member.
+		accessors: Vec<VarAccessor>
 	},
 	DirectSelf,
 	/// A directly generated NULL literal.
@@ -173,8 +183,8 @@ impl ufmt::uDisplay for Val {
 		match self {
 			Val::Tmp(idx) => uwrite!(f, "t{}", idx),
 			Val::DirectLit {ctype, lit } => uwrite!(f, "(({}){})", ctype, lit),
-			Val::DirectVar { this_val, name, depth } => {
-				if *depth > 0 {
+			Val::DirectVar { this_val, name, accessors } => {
+				if accessors.len() > 0 {
 					if let Some(idx) = this_val {
 						let val = Val::Tmp(*idx);
 						uwrite!(f, "{}->", val)?;
@@ -186,10 +196,11 @@ impl ufmt::uDisplay for Val {
 						// AST nodes of some sort.
 						uwrite!(f, "this->")?;
 					}
-					let mut depth_loop = depth - 1;
-					while depth_loop > 0 {
-						uwrite!(f, "parent->")?;
-						depth_loop -= 1;
+					for accessor in accessors.iter() {
+						match accessor {
+							VarAccessor::Parent => uwrite!(f, "parent->")?,
+							VarAccessor::Superclass => uwrite!(f, "superclass.")?,
+						}
 					}
 				}
 				uwrite!(f, "{}", name)
@@ -225,11 +236,11 @@ impl std::fmt::Display for Val {
 		match self {
 			Val::Tmp(idx) => write!(f, "t{}", idx),
 			Val::DirectLit {ctype, lit } => write!(f, "(({ctype}){lit})")	,
-			Val::DirectVar { this_val, name, depth } => {
-				if *depth > 0 {
+			Val::DirectVar { this_val, name, accessors } => {
+				if accessors.len() > 0 {
 					if let Some(idx) = this_val {
 						let val = Val::Tmp(*idx);
-						write!(f, "{val}->")?;
+						write!(f, "{}->", val)?;
 					}
 					else {
 						// TODO: The problem with this system is it doesn't seem
@@ -238,13 +249,14 @@ impl std::fmt::Display for Val {
 						// AST nodes of some sort.
 						write!(f, "this->")?;
 					}
-					let mut depth_loop = depth - 1;
-					while depth_loop > 0 {
-						write!(f, "parent->")?;
-						depth_loop -= 1;
+					for accessor in accessors.iter() {
+						match accessor {
+							VarAccessor::Parent => write!(f, "parent->")?,
+							VarAccessor::Superclass => write!(f, "superclass.")?,
+						}
 					}
 				}
-				write!(f, "{name}")
+				write!(f, "{}", name)
 			}
 			Val::DirectSelf => {
 				write!(f, "this")
@@ -470,7 +482,38 @@ pub struct Codegen<'a> {
 	current_buffer: String,
 }
 
-fn lookup_var_in_parent(db: &Db, var: VarId, parent: TypId) -> (usize, &str, &str) {
+fn lookup_var_recursive(db: &Db, var_class: ClassId, class: ClassId, out: &mut Vec<VarAccessor>) -> bool {
+	if var_class == class {
+		return true;
+	}
+
+	// This is not quite correct. The true order needs to be:
+	// - Walk the entire chain of superclasses.
+	// - Walk the parent's entire chain of superclasses.
+	// - Walk the parent's parent's entire chain of superclasses.
+	// - etc
+	//
+	// But we swap the order of the last two items, and visit the grandparent's
+	// superclass chain before the parent's.
+
+	if let Some(superclass) = db.get(class).superclass {
+		if lookup_var_recursive(db, var_class, superclass, out) {
+			out.push(VarAccessor::Superclass);
+			return true;
+		}
+	}
+	if let Some(parent) = db.get(class).parent {
+		if lookup_var_recursive(db, var_class, parent, out) {
+			out.push(VarAccessor::Parent);
+			return true;
+		}
+	}
+
+	// Wasn't on this chain.
+	return false;
+}
+
+fn lookup_var_in_parent(db: &Db, var: VarId, parent: TypId) -> (Option<Vec<VarAccessor>>, &str, &str) {
 	let arrow = db.get_c_member_lookup(parent);		
 	let varname = db.get_cname(var);
 
@@ -478,29 +521,45 @@ fn lookup_var_in_parent(db: &Db, var: VarId, parent: TypId) -> (usize, &str, &st
 		db.repr_type(parent), parent.to_index());
 
 	let Some(var_class) = db.get(var).class else {
-		return (0, arrow, varname);
+		return (None, arrow, varname);
 	};
 
 	log::trace!("var class = {}", var_class.to_index());
 
-	let mut depth = 0;
-	let mut parent = match db.get(parent) {
+	let starting_point = match db.get(parent) {
 		Type::Class(class) => { *class },
 		// TODO: Consider panicking here?
-		_ => { return (0, arrow, varname) }
+		_ => { return (None, arrow, varname) }
 	};
 
-	loop {
-		if parent == var_class {
-			log::trace!("identified member in class: {} (depth {})", db.repr_class(parent), depth);
-			return (depth, arrow, varname);
-		}
-
-		depth += 1;
-
-		parent = db.get(parent).parent.unwrap_or_else(||
-			panic!("ICE: Trying to lookup a chained var that doesn't have any more parents."));
+	let mut array = Vec::new();
+	let found = lookup_var_recursive(db, var_class, starting_point, &mut array);
+	if !found {
+		panic!("ICE: Trying to lookup a chained var but we couldn't find it.");
 	}
+
+	array.reverse();
+
+	(Some(array), arrow, varname)
+
+	// let mut depth = 0;
+	// let mut parent = match db.get(parent) {
+	// 	Type::Class(class) => { *class },
+	// 	// TODO: Consider panicking here?
+	// 	_ => { return (0, arrow, varname) }
+	// };
+
+	// loop {
+	// 	if parent == var_class {
+	// 		log::trace!("identified member in class: {} (depth {})", db.repr_class(parent), depth);
+	// 		return (depth, arrow, varname);
+	// 	}
+
+	// 	depth += 1;
+
+	// 	parent = db.get(parent).parent.unwrap_or_else(||
+	// 		panic!("ICE: Trying to lookup a chained var that doesn't have any more parents."));
+	// }
 }
 
 fn find_function_depth(db: &Db, typ: TypId, fun: FunId) -> usize {
@@ -1965,14 +2024,27 @@ impl<'a> Codegen<'a> {
 				let mut lhs = lhs.typ;
 				if val.needs_storage() {
 					for var in &get.vars {
-						let (depth, arrow, varname) = lookup_var_in_parent(&self.db, *var, lhs);
+						let (accessors, arrow, varname) = lookup_var_in_parent(&self.db, *var, lhs);
+
+						let mut next_arrow = arrow;
 
 						// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
-						for _ in 0..depth {
-							inf_write!(into, "->parent");
+						if let Some(accessors) = accessors {
+							for accessor in accessors.iter() {
+								match accessor {
+									VarAccessor::Parent => {
+										inf_write!(into, "{}parent", next_arrow);
+										next_arrow = arrow;
+									}
+									VarAccessor::Superclass => {
+										inf_write!(into, "{}superclass", next_arrow);
+										next_arrow = ".";
+									}
+								}
+							}
 						}
 
-						inf_write!(into, "{}{}", arrow, varname);
+						inf_write!(into, "{}{}", next_arrow, varname);
 						// Walk the tree of types
 						lhs = self.db.get_var_type(*var);
 					}
@@ -2000,12 +2072,28 @@ impl<'a> Codegen<'a> {
 				let mut lhs = lhs.typ;
 				if val.needs_storage() {
 					for var in &set.vars {
-						let (depth, arrow, varname) = lookup_var_in_parent(&self.db, *var, lhs);
+						let (accessors, arrow, varname) = lookup_var_in_parent(&self.db, *var, lhs);
 
 						// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
-						for _ in 0..depth {
-							inf_write!(into, "->parent");
+						let mut next_arrow = arrow;
+
+						// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
+						if let Some(accessors) = accessors {
+							for accessor in accessors.iter() {
+								match accessor {
+									VarAccessor::Parent => {
+										inf_write!(into, "{}parent", next_arrow);
+										next_arrow = arrow;
+									}
+									VarAccessor::Superclass => {
+										inf_write!(into, "{}superclass", next_arrow);
+										next_arrow = ".";
+									}
+								}
+							}
 						}
+
+						inf_write!(into, "{}{}", next_arrow, varname);
 
 						inf_write!(into, "{}{}", arrow, varname);
 						// Walk the tree of types
@@ -2580,7 +2668,7 @@ impl<'a> Codegen<'a> {
 	}
 
 	fn get_direct_var(&mut self, var: VarId) -> TypedVal {
-		let mut depth = 0;
+		let mut accessors = Vec::new();
 
 		if let Some(class) = self.db.get(var).class {
 			log::trace!("codegen assign to class member {}.{} using Expr::Assign",
@@ -2590,21 +2678,39 @@ impl<'a> Codegen<'a> {
 				log::trace!("- checking class {}", self.db.repr_class(*inside));
 				// Depth is at least one, because we're in a class, so
 				// increment before checking.
-				depth += 1;
-				if *inside == class {
+				let mut inside = *inside;
+				let mut super_count = 0;
+				let mut found_in_super = false;
+				loop {
+					if inside == class {
+						break;
+					}
+					super_count += 1;
+					if let Some(superclass) = self.db.get(inside).superclass {
+						inside = superclass;
+						found_in_super = true
+					}
+				}
+				if found_in_super {
+					for i in 0..super_count {
+						accessors.push(VarAccessor::Superclass);
+					}
 					break;
 				}
+				accessors.push(VarAccessor::Parent);
 			}
-			log::trace!("--> depth = {}", depth);
+			//log::trace!("--> depth = {}", depth);
 
 			// TODO: Panic if we run out of classes before finding the
 			// right one.
 		}
 
+		accessors.reverse();
+
 		// Again, because this is a direct var, we don't need a GC slot for it.
 		//
 		// (We will need write barriers in the future..?)
-		Val::DirectVar { this_val: self.this_val, name: self.db.get_cname(var), depth }
+		Val::DirectVar { this_val: self.this_val, name: self.db.get_cname(var), accessors }
 			.typed(self.db.get_var_type(var), None)
 	}
 

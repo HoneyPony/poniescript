@@ -1501,6 +1501,19 @@ impl Db {
 			Type::UnboundCStructPtr(_) => 0,
 		}
 	}
+
+	fn lookup_property_in_class_and_superclasses(&self, mut class_id: ClassId, propname: StrId) -> Option<VarId> {
+		loop {
+			let class = self.get(class_id);
+			let result = class.var_map.get(&propname).copied();
+			if result.is_some() { return result; }
+
+			let Some(next) = class.superclass else {
+				return None;
+			};
+			class_id = next;
+		}
+	}
 	
 	pub fn lookup_property(&self, typ: TypId, propname: StrId) -> Option<VarId> {
 		let ty = self.get(typ);
@@ -1532,7 +1545,9 @@ impl Db {
 				let mut class_id = *class_id;
 				loop {
 					let class = self.get(class_id);
-					let result = class.var_map.get(&propname).copied();
+					// Look up properties in a class and all its superclasses
+					// first, THEN look them up in the outer classes.
+					let result = self.lookup_property_in_class_and_superclasses(class_id, propname);
 					if result.is_some() { return result; }
 
 					let Some(next) = class.parent else {
