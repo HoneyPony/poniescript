@@ -1944,16 +1944,37 @@ impl<'a> Codegen<'a> {
 						inf_writeln!(into, "{}{}->parent = {};", indent, val, parent);
 					}
 
+					let mut compile_new_inits = |init_list: &Vec<NewInitElem>| {
+						for init in init_list.iter() {
+							let rhs = self.expr(ast, init.value, into);
+							assert!(rhs.typ == self.db.get_var_type(init.var));
+							let varname = self.db.get_cname(init.var);
+
+							inf_write!(into, "{}{}->", indent, val);
+
+							// This basically compiles a variable from any
+							// nested super{} to point at the actual correct
+							// superclass.
+							let mut superclass = new.class;
+							let var_class = self.db.get(init.var).class.expect("ICE: variable in new{} without class");
+							while superclass != var_class {
+								inf_write!(into, "superclass.");
+								superclass = self.db.get(superclass).superclass.expect("ICE: Couldn't find a matching superclass for var in new{}");
+							}
+
+							inf_writeln!(into, "{} = {};", varname, rhs);
+
+							dont_initialize.insert(init.var);
+						}
+					};
+
 					// Run all the initializers from the new{} first.
-					for init in &new.initializers {
-						let rhs = self.expr(ast, init.value, into);
-						assert!(rhs.typ == self.db.get_var_type(init.var));
-						let varname = self.db.get_cname(init.var);
-
-						inf_writeln!(into, "{}{}->{} = {};", 
-							indent, val.val, varname, rhs);
-
-						dont_initialize.insert(init.var);
+					compile_new_inits(&new.initializers);
+					let mut new_super = new.super_new.as_ref();
+					loop {
+						let Some(super_) = new_super else { break; };
+						compile_new_inits(&super_.elems);
+						new_super = super_.next.as_deref();
 					}
 
 					// We can't change the this val until we've run the new{}
