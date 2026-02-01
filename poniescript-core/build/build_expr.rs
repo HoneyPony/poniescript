@@ -399,7 +399,7 @@ pub fn generate(file: &mut File) {
 	UnboundFunCapture : Token identifier, Option<Expr> object
 	Print         : Vec<Expr> exprs, TypId typ
 	Str           : Vec<Expr> exprs
-	New           : Vec<Token> identifiers, ClassId class, TypId typ, Vec<NewInitElem> initializers, Option<Expr> parent
+	New           : Vec<Token> identifiers, ClassId class, TypId typ, Vec<NewInitElem> initializers, Option<Expr> parent, Option<NewSuper> super_new
 	Get           : Vec<Token> chain, Expr lhs, Vec<VarId> vars
 	Set           : Vec<Token> chain, Expr lhs, Vec<VarId> vars, Expr rhs, Tok op
 	SelfVal       : TypId typ

@@ -17,6 +17,11 @@ pub struct NewInitElem {
 	pub location: SourceLocation
 }
 
+pub struct NewSuper {
+	pub elems: Vec<NewInitElem>,
+	pub next: Option<Box<NewSuper>>,
+}
+
 impl Stmt {
 	pub fn val_location(&self, _ast: &impl AstAbstract) -> SourceLocation {
 		self.location().clone()

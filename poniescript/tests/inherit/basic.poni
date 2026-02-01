@@ -6,7 +6,6 @@ class Base {
 class Subclass : Base {
     var z: int;
 }
-}
 
 fun init() {
     var sub = new Subclass {

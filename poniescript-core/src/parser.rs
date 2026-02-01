@@ -862,6 +862,48 @@ impl<'b> Parser<'b> {
 		got!(self, "','");
 	}
 
+	fn new_super(&mut self) -> Result<NewSuper> {
+		let key_super = expected!(self, Tok::Super, "'super'")?;
+		let colon = expected_after!(self, Tok::Colon, key_super, "':' after 'super'")?;
+		expected_after!(self, Tok::LeftBrace, colon, "'{{' after ':'")?;
+
+		let mut super_ = NewSuper {
+			elems: Vec::new(),
+			next: None,
+		};
+
+		let mut seen_super = false;
+
+		while !self.at(Tok::RightBrace) && !self.is_at_end() {
+			let location = self.start();
+
+			// Super constructor
+			if self.at(Tok::Super) {
+				if seen_super {
+					semantic_error_with!(self,
+						Error::simple("Duplicate 'super' initializer".into(),
+						self.current.location.clone()));
+				}
+				super_.next = Some(Box::new(self.new_super()?));
+				seen_super = true;
+
+				self.eat_comma(Tok::RightBrace)?;
+				continue;
+			}
+
+			let ident = expected!(self, Tok::Identifier, "identifier inside 'new' block")?;
+			expected_after!(self, Tok::Colon, ident, "':' after member name")?;
+
+			let value = self.expression()?;
+			super_.elems.push(NewInitElem { var: self.db.var_unassigned, ident, value, location: self.end(location) });
+
+			self.eat_comma(Tok::RightBrace)?;
+		}
+
+		expected!(self, Tok::RightBrace, "'}}' in 'super' expression inside 'new'")?;
+		Ok(super_)
+	}
+
 	/// Parses a 'new' expression, e.g. new Example {}
 	fn new_(&mut self, object: Option<ExprId>) -> Result<ExprId> {
 		let location = self.start();
@@ -877,11 +919,28 @@ impl<'b> Parser<'b> {
 		}
 
 		let mut initializers = Vec::new();
+		let mut seen_super = false;
+		let mut super_ = None;
 
 		expected!(self, Tok::LeftBrace, "'{{' in 'new' expression")?;
 
 		while !self.at(Tok::RightBrace) && !self.is_at_end() {
 			let location = self.start();
+
+			// Super constructor
+			if self.at(Tok::Super) {
+				if seen_super {
+					semantic_error_with!(self,
+						Error::simple("Duplicate 'super' initializer".into(),
+						self.current.location.clone()));
+				}
+				super_ = Some(self.new_super()?);
+				seen_super = true;
+
+				self.eat_comma(Tok::RightBrace)?;
+				continue;
+			}
+
 			let ident = expected!(self, Tok::Identifier, "identifier inside 'new' block")?;
 			expected_after!(self, Tok::Colon, ident, "':' after member name")?;
 
@@ -897,7 +956,7 @@ impl<'b> Parser<'b> {
 			self.db.class_unassigned,
 			self.db.types.unassigned,
 			initializers,
-		object)
+		object, super_)
 	}
 
 	fn array_literal(&mut self) -> Result<ExprId> {
