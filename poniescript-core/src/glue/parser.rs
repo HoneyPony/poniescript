@@ -292,6 +292,9 @@ impl<'b> Parser<'b> {
             funs,
             classes: Vec::new(),
             parent: None,
+            // TODO: We probably do want to be able to have a superclass for
+            // imported classes.
+            superclass: None,
             var_map,
             fun_map,
             class_map: FxHashMap::default(),

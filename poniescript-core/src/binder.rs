@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::db::*;
 use crate::error::Error;
 use crate::expr::*;
-use crate::lexer::Tok;
+use crate::lexer::{Tok, Token};
 use crate::module::Module;
 use crate::source::SourceLocation;
 use crate::typ::Type;
@@ -82,26 +82,26 @@ impl<'db> Binder<'db> {
 		}
 	}
 
-	fn resolve_class_name(&mut self, ident: StrId, location: &SourceLocation) -> Option<ClassId> {
-		for checker in self.checkers.iter_mut().rev() {
-			match checker.check(self.db, ident) {
-				ScopeEntry::Var(_) => break, // TODO: Figure out an ergonomic way to do this.
-				ScopeEntry::Fun(_) => break,
-				ScopeEntry::Class(class) => {
-					return Some(class)
-				}
-				ScopeEntry::None => continue,
-			}
-		}
+	// fn resolve_class_name(&mut self, ident: StrId, location: &SourceLocation) -> Option<ClassId> {
+	// 	for checker in self.checkers.iter_mut().rev() {
+	// 		match checker.check(self.db, ident) {
+	// 			ScopeEntry::Var(_) => break, // TODO: Figure out an ergonomic way to do this.
+	// 			ScopeEntry::Fun(_) => break,
+	// 			ScopeEntry::Class(class) => {
+	// 				return Some(class)
+	// 			}
+	// 			ScopeEntry::None => continue,
+	// 		}
+	// 	}
 
-		self.db.report_error(Error::simple(
-			format!("Unknown class name '{}'", self.db.get(ident)),
-			location.clone()
-		));
+	// 	self.db.report_error(Error::simple(
+	// 		format!("Unknown class name '{}'", self.db.get(ident)),
+	// 		location.clone()
+	// 	));
 		
-		self.had_error = true;
-		None
-	}
+	// 	self.had_error = true;
+	// 	None
+	// }
 
 	/// Gets a new SelfVal if appropriate.
 	fn get_selfval(&mut self, ast: &AstProxy, location: SourceLocation, selfval: bool) -> Option<ExprId> {
@@ -378,6 +378,122 @@ impl<'db> Binder<'db> {
 		None
 	}
 
+	fn resolve_class_name_inner(
+		&mut self,
+		class_name: StrId,
+		location: &SourceLocation
+	) -> (Option<ClassId>, bool, ScopeEntry, bool) {
+		let mut hit_upper_bound = false;
+
+		for checker in self.checkers.iter_mut().rev() {
+			match checker.check(self.db, class_name) {
+				ScopeEntry::Var(var) => {
+					self.db.report_error(Error::simple(
+						format!("Variable '{}' cannot be used as a class",
+							self.db.repr_var(var)),
+						location.clone()
+					));
+
+					return (None, hit_upper_bound, ScopeEntry::None, true);
+				}
+				ScopeEntry::Fun(_) => {
+					self.db.report_error(Error::simple(
+						format!("Function cannot be used as a class"),
+						location.clone()
+					));
+
+					return (None, hit_upper_bound, ScopeEntry::None, true);
+				},
+				entry @ ScopeEntry::Class(id) => {
+					return (Some(id), hit_upper_bound, entry, false);
+				}
+				ScopeEntry::None => {
+					if checker.is_upper_bound {
+						hit_upper_bound = true;
+					}
+					continue;
+				}
+			}
+		}
+
+		return (None, hit_upper_bound, ScopeEntry::None, false);
+	}
+
+	fn resolve_class_name(
+		&mut self,
+		class_name: StrId,
+		location: &SourceLocation
+	) -> Option<ClassId> {
+		let (class, hit_upper_bound, entry, already_reported_error)
+			= self.resolve_class_name_inner(class_name, location);
+
+		let hit_upper_bound = self.fix_upper_bound(hit_upper_bound, entry);
+
+		match (class, hit_upper_bound) {
+			(Some(class), false) => { return Some(class); },
+			(Some(_), true) => {
+				if !already_reported_error {
+					self.db.report_error(Error::simple(
+						format!("Identifier '{}' is not available in this scope.", self.db.get(class_name)),
+						location.clone()
+					).add_note(format!("Members of outer classes are only available to @inner classes."), None));
+					
+					self.had_error = true;
+				}
+			}
+			(None, _) => {
+				if !already_reported_error {
+					self.db.report_error(Error::simple(
+						format!("Unknown identifier '{}'", self.db.get(class_name)),
+						location.clone()
+					));
+
+					self.had_error = true;
+				}
+			}
+		}
+
+		None
+	}
+
+	fn resolve_class_chain(
+		&mut self,
+		chain: &Vec<Token>
+	) -> Option<ClassId> {
+		// Previously we just unwrap()'d this when the logic was just for New,
+		// but I don't think it's really worth doing here...
+		let Some((first, rest)) = chain.split_first() else { return None; };
+
+		// TODO: We actually want to store the entire chain of classes, for the LSP.
+		let mut class_id = self.resolve_class_name(first.lexeme, &first.location)?;
+		
+		log::trace!("bind: got class {} for Expr::New", self.db.get(self.db.get(class_id).name));
+		for tok in rest {
+			let class = self.db.get(class_id);
+			let next = class.class_map.get(&tok.lexeme);
+
+			log::trace!("bind: resolving inner class: {} -> is_some? {}", self.db.get(tok.lexeme), next.is_some());
+
+			let next = match next {
+				Some(next) => next,
+				None => {
+					self.db.report_error(Error::simple(
+						format!("Class '{}' has no such inner class '{}'",
+						self.db.repr_class(class_id),
+						self.db.get(tok.lexeme)),
+						tok.location.clone()
+					));
+					
+					self.had_error = true;
+
+					return None;
+				}
+			};
+		}
+
+		Some(class_id)
+	}
+
 	fn resolve_expr(&mut self, ast: &AstProxy, expr: &mut Expr) -> Option<Expr> {
 		// eprintln!("visit {:?}", expr);
 		match expr {
@@ -554,41 +670,10 @@ impl<'db> Binder<'db> {
 				// only ever refer to child classes of the given object, so
 				// bind it in the typechecker.
 				if new.parent.is_none() {
-					// SAFETY: We always parse at least one identifier. This might
-					// change with completions in the LS.
-					let (first, rest) = new.identifiers.split_first().unwrap();
-
-					// TODO: We actually want to store the entire chain of classes, for the LSP.
-					let mut class_id = self.resolve_class_name(first.lexeme, &new.location)?;
-					
-					log::trace!("bind: got class {} for Expr::New", self.db.get(self.db.get(class_id).name));
-					for tok in rest {
-						let class = self.db.get(class_id);
-						let next = class.class_map.get(&tok.lexeme);
-
-						log::trace!("bind: resolving inner class: {} -> is_some? {}", self.db.get(tok.lexeme), next.is_some());
-
-						let next = match next {
-							Some(next) => next,
-							None => {
-								self.db.report_error(Error::simple(
-									format!("Class '{}' has no such inner class '{}'",
-									self.db.repr_class(class_id),
-									self.db.get(tok.lexeme)),
-									tok.location.clone()
-								));
-								
-								self.had_error = true;
-
-								class_id = self.db.class_unassigned;
-								break;
-							}
-						};
-
-						class_id = *next;
-					}
-
-					new.class = class_id;
+					// Use class_unassigned for failed new.class, as that's what
+					// we used to do.
+					new.class = self.resolve_class_chain(&new.identifiers)
+						.unwrap_or(self.db.class_unassigned);
 					// Set the type here, so we don't have to mess with it again.
 					new.typ = self.db.put_type(Type::Class(new.class));
 				}
@@ -757,6 +842,8 @@ impl<'db> Binder<'db> {
 		for class in &mut class_declare.classes {
 			self.visit_class(ast, class);
 		}
+
+		self.db.get_mut(class_declare.identity).superclass = self.resolve_class_chain(&class_declare.superclass);
 
 		self.checkers.pop();
 		self.in_class = enclosing_in_class;

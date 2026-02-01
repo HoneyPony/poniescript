@@ -1910,6 +1910,17 @@ impl<'b> Parser<'b> {
 			}
 		}
 
+		// Parent class specifier
+		let mut superclass = Vec::new();
+		if let Some(colon) = self.match_(Tok::Colon)? {
+			superclass.push(expected_after!(self, Tok::Identifier, colon, "super class name")?);
+			loop {
+				if let Some(dot) = self.match_(Tok::Dot)? {
+					superclass.push(expected_after!(self, Tok::Identifier, dot, "class name")?);
+				}
+			}
+		}
+
 		expected!(self, Tok::LeftBrace, "'{{' at beginning of class")?;
 
 		let mut declare_funs = Vec::<FunDeclare>::new();
@@ -1998,6 +2009,7 @@ impl<'b> Parser<'b> {
 			vars,
 			funs,
 			classes,
+			superclass: None, // Will be resolved later.
 			parent,
 			var_map,
 			fun_map,
@@ -2033,7 +2045,7 @@ impl<'b> Parser<'b> {
 
 		self.scope_put_entry(name_str, ScopeEntry::Class(identity), false);
 
-		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars, declare_classes)
+		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars, declare_classes, superclass)
 	}
 
 	fn get_source(&self) -> ArenaBorrowMut<'_, Source, SourceId> {

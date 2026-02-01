@@ -610,6 +610,7 @@ impl Db {
 			funs: Vec::new(),
 			classes: Vec::new(),
 			parent: None,
+			superclass: None,
 			mandatory_vars: FxHashSet::default(),
 			import_kind: crate::expr::ImportKind::Not,
 			var_map: FxHashMap::default(),

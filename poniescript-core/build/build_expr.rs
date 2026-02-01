@@ -427,7 +427,7 @@ pub fn generate(file: &mut File) {
 	
 	Declare      : SourceLocation ident, VarId identity, Option<Expr> value, bool has_explicit_type
 	Expression   : Expr expression
-	ClassDeclare : ClassId identity, Vec<FunDeclare> funs, Vec<Declare> vars, Vec<ClassDeclare> classes
+	ClassDeclare : ClassId identity, Vec<FunDeclare> funs, Vec<Declare> vars, Vec<ClassDeclare> classes, Vec<Token> superclass
 
 	"#;
 

@@ -242,6 +242,10 @@ pub struct Class {
 	/// Optional parent for this class. Applies for inner classes.
 	pub parent: Option<ClassId>,
 
+	/// Optional superclass for this class. May eventually be non-optional
+	/// and default to Object.
+	pub superclass: Option<ClassId>,
+
 	/// Variables that new{} expressions are mandated to initialize.
 	/// 
 	/// We store these in a set so that we can easily "check them off" in the

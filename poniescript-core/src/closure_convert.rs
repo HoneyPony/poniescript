@@ -33,6 +33,8 @@ impl<'a> ClosureConvert<'a> {
                     // Maybe a secondary side map that we use to wire everything
                     // up at the end?
                     parent: None,
+                    // No superclass.
+                    superclass: None,
                     mandatory_vars: FxHashSet::default(),
                     import_kind: crate::expr::ImportKind::Not,
                     var_map: FxHashMap::default(),
