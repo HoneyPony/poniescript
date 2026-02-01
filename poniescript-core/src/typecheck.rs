@@ -1037,6 +1037,56 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	fn check_new_initializers(
+		&mut self,
+		ast: &AstProxy,
+		class_id: ClassId,
+		elems: &mut Vec<NewInitElem>,
+		outer_loc: &SourceLocation,
+		is_super: bool,
+	) -> Result<()> {
+		// We create a copy of the mandatory vars set so that we can
+		// "check" them off as we go through the initializers.
+		//
+		// This might be slightly less performant than some other
+		// strategies but I believe it should be OK.
+		let mut checklist = self.db.get(class_id).mandatory_vars.clone();
+
+		for init in elems {
+			self.check_assign(ast, &init.location, init.var, &mut init.value, false,
+				// Initializers are allowed to assign to readonly variables.
+				true)?;
+			checklist.remove(&init.var);
+		}
+
+		log::trace!("new expression checklist len: {}", checklist.len());
+		if !checklist.is_empty() {
+			let mut iter = checklist.iter();
+			let mut error = Error::simple(
+				format!("'new{}' expression is missing initializer for mandatory variable '{}'",
+					if is_super { " super" } else { "" },
+					// We know the checklist is nonempty, so we can
+					// definitely extract one var.
+					self.db.repr_var(*iter.next().unwrap())),
+				outer_loc.clone(),
+			);
+
+			// Now attach the rest of the uninitialized vars as notes.
+			for var in iter {
+				error = error.add_note(format!("also missing '{}'", self.db.repr_var(*var)), None);
+			}
+
+			self.db.report_error(error);
+			// A little awkward that we have to remember to put this.
+			self.had_error = true;
+			
+			// I don't actually think there's any reason to return Err here,
+			// as this error can't cause additional type errors.
+		}
+
+		Ok(())
+	}
+
 	// TODO: We could, inside this function, just directly call
 	// promote_from_unassigned on any expr that has value_used = false -- we
 	// should consider if that would make sense.
@@ -2108,42 +2158,28 @@ impl<'db> TypeChecker<'db> {
 					}
 				}
 
-				// We create a copy of the mandatory vars set so that we can
-				// "check" them off as we go through the initializers.
-				//
-				// This might be slightly less performant than some other
-				// strategies but I believe it should be OK.
-				let mut checklist = self.db.get(class_id).mandatory_vars.clone();
+				self.check_new_initializers(ast, new.class, &mut new.initializers, &new.location, false)?;
+				let mut superclass = self.db.get(new.class).superclass;
+				let mut new_super = new.super_new.as_mut();
+				let mut empty_elems = Vec::new(); // In case we don't have any elems, just use an empty set.
+				loop {
+					let Some(super_) = superclass else { break; };
 
-				for init in &mut new.initializers {
-					self.check_assign(ast, &init.location, init.var, &mut init.value, false,
-						// Initializers are allowed to assign to readonly variables.
-						true)?;
-					checklist.remove(&init.var);
-				}
-
-				log::trace!("new expression checklist len: {}", checklist.len());
-				if !checklist.is_empty() {
-					let mut iter = checklist.iter();
-					let mut error = Error::simple(
-						format!("'new' expression is missing initializer for mandatory variable '{}'",
-							// We know the checklist is nonempty, so we can
-							// definitely extract one var.
-							self.db.repr_var(*iter.next().unwrap())),
-						new.location.clone(),
-					);
-
-					// Now attach the rest of the uninitialized vars as notes.
-					for var in iter {
-						error = error.add_note(format!("also missing '{}'", self.db.repr_var(*var)), None);
-					}
-
-					self.db.report_error(error);
-					// A little awkward that we have to remember to put this.
-					self.had_error = true;
+					let elems = match new_super {
+						Some(inner) => {
+							new_super = inner.next.as_deref_mut();
+							&mut inner.elems
+						},
+						None => &mut empty_elems,
+					};
 					
-					// I don't actually think there's any reason to return Err here,
-					// as this error can't cause additional type errors.
+					self.check_new_initializers(ast,
+						super_,
+						elems,
+						&new.location,
+						true)?;
+
+					superclass = self.db.get(super_).superclass;
 				}
 
 				new.typ
