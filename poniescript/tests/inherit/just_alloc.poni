@@ -1,0 +1,16 @@
+// For now, this test will not actually be tested, because it isn't very useful.
+// But it's nice for intermediary codegen testing.
+
+class Base {
+    var x: int = 0;
+    var y: int = 0;
+}
+
+class Subclass : Base {
+    var z: int = 0;
+}
+
+fun init() {
+    var sub = new Subclass{};
+    print("success"); //! success
+}
