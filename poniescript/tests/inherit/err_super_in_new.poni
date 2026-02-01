@@ -1,0 +1,18 @@
+class Base {
+    var x: int;
+    var y: int;
+}
+
+class Subclass {
+    var z: int;
+}
+
+fun init() {
+    var sub = new Subclass {
+        super: {
+            x: 0,
+            y: 30,
+        },
+        z: 50
+    };
+}

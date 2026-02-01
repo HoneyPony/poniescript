@@ -2163,6 +2163,16 @@ impl<'db> TypeChecker<'db> {
 				let mut new_super = new.super_new.as_mut();
 				let mut empty_elems = Vec::new(); // In case we don't have any elems, just use an empty set.
 				loop {
+					if superclass.is_none() && new_super.is_some() {
+						let error = Error::simple(
+						format!("'super' inside 'new' for class that has no superclass"),
+							new.location.clone(),
+						);
+
+						self.db.report_error(error);
+						// A little awkward that we have to remember to put this.
+						self.had_error = true;
+					}
 					let Some(super_) = superclass else { break; };
 
 					let elems = match new_super {
