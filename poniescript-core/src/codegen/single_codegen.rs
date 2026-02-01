@@ -1971,22 +1971,31 @@ impl<'a> Codegen<'a> {
 					// Need to fetch the class list / scope from the class, as
 					// that's the static syntantical context for its constructor.
 					let enclosing_inside_class = std::mem::take(&mut self.inside_class);
-					self.inside_class = Self::get_class_list_class(&self.db, new.class);
+					let mut class_to_init = new.class;
+					let mut superclass_accessor = String::new();
+					loop {
+						self.inside_class = Self::get_class_list_class(&self.db, class_to_init);
 
-					// Run all the initializers from the class second.
-					for var in &self.db.get(new.class).vars {
-						// Skip any variables from the new{} expression.
-						if dont_initialize.contains(var) { continue; }
+						// Run all the initializers from the class second.
+						for var in &self.db.get(class_to_init).vars {
+							// Skip any variables from the new{} expression.
+							if dont_initialize.contains(var) { continue; }
 
-						// Compile the assignment.
-						if let Some(initializer) = self.db.get(*var).initializer {
-							// TODO: Some way to re-use compiled exprs?
-							let rhs = self.expr(ast, initializer, into); 
-							let varname = self.db.get_cname(*var);
-							inf_writeln!(into, "{}{}->{} = {};",
-								indent, val.val, varname, rhs);
-							//self.compile_assign(ast, *var, initializer, into, false);
+							// Compile the assignment.
+							if let Some(initializer) = self.db.get(*var).initializer {
+								// TODO: Some way to re-use compiled exprs?
+								let rhs = self.expr(ast, initializer, into); 
+								let varname = self.db.get_cname(*var);
+								inf_writeln!(into, "{}{}->{}{} = {};",
+									indent, val, superclass_accessor, varname, rhs);
+								//self.compile_assign(ast, *var, initializer, into, false);
+							}
 						}
+
+						let Some(next) = self.db.get(class_to_init).superclass else { break; };
+						class_to_init = next;
+
+						superclass_accessor.push_str("superclass.");
 					}
 
 					self.inside_class = enclosing_inside_class;

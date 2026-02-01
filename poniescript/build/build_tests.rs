@@ -381,6 +381,7 @@ pub fn generate(tests_file: &mut File) {
 
 		("inherit/", "basic"),
 		("inherit/", "basic2"),
+		("inherit/", "basic2_triple"),
 		("inherit/", "basic3"),
 
 		("promote/", "err_array_assign"),

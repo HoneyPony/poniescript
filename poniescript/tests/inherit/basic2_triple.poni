@@ -1,0 +1,26 @@
+class Base {
+    var x: int = 80;
+    var y: int = 90;
+}
+
+class Subclass1 : Base {
+    var z: int = 100;
+}
+
+class Subclass2 : Subclass1 {
+    var w: int = 200;
+}
+
+class Subclass3 : Subclass2 {
+    var theta: int = -10;
+}
+
+fun init() {
+    var sub = new Subclass3 {};
+
+    print(sub.x);     //! 80
+    print(sub.y);     //! 90
+    print(sub.z);     //! 100
+    print(sub.w);     //! 200
+    print(sub.theta); //! -10
+}
