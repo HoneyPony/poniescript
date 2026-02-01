@@ -1051,8 +1051,26 @@ impl<'db> TypeChecker<'db> {
 		// This might be slightly less performant than some other
 		// strategies but I believe it should be OK.
 		let mut checklist = self.db.get(class_id).mandatory_vars.clone();
+		let class_ty = self.db.put_type(Type::Class(class_id));
 
+		// Check variable existence here.
+		//
+		// TODO: Check if we initialized a variable in both the super {} block
+		// and a different block.
 		for init in elems {
+			if let Some(id) = self.db.lookup_property(class_ty, init.ident.lexeme) {
+				init.var = id;
+			} else {
+				self.db.report_error(Error::simple(
+					format!("Class '{}' has no such property '{}'",
+					self.db.repr_class(class_id),
+					self.db.get(init.ident.lexeme)),
+					init.location.clone()
+				));
+				
+				self.had_error = true;
+			};
+
 			self.check_assign(ast, &init.location, init.var, &mut init.value, false,
 				// Initializers are allowed to assign to readonly variables.
 				true)?;

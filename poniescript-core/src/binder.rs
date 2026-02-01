@@ -680,19 +680,19 @@ impl<'db> Binder<'db> {
 
 				for init in &mut new.initializers {
 					self.visit_expr(ast, init.value);
-					
-					if let Some(id) = self.db.lookup_property(new.typ, init.ident.lexeme) {
-						init.var = id;
-					} else {
-						self.db.report_error(Error::simple(
-							format!("Class '{}' has no such property '{}'",
-							self.db.repr_class(new.class),
-							self.db.get(init.ident.lexeme)),
-							init.location.clone()
-						));
-						
-						self.had_error = true;
-					};
+				}
+
+				let mut super_new = new.super_new.as_mut();
+				loop {
+					if let Some(inner) = super_new {
+						for init in &inner.elems {
+							self.visit_expr(ast, init.value);
+						}
+						super_new = inner.next.as_deref_mut();
+					}
+					else {
+						break;
+					}
 				}
 
 				return None;
