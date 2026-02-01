@@ -1,0 +1,60 @@
+class TopLevel {
+    var top_level: int = 30;
+}
+
+class Outer {
+    // @inner classes can inherit from top-level classes, or from other @inner
+    // classes that share parents (so that the superclass-inner class can be
+    // properly initialized).
+    @inner
+    class Inner : TopLevel {
+
+    }
+
+    @inner
+    class Inner2 {
+        // Valid because we can store an additional parent pointer ...?
+        @inner
+        class Inner3 : Inner {
+
+        }
+       
+        @inner
+        class Wrapper {
+            // Should still be valid. In particular, the Inner5 can inherit
+            // from Inner, then have a parent pointer to the Wrapper. 
+            @inner
+            class Inner5 : Inner {
+
+            }
+        }
+
+        // Ideally shares same parent pointer with Inner3
+        @inner
+        class Inner4 : Inner3 {
+            // Should also still be valid. In particular, Inner5 is a valid
+            // instance of Inner, and its parent is also a valid instance of
+            // Inner. Note, however, that passing yourself as your parent
+            // is NOT allowed; only passing yourself as your superclass is
+            // allowed.
+            @inner
+            class Inner6 : Inner {
+
+            }
+        }
+    }
+}
+
+fun init() {
+    var outer = new Outer{};
+    var inner = outer.new Inner{};
+    var inner2 = outer.new Inner2{};
+    // Initializes the Inner superclass parent pointer to point at inner2's parent
+    // pointer, i.e. the Outer.
+    var inner3 = inner2.new Inner3{};
+    var wrapper = inner2.new Wrapper{};
+    var inner4 = inner2.new Inner4{};
+
+    var inner5 = wrapper.new Inner5{};
+    var inner6 = inner4.new Inner6{};
+}
