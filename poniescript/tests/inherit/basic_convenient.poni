@@ -1,0 +1,23 @@
+class Base {
+    var x: int;
+    var y: int;
+}
+
+class Subclass : Base {
+    var z: int;
+}
+
+fun init() {
+    var sub = new Subclass {
+        // We are allowed to directly initialize parent properties like this.
+        // This is useful because it lets us do way less nesting for e.g.
+        // deep class heirarchies where we want to initialize various properties.
+        x: 0,
+        y: 30,
+        z: 50
+    };
+
+    print(sub.x); //! 0
+    print(sub.y); //! 30
+    print(sub.z); //! 50
+}
