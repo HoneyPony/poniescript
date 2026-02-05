@@ -1,0 +1,16 @@
+class Base {
+    var x: int = 20;
+    var y: int = 30;
+
+    fun print_stuff() {
+        print(x, " ", y);
+    }
+}
+
+class Sub : Base {
+}
+
+fun init() {
+    var sub = new Sub{};
+    sub.print_stuff(); //! 20 30
+}

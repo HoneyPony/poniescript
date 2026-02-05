@@ -386,6 +386,8 @@ pub fn generate(tests_file: &mut File) {
 		("inherit/", "basic_convenient"),
 		("inherit/", "basic_err_missing"),
 		("inherit/", "basic_err_wrongty"),
+		("inherit/", "call_superclass_fn"),
+		("inherit/", "call_superclass_fn_outside"),
 
 		("promote/", "err_array_assign"),
 		("promote/", "err_array_assign_in_tuple"),

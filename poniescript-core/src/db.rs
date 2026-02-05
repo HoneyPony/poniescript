@@ -1658,6 +1658,19 @@ impl Db {
 		if self.is_value_type(typ) { "." } else { "->" }
 	}
 
+	fn lookup_member_fn_in_class_and_superclasses(&self, mut class_id: ClassId, propname: StrId) -> Option<FunId> {
+		loop {
+			let class = self.get(class_id);
+			let result = class.fun_map.get(&propname).copied();
+			if result.is_some() { return result; }
+
+			let Some(next) = class.superclass else {
+				return None;
+			};
+			class_id = next;
+		}
+	}
+
 	pub fn lookup_member_fn(&self, typ: TypId, propname: StrId) -> Option<FunId> {
 		let ty = self.get(typ);
 		match ty {
@@ -1665,7 +1678,7 @@ impl Db {
 				let mut class_id = *class_id;
 				loop {
 					let class = self.get(class_id);
-					let result = class.fun_map.get(&propname).copied();
+					let result = self.lookup_member_fn_in_class_and_superclasses(class_id, propname);
 					if result.is_some() { return result; }
 
 					let Some(next) = class.parent else {
