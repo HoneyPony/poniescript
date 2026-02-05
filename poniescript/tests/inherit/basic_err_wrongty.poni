@@ -10,6 +10,7 @@ class Subclass : Base {
 fun init() {
     var sub = new Subclass {
         super: {
+            //? Invalid assignment to 'x': need int, but value is StrConst
             x: "hello",
             y: 30,
         },

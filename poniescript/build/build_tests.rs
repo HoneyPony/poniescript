@@ -384,6 +384,8 @@ pub fn generate(tests_file: &mut File) {
 		("inherit/", "basic2_triple"),
 		("inherit/", "basic3"),
 		("inherit/", "basic_convenient"),
+		("inherit/", "basic_err_missing"),
+		("inherit/", "basic_err_wrongty"),
 
 		("promote/", "err_array_assign"),
 		("promote/", "err_array_assign_in_tuple"),

@@ -8,6 +8,7 @@ class Subclass : Base {
 }
 
 fun init() {
+    //? 'new' expression is missing initializer for mandatory variable 'x' (from superclass 'Base')
     var sub = new Subclass {
         super: {
             y: 30,
@@ -15,7 +16,7 @@ fun init() {
         z: 50
     };
 
-    print(sub.x); //! 0
-    print(sub.y); //! 30
-    print(sub.z); //! 50
+    print(sub.x);
+    print(sub.y);
+    print(sub.z);
 }

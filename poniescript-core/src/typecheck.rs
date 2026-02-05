@@ -11,6 +11,7 @@ use crate::expr::*;
 use crate::error::Error;
 
 use poni_arena::IndexCell;
+use rustc_hash::FxHashSet;
 
 // Current plan for type inference:
 // variable declarations may infer a type for the variable:
@@ -1042,15 +1043,10 @@ impl<'db> TypeChecker<'db> {
 		ast: &AstProxy,
 		class_id: ClassId,
 		elems: &mut Vec<NewInitElem>,
+		checklist: &mut FxHashSet<VarId>,
 		outer_loc: &SourceLocation,
-		is_super: bool,
 	) -> Result<()> {
-		// We create a copy of the mandatory vars set so that we can
-		// "check" them off as we go through the initializers.
-		//
-		// This might be slightly less performant than some other
-		// strategies but I believe it should be OK.
-		let mut checklist = self.db.get(class_id).mandatory_vars.clone();
+		
 		let class_ty = self.db.put_type(Type::Class(class_id));
 
 		// Check variable existence here.
@@ -1075,31 +1071,6 @@ impl<'db> TypeChecker<'db> {
 				// Initializers are allowed to assign to readonly variables.
 				true)?;
 			checklist.remove(&init.var);
-		}
-
-		log::trace!("new expression checklist len: {}", checklist.len());
-		if !checklist.is_empty() {
-			let mut iter = checklist.iter();
-			let mut error = Error::simple(
-				format!("'new{}' expression is missing initializer for mandatory variable '{}'",
-					if is_super { " super" } else { "" },
-					// We know the checklist is nonempty, so we can
-					// definitely extract one var.
-					self.db.repr_var(*iter.next().unwrap())),
-				outer_loc.clone(),
-			);
-
-			// Now attach the rest of the uninitialized vars as notes.
-			for var in iter {
-				error = error.add_note(format!("also missing '{}'", self.db.repr_var(*var)), None);
-			}
-
-			self.db.report_error(error);
-			// A little awkward that we have to remember to put this.
-			self.had_error = true;
-			
-			// I don't actually think there's any reason to return Err here,
-			// as this error can't cause additional type errors.
 		}
 
 		Ok(())
@@ -2176,7 +2147,20 @@ impl<'db> TypeChecker<'db> {
 					}
 				}
 
-				self.check_new_initializers(ast, new.class, &mut new.initializers, &new.location, false)?;
+				// We create a copy of the mandatory vars set so that we can
+				// "check" them off as we go through the initializers.
+				//
+				// This might be slightly less performant than some other
+				// strategies but I believe it should be OK.
+				let mut checklist = self.db.get(new.class).mandatory_vars.clone();
+
+				self.check_new_initializers(
+					ast,
+					new.class,
+					&mut new.initializers,
+					&mut checklist,
+					&new.location,
+				)?;
 				let mut superclass = self.db.get(new.class).superclass;
 				let mut new_super = new.super_new.as_mut();
 				let mut empty_elems = Vec::new(); // In case we don't have any elems, just use an empty set.
@@ -2204,10 +2188,47 @@ impl<'db> TypeChecker<'db> {
 					self.check_new_initializers(ast,
 						super_,
 						elems,
+						&mut checklist,
 						&new.location,
-						true)?;
+					)?;
 
 					superclass = self.db.get(super_).superclass;
+				}
+
+				// Check the checklist at the end, after we've checked all
+				// super blocks.
+				log::trace!("new expression checklist len: {}", checklist.len());
+				if !checklist.is_empty() {
+					let mut iter = checklist.iter();
+
+					// We know the checklist is nonempty, so we can
+					// definitely extract one var.
+					let first_var = *iter.next().unwrap();
+					let superclass_msg = if let Some(class) = self.db.get(first_var).class {
+						if class != new.class {
+							format!(" (from superclass '{}')", self.db.repr_class(class))
+						} else { String::new() }
+					} else { String::new() };
+
+					let mut error = Error::simple(
+						format!("'new' expression is missing initializer for mandatory variable '{}'{}",
+							self.db.repr_var(first_var),
+							superclass_msg
+						),
+						new.location.clone(),
+					);
+
+					// Now attach the rest of the uninitialized vars as notes.
+					for var in iter {
+						error = error.add_note(format!("also missing '{}'", self.db.repr_var(*var)), None);
+					}
+
+					self.db.report_error(error);
+					// A little awkward that we have to remember to put this.
+					self.had_error = true;
+					
+					// I don't actually think there's any reason to return Err here,
+					// as this error can't cause additional type errors.
 				}
 
 				new.typ

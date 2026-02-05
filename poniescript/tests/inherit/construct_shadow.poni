@@ -1,0 +1,29 @@
+class Base {
+    var x: int;
+
+    fun base_msg() {
+        // Should resolve to base class X
+        print(x);
+    }
+}
+
+class Sub : Base {
+    // TODO: Annotation like @shadow?
+    var x: int;
+
+    fun sub_msg() {
+        // Should resolve to our own X
+        print(x);
+    }
+}
+
+fun init() {
+    var sub = new Sub {
+        super: { x: 30 },
+        x: 20
+    };
+
+    sub.sub_msg(); //! 20
+    // TODO: Make this possible.
+    //sub.base_msg();
+}

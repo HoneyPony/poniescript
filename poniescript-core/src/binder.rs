@@ -1106,5 +1106,23 @@ pub fn bind(db: &mut Db, ast: &mut Ast) -> bool {
 
 	proxy.commit();
 
+	// After binding, we have a second pass: We need to update the mandatory_vars
+	// set of each class to include all superclass mandatory vars.
+	//
+	// The way this is implemented right now is a bit inefficient, but oh well.
+	for class in db.iter_class() {
+		let mut superclass = db.get(class).superclass;
+		let mut set = std::mem::take(&mut db.get_mut(class).mandatory_vars);
+		
+		loop {
+			let Some(super_) = superclass else { break; };
+			set.extend(db.get(super_).mandatory_vars.iter());
+
+			superclass = db.get(super_).superclass;
+		}
+
+		db.get_mut(class).mandatory_vars = set;
+	}
+
 	had_error
 }
