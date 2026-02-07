@@ -1,0 +1,24 @@
+fun get_greeting(horse: Horse) -> StrBuf {
+    horse.greeting
+}
+
+class Horse {
+    var greeting: StrBuf = "neigh";
+
+    fun neigh(inner: StrBuf) -> fun(int) -> StrBuf {
+        fun(x: int) -> StrBuf {
+            // Use explicit self
+            str(get_greeting(self), " ", inner, " ", x)
+        }
+    }
+}
+
+fun init() {
+    var horse = new Horse{};
+    var func = horse.neigh("!!!!");
+
+    horse.greeting = "greeting";
+
+    print(func(5)); //! greeting !!!! 5
+    print(func(7)); //! greeting !!!! 7
+}
