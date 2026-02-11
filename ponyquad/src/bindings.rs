@@ -1,6 +1,5 @@
 pub mod texture;
 pub mod input;
-pub mod canvas;
 pub mod camera;
 pub mod math;
 

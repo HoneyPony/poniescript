@@ -80,12 +80,8 @@ async fn macroquad_main() {
     let mut hot = hot::HotReload::new("./.build/hot/script-init.so", ctx).unwrap();
 
     loop {
-        bindings::canvas::frame_begin();
-
         hot::call_update(ctx, &mut hot);
         hot.poll(ctx);
-
-        bindings::canvas::frame_end();
 
         bindings::texture::process_queue().await;
 
