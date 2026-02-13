@@ -174,7 +174,7 @@ impl VisitAstMut for AsyncConvert {
                     // return-type variable for our callback.
                     if let Some(param) = db.get(sig).parameters.first().copied() {
                         let new_var_name = db.put_str("await");
-                        let new_var = db.new_var(new_var_name, cb_type, true, None,
+                        let new_var = db.new_var(new_var_name, param, true, None,
                             None, Some(closure), None, None, loc.clone(), None);
                         parameters.push(new_var);
                     }
