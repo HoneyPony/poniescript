@@ -105,6 +105,9 @@ pub struct Parser<'b> {
 
 	/// List of VarId's local to the current function.
 	fun_vars: Vec<VarId>,
+	/// Asyncness of the current function. Starts at Not and becomes Implicit
+	/// if we use .await.
+	fun_asyncness: Asyncness,
 
 	/// Tracks whether we are currently in a member initializer. If so, we
 	/// forbid the 'self' keyword as a straightforward way to keep things
@@ -262,6 +265,7 @@ impl<'b> Parser<'b> {
 
 			closure: None,
 			fun_vars: Vec::new(),
+			fun_asyncness: Asyncness::Not,
 
 			scopes: Vec::new(),
 			// TODO: Push and pop things from this name
@@ -1760,6 +1764,7 @@ impl<'b> Parser<'b> {
 		let closure = self.db.push(Closure { class: None, parent: enclosing_closure, parent_class: None });
 		self.closure = Some(closure);
 		let enclosing_vars = std::mem::take(&mut self.fun_vars);
+		let enclosing_asyncness = self.fun_asyncness;
 		self.push_scope();
 
 		let mut parameters = vec![];
@@ -1809,6 +1814,8 @@ impl<'b> Parser<'b> {
 			name: name_str,
 			parameters,
 			return_type,
+			// Asyncness comes from the one we currently track.
+			asyncness: self.fun_asyncness,
 			// The closure for this function is the enclosing closure.
 			closure: enclosing_closure,
 			sig: self.db.sig_unassigned,
@@ -1829,6 +1836,7 @@ impl<'b> Parser<'b> {
 			self.db.get_mut(*var).fun = Some(identity);
 		}
 		self.fun_vars = enclosing_vars;
+		self.fun_asyncness = enclosing_asyncness;
 
 		// We must pop our pushed_name before we put the function name in the scope.
 		self.pop_name(pushed_name);

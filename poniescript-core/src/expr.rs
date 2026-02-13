@@ -187,6 +187,15 @@ pub struct Var {
 	pub doc_comment: Option<Vec<Token>>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Asyncness {
+	Not,
+	/// Function contains any number of .await's.
+	Implicit,
+	/// Function has an async-compatible callback as its last parameter.
+	Explicit,
+}
+
 pub struct Fun {
 	pub name: Option<StrId>,
 	pub sig: SigId,
@@ -195,6 +204,14 @@ pub struct Fun {
 	/// are the values passed by the caller.
 	pub parameters: Vec<VarId>,
 	pub return_type: TypId,
+
+	/// Asyncness of this function. In later compilation stages, this should
+	/// not make a difference; all async functions should be desugared to the
+	/// form f(...args, callback: fun(return_type)) -> void.
+	/// 
+	/// However, in early stages, we do need to know so that we can decide whether
+	/// to transform the signature or not.
+	pub asyncness: Asyncness,
 
 	pub class: Option<ClassId>,
 
@@ -213,6 +230,15 @@ pub struct Fun {
 
 	/// Doc comment for this function.
 	pub doc_comment: Option<Vec<Token>>,
+}
+
+impl Fun {
+	pub fn is_async(&self) -> bool {
+		match self.asyncness {
+			Asyncness::Not => false,
+			Asyncness::Implicit | Asyncness::Explicit => true,
+		}
+	}
 }
 
 /// Represents a function signature. Includes the types of all parameters
