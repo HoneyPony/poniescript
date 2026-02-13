@@ -382,11 +382,11 @@ pub fn generate(file: &mut File) {
 	Comparison    : Tok op, Expr left, Expr right, TypId compare_as
 	Variable      : VarId identity
 	Logical       : Tok op, Expr left, Expr right
-	FunCall       : SourceLocation fn_name, FunId identity, Vec<Expr> args, Option<Expr> object, Vec<u32> arg_boundaries,
+	FunCall       : SourceLocation fn_name, FunId identity, Vec<Expr> args, Option<Expr> object, CallType call_type, Vec<u32> arg_boundaries,
 	BuiltinCall   : SourceLocation fn_name, BuiltinMethodPtr ptr, TypId typ, Vec<Expr> args, Expr object
 	BuiltinCapture : SourceLocation fn_name, BuiltinMethodPtr ptr, Expr object
 	FunDeclare    : FunId identity, Expr value, TypId typ
-	ValCall       : Expr value, Vec<Expr> args, SigId sig, Vec<u32> arg_boundaries,
+	ValCall       : Expr value, Vec<Expr> args, SigId sig, CallType call_type, Vec<u32> arg_boundaries,
 	FunCapture    : SourceLocation fn_name, FunId identity, TypId typ, Option<Expr> object
 	Assign        : SourceLocation var_name, VarId identity, Expr value, Tok op
 	UnboundAssign : Token identifier, Expr value, Tok op

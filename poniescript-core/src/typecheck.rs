@@ -1879,6 +1879,7 @@ impl<'db> TypeChecker<'db> {
 							args: std::mem::take(&mut call.args),
 							object: capt.object,
 							arg_boundaries: std::mem::take(&mut call.arg_boundaries),
+							call_type: call.call_type,
 						};
 
 						*expr = Expr::FunCall(as_funcall);
@@ -1890,6 +1891,14 @@ impl<'db> TypeChecker<'db> {
 					}
 
 					if let Expr::BuiltinCapture(capt) = inner_bind.as_mut() {
+						if call.call_type != CallType::Normal {
+							// Until such time as we have builtins that need .await
+							// or .induce, it is not supported.
+							type_error!(self,
+								&call.location,
+								"Builtin method cannot be called with .await or .induce");
+						}
+
 						log::trace!("ValCall>BuiltinCapture => BuiltinCall");
 						let as_builtincall = BuiltinCall {
 							location: call.location.clone(),
@@ -2702,7 +2711,7 @@ impl<'db> TypeChecker<'db> {
 						let read_fun_obj = Expr::push_variable(ast, loc_ignore.clone(),
 							fun_obj_var);
 						let call_fun = Expr::push_valcall(ast, loc_ignore.clone(),
-							read_fun_obj, Vec::new(), sig_id, Vec::new());
+							read_fun_obj, Vec::new(), sig_id, CallType::Normal, Vec::new());
 						let break_out = Expr::push_break(ast, loc_ignore.clone(), None);
 						let call_else_break = Expr::push_optionelse(ast, loc_ignore.clone(),
 							call_fun, break_out, inner);

@@ -1,0 +1,13 @@
+// TODO: Will require callback when we get to typechecker...
+fun test() {
+
+}
+
+fun doesnt_do_anything() {
+    test().induce;
+    test().await;
+}
+
+fun init() {
+    print("success"); //! success
+}

@@ -502,6 +502,22 @@ impl<'b> Parser<'b> {
 		expected_no_err!(self, Tok::RightParen, "')' after argument list");
 		arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 
+		// TODO: Please deduplicate ALL the call parsing logic :(
+		let mut call_type = CallType::Normal;
+		if self.match_(Tok::Dot)?.is_some() {
+			if self.at(Tok::Identifier) && self.current.lexeme == self.db.put_str("await") {
+				self.advance()?;
+				call_type = CallType::Await;
+			}
+			else if self.at(Tok::Identifier) && self.current.lexeme == self.db.put_str("induce") {
+				self.advance()?;
+				call_type = CallType::Induce;
+			}
+			else {
+				todo!("complete dot operator on function call when not .await or .induce");
+			}	
+		}
+
 		// Note: This is handled by expr_prefix() now.
 		//if self.match_(Tok::LeftParen)?.is_some() {
 		//	todo!("calling the return value of a call");
@@ -518,7 +534,7 @@ impl<'b> Parser<'b> {
 		match lookup {
 			ScopeEntry::Var(v) => {
 				let inner = Expr::put_variable(self.ast, location.clone(), v);
-				return Expr::put_valcall_ok(self.ast, self.end(location), inner, args, self.db.sig_unassigned, arg_boundaries)
+				return Expr::put_valcall_ok(self.ast, self.end(location), inner, args, self.db.sig_unassigned, call_type, arg_boundaries)
 			},
 
 			// It may seem in poor taste to have a specific Expr for function
@@ -529,14 +545,14 @@ impl<'b> Parser<'b> {
 			ScopeEntry::Fun(fun) => {
 				log::trace!("new bound fun: {} object.is_some(): {}",
 					self.db.get(ident.lexeme), object.is_some());
-				Expr::put_funcall_ok(self.ast, self.end(location), ident.location, fun, args, None, arg_boundaries)
+				Expr::put_funcall_ok(self.ast, self.end(location), ident.location, fun, args, None, call_type, arg_boundaries)
 			}
 			ScopeEntry::Class(_) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), self.current.location.clone()));
 
 				// Just return an UnboundCall, as we have a semantic error rather than parse error.
 				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
-				Expr::put_valcall_ok(self.ast, self.end(location), call, args, self.db.sig_unassigned, arg_boundaries)
+				Expr::put_valcall_ok(self.ast, self.end(location), call, args, self.db.sig_unassigned, call_type, arg_boundaries)
 			}
 
 			ScopeEntry::None => {
@@ -557,7 +573,7 @@ impl<'b> Parser<'b> {
 					self.db.get(ident.lexeme), object.is_some());
 
 				let capt = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
-				Expr::put_valcall_ok(self.ast, self.end(location), capt, args, self.db.sig_unassigned, arg_boundaries)
+				Expr::put_valcall_ok(self.ast, self.end(location), capt, args, self.db.sig_unassigned, call_type, arg_boundaries)
 			}
 		}
 	}
@@ -944,8 +960,23 @@ impl<'b> Parser<'b> {
 						}
 
 						expected_no_err!(self, Tok::RightParen, "')' after argument list");
+
+						let mut call_type = CallType::Normal;
+						if self.match_(Tok::Dot)?.is_some() {
+							if self.at(Tok::Identifier) && self.current.lexeme == self.db.put_str("await") {
+								self.advance()?;
+								call_type = CallType::Await;
+							}
+							else if self.at(Tok::Identifier) && self.current.lexeme == self.db.put_str("induce") {
+								self.advance()?;
+								call_type = CallType::Induce;
+							}
+							else {
+								todo!("complete dot operator on function call when not .await or .induce");
+							}	
+						}
 						arg_boundaries.push((self.current.location.offset - location.offset) as u32);
-						inner = Expr::put_valcall(self.ast, self.end(location.clone()), inner, args, self.db.sig_unassigned, arg_boundaries);
+						inner = Expr::put_valcall(self.ast, self.end(location.clone()), inner, args, self.db.sig_unassigned, call_type, arg_boundaries);
 					}
 					while self.match_(Tok::LeftSquare)?.is_some() {
 						// TODO: Can the index take multiple args?

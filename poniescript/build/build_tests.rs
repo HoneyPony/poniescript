@@ -42,6 +42,8 @@ fn generate_test(bt: &mut BuiltTests, bt_valgrind: &mut BuiltTests, path: &str, 
 
 pub fn generate(tests_file: &mut File) {
 	let tests = [
+		("async/", "parse_await_and_induce"),
+
 		("assign/", "addition_tuple"),
 		("assign/", "arith_ops_float_promote"),
 		("assign/", "arith_ops_int"),

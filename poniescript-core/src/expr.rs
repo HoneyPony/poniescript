@@ -196,6 +196,15 @@ pub enum Asyncness {
 	Explicit,
 }
 
+/// Types of function calls. .await and .induce must be desugared into more
+/// complicated calls.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum CallType {
+	Normal,
+	Await,
+	Induce
+}
+
 pub struct Fun {
 	pub name: Option<StrId>,
 	pub sig: SigId,
