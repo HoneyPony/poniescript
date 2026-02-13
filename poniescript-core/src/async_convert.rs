@@ -229,7 +229,7 @@ impl VisitAstMut for AsyncConvert {
             }
 
             // Otherwise, visit the expr normally...
-            self.visit_expr(ast, db, call_id);
+            //self.visit_expr(ast, db, call_id);
 
             idx += 1;
         }

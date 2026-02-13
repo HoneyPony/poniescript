@@ -432,6 +432,10 @@ fn main() {
 	}
 
 	async_convert::convert_awaits(&mut ast, &mut db);
+	if args.pretty_print_async {
+		pretty_print::pretty_print(&ast, &db);
+		exit(0);
+	}
 	closure_convert::convert_closures(&mut ast, &mut db);
 
 	let timer = duration(timer, "closure convert", &mut duration_set);

@@ -107,6 +107,10 @@ pub struct Args {
 	/// 
 	/// TODO: Also support printing it at other stages.
 	pub pretty_print: bool,
+
+	#[arg(long = "pretty-print-async")]
+	/// Pretty-print after async conversion.
+	pub pretty_print_async: bool,
 }
 
 #[cfg(test)]
