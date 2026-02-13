@@ -139,7 +139,7 @@ impl VisitAstMut for AsyncConvert {
                     // What we want to do:
                     // Split the rest of the function body into a new closure.
                     // Add that function as a continuation to this.
-                    let stmts = block.stmts.split_off(idx);
+                    let stmts = block.stmts.split_off(idx + 1);
                     let loc = call.location.clone();
                     let fun = call.identity;
                     drop(binding); drop(stmt); drop(expr);

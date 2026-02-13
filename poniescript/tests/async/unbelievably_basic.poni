@@ -6,11 +6,11 @@ fun call_with_print(cb: fun(int)) {
 fun test() -> int {
     call_with_print().await;
     print("yippee");
-    call_with_print().await;
-    print("hippo");
     return 5;
 }
 
 fun init() {
-    test(fun(ret: int) {});
+    test(fun(ret: int) {
+        print("final callback");
+    });
 }
