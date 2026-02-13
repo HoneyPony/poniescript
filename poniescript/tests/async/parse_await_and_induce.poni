@@ -1,5 +1,4 @@
-// TODO: Will require callback when we get to typechecker...
-fun test() {
+fun test(callback: fun()) {
 
 }
 

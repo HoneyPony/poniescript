@@ -42,6 +42,10 @@ fn generate_test(bt: &mut BuiltTests, bt_valgrind: &mut BuiltTests, path: &str, 
 
 pub fn generate(tests_file: &mut File) {
 	let tests = [
+		("async/", "err_no_callback"),
+		("async/", "err_zero_argument"),
+		("async/", "err_callback_ret_type"),
+		("async/", "err_callback_two_args"),
 		("async/", "parse_await_and_induce"),
 
 		("assign/", "addition_tuple"),

@@ -1,0 +1,10 @@
+fun test() {
+
+}
+
+fun doesnt_do_anything() {
+    // TODO: We possibly want this message to be a bit clearer.
+    //? Can't use .await or .induce on 0-argument function.
+    test().induce;
+    test().await;
+}

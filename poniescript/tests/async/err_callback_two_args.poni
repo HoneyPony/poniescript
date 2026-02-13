@@ -1,0 +1,9 @@
+fun test(cb: fun(int, int)) {
+
+}
+
+fun doesnt_do_anything() {
+    //? Can only use .await or .induce on an async function.
+    test().induce;
+    test().await;
+}

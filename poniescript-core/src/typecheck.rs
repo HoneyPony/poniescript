@@ -1037,6 +1037,55 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	/// Checks that we are calling .await or .induce on an awaitable function,
+	/// and extracts the type ID from it.
+	fn check_async_function_callback(&mut self, location: &SourceLocation, sig: SigId) -> Result<TypId> {
+		let sig = self.db.get(sig);
+		let Some(last) = sig.parameters.last() else {
+			type_error!(self, location.clone(), "Can't use .await or .induce on 0-argument function.");
+		};
+
+		let Type::Fun(sig) = self.db.get(*last) else {
+			let error = Error::simple(
+				format!("Can only use .await or .induce on an async function."),
+				location.clone());
+			let error = error.add_note(format!("Async functions must (explicitly or implicitly) take a callback as their last argument."), None);
+			self.db.report_error(error);
+			self.had_error = true;
+			return Err(TypeCheckErr);
+		};
+
+		let sig = self.db.get(*sig);
+		if sig.return_type != self.db.types.void {
+			let error = Error::simple(
+				format!("Can only use .await or .induce on an async function."),
+				location.clone());
+			let error = error.add_note(format!("The callback type at this call site does not return void."), None);
+			self.db.report_error(error);
+			self.had_error = true;
+			return Err(TypeCheckErr);
+		}
+
+		if sig.parameters.is_empty() {
+			// void callback
+			return Ok(self.db.types.void);
+		}
+
+		if sig.parameters.len() > 1 {
+			// Error
+			let error = Error::simple(
+				format!("Can only use .await or .induce on an async function."),
+				location.clone());
+			let error = error.add_note(format!("The callback type at this call site takes more than one parameter."), None);
+			self.db.report_error(error);
+			self.had_error = true;
+			return Err(TypeCheckErr);
+		}
+
+		// Safety: We've verified this is in bounds.
+		return Ok(sig.parameters[0]);
+	}
+
 	// TODO: We could, inside this function, just directly call
 	// promote_from_unassigned on any expr that has value_used = false -- we
 	// should consider if that would make sense.
@@ -1766,8 +1815,13 @@ impl<'db> TypeChecker<'db> {
 				// in that way, but otherwise very similar.
 
 				let fun_arity = self.db.get(call.identity).parameters.len();
+				let (await_diff, await_typ) = if call.call_type != CallType::Normal {
+					// We want to check this first so that we don't get confusing error messages.
+					let typ = self.check_async_function_callback(&call.location, self.db.get(call.identity).sig)?;
+					(1, Some(typ))
+				} else { (0, None) };
 
-				if call.args.len() != fun_arity {
+				if call.args.len() + await_diff != fun_arity {
 					// TODO: Add a Note about the function definition.
 					type_error!(self,
 						&call.location,
@@ -1777,7 +1831,7 @@ impl<'db> TypeChecker<'db> {
 						call.args.len());
 				}
 
-				for i in 0..fun_arity {
+				for i in 0..call.args.len() {
 					// Check each argument against the corresponding parameter.
 					let arg = self.check_expr(ast, call.args[i], true)?;
 
@@ -1806,7 +1860,23 @@ impl<'db> TypeChecker<'db> {
 					call.object = Some(object);
 				}
 
-				self.db.get_fun_ret_type(call.identity)
+				match call.call_type {
+					CallType::Normal => { self.db.get_fun_ret_type(call.identity) }
+					CallType::Await => {
+						// Extract the type from the callback
+						//
+						// Safety: This would have been an Err earlier if we
+						// didn't get this.
+						await_typ.unwrap()
+					}
+					CallType::Induce => {
+						// Do we want to desugar these calls right here?
+
+						// In the future, we may want to return a Promise type
+						// from .induce expressions.
+						self.db.types.void
+					}
+				}
 			},
 
 			Expr::BuiltinCall(call) => {
