@@ -47,6 +47,7 @@ pub fn generate(tests_file: &mut File) {
 		("async/", "err_callback_ret_type"),
 		("async/", "err_callback_two_args"),
 		("async/", "parse_await_and_induce"),
+		("async/", "typecheck_int"),
 
 		("assign/", "addition_tuple"),
 		("assign/", "arith_ops_float_promote"),

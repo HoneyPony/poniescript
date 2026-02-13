@@ -1,0 +1,12 @@
+fun test(number: int, callback: fun()) {
+
+}
+
+fun doesnt_do_anything() {
+    test(20).induce;
+    test(30).await;
+}
+
+fun init() {
+    print("success"); //! success
+}
