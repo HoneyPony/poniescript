@@ -57,6 +57,46 @@ impl AsyncConvert {
 }
 
 impl VisitAstMut for AsyncConvert {
+    fn visit_return(&mut self, ast: &AstProxy, db: &mut Db, id: ExprId) {
+        let binding = ast.get_expr(id);
+        let Expr::Return(ret) = binding.as_ref() else { unreachable!() };
+
+        if let Some(inner) = ret.expression {
+            self.visit_expr(ast, db, inner);
+        }
+
+        // Whenever we encounter a return statement, instead call the function's
+        // end_continuation.
+        if let Some(fun) = self.current_fun {
+            if db.get(fun).asyncness == Asyncness::Implicit {
+                // This must be a variable, otherwise something is broken.
+                let continuation = db.get(fun).parameters.last().unwrap();
+
+                let loc = ret.location.clone();
+                let inner = ret.expression;
+                drop(binding);
+
+                let var = Expr::push_variable(ast, loc.clone(), *continuation);
+                let var_type = db.get_var_type(*continuation);
+                let Type::Fun(sig) = db.get(var_type) else { panic!("ICE: Non-Fun continuation"); };
+                let mut as_valcall = ValCall {
+                    location: loc.clone(),
+                    value: var,
+                    args: Vec::new(),
+                    sig: *sig,
+                    call_type: CallType::Normal,
+                    arg_boundaries: Vec::new(),
+                };
+                
+                if let Some(inner) = inner {
+                    as_valcall.args.push(inner);
+                }
+
+                *ast.get_expr_mut(id).as_mut() = Expr::ValCall(as_valcall);
+            }
+        }
+    }
+
     fn visit_fundeclare(&mut self, ast: &AstProxy, db: &mut Db, id: crate::db::ExprId) {
         let binding = ast.get_expr(id);
         let Expr::FunDeclare(declare) = binding.as_ref() else { unreachable!() };
@@ -75,12 +115,18 @@ impl VisitAstMut for AsyncConvert {
         let mut binding = ast.get_expr_mut(id);
         let Expr::Block(block) = binding.as_mut() else { unreachable!() };
 
+        // First pass: Visit everything
+        for stmt_id in &block.stmts {
+            self.visit_stmt(ast, db, *stmt_id);
+        }
+
+        // Second pass: Split at await point
+        //
+        // Still need to visit the inner expression somehow...?
         let mut idx = 0;
         for stmt_id in &block.stmts {
             let stmt = ast.get_stmt(*stmt_id);
             let Stmt::Expression(expr) = stmt.as_ref() else {
-                drop(stmt);
-                self.visit_stmt(ast, db, *stmt_id);
                 continue;
             };
             
