@@ -4,6 +4,7 @@ use crate::db::*;
 use crate::expr::{Declare, FunDeclare, ClassDeclare};
 use crate::parser::Parser;
 
+#[derive(Default)] // For mem::take
 pub struct Module {
 	pub classes: Vec<ClassDeclare>,
 	pub functions: Vec<FunDeclare>,

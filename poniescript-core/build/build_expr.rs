@@ -110,7 +110,7 @@ fn generate_constructor(use_proxy: bool, id_name: &str, ast_field: &str, enum_na
 }
 
 fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &mut File,
-	visit_trait: &mut String, visit_immut_trait: &mut String, locate_trait: &mut String) -> std::fmt::Result {
+	visit_trait: &mut String, visit_immut_trait: &mut String, visit_mut_trait: &mut String, locate_trait: &mut String) -> std::fmt::Result {
 	let mut enum_def = String::new();
 	let mut struct_defs = String::new();
 	let mut enum_impl = String::new();
@@ -118,6 +118,7 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 	let mut debug_impl = String::new();
 	let mut visit_trait_visit_fn = String::new();
 	let mut visit_immut_trait_visit_fn = String::new();
+	let mut visit_mut_trait_visit_fn = String::new();
 	let mut locate_trait_visit_fn = String::new();
 
 	writeln!(enum_def, "pub enum {name} {{")?;
@@ -140,6 +141,10 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 	writeln!(visit_immut_trait_visit_fn, "\tfn visit_{lname}(&mut self, ast: &Ast, db: &Db, id: {id_name}) {{")?;
 	writeln!(visit_immut_trait_visit_fn, "\t\tlet binding = ast.{lname}s.get(id);")?;
 	writeln!(visit_immut_trait_visit_fn, "\t\tmatch binding.as_ref() {{")?;
+
+	writeln!(visit_mut_trait_visit_fn, "\tfn visit_{lname}(&mut self, ast: &AstProxy, db: &mut Db, id: {id_name}) {{")?;
+	writeln!(visit_mut_trait_visit_fn, "\t\tlet binding = ast.{lname}s.get(id);")?;
+	writeln!(visit_mut_trait_visit_fn, "\t\tmatch binding.as_ref() {{")?;
 
 	writeln!(locate_trait_visit_fn, "\tfn visit_{lname}(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation, id: {id_name}) -> bool {{")?;
 	writeln!(locate_trait_visit_fn, "\t\tlet binding = ast.{lname}s.get(id);")?;
@@ -210,6 +215,9 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 		writeln!(visit_immut_trait, "\t\tlet binding = ast.{lname}s.get(id);")?;
 		writeln!(visit_immut_trait, "\t\tlet {name}::{ty_name}({lname}) = binding.as_ref() else {{ return; }};")?;
 
+		writeln!(visit_mut_trait, "\tfn visit_{}(&mut self, ast: &AstProxy, db: &mut Db, id: {id_name}) {{", ty_name.to_ascii_lowercase())?;
+		writeln!(visit_mut_trait, "\t\tlet binding = ast.{lname}s.get(id);")?;
+		writeln!(visit_mut_trait, "\t\tlet {name}::{ty_name}({lname}) = binding.as_ref() else {{ return; }};")?;
 		
 		// The locate trait helps us find the smallest node overlapping a particular
 		// cursor position
@@ -229,6 +237,8 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 
 				writeln!(visit_immut_trait, "\t\tself.visit_expr(ast, db, {lname}.{});", field.1)?;
 
+				writeln!(visit_mut_trait, "\t\tself.visit_expr(ast, db, {lname}.{});", field.1)?;
+
 				writeln!(locate_trait, "\t\tif self.visit_expr(ast, db, loc, {lname}.{}) {{ return true; }}", field.1)?;
 			}
 			if field.0 == "Vec<ExprId>" {
@@ -240,6 +250,10 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 				writeln!(visit_immut_trait, "\t\t\tself.visit_expr(ast, db, *item);")?;
 				writeln!(visit_immut_trait, "\t\t}}")?;
 
+				writeln!(visit_mut_trait, "\t\tfor item in &{lname}.{} {{", field.1)?;
+				writeln!(visit_mut_trait, "\t\t\tself.visit_expr(ast, db, *item);")?;
+				writeln!(visit_mut_trait, "\t\t}}")?;
+
 				writeln!(locate_trait, "\t\tfor item in &{lname}.{} {{", field.1)?;
 				writeln!(locate_trait, "\t\t\tif self.visit_expr(ast, db, loc, *item) {{ return true; }}")?;
 				writeln!(locate_trait, "\t\t}}")?;
@@ -250,12 +264,16 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 
 				writeln!(visit_immut_trait, "\t\tif let Some(inner) = {lname}.{} {{ self.visit_expr(ast, db, inner); }}", field.1)?;
 
+				writeln!(visit_mut_trait, "\t\tif let Some(inner) = {lname}.{} {{ self.visit_expr(ast, db, inner); }}", field.1)?;
+
 				writeln!(locate_trait, "\t\tif let Some(inner) = {lname}.{} {{ if self.visit_expr(ast, db, loc, inner) {{ return true; }} }}", field.1)?;
 			}
 			if field.0 == "StmtId" {
 				writeln!(visit_trait, "\t\tself.visit_stmt(ast, db, {lname}.{});", field.1)?;
 
 				writeln!(visit_immut_trait, "\t\tself.visit_stmt(ast, db, {lname}.{});", field.1)?;
+
+				writeln!(visit_mut_trait, "\t\tself.visit_stmt(ast, db, {lname}.{});", field.1)?;
 
 				writeln!(locate_trait, "\t\tif self.visit_stmt(ast, db, loc, {lname}.{}) {{ return true; }}", field.1)?;
 			}
@@ -267,6 +285,10 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 				writeln!(visit_immut_trait, "\t\tfor item in &{lname}.{} {{", field.1)?;
 				writeln!(visit_immut_trait, "\t\t\tself.visit_stmt(ast, db, *item);")?;
 				writeln!(visit_immut_trait, "\t\t}}")?;
+
+				writeln!(visit_mut_trait, "\t\tfor item in &{lname}.{} {{", field.1)?;
+				writeln!(visit_mut_trait, "\t\t\tself.visit_stmt(ast, db, *item);")?;
+				writeln!(visit_mut_trait, "\t\t}}")?;
 
 				writeln!(locate_trait, "\t\tfor item in &{lname}.{} {{", field.1)?;
 				writeln!(locate_trait, "\t\t\tif self.visit_stmt(ast, db, loc, *item) {{ return true; }}")?;
@@ -295,6 +317,12 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 		writeln!(visit_immut_trait_visit_fn, "\t\t\t\tself.visit_{}(ast, db, id);", ty_name.to_ascii_lowercase())?;
 		writeln!(visit_immut_trait_visit_fn, "\t\t\t}}")?;
 
+		writeln!(visit_mut_trait, "\t}}")?;
+
+		writeln!(visit_mut_trait_visit_fn, "\t\t\t{name}::{ty_name}(_inner) => {{")?;
+		writeln!(visit_mut_trait_visit_fn, "\t\t\t\tdrop(binding);")?;
+		writeln!(visit_mut_trait_visit_fn, "\t\t\t\tself.visit_{}(ast, db, id);", ty_name.to_ascii_lowercase())?;
+		writeln!(visit_mut_trait_visit_fn, "\t\t\t}}")?;
 
 
 		writeln!(locate_trait_visit_fn, "\t\t\t{name}::{ty_name}(inner) => {{")?;
@@ -357,6 +385,10 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 	writeln!(visit_immut_trait_visit_fn, "\t\t}}")?;	
 	writeln!(visit_immut_trait_visit_fn, "\t}}")?;
 	writeln!(visit_immut_trait, "{}", visit_immut_trait_visit_fn)?;
+
+	writeln!(visit_mut_trait_visit_fn, "\t\t}}")?;	
+	writeln!(visit_mut_trait_visit_fn, "\t}}")?;
+	writeln!(visit_mut_trait, "{}", visit_mut_trait_visit_fn)?;
 
 	writeln!(locate_trait_visit_fn, "\t\t}}")?;	
 	writeln!(locate_trait_visit_fn, "\t}}")?;
@@ -442,14 +474,16 @@ pub fn generate(file: &mut File) {
 
 	let mut visit_trait = String::new();
 	let mut visit_immut_trait = String::new();
+	let mut visit_mut_trait = String::new();
 	let mut locate_trait = String::new();
 
 	writeln!(visit_trait, "#[allow(unused_variables)]\npub trait VisitAst {{").unwrap();
 	writeln!(visit_immut_trait, "#[allow(unused_variables)]\npub trait VisitAstImmut {{").unwrap();
+	writeln!(visit_mut_trait, "#[allow(unused_variables)]\npub trait VisitAstMut {{").unwrap();
 	writeln!(locate_trait, "#[allow(unused_variables)]\npub trait LocateAst {{").unwrap();
 
-	generate_spec("Expr", "exprs", expr_spec, expr_opt, file, &mut visit_trait, &mut visit_immut_trait, &mut locate_trait).unwrap();
-	generate_spec("Stmt", "stmts", stmt_spec, stmt_opt, file, &mut visit_trait, &mut visit_immut_trait, &mut locate_trait).unwrap();
+	generate_spec("Expr", "exprs", expr_spec, expr_opt, file, &mut visit_trait, &mut visit_immut_trait, &mut visit_mut_trait, &mut locate_trait).unwrap();
+	generate_spec("Stmt", "stmts", stmt_spec, stmt_opt, file, &mut visit_trait, &mut visit_immut_trait, &mut visit_mut_trait, &mut locate_trait).unwrap();
 
 	writeln!(locate_trait, "	fn visit_ast(&mut self, ast: &Ast, db: &Db, loc: &SourceLocation) {{
 		// Locate the value into the relevant source itself.
@@ -499,14 +533,45 @@ pub fn generate(file: &mut File) {
 		}}
 	}}").unwrap();
 
+	// TODO:
+	// writeln!(visit_mut_trait, 
+	// "/// So in theory these should visit any Declare, whether it is associated
+	// /// with an ExprId or not. In practice, we have not yet implemented this
+	// /// for the tree itself; implementors must manually override visit_declare
+	// /// to defer to this method (and similar with the other two). But, these methods
+	// /// *are* called by visit_ast_for_source, allowing us to implement visitors
+	// /// that visit everything.
+	// fn visit_declare_any(&mut self, ast: &AstProxy, db: &Db, declare: &Declare) {{}}
+	// fn visit_fundeclare_any(&mut self, ast: &AstProxy, db: &Db, fundeclare: &FunDeclare) {{}}
+	// fn visit_classdeclare_any(&mut self, ast: &AstProxy, db: &Db, classdeclare: &ClassDeclare) {{}}
+
+	// fn visit_ast_for_source(&mut self, ast: &AstProxy, db: &Db, source: SourceId) {{
+	// 	let source = ast.sources.get(source);
+	// 	let module = &source.module;
+
+	// 	for it in &module.globals {{
+	// 		self.visit_declare_any(ast, db, it);
+	// 	}}
+
+	// 	for it in &module.functions {{
+	// 		self.visit_fundeclare_any(ast, db, it);
+	// 	}}
+
+	// 	for it in &module.classes {{
+	// 		self.visit_classdeclare_any(ast, db, it);
+	// 	}}
+	// }}").unwrap();
+
 	writeln!(locate_trait, "}}").unwrap();
 	writeln!(visit_trait, "}}").unwrap();
 	writeln!(visit_immut_trait, "}}").unwrap();
+	writeln!(visit_mut_trait, "}}").unwrap();
 
 	{
 		use std::io::Write;
 		write!(file, "{}\n", visit_trait).unwrap();
 		write!(file, "{}\n", visit_immut_trait).unwrap();
+		write!(file, "{}\n", visit_mut_trait).unwrap();
 		write!(file, "{}\n", locate_trait).unwrap();
 	}
 }

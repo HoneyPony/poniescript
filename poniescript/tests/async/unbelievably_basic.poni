@@ -1,0 +1,15 @@
+fun call_with_print(cb: fun(int)) {
+    print("hello async!");
+    cb(0);
+}
+
+fun test() {
+    call_with_print().await;
+    print("yippee");
+    call_with_print().await;
+    print("hippo");
+}
+
+fun init() {
+    test();
+}

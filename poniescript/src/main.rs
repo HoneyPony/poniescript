@@ -1,5 +1,5 @@
 use poniescript_core::{
-    Args, binder, closure_convert, codegen, db::{self, *}, dead_code, glue, init_ordering, module, pretty_print, typecheck
+    Args, async_convert, binder, closure_convert, codegen, db::{self, *}, dead_code, glue, init_ordering, module, pretty_print, typecheck
 };
 
 use mimalloc::MiMalloc;
@@ -431,6 +431,7 @@ fn main() {
 		exit(0);
 	}
 
+	async_convert::convert_awaits(&mut ast, &mut db);
 	closure_convert::convert_closures(&mut ast, &mut db);
 
 	let timer = duration(timer, "closure convert", &mut duration_set);
