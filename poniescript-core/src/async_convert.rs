@@ -124,6 +124,7 @@ impl VisitAstMut for AsyncConvert {
                         sig,
                         parameters: vec![new_var],
                         return_type: db.types.void,
+                        sugar_return_type: db.types.void,
                         asyncness: Asyncness::Not,
                         class: None,
                         closure: self.current_closure, // I believe this is the enclosing closure

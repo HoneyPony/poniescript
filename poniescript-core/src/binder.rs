@@ -956,6 +956,30 @@ impl<'db> Binder<'db> {
 		let location = self.db.get(id).location.clone();
 		let ret_type = self.visit_type(self.db.get(id).return_type, &location);
 		self.db.get_mut(id).return_type = ret_type;
+		// The sugar type is bound here and does not change. This is the type
+		// we will compare return types against.
+		self.db.get_mut(id).sugar_return_type = ret_type;
+
+		if self.db.get(id).asyncness == Asyncness::Implicit {
+			log::trace!("creating end_continuation parameter for implicitly async function '{}'",
+				self.db.get_fun_name(id));
+			let sig = Sig {
+				parameters: vec![ret_type],
+				return_type: self.db.types.void,
+			};
+			let sig = self.db.put_sig(&sig);
+			let continuation_type = self.db.put_type(Type::Fun(sig));
+			// If we have an implicitly async function, create the callback argument.
+			let name = self.db.put_str("async_continuation");
+			let end_continuation = self.db.new_var(name, continuation_type, true, Some(id), Some(id),
+				// TODO: Do these have a closure?
+				None, None, None, self.db.get(id).location.clone(), None);
+
+			// The last parameter is our "end continuation," i.e. the continuation
+			// that we call whenever we return from the function.
+			self.db.get_mut(id).parameters.push(end_continuation);
+			self.db.get_mut(id).return_type = self.db.types.void;
+		}
 	}
 
 	fn visit_function(&mut self, ast: &AstProxy, function: &mut FunDeclare) {

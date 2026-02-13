@@ -3,13 +3,14 @@ fun call_with_print(cb: fun(int)) {
     cb(0);
 }
 
-fun test() {
+fun test() -> int {
     call_with_print().await;
     print("yippee");
     call_with_print().await;
     print("hippo");
+    return 5;
 }
 
 fun init() {
-    test();
+    test(fun(ret: int) {});
 }

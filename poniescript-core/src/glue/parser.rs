@@ -380,6 +380,7 @@ impl<'b> Parser<'b> {
             // funs all have a sig?
             parameters: params,
             return_type: c_ret_type,
+            sugar_return_type: c_ret_type,
             // There are no implicitly async functions here. Explicitly async
             // ones should be handled correctly by Binder.
             asyncness: crate::expr::Asyncness::Not,

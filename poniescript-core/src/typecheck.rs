@@ -2936,7 +2936,9 @@ impl<'db> TypeChecker<'db> {
 
 		log::trace!("check_fun_declare: {}", self.db.get_fun_name(fun.identity));
 
-		self.return_types.push(return_type);
+		// Compare against the sugar return type. This is so async functions with
+		// .await will compare against their declared return type.
+		self.return_types.push(self.db.get(fun.identity).sugar_return_type);
 
 		let inner = self.check_expr(ast, fun.value, value_used)?;
 

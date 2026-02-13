@@ -212,7 +212,12 @@ pub struct Fun {
 	/// Parameters are the values when the function is defined, arguments
 	/// are the values passed by the caller.
 	pub parameters: Vec<VarId>,
+
+	/// The actual return type of the function.
 	pub return_type: TypId,
+	/// The "sugar" return type of the function. This is what return statements
+	/// are typechecked against.
+	pub sugar_return_type: TypId,
 
 	/// Asyncness of this function. In later compilation stages, this should
 	/// not make a difference; all async functions should be desugared to the

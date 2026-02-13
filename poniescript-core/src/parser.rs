@@ -507,6 +507,9 @@ impl<'b> Parser<'b> {
 		if self.match_(Tok::Dot)?.is_some() {
 			if self.at(Tok::Identifier) && self.current.lexeme == self.db.put_str("await") {
 				self.advance()?;
+				// Whenever we use await, we become implicitly async,
+				// *even if* we already have a callback argument.
+				self.fun_asyncness = Asyncness::Implicit;
 				call_type = CallType::Await;
 			}
 			else if self.at(Tok::Identifier) && self.current.lexeme == self.db.put_str("induce") {
@@ -965,6 +968,9 @@ impl<'b> Parser<'b> {
 						if self.match_(Tok::Dot)?.is_some() {
 							if self.at(Tok::Identifier) && self.current.lexeme == self.db.put_str("await") {
 								self.advance()?;
+								// Whenever we use await, we become implicitly async,
+								// *even if* we already have a callback argument.
+								self.fun_asyncness = Asyncness::Implicit;
 								call_type = CallType::Await;
 							}
 							else if self.at(Tok::Identifier) && self.current.lexeme == self.db.put_str("induce") {
@@ -1845,6 +1851,7 @@ impl<'b> Parser<'b> {
 			name: name_str,
 			parameters,
 			return_type,
+			sugar_return_type: return_type,
 			// Asyncness comes from the one we currently track.
 			asyncness: self.fun_asyncness,
 			// The closure for this function is the enclosing closure.
