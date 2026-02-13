@@ -972,8 +972,9 @@ impl<'db> Binder<'db> {
 			// If we have an implicitly async function, create the callback argument.
 			let name = self.db.put_str("async_continuation");
 			let end_continuation = self.db.new_var(name, continuation_type, true, Some(id), Some(id),
-				// TODO: Do these have a closure?
-				None, None, None, self.db.get(id).location.clone(), None);
+				// Use the param_closure for the variable. It will need to be copied
+				// to this closure.
+				Some(self.db.get(id).param_closure), None, None, self.db.get(id).location.clone(), None);
 
 			// The last parameter is our "end continuation," i.e. the continuation
 			// that we call whenever we return from the function.

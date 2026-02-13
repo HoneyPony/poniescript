@@ -2,7 +2,7 @@ use std::path::Path;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{db::*, expr::{Class, Fun, ImportKind, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
+use crate::{db::*, expr::{Class, Closure, Fun, ImportKind, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
 use crate::error::Error;
 
 use poni_arena::IndexCell;
@@ -373,6 +373,9 @@ impl<'b> Parser<'b> {
         let params_for_fun = params.clone();
 
         let sig_id = self.db.put_sig(&sig);
+        // Simply create a dummy closure. This may be relevant if a function is
+        // somehow inferred to be async.
+        let param_closure = self.db.push(Closure { class: None, parent: None, parent_class: None });
         let fun: FunId = self.db.push(Fun {
             name: Some(fun_name),
             sig: sig_id,
@@ -386,6 +389,7 @@ impl<'b> Parser<'b> {
             asyncness: crate::expr::Asyncness::Not,
             class: None,
             closure: None,
+            param_closure,
             expression: None,
             location,
             doc_comment,

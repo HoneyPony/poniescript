@@ -152,14 +152,18 @@ impl VisitAstMut for AsyncConvert {
                     };
                     let closure = db.push(closure);
                     let new_alloc = Expr::push_allocateclosure(ast, loc.clone(), closure,
-                        new_block, db.types.void, false);
+                        new_block, db.types.void,
+                        // This closure is responsible for copying params.
+                        true);
 
-                    let cb_type = db.get(fun).return_type;
+                    // The sugar return type should still be referring to the correct type.
+                    let cb_type = db.get(fun).sugar_return_type;
                     let sig = Sig {
                         parameters: vec![cb_type],
                         return_type: db.types.void,
                     };
                     let sig = db.put_sig(&sig);
+                    db.use_sig(sig);
 
                     let new_var_name = db.put_str("await");
                     let new_var = db.new_var(new_var_name, cb_type, true, None,
@@ -174,6 +178,7 @@ impl VisitAstMut for AsyncConvert {
                         asyncness: Asyncness::Not,
                         class: None,
                         closure: self.current_closure, // I believe this is the enclosing closure
+                        param_closure: closure, // This would be the inner closure
                         expression: Some(new_alloc),
                         location: loc.clone(),
                         doc_comment: None,

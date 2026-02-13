@@ -1856,6 +1856,8 @@ impl<'b> Parser<'b> {
 			asyncness: self.fun_asyncness,
 			// The closure for this function is the enclosing closure.
 			closure: enclosing_closure,
+			// The parameter closure is the inner closure.
+			param_closure: closure,
 			sig: self.db.sig_unassigned,
 			class: None, // Class is not assigned for now, the class parser will assign it later.
 			expression: Some(value),

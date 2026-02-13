@@ -234,6 +234,8 @@ pub struct Fun {
 	/// Global functions have no closure. Functions that are inside another
 	/// function get that function's closure.
 	pub closure: Option<ClosureId>,
+	/// The closure for the function's own parameters.
+	pub param_closure: ClosureId,
 
 	/// Should be Some() if this is a function we are compiling, or None if
 	/// this is an imported function from a C module.
