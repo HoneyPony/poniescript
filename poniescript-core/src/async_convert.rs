@@ -188,6 +188,15 @@ impl VisitAstMut for AsyncConvert {
                     let fun_capture = Expr::push_funcapture(ast, loc.clone(),
                         loc.clone(), new_function, db.put_type(Type::Fun(sig)), None);
                     
+                    // We must add the fun declare to this block so that the closure
+                    // conversion pass will see it.
+                    let fundeclare = Expr::push_fundeclare(ast, loc.clone(), new_function, new_alloc, db.types.void);
+                    let fundeclare_stmt = Stmt::push_expression(ast, loc.clone(), fundeclare);
+                    let mut binding = ast.get_expr_mut(id);
+                    let Expr::Block(block) = binding.as_mut() else { unreachable!() };
+                    block.stmts.push(fundeclare_stmt);
+                    drop(binding);
+
                     // Add the fun capture to the parameters of the fun call.
                     let mut binding = ast.get_expr_mut(call_id);
                     let Expr::FunCall(call) = binding.as_mut() else { unreachable!() };
