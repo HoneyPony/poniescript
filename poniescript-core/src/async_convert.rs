@@ -156,23 +156,41 @@ impl VisitAstMut for AsyncConvert {
                         // This closure is responsible for copying params.
                         true);
 
-                    // The sugar return type should still be referring to the correct type.
-                    let cb_type = db.get(fun).sugar_return_type;
-                    let sig = Sig {
-                        parameters: vec![cb_type],
-                        return_type: db.types.void,
-                    };
-                    let sig = db.put_sig(&sig);
-                    db.use_sig(sig);
+                    // We can't just directly use the sugar return type or
+                    // the normal return type. We need to extract the return
+                    // type from the function.
+                    //
+                    // First get the end_continuation.
+                    let end_continuation = db.get(fun).parameters.last().unwrap();
 
-                    let new_var_name = db.put_str("await");
-                    let new_var = db.new_var(new_var_name, cb_type, true, None,
-                        None, Some(closure), None, None, loc.clone(), None);
+                    // Next, extract the type from the end_continuation.
+                    let cb_type = db.get_var_type(*end_continuation);
+                    let Type::Fun(sig) = db.get(cb_type) else { panic!("ICE: Non-Fun continuation"); };
+                    let sig = *sig;
+
+                    // We re-use this sig as the sig for the new function.
+                    let mut parameters = vec![];
+                    // If there is a single parameter in the cb_type, that is our
+                    // return-type variable for our callback.
+                    if let Some(param) = db.get(sig).parameters.first().copied() {
+                        let new_var_name = db.put_str("await");
+                        let new_var = db.new_var(new_var_name, cb_type, true, None,
+                            None, Some(closure), None, None, loc.clone(), None);
+                        parameters.push(new_var);
+                    }
+
+                    // log::trace!("async: cb_type for {} = {}", db.get_fun_name(fun), db.repr_type(cb_type));
+                    // let sig = Sig {
+                    //     parameters: vec![cb_type],
+                    //     return_type: db.types.void,
+                    // };
+                    // let sig = db.put_sig(&sig);
+                    // db.use_sig(sig);
 
                     let new_function = Fun {
                         name: None,
                         sig,
-                        parameters: vec![new_var],
+                        parameters,
                         return_type: db.types.void,
                         sugar_return_type: db.types.void,
                         asyncness: Asyncness::Not,
