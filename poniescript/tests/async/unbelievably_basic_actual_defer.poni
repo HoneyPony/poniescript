@@ -1,0 +1,54 @@
+var callbacks: DynArray[fun(int)] = [];
+
+fun call_later(cb: fun(int)) {
+    print("i'll do this later...");
+    callbacks.push(cb);
+}
+
+fun do_call_laters() {
+    let to_execute = callbacks;
+    callbacks = [];
+    for i in 0..to_execute.length {
+        to_execute[i](i);
+    }
+}
+
+fun test() -> int {
+    call_later().await;
+    print("hello 1");
+    call_later().await;
+    print("hello 2");
+    call_later().await;
+    print("hello 3");
+
+    return 20;
+}
+
+//! i'll do this later...
+//! init 1
+//! hello 1
+//! i'll do this later...
+//! init 2
+//! hello 2
+//! i'll do this later...
+//! init 3
+//! hello 3
+//! final callback
+fun init() {
+    fun final_cb(ret: int) {
+        print("final callback");
+    }
+
+    test(final_cb);
+
+    print("init 1");
+    do_call_laters();
+
+    // test(final_cb);
+
+    print("init 2");
+    do_call_laters();
+
+    print("init 3");
+    do_call_laters();
+}

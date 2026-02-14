@@ -48,6 +48,10 @@ pub fn generate(tests_file: &mut File) {
 		("async/", "err_callback_two_args"),
 		("async/", "parse_await_and_induce"),
 		("async/", "typecheck_int"),
+		("async/", "unbelievably_basic"),
+		("async/", "unbelievably_basic2"),
+		("async/", "unbelievably_basic_actual_defer"),
+		("async/", "actual_defer_crazy"),
 
 		("assign/", "addition_tuple"),
 		("assign/", "arith_ops_float_promote"),

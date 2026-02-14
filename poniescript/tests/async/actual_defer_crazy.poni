@@ -1,0 +1,65 @@
+var callbacks: DynArray[fun(int)] = [];
+
+fun call_later(name: StrConst, cb: fun(int)) {
+    print(name, " task deferred...");
+    callbacks.push(cb);
+}
+
+fun do_call_laters() {
+    let to_execute = callbacks;
+    callbacks = [];
+    for i in 0..to_execute.length {
+        to_execute[i](i);
+    }
+}
+
+fun test(name: StrConst) -> int {
+    call_later(name).await;
+    print("hello from ", name, " 1");
+    call_later(name).await;
+    print("hello from ", name, " 2");
+    call_later(name).await;
+    print("hello from ", name, " 3");
+
+    return 20;
+}
+
+//! Horse task deferred...
+//! init 1
+//! hello from Horse 1
+//! Horse task deferred...
+//! Borse task deferred...
+//! init 2
+//! hello from Horse 2
+//! Horse task deferred...
+//! hello from Borse 1
+//! Borse task deferred...
+//! init 3
+//! hello from Horse 3
+//! final callback
+//! hello from Borse 2
+//! Borse task deferred...
+//! init 4
+//! hello from Borse 3
+//! final callback
+fun init() {
+    fun final_cb(ret: int) {
+        print("final callback");
+    }
+
+    test("Horse", final_cb);
+
+    print("init 1");
+    do_call_laters();
+
+    test("Borse", final_cb);
+
+    print("init 2");
+    do_call_laters();
+
+    print("init 3");
+    do_call_laters();
+
+    print("init 4");
+    do_call_laters();
+}
