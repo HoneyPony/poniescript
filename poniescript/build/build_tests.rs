@@ -50,6 +50,7 @@ pub fn generate(tests_file: &mut File) {
 		("async/", "typecheck_int"),
 		("async/", "unbelievably_basic"),
 		("async/", "unbelievably_basic2"),
+		("async/", "unbelievably_basic_void"),
 		("async/", "unbelievably_basic_actual_defer"),
 		("async/", "actual_defer_crazy"),
 

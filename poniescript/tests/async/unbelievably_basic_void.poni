@@ -1,0 +1,25 @@
+// This test case is just to make sure we can correctly
+// use void return types.
+fun call_with_print(cb: fun()) {
+    print("hello async!");
+    cb();
+}
+
+fun test() {
+    call_with_print().await;
+    print("yippee");
+    call_with_print().await;
+    print("yippee 2");
+}
+
+//! hello async!
+//! yippee
+//! hello async!
+//! yippee 2
+//! final callback
+fun init() {
+    fun final_cb() {
+        print("final callback");
+    }
+    test(final_cb);
+}
