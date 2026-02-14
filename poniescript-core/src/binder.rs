@@ -963,8 +963,15 @@ impl<'db> Binder<'db> {
 		if self.db.get(id).asyncness == Asyncness::Implicit {
 			log::trace!("creating end_continuation parameter for implicitly async function '{}'",
 				self.db.get_fun_name(id));
+
+			// Parameters are () for -> void, and (T) for other -> T
+			let mut parameters = Vec::new();
+			if ret_type != self.db.types.void {
+				parameters.push(ret_type);
+			}
+
 			let sig = Sig {
-				parameters: vec![ret_type],
+				parameters,
 				return_type: self.db.types.void,
 			};
 			let sig = self.db.put_sig(&sig);

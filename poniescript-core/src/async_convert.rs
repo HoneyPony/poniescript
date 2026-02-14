@@ -41,6 +41,9 @@ impl AsyncConvert {
 
         self.current_fun = enclosing;
         self.current_closure = enclosing_closure;
+
+        // TODO: We need to implicitly add a call to the return continuation
+        // if the function has no return statements.
     }
 
     fn visit_classdeclare_any(&mut self, ast: &AstProxy, db: &mut Db, declare: &ClassDeclare) {
