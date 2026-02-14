@@ -1,0 +1,24 @@
+fun call_with_print(cb: fun(int)) {
+    print("hello async!");
+    cb(0);
+}
+
+fun test() -> int {
+    call_with_print().await;
+    print("yippee");
+    call_with_print().await;
+    print("yippee 2");
+    return 5;
+}
+
+//! hello async!
+//! yippee
+//! hello async!
+//! yippee 2
+//! final callback
+fun init() {
+    fun final_cb(ret: int) {
+        print("final callback");
+    }
+    test(final_cb);
+}
