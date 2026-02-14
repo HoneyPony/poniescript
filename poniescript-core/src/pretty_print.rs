@@ -227,7 +227,11 @@ impl<'ad> PrettyPrinter<'ad> {
             crate::expr::Expr::Loop(_) => todo!(),
             crate::expr::Expr::Break(_) => todo!(),
             crate::expr::Expr::Continue(_) => todo!(),
-            crate::expr::Expr::Return(_) => todo!(),
+            crate::expr::Expr::Return(ret) => {
+                self.start("Return");
+                self.inner_expr(ret.expression);
+                self.end();
+            },
             crate::expr::Expr::WhileLoop(while_loop) => todo!(),
             crate::expr::Expr::ForLoop(for_loop) => todo!(),
             crate::expr::Expr::Undefined(_undefined) => {

@@ -10,7 +10,8 @@ fun test() -> int {
 }
 
 fun init() {
-    test(fun(ret: int) {
+    fun final_cb(ret: int) {
         print("final callback");
-    });
+    }
+    test(final_cb);
 }
