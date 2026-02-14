@@ -230,9 +230,11 @@ impl VisitAstMut for AsyncConvert {
 
                     // Now, visit the new function ??
                     drop(binding);
-                    //self.visit_expr(ast, db, new_alloc);
+                    // This is, uh, O(n^2), and of course, still very wrong,
+                    // but it does actually kind of work.
+                    self.visit_expr(ast, db, new_alloc);
 
-                    break;
+                    return;
                 }
             }
 
