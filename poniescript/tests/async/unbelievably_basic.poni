@@ -9,6 +9,9 @@ fun test() -> int {
     return 5;
 }
 
+//! hello async!
+//! yippee
+//! final callback
 fun init() {
     fun final_cb(ret: int) {
         print("final callback");

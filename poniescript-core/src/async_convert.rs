@@ -31,7 +31,11 @@ impl AsyncConvert {
         let enclosing = self.current_fun;
         let enclosing_closure = self.current_closure;
         self.current_fun = Some(declare.identity);
-        self.current_closure = db.get(declare.identity).closure;
+        // The current closure is the param closure.
+        //
+        // That's because the param_closure is the one that we want to be the
+        // parent of any new continuation we build.
+        self.current_closure = Some(db.get(declare.identity).param_closure);
 
         self.visit_expr(ast, db, declare.value);
 
@@ -187,8 +191,12 @@ impl VisitAstMut for AsyncConvert {
                     // let sig = db.put_sig(&sig);
                     // db.use_sig(sig);
 
+                    // Use the name "continuation" for these functions, to make
+                    // them clearer in debug output
+                    let name = db.put_str("continuation");
+
                     let new_function = Fun {
-                        name: None,
+                        name: Some(name),
                         sig,
                         parameters,
                         return_type: db.types.void,
@@ -212,7 +220,7 @@ impl VisitAstMut for AsyncConvert {
                     let fundeclare_stmt = Stmt::push_expression(ast, loc.clone(), fundeclare);
                     let mut binding = ast.get_expr_mut(id);
                     let Expr::Block(block) = binding.as_mut() else { unreachable!() };
-                    block.stmts.push(fundeclare_stmt);
+                    block.stmts.insert(block.stmts.len() - 1, fundeclare_stmt);
                     drop(binding);
 
                     // Add the fun capture to the parameters of the fun call.
