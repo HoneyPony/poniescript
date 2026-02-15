@@ -32,6 +32,180 @@ fn push_to_block(ast: &AstProxy, target_block: ExprId, new_stmt: StmtId) {
 }
 
 impl AsyncConvert {
+    fn call_continuation(
+        &mut self,
+        ast: &AstProxy,
+        db: &mut Db,
+        fun: FunId,
+        value: Option<ExprId>
+    ) -> ExprId {
+        // TODO: If we are calling a fun(), we actually need to essentially do
+        // {
+        //     <evaluate value>
+        //     call();
+        // }
+        let loc = db.synthetic();
+        Expr::push_funcall(ast, loc.clone(), loc.clone(),
+            // TODO: The number of arguments in the value needs to match the call...
+            fun, value.into_iter().collect(), None, CallType::Normal, Vec::new())
+    }
+
+    fn splice_continuation_call(
+        &mut self,
+        ast: &AstProxy,
+        db: &mut Db,
+        // The block that we're splicing the call into.
+        dest_block: ExprId,
+        continuation: FunId,
+    ) {
+        let mut binding = ast.get_expr_mut(dest_block);
+        let Expr::Block(block) = binding.as_mut() else { panic!("ICE: Non-Block in splice_continuation_call"); };
+
+        let last_expr = block.stmts.last();
+        match last_expr {
+            Some(s) => {
+                let mut binding = ast.get_stmt_mut(*s);
+                match binding.as_mut() {
+                    Stmt::Declare(declare) => (),
+                    Stmt::Expression(expression) => {
+                        let call = self.call_continuation(ast, db, continuation, Some(expression.expression));
+                        expression.expression = call;
+                        return;
+                    }
+                    Stmt::ClassDeclare(class_declare) => (),
+                }
+            }
+            None => (),
+        };
+        
+        // Ok, well, we weren't able to replace the last expression of the block with a call, so synthesize
+        // a new call.
+        let call = self.call_continuation(ast, db, continuation, None);
+        let call_stmt = Stmt::push_expression(ast, db.synthetic(), call);
+        block.stmts.push(call_stmt);
+    }
+
+    /// Synthesizes a new continuation function.
+    /// 
+    /// The callback_param may be either None (for an empty callback, equivalent to void), or a void type.
+    /// 
+    /// If it is void, you should not call the callback with any parameters.
+    fn synthesize_continuation(
+        &mut self,
+        ast: &AstProxy,
+        db: &mut Db,
+        mut callback_param: Option<TypId>,
+        target_block: ExprId,
+    ) -> (ExprId, FunId, ClosureId, Expr) {
+        let loc = db.synthetic(); // idk
+
+        if let Some(cb) = callback_param {
+            if cb == db.types.void {
+                // Convert these into empty callback param so we handle it consistently
+                callback_param = None;
+            }
+        }
+
+        let new_block = Expr::push_block(ast,
+            loc.clone(),
+            // The new block starts empty; it is filled up through the target_block system.
+            Vec::new(),
+            db.types.void);
+        let closure = Closure {
+            class: None,
+            parent: self.current_closure,
+            parent_class: None,
+        };
+        let closure = db.push(closure);
+        let new_alloc = Expr::push_allocateclosure(ast, loc.clone(), closure,
+            new_block, db.types.void,
+            // This closure is responsible for copying params.
+            true);
+
+        let replacement_expr: Expr;
+
+        // We re-use this sig as the sig for the new function.
+        let mut parameters = vec![];
+        let mut the_new_var = None;
+        // If there is a single parameter in the cb_type, that is our
+        // return-type variable for our callback.
+        if let Some(param) = callback_param {
+            let new_var_name = db.put_str("await");
+            let new_var = db.new_var(new_var_name, param, true, None,
+                None, Some(closure), None, None, loc.clone(), None);
+            parameters.push(new_var);
+
+            // It is important to save this for later, because we have to assign
+            // it's fun, otherwise closure_convert won't convert it
+            the_new_var = Some(new_var);
+
+            replacement_expr = Expr::Variable(Variable {
+                location: loc.clone(),
+                identity: new_var,
+            });
+        }
+        else {
+            // For now, if we are a void, as our replacement expression use an empty block.
+            replacement_expr = Expr::Block(Block {
+                location: loc.clone(),
+                stmts: Vec::new(),
+                typ: db.types.void
+            });
+        }
+
+        // log::trace!("async: cb_type for {} = {}", db.get_fun_name(fun), db.repr_type(cb_type));
+        let sig = Sig {
+            parameters: the_new_var.map(|v| db.get(v).typ).into_iter().collect(),
+            return_type: db.types.void,
+        };
+        let sig = db.put_sig(&sig);
+        db.use_sig(sig);
+
+        // Use the name "continuation" for these functions, to make
+        // them clearer in debug output
+        let name = db.put_str("continuation");
+
+        let new_function = Fun {
+            name: Some(name),
+            sig,
+            parameters,
+            return_type: db.types.void,
+            sugar_return_type: db.types.void,
+            asyncness: Asyncness::Not,
+            class: None,
+            closure: self.current_closure, // I believe this is the enclosing closure
+            param_closure: closure, // This would be the inner closure
+            expression: Some(new_alloc),
+            location: loc.clone(),
+            doc_comment: None,
+        };
+
+        let new_function = db.push(new_function);
+        
+        if let Some(var) = the_new_var {
+            // Make sure the var is assigned the function, otherwise closure conversion
+            // won't work.
+            db.get_mut(var).fun = Some(new_function);
+            // ...And it is a parameter.
+            db.get_mut(var).param_for = Some(new_function);
+        }
+
+        // We must add the fun declare to this block so that the closure
+        // conversion pass will see it.
+        let fundeclare = Expr::push_fundeclare(ast, loc.clone(), new_function, new_alloc, db.types.void);
+        let fundeclare_stmt = Stmt::push_expression(ast, loc.clone(), fundeclare);
+        
+        // THIS needs to be the OLD target_block.
+        push_to_block(ast, target_block, fundeclare_stmt);
+
+        (
+            new_block,
+            new_function,
+            closure,
+            replacement_expr
+        )
+    }
+
     fn expr(&mut self, ast: &AstProxy, db: &mut Db, expr: ExprId, mut target_block: ExprId) -> ExprId {
         let mut binding = ast.get_expr_mut(expr);
         match binding.as_mut() {
@@ -65,22 +239,6 @@ impl AsyncConvert {
                     let fun = call.identity;
                     drop(binding); // So we don't double borrow soon
                     
-                    let new_block = Expr::push_block(ast,
-                        loc.clone(),
-                        // The new block starts empty; it is filled up through the target_block system.
-                        Vec::new(),
-                        db.types.void);
-                    let closure = Closure {
-                        class: None,
-                        parent: self.current_closure,
-                        parent_class: None,
-                    };
-                    let closure = db.push(closure);
-                    let new_alloc = Expr::push_allocateclosure(ast, loc.clone(), closure,
-                        new_block, db.types.void,
-                        // This closure is responsible for copying params.
-                        true);
-
                     // We can't just directly use the sugar return type or
                     // the normal return type. We need to extract the return
                     // type from the function.
@@ -93,83 +251,14 @@ impl AsyncConvert {
                     let Type::Fun(sig) = db.get(cb_type) else { panic!("ICE: Non-Fun continuation"); };
                     let sig = *sig;
 
-                    let replacement_expr: Expr;
+                    // The callback_param is literally the parameter of our callback, i.e. our async_continuation
+                    // param. That is, it's the first parameter of the function type which is the last parameter.
+                    let callback_param = db.get(sig).parameters.first().copied();
+                    let (new_block, new_function, closure, replacement_expr)
+                        = self.synthesize_continuation(ast, db, callback_param, target_block);
 
-                    // We re-use this sig as the sig for the new function.
-                    let mut parameters = vec![];
-                    let mut the_new_var = None;
-                    // If there is a single parameter in the cb_type, that is our
-                    // return-type variable for our callback.
-                    if let Some(param) = db.get(sig).parameters.first().copied() {
-                        let new_var_name = db.put_str("await");
-                        let new_var = db.new_var(new_var_name, param, true, None,
-                            None, Some(closure), None, None, loc.clone(), None);
-                        parameters.push(new_var);
-
-                        // It is important to save this for later, because we have to assign
-                        // it's fun, otherwise closure_convert won't convert it
-                        the_new_var = Some(new_var);
-
-                        replacement_expr = Expr::Variable(Variable {
-                            location: loc.clone(),
-                            identity: new_var,
-                        });
-                    }
-                    else {
-                        // For now, if we are a void, as our replacement expression use an empty block.
-                        replacement_expr = Expr::Block(Block {
-                            location: loc.clone(),
-                            stmts: Vec::new(),
-                            typ: db.types.void
-                        });
-                    }
-
-                    // log::trace!("async: cb_type for {} = {}", db.get_fun_name(fun), db.repr_type(cb_type));
-                    // let sig = Sig {
-                    //     parameters: vec![cb_type],
-                    //     return_type: db.types.void,
-                    // };
-                    // let sig = db.put_sig(&sig);
-                    // db.use_sig(sig);
-
-                    // Use the name "continuation" for these functions, to make
-                    // them clearer in debug output
-                    let name = db.put_str("continuation");
-
-                    let new_function = Fun {
-                        name: Some(name),
-                        sig,
-                        parameters,
-                        return_type: db.types.void,
-                        sugar_return_type: db.types.void,
-                        asyncness: Asyncness::Not,
-                        class: None,
-                        closure: self.current_closure, // I believe this is the enclosing closure
-                        param_closure: closure, // This would be the inner closure
-                        expression: Some(new_alloc),
-                        location: loc.clone(),
-                        doc_comment: None,
-                    };
-
-                    let new_function = db.push(new_function);
                     let fun_capture = Expr::push_funcapture(ast, loc.clone(),
-                        loc.clone(), new_function, db.put_type(Type::Fun(sig)), None);
-                    
-                    if let Some(var) = the_new_var {
-                        // Make sure the var is assigned the function, otherwise closure conversion
-                        // won't work.
-                        db.get_mut(var).fun = Some(new_function);
-                        // ...And it is a parameter.
-                        db.get_mut(var).param_for = Some(new_function);
-                    }
-
-                    // We must add the fun declare to this block so that the closure
-                    // conversion pass will see it.
-                    let fundeclare = Expr::push_fundeclare(ast, loc.clone(), new_function, new_alloc, db.types.void);
-                    let fundeclare_stmt = Stmt::push_expression(ast, loc.clone(), fundeclare);
-                    
-                    // THIS needs to be the OLD target_block.
-                    push_to_block(ast, target_block, fundeclare_stmt);
+                loc.clone(), new_function, db.put_type(Type::Fun(sig)), None);
 
                     // Add the fun capture to the parameters of the fun call.
                     let mut binding = ast.get_expr_mut(expr);
@@ -230,8 +319,12 @@ impl AsyncConvert {
                     inner_target = self.stmt(ast, db, stmt, inner_target);
                 }
 
-                // Original target block.
-                return target_block;
+                // Revert to original target if there were no continuations.
+                if inner_target == expr {
+                    return target_block;
+                }
+                // Otherwise, we need to write into the continuations...
+                return inner_target;
             }
             Expr::AllocateClosure(alloc) => {
                 return self.expr(ast, db, alloc.inner, target_block)
@@ -259,6 +352,7 @@ impl AsyncConvert {
             }
             Expr::StrLiteral(_) => { target_block }
             Expr::NumLiteral(_) => { target_block }
+            Expr::BoolLiteral(_) => { target_block }
             Expr::Variable(_) => { target_block }
             Expr::Return(ret) => {
                 // Returns are special, because they must be replaced with a call to the
@@ -340,6 +434,119 @@ impl AsyncConvert {
                 target_block = self.expr(ast, db, loop_.condition, target_block);
                 target_block = self.expr(ast, db, loop_.inner, target_block);
                 return target_block;
+            }
+            Expr::Loop(loop_) => {
+                // The basic idea here is as follows:
+                // If there is an await inside the loop, we will need the loop body
+                // itself to be a new continuation, as well as everything 'after' the loop.
+                //
+                // For this reason, we create a new block *immediately*. If it turns out that the
+                // loop body was a continuation, we synthesize it into a continuation, then create
+                // ANOTHER continuation, and make that the exit continuation for the loop.
+                //
+                // If it turns out the loop body was NOT a continuation, we simply append everything
+                // to the parent target block.
+                //
+                // We figure this out by checking if target block changes. If it stays the same, there
+                // is no need for any continuation synthesis.
+                todo!()
+            }
+            Expr::If(if_) => {
+                // The idea here is similar to the Loops.
+                //
+                // Basically, we want to see if either of our own inner expressions changes.
+                // I actually think what we want to do is just make it a propert of if/else
+                // that they always have an inner block, to keep the building of the continuations
+                // more straightforward.
+                //
+                // In any case... What we want to do is, if the target_block changed, synthesize
+                // one new continuation, and then write into the end of each target_block a jump
+                // to this continuation.
+                target_block = self.expr(ast, db, if_.condition, target_block);
+
+                let then_branch = self.expr(ast, db, if_.then_branch, target_block);
+                let else_branch = match if_.else_branch {
+                    Some(branch) => Some(self.expr(ast, db, branch, target_block)),
+                    None => None
+                };
+
+                let needs_continuation = then_branch != target_block || match else_branch {
+                    Some(b) => b != target_block,
+                    None => false
+                };
+
+                if needs_continuation {
+                    let loc = db.synthetic();
+                    let (new_block, new_function, closure, replacement_expr)
+                        = self.synthesize_continuation(ast, db, Some(if_.typ), target_block);
+
+
+                    // What we need to do is put our own continuation at the end of the converted blocks.
+                    // 
+                    // That is,
+                    // if { let x = a().await; x + 2 } else { b().await }
+                    //
+                    // Should be converted into:
+                    // ```
+                    // if {
+                    //     a(fun(a_result) {
+                    //         let x = a_result;
+                    //         if_continuation(x + 2)
+                    //     })
+                    // }
+                    // else {
+                    //     b(fun(b_result) {
+                    //         if_continuation(b_result)
+                    //     })
+                    // }
+                    // ```
+                    //
+                    // One reasonably clean way to do this should be (?) to 'simply' replace the last expression
+                    // in the block with a call, with the old expression as an argument.
+
+                    let else_branch = match else_branch {
+                        Some(e) => e,
+                        None => {
+                            // If we have an empty else branch, we have to synthesize a new one.
+                            let else_branch = Expr::push_block(ast, db.synthetic(), Vec::new(), db.types.void);
+                            if_.else_branch = Some(else_branch); // This must be put on the if_ as well
+
+                            else_branch
+                        },
+                    };
+
+                    self.splice_continuation_call(ast, db, then_branch, new_function);
+                    self.splice_continuation_call(ast, db, else_branch, new_function);
+
+                    // As with function calls, we in-place replace the old if statement with the new variable
+                    // representing its value. Then, we push the if statement to the OLD target_block.
+                    let if_ = std::mem::replace(binding.as_mut(), replacement_expr);
+
+                    // Finally-finally, the fun_call itself still needs to occur, so append it as a new
+                    // expr to the current block (not the new block). It occurs as a fun call that is assigned
+                    // to nothing.
+                    drop(binding);
+                    let if_expr = ast.exprs.push(if_);
+                    let if_stmt = Stmt::push_expression(ast, loc.clone(), if_expr);
+                    push_to_block(ast, target_block, if_stmt);
+
+                    // I'm not entirely sure if this is right, but it seems like it should be?
+                    //
+                    // We definitely need to keep track of the new closure SOMEWHERE. The question is whether
+                    // we ever pop this value in some way.
+                    //
+                    // We can't update self.current_fun, though, because we still need the *real* current_fun to find
+                    // the async_continuation for return statements. We will likely have to revisit this when we 
+                    // implement loop handling.
+                    self.current_closure = Some(closure);
+                    //self.current_fun = Some(new_function);
+
+                    // Interestingly, there is nothing to visit in the new function yet. (And in fact, there never will be).
+                    // Instead, we simply have a new target_block, for the rest of the upcoming statements.
+                    target_block = new_block;
+                }
+
+                target_block
             }
             Expr::Promote(promote) => {
                 return self.expr(ast, db, promote.inner, target_block);
