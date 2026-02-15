@@ -1092,7 +1092,7 @@ impl<'db> TypeChecker<'db> {
 	fn check_expr(&mut self, ast: &AstProxy, expr_id: ExprId, value_used: bool) -> Result<TypId> {
 		let mut binding = ast.exprs.get_mut(expr_id);
 		let expr = binding.as_mut();
-		log::trace!("check_expr: {:?}", expr);
+		log::trace!("check_expr: {:?} ({})", expr, value_used);
 		let result = Ok(match expr {
 			Expr::AllocateClosure(ac) => {
 				// Merely a wrapper
@@ -1867,6 +1867,7 @@ impl<'db> TypeChecker<'db> {
 						//
 						// Safety: This would have been an Err earlier if we
 						// didn't get this.
+						log::trace!("type of .await'd call: {}", self.db.repr_type(await_typ.unwrap()));
 						await_typ.unwrap()
 					}
 					CallType::Induce => {
@@ -2931,14 +2932,17 @@ impl<'db> TypeChecker<'db> {
 		//
 		// So, the only thing that affects whether we need a value is the return type.
 		// If it's void, we need no value; otherwise, we need a value.
-		let value_used = !self.db.does_fun_return_void(fun.identity);
-		let return_type = self.db.get_fun_return_typid(fun.identity);
+
+		let sugar_return_type = self.db.get(fun.identity).sugar_return_type;
+		let value_used = sugar_return_type != self.db.types.void;
+		//let value_used = !self.db.does_fun_return_void(fun.identity);
+		//let return_type = self.db.get_fun_return_typid(fun.identity);
 
 		log::trace!("check_fun_declare: {}", self.db.get_fun_name(fun.identity));
 
 		// Compare against the sugar return type. This is so async functions with
 		// .await will compare against their declared return type.
-		self.return_types.push(self.db.get(fun.identity).sugar_return_type);
+		self.return_types.push(sugar_return_type);
 
 		let inner = self.check_expr(ast, fun.value, value_used)?;
 
@@ -2948,7 +2952,7 @@ impl<'db> TypeChecker<'db> {
 		// type.
 		if value_used {
 			let computed = self.compute_assignable(
-				self.db.get_fun_return_typid(fun.identity),
+				sugar_return_type,
 				inner);
 
 			let computed = maybe_type_error!(self, 

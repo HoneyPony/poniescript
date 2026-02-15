@@ -4,7 +4,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use poni_arena::ArenaKey;
 use crate::{db::*, lexer::Token};
-use crate::typ::RangeEnd;
+use crate::typ::{RangeEnd, Type};
 use crate::source::SourceLocation;
 use crate::lexer::Tok;
 
@@ -90,7 +90,39 @@ impl Expr {
 				db.get_var_type(var.identity)
 			},
 			Expr::FunCall(call) => {
-				db.get_fun_ret_type(call.identity)
+				// This is a little awkward.
+				//
+				// Basically, the return type depends on what kind of call it is.
+				// Although, I guess until we make .induce return a Promise, it's not
+				// too bad.
+				match call.call_type {
+					CallType::Normal => db.get(call.identity).return_type,
+					CallType::Await => {
+						// We actually can't directly use the sugar return type here. In particular,
+						// that isn't the correct return type for any explicitly written async function.
+						//
+						// Instead, we have to manually extract the type, or otherwise keep a cached
+						// copy somewhere...
+						let Some(param) = db.get(call.identity).parameters.last() else {
+							return db.types.unassigned;
+						};
+						// This param must be a function call.
+						let Type::Fun(f) = db.get(db.get_var_type(*param)) else {
+							return db.types.unassigned;
+						};
+						let sig = db.get(*f);
+						let Some(first) = sig.parameters.first() else {
+							return db.types.unassigned;
+						};
+						log::trace!("typ() of .await'd FunCall {}: {}", db.get_fun_name(call.identity), db.repr_type(*first));
+						return *first;
+						
+						//db.get(call.identity).sugar_return_type
+					}
+					CallType::Induce => db.types.void,
+				}
+				
+				//db.get_fun_ret_type(call.identity)
 			},
 			Expr::BuiltinCall(call) => {
 				// Because this type is dynamic, we might as well just cache it.

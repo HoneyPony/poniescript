@@ -94,6 +94,7 @@ impl AsyncConvert {
         &mut self,
         ast: &AstProxy,
         db: &mut Db,
+        tag: &'static str,
         mut callback_param: Option<TypId>,
         target_block: ExprId,
     ) -> (ExprId, FunId, ClosureId, Expr) {
@@ -163,7 +164,7 @@ impl AsyncConvert {
 
         // Use the name "continuation" for these functions, to make
         // them clearer in debug output
-        let name = db.put_str("continuation");
+        let name = db.put_str(tag);
 
         let new_function = Fun {
             name: Some(name),
@@ -255,7 +256,7 @@ impl AsyncConvert {
                     // param. That is, it's the first parameter of the function type which is the last parameter.
                     let callback_param = db.get(sig).parameters.first().copied();
                     let (new_block, new_function, closure, replacement_expr)
-                        = self.synthesize_continuation(ast, db, callback_param, target_block);
+                        = self.synthesize_continuation(ast, db, "funcall_continuation", callback_param, target_block);
 
                     let fun_capture = Expr::push_funcapture(ast, loc.clone(),
                 loc.clone(), new_function, db.put_type(Type::Fun(sig)), None);
@@ -413,6 +414,10 @@ impl AsyncConvert {
                 // do it in a top-level way. This would allow us to skip any functions that
                 // do not contain any .await's entirely.
                 self.function(ast, db, fun.identity, target_block);
+                // In case we overwrote the function expressoin in-Fun, also do it here.
+                if let Some(expr) = db.get(fun.identity).expression {
+                    fun.value = expr;
+                }
                 // Keep same target block.
                 return target_block;
             }
@@ -476,9 +481,10 @@ impl AsyncConvert {
                 };
 
                 if needs_continuation {
+                    log::trace!("async: if type = {}", db.repr_type(if_.typ));
                     let loc = db.synthetic();
                     let (new_block, new_function, closure, replacement_expr)
-                        = self.synthesize_continuation(ast, db, Some(if_.typ), target_block);
+                        = self.synthesize_continuation(ast, db, "if_continuation", Some(if_.typ), target_block);
 
 
                     // What we need to do is put our own continuation at the end of the converted blocks.
@@ -601,7 +607,35 @@ impl AsyncConvert {
         // parent of any new continuation we build.
         self.current_closure = Some(db.get(fun).param_closure);
 
-        self.maybe_expr(ast, db, db.get(fun).expression, target_block);
+        let block = self.maybe_expr(ast, db, db.get(fun).expression, target_block);
+        if block != target_block {
+            // If there is async stuff happening, we need to convert the function to call
+            // its next continuation as the function body. This is for the case where
+            // a function does not have an explicit return statement at the end.
+            let continuation = db.get(fun).parameters.last().unwrap();
+
+            let loc = db.synthetic();
+            let inner = db.get(fun).expression;
+
+            let var = Expr::push_variable(ast, loc.clone(), *continuation);
+            let var_type = db.get_var_type(*continuation);
+            let Type::Fun(sig) = db.get(var_type) else { panic!("ICE: Non-Fun continuation"); };
+            let mut as_valcall = ValCall {
+                location: loc.clone(),
+                value: var,
+                args: Vec::new(),
+                sig: *sig,
+                call_type: CallType::Normal,
+                arg_boundaries: Vec::new(),
+            };
+            
+            if let Some(inner) = inner {
+                as_valcall.args.push(inner);
+            }
+
+            let valcall = ast.exprs.push(Expr::ValCall(as_valcall));
+            db.get_mut(fun).expression = Some(valcall);
+        }
 
         self.current_fun = enclosing;
         self.current_closure = enclosing_closure;
