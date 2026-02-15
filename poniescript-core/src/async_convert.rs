@@ -181,6 +181,10 @@ impl AsyncConvert {
                     let funcall_stmt = Stmt::push_expression(ast, loc.clone(), funcall_expr);
                     push_to_block(ast, target_block, funcall_stmt);
 
+                    // I'm not entirely sure if this is right, but it seems like it should be?
+                    self.current_closure = Some(closure);
+                    //self.current_fun = Some(new_function);
+
                     // Interestingly, there is nothing to visit in the new function yet. (And in fact, there never will be).
                     // Instead, we simply have a new target_block, for the rest of the upcoming statements.
                     target_block = new_block;
@@ -316,6 +320,9 @@ impl AsyncConvert {
                 target_block = self.expr(ast, db, loop_.condition, target_block);
                 target_block = self.expr(ast, db, loop_.inner, target_block);
                 return target_block;
+            }
+            Expr::Promote(promote) => {
+                return self.expr(ast, db, promote.inner, target_block);
             }
             oops @ _ => {
                 todo!("{:#?}", std::mem::discriminant(oops))

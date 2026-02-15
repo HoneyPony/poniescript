@@ -1,0 +1,22 @@
+fun make_number(x: int, cb: fun(int)) {
+    print("i shall make... ", x);
+    cb(x);
+}
+
+fun test() -> int {
+    print("i have received... ",
+        make_number(10).await + make_number(20).await);
+
+    return 5;
+}
+
+//! i shall make... 10
+//! i shall make... 20
+//! i have received... 30
+//! final callback
+fun init() {
+    fun final_cb(ret: int) {
+        print("final callback");
+    }
+    test(final_cb);
+}

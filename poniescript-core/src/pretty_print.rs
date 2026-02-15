@@ -46,7 +46,12 @@ impl<'ad> PrettyPrinter<'ad> {
         let binding = self.ast.get_expr(expr);
         match binding.as_ref() {
             crate::expr::Expr::AllocateClosure(allocate_closure) => {
-                eprintln!("AllocateClosure");
+                eprint!("AllocateClosure [[{}",
+                    allocate_closure.id.to_index());
+                if let Some(parent) = self.db.get(allocate_closure.id).parent {
+                    eprint!(", parent = {}", parent.to_index());
+                }
+                eprintln!("]]");
                 self.inner_expr(Some(allocate_closure.inner));
             },
             crate::expr::Expr::Binary(binary) => {
@@ -220,7 +225,11 @@ impl<'ad> PrettyPrinter<'ad> {
             crate::expr::Expr::SetIndex(set_index) => todo!(),
             crate::expr::Expr::MakeTuple(make_tuple) => todo!(),
             crate::expr::Expr::MakeRange(make_range) => todo!(),
-            crate::expr::Expr::Promote(promote) => todo!(),
+            crate::expr::Expr::Promote(promote) => {
+                self.start("Promote");
+                self.expr(promote.inner);
+                self.end();
+            },
             crate::expr::Expr::Lerp(lerp) => todo!(),
             crate::expr::Expr::MakeSumType(make_sum_type) => todo!(),
             crate::expr::Expr::OptionElse(option_else) => todo!(),
