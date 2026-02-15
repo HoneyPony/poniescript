@@ -1,0 +1,28 @@
+var call_count: int = 0;
+
+fun caller(cb: fun(int)) {
+    call_count += 1;
+    print("call ", call_count);
+    cb(call_count);
+}
+
+fun test(cond: bool) -> int {
+    return {
+        return if(cond) {
+            caller().await
+        }
+        else {
+            let x = caller().await;
+            x + 4
+        };
+    };
+}
+
+fun init() {
+    fun final_cb(x: int) {
+        print("final: ", x);
+    }
+
+    test(true, final_cb);
+    test(false, final_cb);
+}

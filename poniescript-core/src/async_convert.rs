@@ -22,6 +22,7 @@ use crate::{db::*, expr::*, lexer::Tok, typ::Type};
 struct AsyncConvert {
     current_fun: Option<FunId>,
     current_closure: Option<ClosureId>,
+    dummy_block: ExprId,
 }
 
 fn push_to_block(ast: &AstProxy, target_block: ExprId, new_stmt: StmtId) {
@@ -95,6 +96,7 @@ impl AsyncConvert {
         ast: &AstProxy,
         db: &mut Db,
         tag: &'static str,
+        current_closure: Option<ClosureId>,
         mut callback_param: Option<TypId>,
         target_block: ExprId,
     ) -> (ExprId, FunId, ClosureId, Expr) {
@@ -114,7 +116,7 @@ impl AsyncConvert {
             db.types.void);
         let closure = Closure {
             class: None,
-            parent: self.current_closure,
+            parent: current_closure,
             parent_class: None,
         };
         let closure = db.push(closure);
@@ -174,7 +176,7 @@ impl AsyncConvert {
             sugar_return_type: db.types.void,
             asyncness: Asyncness::Not,
             class: None,
-            closure: self.current_closure, // I believe this is the enclosing closure
+            closure: current_closure, // I believe this is the enclosing closure
             param_closure: closure, // This would be the inner closure
             expression: Some(new_alloc),
             location: loc.clone(),
@@ -256,7 +258,7 @@ impl AsyncConvert {
                     // param. That is, it's the first parameter of the function type which is the last parameter.
                     let callback_param = db.get(sig).parameters.first().copied();
                     let (new_block, new_function, closure, replacement_expr)
-                        = self.synthesize_continuation(ast, db, "funcall_continuation", callback_param, target_block);
+                        = self.synthesize_continuation(ast, db, "funcall_continuation", self.current_closure, callback_param, target_block);
 
                     let fun_capture = Expr::push_funcapture(ast, loc.clone(),
                 loc.clone(), new_function, db.put_type(Type::Fun(sig)), None);
@@ -324,8 +326,27 @@ impl AsyncConvert {
                 if inner_target == expr {
                     return target_block;
                 }
-                // Otherwise, we need to write into the continuations...
-                return inner_target;
+                // Otherwise, we do need to keep the continuation block.
+                // But we have to write OURSELVES into our parent block...?
+                //
+                // This does seem a little bad, but the idea is we already double-block up the top-level
+                // of each function, so this shouuuuuld work...
+                if target_block != self.dummy_block {
+                    return inner_target;
+                    // let mut binding = ast.get_expr_mut(expr);
+                    // let Expr::Block(block) = binding.as_mut() else { unreachable!() };
+
+                    // // Sythesize a new block with our statements and push it to the parent. We remain empty.
+                    // let take = std::mem::take(&mut block.stmts);
+                    // let typ = block.typ;
+                    // block.typ = db.types.void;
+                    // drop(binding);
+
+                    // let new_block = Expr::push_block(ast, db.synthetic(), take, typ);
+                    // let new_stmt = Stmt::push_expression(ast, db.synthetic(), new_block);
+                    // push_to_block(ast, target_block, new_stmt);
+                }
+                return target_block;
             }
             Expr::AllocateClosure(alloc) => {
                 return self.expr(ast, db, alloc.inner, target_block)
@@ -469,6 +490,8 @@ impl AsyncConvert {
                 // to this continuation.
                 target_block = self.expr(ast, db, if_.condition, target_block);
 
+                let if_closure = self.current_closure;
+
                 let then_branch = self.expr(ast, db, if_.then_branch, target_block);
                 let else_branch = match if_.else_branch {
                     Some(branch) => Some(self.expr(ast, db, branch, target_block)),
@@ -484,7 +507,7 @@ impl AsyncConvert {
                     log::trace!("async: if type = {}", db.repr_type(if_.typ));
                     let loc = db.synthetic();
                     let (new_block, new_function, closure, replacement_expr)
-                        = self.synthesize_continuation(ast, db, "if_continuation", Some(if_.typ), target_block);
+                        = self.synthesize_continuation(ast, db, "if_continuation", if_closure, Some(if_.typ), target_block);
 
 
                     // What we need to do is put our own continuation at the end of the converted blocks.
@@ -631,16 +654,25 @@ impl AsyncConvert {
         // We will see.
         if db.get(fun).asyncness == Asyncness::Implicit {
             if let Some(expr) = db.get(fun).expression {
-                // Synthesize a 'return' inside the AllocateClosure, I think.
+                // We need to sythesize a Return, but it must occur inside a block so that the target_block
+                // logic works.
+                // So, synthesize a new block, and put the inner block inside it.
+                //
+                // I believe we want the new block to be inside the AllocateClosure.
                 let mut binding = ast.get_expr_mut(expr);
                 let Expr::AllocateClosure(ac) = binding.as_mut() else { panic!("ICE: Fun without AllocateClosure"); };
 
                 // TODO: We may have to change this slightly for void-returning functions.
                 let ret = Expr::push_return(ast, db.synthetic(), Some(ac.inner));
-                ac.inner = ret;
+                let ret_stmt = Stmt::push_expression(ast, db.synthetic(), ret);
+                let block = Expr::push_block(ast, db.synthetic(), vec![ret_stmt], db.types.void);
+                log::trace!("Fun '{}': {} => Expr::Block {} / {} / {}", db.get_fun_name(fun),
+                    ac.inner.to_index(), block.to_index(), ret_stmt.to_index(), ret.to_index());
+                ac.inner = block;            
             }
         }
 
+        //return target_block;
         self.maybe_expr(ast, db, db.get(fun).expression, target_block);
 
         self.current_fun = enclosing;
@@ -893,6 +925,7 @@ pub fn convert_awaits(ast: &mut Ast, db: &mut Db) {
         let mut convert = AsyncConvert {
             current_fun: None,
             current_closure: None,
+            dummy_block,
         };
 
         for fun in &module.functions {
