@@ -195,6 +195,13 @@ impl AsyncConvert {
                     push_to_block(ast, target_block, funcall_stmt);
 
                     // I'm not entirely sure if this is right, but it seems like it should be?
+                    //
+                    // We definitely need to keep track of the new closure SOMEWHERE. The question is whether
+                    // we ever pop this value in some way.
+                    //
+                    // We can't update self.current_fun, though, because we still need the *real* current_fun to find
+                    // the async_continuation for return statements. We will likely have to revisit this when we 
+                    // implement loop handling.
                     self.current_closure = Some(closure);
                     //self.current_fun = Some(new_function);
 
