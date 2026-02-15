@@ -40,6 +40,14 @@ impl AsyncConvert {
                 target_block = self.expr(ast, db, binary.right, target_block);
                 return target_block;
             },
+            Expr::Unary(unary) => {
+                return self.expr(ast, db, unary.inner, target_block);
+            }
+            Expr::Comparison(comparison) => {
+                target_block = self.expr(ast, db, comparison.left, target_block);
+                target_block = self.expr(ast, db, comparison.right, target_block);
+                return target_block;
+            }
             Expr::FunCall(call) => {
                 if let Some(obj) = call.object {
                     target_block = self.expr(ast, db, obj, target_block);
@@ -273,6 +281,15 @@ impl AsyncConvert {
                 }
                 return target_block;
             }
+            Expr::BuiltinCall(call) => {
+                // For now, builtin calls cannot themselves be async, so there is nothing
+                // to convert.
+                target_block = self.expr(ast, db, call.object, target_block);
+                for arg in &call.args {
+                    target_block = self.expr(ast, db, *arg, target_block);
+                }
+                return target_block;
+            }
             Expr::FunDeclare(fun) => {
                 // TODO: We may want to avoid traversing these through the AST, and instead
                 // do it in a top-level way. This would allow us to skip any functions that
@@ -283,6 +300,22 @@ impl AsyncConvert {
             }
             Expr::FunCapture(capt) => {
                 return self.maybe_expr(ast, db, capt.object, target_block);
+            }
+            Expr::Get(get) => {
+                // There is not actually much to do here.
+                return self.expr(ast, db, get.lhs, target_block);
+            }
+            Expr::MakeRange(make) => {
+                target_block = self.expr(ast, db, make.left, target_block);
+                target_block = self.expr(ast, db, make.right, target_block);
+                return target_block;
+            }
+            Expr::WhileLoop(loop_) => {
+                // TODO: Synthesize continuations and stuff. This one will
+                // be interesting. For now we just barely support it for reasons.
+                target_block = self.expr(ast, db, loop_.condition, target_block);
+                target_block = self.expr(ast, db, loop_.inner, target_block);
+                return target_block;
             }
             oops @ _ => {
                 todo!("{:#?}", std::mem::discriminant(oops))
