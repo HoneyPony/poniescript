@@ -607,35 +607,41 @@ impl AsyncConvert {
         // parent of any new continuation we build.
         self.current_closure = Some(db.get(fun).param_closure);
 
-        let block = self.maybe_expr(ast, db, db.get(fun).expression, target_block);
-        if block != target_block {
-            // If there is async stuff happening, we need to convert the function to call
-            // its next continuation as the function body. This is for the case where
-            // a function does not have an explicit return statement at the end.
-            let continuation = db.get(fun).parameters.last().unwrap();
+        // For implicit functions, we want to desugar the inner block to have an explicit Return.
+        //
+        // This is because the implicit return has no obvious place to be converted into a continuation.
+        // For example consider
+        // ```
+        // fun example(x: bool) {
+        //     if(x) {
+        //         some_fun().await
+        //     }
+        //     else {
+        //         some_fun().await
+        //     }
+        // }
+        // ```
+        //
+        // ... How does the if know that, for its new continuation, it needs to return a value to the
+        // function?
+        //
+        // Adding the return explicitly should help this.
+        //
+        // The question, I guess, will be whether this same issue impacts any other expressions-as-values.
+        // We will see.
+        if db.get(fun).asyncness == Asyncness::Implicit {
+            if let Some(expr) = db.get(fun).expression {
+                // Synthesize a 'return' inside the AllocateClosure, I think.
+                let mut binding = ast.get_expr_mut(expr);
+                let Expr::AllocateClosure(ac) = binding.as_mut() else { panic!("ICE: Fun without AllocateClosure"); };
 
-            let loc = db.synthetic();
-            let inner = db.get(fun).expression;
-
-            let var = Expr::push_variable(ast, loc.clone(), *continuation);
-            let var_type = db.get_var_type(*continuation);
-            let Type::Fun(sig) = db.get(var_type) else { panic!("ICE: Non-Fun continuation"); };
-            let mut as_valcall = ValCall {
-                location: loc.clone(),
-                value: var,
-                args: Vec::new(),
-                sig: *sig,
-                call_type: CallType::Normal,
-                arg_boundaries: Vec::new(),
-            };
-            
-            if let Some(inner) = inner {
-                as_valcall.args.push(inner);
+                // TODO: We may have to change this slightly for void-returning functions.
+                let ret = Expr::push_return(ast, db.synthetic(), Some(ac.inner));
+                ac.inner = ret;
             }
-
-            let valcall = ast.exprs.push(Expr::ValCall(as_valcall));
-            db.get_mut(fun).expression = Some(valcall);
         }
+
+        self.maybe_expr(ast, db, db.get(fun).expression, target_block);
 
         self.current_fun = enclosing;
         self.current_closure = enclosing_closure;
