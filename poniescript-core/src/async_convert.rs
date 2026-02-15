@@ -97,6 +97,7 @@ impl AsyncConvert {
 
                     // We re-use this sig as the sig for the new function.
                     let mut parameters = vec![];
+                    let mut the_new_var = None;
                     // If there is a single parameter in the cb_type, that is our
                     // return-type variable for our callback.
                     if let Some(param) = db.get(sig).parameters.first().copied() {
@@ -104,6 +105,10 @@ impl AsyncConvert {
                         let new_var = db.new_var(new_var_name, param, true, None,
                             None, Some(closure), None, None, loc.clone(), None);
                         parameters.push(new_var);
+
+                        // It is important to save this for later, because we have to assign
+                        // it's fun, otherwise closure_convert won't convert it
+                        the_new_var = Some(new_var);
 
                         replacement_expr = Expr::Variable(Variable {
                             location: loc.clone(),
@@ -150,6 +155,14 @@ impl AsyncConvert {
                     let fun_capture = Expr::push_funcapture(ast, loc.clone(),
                         loc.clone(), new_function, db.put_type(Type::Fun(sig)), None);
                     
+                    if let Some(var) = the_new_var {
+                        // Make sure the var is assigned the function, otherwise closure conversion
+                        // won't work.
+                        db.get_mut(var).fun = Some(new_function);
+                        // ...And it is a parameter.
+                        db.get_mut(var).param_for = Some(new_function);
+                    }
+
                     // We must add the fun declare to this block so that the closure
                     // conversion pass will see it.
                     let fundeclare = Expr::push_fundeclare(ast, loc.clone(), new_function, new_alloc, db.types.void);
