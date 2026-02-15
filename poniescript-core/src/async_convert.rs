@@ -85,6 +85,8 @@ impl AsyncConvert {
                     let Type::Fun(sig) = db.get(cb_type) else { panic!("ICE: Non-Fun continuation"); };
                     let sig = *sig;
 
+                    let replacement_expr: Expr;
+
                     // We re-use this sig as the sig for the new function.
                     let mut parameters = vec![];
                     // If there is a single parameter in the cb_type, that is our
@@ -94,6 +96,19 @@ impl AsyncConvert {
                         let new_var = db.new_var(new_var_name, param, true, None,
                             None, Some(closure), None, None, loc.clone(), None);
                         parameters.push(new_var);
+
+                        replacement_expr = Expr::Variable(Variable {
+                            location: loc.clone(),
+                            identity: new_var,
+                        });
+                    }
+                    else {
+                        // For now, if we are a void, as our replacement expression use an empty block.
+                        replacement_expr = Expr::Block(Block {
+                            location: loc.clone(),
+                            stmts: Vec::new(),
+                            typ: db.types.void
+                        });
                     }
 
                     // log::trace!("async: cb_type for {} = {}", db.get_fun_name(fun), db.repr_type(cb_type));
@@ -140,6 +155,24 @@ impl AsyncConvert {
                     let Expr::FunCall(call) = binding.as_mut() else { unreachable!() };
                     call.args.push(fun_capture);
 
+                    // Finally, replace our fun call with the replacement expr. The idea here is that,
+                    // we have some code that looks like:
+                    //
+                    // fun_call().await + 123
+                    // 
+                    // Replacing 'fun_call().await' with the new variable that represents the return value
+                    // will naturally fit it into the syntax tree. The overall expression will end up in the
+                    // new target_block, inside of stmt().
+                    let fun_call = std::mem::replace(binding.as_mut(), replacement_expr);
+
+                    // Finally-finally, the fun_call itself still needs to occur, so append it as a new
+                    // expr to the current block (not the new block). It occurs as a fun call that is assigned
+                    // to nothing.
+                    drop(binding);
+                    let funcall_expr = ast.exprs.push(fun_call);
+                    let funcall_stmt = Stmt::push_expression(ast, loc.clone(), funcall_expr);
+                    push_to_block(ast, target_block, funcall_stmt);
+
                     // Interestingly, there is nothing to visit in the new function yet. (And in fact, there never will be).
                     // Instead, we simply have a new target_block, for the rest of the upcoming statements.
                     target_block = new_block;
@@ -168,8 +201,91 @@ impl AsyncConvert {
                 // Original target block.
                 return target_block;
             }
-            _ => {
-                todo!()
+            Expr::AllocateClosure(alloc) => {
+                return self.expr(ast, db, alloc.inner, target_block)
+            }
+            Expr::Print(print) => {
+                for arg in &print.exprs {
+                    target_block = self.expr(ast, db, *arg, target_block);
+                }
+                return target_block;
+            }
+            Expr::ArrayLit(lit) => {
+                for arg in &lit.values {
+                    target_block = self.expr(ast, db, *arg, target_block);
+                }
+                return target_block;
+            }
+            Expr::Assign(assign) => {
+                target_block = self.expr(ast, db, assign.value, target_block);
+                return target_block;
+            }
+            Expr::Index(index) => {
+                target_block = self.expr(ast, db, index.index, target_block);
+                target_block = self.expr(ast, db, index.value, target_block);
+                return target_block;
+            }
+            Expr::StrLiteral(_) => { target_block }
+            Expr::NumLiteral(_) => { target_block }
+            Expr::Variable(_) => { target_block }
+            Expr::Return(ret) => {
+                // Returns are special, because they must be replaced with a call to the
+                // async continuation.
+                target_block = self.maybe_expr(ast, db, ret.expression, target_block);
+
+                // Whenever we encounter a return statement, instead call the function's
+                // end_continuation.
+                if let Some(fun) = self.current_fun {
+                    if db.get(fun).asyncness == Asyncness::Implicit {
+                        // This must be a variable, otherwise something is broken.
+                        let continuation = db.get(fun).parameters.last().unwrap();
+
+                        let loc = ret.location.clone();
+                        let inner = ret.expression;
+                        drop(binding);
+
+                        let var = Expr::push_variable(ast, loc.clone(), *continuation);
+                        let var_type = db.get_var_type(*continuation);
+                        let Type::Fun(sig) = db.get(var_type) else { panic!("ICE: Non-Fun continuation"); };
+                        let mut as_valcall = ValCall {
+                            location: loc.clone(),
+                            value: var,
+                            args: Vec::new(),
+                            sig: *sig,
+                            call_type: CallType::Normal,
+                            arg_boundaries: Vec::new(),
+                        };
+                        
+                        if let Some(inner) = inner {
+                            as_valcall.args.push(inner);
+                        }
+
+                        *ast.get_expr_mut(expr).as_mut() = Expr::ValCall(as_valcall);
+                    }
+                }
+
+                return target_block;
+            }
+            Expr::ValCall(call) => {
+                // TODO: Actually synthesize the closure. :)
+                for arg in &call.args {
+                    target_block = self.expr(ast, db, *arg, target_block);
+                }
+                return target_block;
+            }
+            Expr::FunDeclare(fun) => {
+                // TODO: We may want to avoid traversing these through the AST, and instead
+                // do it in a top-level way. This would allow us to skip any functions that
+                // do not contain any .await's entirely.
+                self.function(ast, db, fun.identity, target_block);
+                // Keep same target block.
+                return target_block;
+            }
+            Expr::FunCapture(capt) => {
+                return self.maybe_expr(ast, db, capt.object, target_block);
+            }
+            oops @ _ => {
+                todo!("{:#?}", std::mem::discriminant(oops))
             }
         }
     }
@@ -206,6 +322,25 @@ impl AsyncConvert {
         push_to_block(ast, target_block, stmt);
     
         return target_block;
+    }
+
+    fn function(&mut self, ast: &AstProxy, db: &mut Db, fun: FunId, target_block: ExprId) -> ExprId {
+        let enclosing = self.current_fun;
+        let enclosing_closure = self.current_closure;
+        self.current_fun = Some(fun);
+        // The current closure is the param closure.
+        //
+        // That's because the param_closure is the one that we want to be the
+        // parent of any new continuation we build.
+        self.current_closure = Some(db.get(fun).param_closure);
+
+        self.maybe_expr(ast, db, db.get(fun).expression, target_block);
+
+        self.current_fun = enclosing;
+        self.current_closure = enclosing_closure;
+
+        // Return the enclosing target_block..?
+        target_block
     }
 }
 
@@ -435,12 +570,15 @@ impl VisitAstMut for AsyncConvert {
 }
 
 pub fn convert_awaits(ast: &mut Ast, db: &mut Db) {
+    let dummy_block = Expr::put_block(ast, db.synthetic(), Vec::new(), db.types.void);
+    
     for source_id in ast.sources.iter_existing() {
         //let mut source = ast.sources.get_mut(source_id);
         //let module = std::mem::take(&mut source.module);
         //drop(source); // Let us borrow this
         
         let proxy = ast.get_proxy();
+
 
         let source = proxy.sources.get(source_id);
         let module = &source.module;
@@ -451,18 +589,26 @@ pub fn convert_awaits(ast: &mut Ast, db: &mut Db) {
         };
 
         for fun in &module.functions {
-            convert.visit_fundeclare_any(&proxy, db, fun);
-        }
+            convert.function(&proxy, db, fun.identity, dummy_block);
+            // As a sanity check, make sure nothing was pushed into the dummy_block.
+            let check = proxy.get_expr(dummy_block);
+            let Expr::Block(block) = check.as_ref() else { unreachable!() };
 
-        for class in &module.classes {
-            convert.visit_classdeclare_any(&proxy, db, class);
-        }
-
-        for var in &module.globals {
-            if let Some(value) = var.value {
-                convert.visit_expr(&proxy, db, value);
+            if !block.stmts.is_empty() {
+                panic!("ICE: Async conversion for '{}' resulted in dummy_block with {} statements",
+                    db.get_fun_name(fun.identity), block.stmts.len())
             }
         }
+
+        // for class in &module.classes {
+        //     convert.visit_classdeclare_any(&proxy, db, class);
+        // }
+
+        // for var in &module.globals {
+        //     if let Some(value) = var.value {
+        //         convert.visit_expr(&proxy, db, value);
+        //     }
+        // }
 
         drop(source);
         proxy.commit();
