@@ -746,7 +746,10 @@ impl AsyncConvert {
                 let block = Expr::push_block(ast, db.synthetic(), vec![ret_stmt], db.types.void);
                 log::trace!("Fun '{}': {} => Expr::Block {} / Ret StmtId {} / Ret ExprId {}", db.get_fun_name(fun),
                     ac.inner.to_index(), block.to_index(), ret_stmt.to_index(), ret.to_index());
-                ac.inner = block;            
+                ac.inner = block;     
+
+                // The ac type must also be void.
+                ac.typ = db.types.void;       
             }
         }
 

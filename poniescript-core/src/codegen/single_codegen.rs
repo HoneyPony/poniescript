@@ -2352,6 +2352,7 @@ impl<'a> Codegen<'a> {
 					// What might be cleaner is to not introduce a new scope
 					// at all, and instead have a better SelfVal system.
 					let val = self.new_val_typed_tmp(ac.typ);
+					log::trace!("allocate closure typ = {}", self.db.repr_type(ac.typ));
 					log::trace!("allocate closure val = {}", self.db.repr_type(val.typ));
 
 					define_val!(self, into, val, ";\n");

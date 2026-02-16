@@ -65,8 +65,8 @@ impl Expr {
 	pub fn typ(&self, ast: &impl AstAbstract, db: &Db) -> TypId {
 		match self {
 			Expr::AllocateClosure(c) => {
-				// These are never nested particularly deeply, so just defer.
-				c.inner.typ(ast, db)
+				// Haha. Don't defer. It has its own type silly...
+				c.typ
 			}
 			Expr::ArrayLit(lit) => {
 				lit.arr_typ
