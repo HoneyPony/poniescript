@@ -174,6 +174,10 @@ impl AsyncConvert {
             name: Some(name),
             sig,
             parameters,
+            // Continuations all return Never, because we continue into them.
+            //
+            // At least, that should be the case, except we actually can't synthesize
+            // this in C currently... TODO...
             return_type: db.types.void,
             sugar_return_type: db.types.void,
             asyncness: Asyncness::Not,
@@ -440,6 +444,16 @@ impl AsyncConvert {
             Expr::BoolLiteral(_) => { (target_block, target_block) }
             Expr::Variable(_) => { (target_block, target_block) }
             Expr::Return(ret) => {
+                // As a sort of janky dead code elimination, don't bother doing anything
+                // if the inner expression was Never.
+                let inner_type_never = match ret.expression {
+                    Some(e) => e.typ(ast, db) == db.types.bottom,
+                    None => false
+                };
+                // We do this BEFORE converting the inner expression, as returns (which are Never)
+                // get replaced with ValCall continuations (which are, unfortunately, not, although
+                // maybe we should make them Never somehow? E.g. a ValTailCall or something?)
+
                 // Returns are special, because they must be replaced with a call to the
                 // async continuation.
                 target_block = self.maybe_expr(ast, db, ret.expression, target_block).0;
@@ -447,12 +461,29 @@ impl AsyncConvert {
                 // Whenever we encounter a return statement, instead call the function's
                 // end_continuation.
                 if let Some(fun) = self.current_fun {
+                    // If the inner type is never, skip our own continuation call, as it will never occur
+                    // (and may be malformed).
                     if db.get(fun).asyncness == Asyncness::Implicit {
+                        let loc = ret.location.clone();
+
+                        if inner_type_never {
+                            // If the inner type is never, we just replace ourselves with a block containing
+                            // our inner expression.
+                            let mut as_block = Block { location: loc.clone(), stmts: Vec::new(), typ: db.types.void };
+                            if let Some(expr) = ret.expression {
+                                let stmt = Stmt::push_expression(ast, loc.clone(), expr);
+                                as_block.stmts.push(stmt);
+                            }
+                            *binding.as_mut() = Expr::Block(as_block);
+                            return (target_block, target_block);
+                        }
+
+                        // Otherwise, we synthesize the call to the continuation.
                         log::trace!("moving Return to block {}", target_block.to_index());
                         // This must be a variable, otherwise something is broken.
                         let continuation = db.get(fun).parameters.last().unwrap();
 
-                        let loc = ret.location.clone();
+                        
                         let inner = ret.expression;
                         drop(binding);
 
