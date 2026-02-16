@@ -437,6 +437,10 @@ fn main() {
 		exit(0);
 	}
 	closure_convert::convert_closures(&mut ast, &mut db);
+	if args.pretty_print_closure {
+		pretty_print::pretty_print(&ast, &db);
+		exit(0);
+	}
 
 	let timer = duration(timer, "closure convert", &mut duration_set);
 

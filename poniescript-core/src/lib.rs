@@ -111,6 +111,10 @@ pub struct Args {
 	#[arg(long = "pretty-print-async")]
 	/// Pretty-print after async conversion.
 	pub pretty_print_async: bool,
+
+	#[arg(long = "pretty-print-closure")]
+	/// Pretty-print after closure conversion.
+	pub pretty_print_closure: bool,
 }
 
 #[cfg(test)]

@@ -1299,11 +1299,6 @@ impl<'a> Codegen<'a> {
 			}
 		};
 
-		if block.typ == self.db.types.void {
-			// If we are a void, just throw away our own val.
-			val = Val::Void;
-		}
-
 		self.pop_block_scope();
 
 		if do_own_block {
@@ -1364,7 +1359,12 @@ impl<'a> Codegen<'a> {
 		}
 	}
 
-	fn expr(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String) -> TypedVal {
+	fn expr(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String) -> TypedVal  {
+		let val = self.__expr(ast, expr, into);
+		log::trace!("expr {} => {}", expr.to_index(), self.db.repr_type(val.typ));
+		val
+	}
+	fn __expr(&mut self, ast: &AstReadonly, expr: ExprId, into: &mut String) -> TypedVal {
 		let indent = self.indent();
 		match ast.exprs.get(expr) {
 			Expr::Binary(binary) => self.compile_binary(ast, binary, into),
@@ -1585,6 +1585,7 @@ impl<'a> Codegen<'a> {
 				// Don't create the FunCall val itself until the GC vals are saved.
 				let ret_type = self.db.get_fun_ret_type(call.identity);
 				let val = self.new_val_typed(ret_type);
+				log::trace!("FunCall: val type = {}", self.db.repr_type(val.typ));
 
 				// TODO: An awkward thing about the define_val! syntax is that
 				// it must be remembed that it does not always print. So,
@@ -2351,6 +2352,7 @@ impl<'a> Codegen<'a> {
 					// What might be cleaner is to not introduce a new scope
 					// at all, and instead have a better SelfVal system.
 					let val = self.new_val_typed_tmp(ac.typ);
+					log::trace!("allocate closure val = {}", self.db.repr_type(val.typ));
 
 					define_val!(self, into, val, ";\n");
 
@@ -2737,13 +2739,10 @@ impl<'a> Codegen<'a> {
 		if val.needs_storage() {
 			log::trace!("writing return for function '{}' (val.typ = {}, own_return_type = {})", self.db.get_fun_name(fun),
 				self.db.repr_type(val.typ), self.db.repr_type(own_return_type));
-			// HACK....
-			if own_return_type != self.db.types.void {
-				assert!(val.typ == own_return_type);
-				// If it does have a value, then we write it as a default
-				// return value.
-				inf_writeln!(own_buffer, "{}return {};", indent, val);
-			}
+			assert!(val.typ == own_return_type);
+			// If it does have a value, then we write it as a default
+			// return value.
+			inf_writeln!(own_buffer, "{}return {};", indent, val);
 		}
 
 		// Now that we have generated the inner expression, we know how big

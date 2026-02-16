@@ -362,7 +362,6 @@ impl AsyncConvert {
                     return (target_block, target_block);
                 }
 
-
                 // Otherwise, we do need to keep the continuation block.
                 // But we have to write OURSELVES into our parent block...? IF AND ONLY IF WE ARE A stmt...
                 // So we use a split target_block approach.
@@ -380,7 +379,8 @@ impl AsyncConvert {
                     block.typ = db.types.void;
                     drop(binding);
 
-                    let new_block = Expr::push_block(ast, db.synthetic(), take, typ);
+                    // TODO: Consider using Type::Bottom for everything instead of Void.
+                    let new_block = Expr::push_block(ast, db.synthetic(), take, db.types.void);
                     let new_stmt = Stmt::push_expression(ast, db.synthetic(), new_block);
                     push_to_block(ast, target_block, new_stmt);
 
@@ -402,6 +402,12 @@ impl AsyncConvert {
                     let mut binding = ast.get_expr_mut(expr);
 
                     *binding = std::mem::take(to_steal.as_mut());
+                }
+                else {
+                    // If we're not moving ourselves, then we need to change our type to be void.
+                    let mut binding = ast.get_expr_mut(expr);
+                    let Expr::Block(block) = binding.as_mut() else { unreachable!() };
+                    block.typ = db.types.void;
                 }
                 return (inner_target, inner_target);
             }
