@@ -384,9 +384,26 @@ impl AsyncConvert {
                     let new_stmt = Stmt::push_expression(ast, db.synthetic(), new_block);
                     push_to_block(ast, target_block, new_stmt);
 
-                   
+                    // Now, replace ourselves with whatever the last statement in the newest block is.
+
+                    let mut binding_inner = ast.get_expr_mut(inner_target);
+                    let Expr::Block(inner) = binding_inner.as_mut() else { unreachable!() };
+                    // TODO: Does this still apply in the case of void?? Probably not.
+                    let Some(last_expr) = inner.stmts.pop() else { panic!("ICE: inner stmts didn't have a last expression") };
+
+                    let mut binding_stmt = ast.get_stmt(last_expr);
+                    let Stmt::Expression(to_steal_expr) = binding_stmt.as_ref() else {
+                        panic!("ICE: Last expression in async block wasn't an Expression.");
+                    };
+
+                    let mut to_steal = ast.get_expr_mut(to_steal_expr.expression);
+
+                    // Re-bind ourselves.
+                    let mut binding = ast.get_expr_mut(expr);
+
+                    *binding = std::mem::take(to_steal.as_mut());
                 }
-                 return (inner_target, inner_target);
+                return (inner_target, inner_target);
             }
             Expr::AllocateClosure(alloc) => {
                 return self.expr(ast, db, alloc.inner, target_block)

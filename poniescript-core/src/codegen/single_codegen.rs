@@ -1267,7 +1267,7 @@ impl<'a> Codegen<'a> {
 			}
 		}
 
-		let val = match (block.stmts.last(), val) {
+		let mut val = match (block.stmts.last(), val) {
 			// If the block has no val, then generate a statement
 			// and return Val::Void.
 			(last, Val::Void) => {
@@ -1298,6 +1298,11 @@ impl<'a> Codegen<'a> {
 				val
 			}
 		};
+
+		if block.typ == self.db.types.void {
+			// If we are a void, just throw away our own val.
+			val = Val::Void;
+		}
 
 		self.pop_block_scope();
 
@@ -2732,10 +2737,13 @@ impl<'a> Codegen<'a> {
 		if val.needs_storage() {
 			log::trace!("writing return for function '{}' (val.typ = {}, own_return_type = {})", self.db.get_fun_name(fun),
 				self.db.repr_type(val.typ), self.db.repr_type(own_return_type));
-			assert!(val.typ == own_return_type);
-			// If it does have a value, then we write it as a default
-			// return value.
-			inf_writeln!(own_buffer, "{}return {};", indent, val);
+			// HACK....
+			if own_return_type != self.db.types.void {
+				assert!(val.typ == own_return_type);
+				// If it does have a value, then we write it as a default
+				// return value.
+				inf_writeln!(own_buffer, "{}return {};", indent, val);
+			}
 		}
 
 		// Now that we have generated the inner expression, we know how big
