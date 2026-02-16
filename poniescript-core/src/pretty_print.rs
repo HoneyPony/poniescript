@@ -254,7 +254,7 @@ impl<'ad> PrettyPrinter<'ad> {
         match binding.as_ref() {
             crate::expr::Stmt::Declare(declare) => self.var(declare),
             crate::expr::Stmt::Expression(expression) => {
-                eprint!("<{}> ", expression.expression.to_index());
+                eprint!("{{{}}} <{}> ", expression.expression.to_index(), self.db.repr_type(expression.expression.typ(self.ast, self.db)));
                 // visit_expr so we don't re-indent-and-newline
                 self.visit_expr(expression.expression);
             }
@@ -268,7 +268,7 @@ impl<'ad> PrettyPrinter<'ad> {
         eprint!("{} - ", indent);
         match expr {
             Some(expr) => {
-                eprint!("{} = ", expr.to_index());
+                eprint!("{} = <{}> ", expr.to_index(), self.db.repr_type(expr.typ(self.ast, self.db)));
                 self.visit_expr(expr);
             }
             None => {
@@ -287,7 +287,7 @@ impl<'ad> PrettyPrinter<'ad> {
     }
     fn expr(&mut self, expr: ExprId) {
         let indent = Indenter { level: self.indent };
-        eprint!("{} - {} = ", indent, expr.to_index());
+        eprint!("{} - {} = <{}> ", indent, expr.to_index(), self.db.repr_type(expr.typ(self.ast, self.db)));
         self.visit_expr(expr);
     }
     fn expr_prefix(&mut self, expr: ExprId, prefix: &str) {

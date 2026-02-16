@@ -709,7 +709,8 @@ impl AsyncConvert {
                 let mut og_block = ast.get_expr_mut(ac.inner);
                 let Expr::Block(og) = og_block.as_mut() else { panic!("ICE: Fun without Block"); };
                 // The og_block also must have its type changed to void, rather than the sugar return type.
-                og.typ = db.types.void;
+                // og.typ = db.types.void;
+                // No, wait, that doesn't make any sense. The og block is being moved inside our return value...
 
                 let ret_stmt = Stmt::push_expression(ast, db.synthetic(), ret);
                 let block = Expr::push_block(ast, db.synthetic(), vec![ret_stmt], db.types.void);
