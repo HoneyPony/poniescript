@@ -81,7 +81,7 @@ impl<'ad> PrettyPrinter<'ad> {
                 self.end();
             },
             crate::expr::Expr::FunCall(fun_call) => {
-                eprint!("FunCall [{} = {}]", fun_call.identity.to_nonzero_u32(), self.db.get_fun_name(fun_call.identity));
+                eprint!("FunCall [{} = {}]", fun_call.identity.to_index(), self.db.get_fun_name(fun_call.identity));
                 self.start("");
                 self.expr_obj(fun_call.object);
                 for arg in &fun_call.args {
@@ -114,7 +114,7 @@ impl<'ad> PrettyPrinter<'ad> {
                 self.end();
             },
             crate::expr::Expr::FunCapture(fun_capture) => {
-                eprint!("FunCapture [{} = {}]", fun_capture.identity.to_nonzero_u32(), self.db.get_fun_name(fun_capture.identity));
+                eprint!("FunCapture [{} = {}]", fun_capture.identity.to_index(), self.db.get_fun_name(fun_capture.identity));
                 self.start("");
                 self.expr_obj(fun_capture.object);
                 self.end();

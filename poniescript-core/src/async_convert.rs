@@ -29,6 +29,8 @@ fn push_to_block(ast: &AstProxy, target_block: ExprId, new_stmt: StmtId) {
     let mut binding = ast.get_expr_mut(target_block);
     let Expr::Block(block) = binding.as_mut() else { panic!("ICE: Non-block target_block"); };
 
+    log::trace!("push stmt {} to block {}", new_stmt.to_index(), target_block.to_index());
+
     block.stmts.push(new_stmt);
 }
 
@@ -315,6 +317,18 @@ impl AsyncConvert {
                 //
                 // Finally, this block itself must go on the original target_block, maybe.
                 let take = std::mem::take(&mut block.stmts);
+                log::trace!("clearing block {} (target_block = {}). inner stmts: ",
+                    expr.to_index(), target_block.to_index());
+                for stmt in &take {
+                    let tmp = ast.get_stmt(*stmt);
+                    match tmp.as_ref() {
+                        Stmt::Declare(_) => log::trace!(" - {} (Declare)", stmt.to_index()),
+                        Stmt::Expression(expression) => log::trace!(" - {} (ExprId {})",
+                            stmt.to_index(), expression.expression.to_index()),
+                        Stmt::ClassDeclare(_) => log::trace!(" - {} (ClassDeclare)", stmt.to_index()),
+                    }
+                    
+                }
                 drop(binding); // We will re-borrow the block later.
 
                 let mut inner_target: ExprId = expr;
@@ -323,41 +337,54 @@ impl AsyncConvert {
                     inner_target = self.stmt(ast, db, stmt, inner_target);
                 }
 
-                if inner_target != target_block {
-                    let mut binding = ast.get_expr_mut(expr);
-                    let Expr::Block(block) = binding.as_mut() else { unreachable!() };
-                    block.typ = db.types.void;
-                }
+                // let mut final_target_block = target_block;
 
-                return (inner_target, target_block);
-                // Revert to original target if there were no continuations.
-                // if inner_target == expr {
-                //     return (target_block, target_block);
-                // }
-
-
-                // // Otherwise, we do need to keep the continuation block.
-                // // But we have to write OURSELVES into our parent block...? IF AND ONLY IF WE ARE A stmt...
-                // // So we use a split target_block approach.
-                // //
-                // // This does seem a little bad, but the idea is we already double-block up the top-level
-                // // of each function, so this shouuuuuld work...
-                // if target_block != self.dummy_block {
-                //     //return inner_target;
+                // if inner_target != expr {
                 //     let mut binding = ast.get_expr_mut(expr);
                 //     let Expr::Block(block) = binding.as_mut() else { unreachable!() };
-
-                //     // Sythesize a new block with our statements and push it to the parent. We remain empty.
-                //     let take = std::mem::take(&mut block.stmts);
-                //     let typ = block.typ;
                 //     block.typ = db.types.void;
-                //     drop(binding);
 
-                //     let new_block = Expr::push_block(ast, db.synthetic(), take, typ);
-                //     let new_stmt = Stmt::push_expression(ast, db.synthetic(), new_block);
-                //     push_to_block(ast, target_block, new_stmt);
+                //     final_target_block = inner_target;
+
+                //     // Move all our stmts to our parent block...?
+                //     // But that wouldn't be correct for if statements...
+                //     //
+                //     // We need to figure out how to avoid leaking blocks that are nested inside a block,
+                //     // WITHOUT affecting how blocks inside control structures are moved. Weird...
                 // }
-                // return (target_block, target_block);
+
+                // log::trace!("block {}: final_target_block = {}, target_block = {}",
+                //     expr.to_index(), final_target_block.to_index(), target_block.to_index());
+
+                //return (final_target_block, target_block);
+                // Revert to original target if there were no continuations.
+                if inner_target == expr {
+                    return (target_block, target_block);
+                }
+
+
+                // Otherwise, we do need to keep the continuation block.
+                // But we have to write OURSELVES into our parent block...? IF AND ONLY IF WE ARE A stmt...
+                // So we use a split target_block approach.
+                //
+                // This does seem a little bad, but the idea is we already double-block up the top-level
+                // of each function, so this shouuuuuld work...
+                if target_block != self.dummy_block {
+                    //return inner_target;
+                    let mut binding = ast.get_expr_mut(expr);
+                    let Expr::Block(block) = binding.as_mut() else { unreachable!() };
+
+                    // Sythesize a new block with our statements and push it to the parent. We remain empty.
+                    let take = std::mem::take(&mut block.stmts);
+                    let typ = block.typ;
+                    block.typ = db.types.void;
+                    drop(binding);
+
+                    let new_block = Expr::push_block(ast, db.synthetic(), take, typ);
+                    let new_stmt = Stmt::push_expression(ast, db.synthetic(), new_block);
+                    push_to_block(ast, target_block, new_stmt);
+                }
+                return (target_block, target_block);
             }
             Expr::AllocateClosure(alloc) => {
                 return self.expr(ast, db, alloc.inner, target_block)
@@ -503,14 +530,15 @@ impl AsyncConvert {
 
                 let if_closure = self.current_closure;
 
-                let then_branch = self.expr(ast, db, if_.then_branch, target_block).0;
+                // We pass the dummy_block as the target block because we are in control of the flow.
+                let then_branch = self.expr(ast, db, if_.then_branch, self.dummy_block).0;
                 let else_branch = match if_.else_branch {
-                    Some(branch) => Some(self.expr(ast, db, branch, target_block).0),
+                    Some(branch) => Some(self.expr(ast, db, branch, self.dummy_block).0),
                     None => None
                 };
 
-                let needs_continuation = then_branch != target_block || match else_branch {
-                    Some(b) => b != target_block,
+                let needs_continuation = then_branch != self.dummy_block || match else_branch {
+                    Some(b) => b != self.dummy_block,
                     None => false
                 };
 
@@ -627,6 +655,7 @@ impl AsyncConvert {
         target_block = target;
 
         // Push the statement into the target block.
+        log::trace!("push stmt {} to {} -- target_block = {}", stmt.to_index(), own.to_index(), target_block.to_index());
         push_to_block(ast, own, stmt);
     
         return target_block;
@@ -676,9 +705,15 @@ impl AsyncConvert {
 
                 // TODO: We may have to change this slightly for void-returning functions.
                 let ret = Expr::push_return(ast, db.synthetic(), Some(ac.inner));
+
+                let mut og_block = ast.get_expr_mut(ac.inner);
+                let Expr::Block(og) = og_block.as_mut() else { panic!("ICE: Fun without Block"); };
+                // The og_block also must have its type changed to void, rather than the sugar return type.
+                og.typ = db.types.void;
+
                 let ret_stmt = Stmt::push_expression(ast, db.synthetic(), ret);
                 let block = Expr::push_block(ast, db.synthetic(), vec![ret_stmt], db.types.void);
-                log::trace!("Fun '{}': {} => Expr::Block {} / {} / {}", db.get_fun_name(fun),
+                log::trace!("Fun '{}': {} => Expr::Block {} / Ret StmtId {} / Ret ExprId {}", db.get_fun_name(fun),
                     ac.inner.to_index(), block.to_index(), ret_stmt.to_index(), ret.to_index());
                 ac.inner = block;            
             }

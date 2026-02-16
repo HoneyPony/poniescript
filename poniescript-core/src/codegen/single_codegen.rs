@@ -1783,6 +1783,8 @@ impl<'a> Codegen<'a> {
 						return val;
 					}
 
+					log::trace!("valcall: val.typ = {}, sig param type = {}",
+						self.db.repr_type(val.typ), self.db.repr_type(self.db.get_sig_param_type(call.sig, idx)));
 					assert!(val.typ == self.db.get_sig_param_type(call.sig, idx));
 					vals.push(val);
 				}
@@ -2728,6 +2730,8 @@ impl<'a> Codegen<'a> {
 		}
 
 		if val.needs_storage() {
+			log::trace!("writing return for function '{}' (val.typ = {}, own_return_type = {})", self.db.get_fun_name(fun),
+				self.db.repr_type(val.typ), self.db.repr_type(own_return_type));
 			assert!(val.typ == own_return_type);
 			// If it does have a value, then we write it as a default
 			// return value.
