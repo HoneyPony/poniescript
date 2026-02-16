@@ -114,7 +114,7 @@ impl Expr {
 						let Some(first) = sig.parameters.first() else {
 							return db.types.unassigned;
 						};
-						log::trace!("typ() of .await'd FunCall {}: {}", db.get_fun_name(call.identity), db.repr_type(*first));
+						//log::trace!("typ() of .await'd FunCall {}: {}", db.get_fun_name(call.identity), db.repr_type(*first));
 						return *first;
 						
 						//db.get(call.identity).sugar_return_type

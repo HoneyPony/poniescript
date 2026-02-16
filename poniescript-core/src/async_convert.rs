@@ -383,8 +383,10 @@ impl AsyncConvert {
                     let new_block = Expr::push_block(ast, db.synthetic(), take, typ);
                     let new_stmt = Stmt::push_expression(ast, db.synthetic(), new_block);
                     push_to_block(ast, target_block, new_stmt);
+
+                   
                 }
-                return (target_block, target_block);
+                 return (inner_target, inner_target);
             }
             Expr::AllocateClosure(alloc) => {
                 return self.expr(ast, db, alloc.inner, target_block)
@@ -423,6 +425,7 @@ impl AsyncConvert {
                 // end_continuation.
                 if let Some(fun) = self.current_fun {
                     if db.get(fun).asyncness == Asyncness::Implicit {
+                        log::trace!("moving Return to block {}", target_block.to_index());
                         // This must be a variable, otherwise something is broken.
                         let continuation = db.get(fun).parameters.last().unwrap();
 
@@ -537,6 +540,9 @@ impl AsyncConvert {
                     None => None
                 };
 
+                log::trace!("if: got then_branch = {}, else_branch = {}, dummy_block = {}",
+                    then_branch.to_index(), else_branch.map(|x| x.to_index()).unwrap_or(0xFFFFFFFFFF), self.dummy_block.to_index());
+
                 let needs_continuation = then_branch != self.dummy_block || match else_branch {
                     Some(b) => b != self.dummy_block,
                     None => false
@@ -614,6 +620,7 @@ impl AsyncConvert {
                     // Interestingly, there is nothing to visit in the new function yet. (And in fact, there never will be).
                     // Instead, we simply have a new target_block, for the rest of the upcoming statements.
                     target_block = new_block;
+                    log::trace!("if: target_block is now {}", target_block.to_index());
                 }
 
                 (target_block, target_block)
