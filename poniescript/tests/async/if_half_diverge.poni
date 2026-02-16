@@ -1,0 +1,30 @@
+var call_count: int = 0;
+
+fun caller(cb: fun(int)) {
+    call_count += 1;
+    print("call ", call_count);
+    cb(call_count);
+}
+
+fun test(cond: bool) -> int {
+    var my_value = if cond {
+        caller().await;
+    }
+    else {
+        return caller().await + 30;
+    };
+
+    my_value += 10;
+    print(my_value);
+
+    my_value
+}
+
+fun init() {
+    fun final_cb(x: int) {
+        print("final: ", x);
+    }
+
+    test(true, final_cb);
+    test(false, final_cb);
+}
