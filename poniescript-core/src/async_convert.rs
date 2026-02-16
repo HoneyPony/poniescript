@@ -209,28 +209,29 @@ impl AsyncConvert {
         )
     }
 
-    fn expr(&mut self, ast: &AstProxy, db: &mut Db, expr: ExprId, mut target_block: ExprId) -> ExprId {
+    // Returns (target_block, own_dest_block)
+    fn expr(&mut self, ast: &AstProxy, db: &mut Db, expr: ExprId, mut target_block: ExprId) -> (ExprId, ExprId) {
         let mut binding = ast.get_expr_mut(expr);
         match binding.as_mut() {
             Expr::Binary(binary) => {
-                target_block = self.expr(ast, db, binary.left, target_block);
-                target_block = self.expr(ast, db, binary.right, target_block);
-                return target_block;
+                target_block = self.expr(ast, db, binary.left, target_block).0;
+                target_block = self.expr(ast, db, binary.right, target_block).0;
+                return (target_block, target_block);
             },
             Expr::Unary(unary) => {
                 return self.expr(ast, db, unary.inner, target_block);
             }
             Expr::Comparison(comparison) => {
-                target_block = self.expr(ast, db, comparison.left, target_block);
-                target_block = self.expr(ast, db, comparison.right, target_block);
-                return target_block;
+                target_block = self.expr(ast, db, comparison.left, target_block).0;
+                target_block = self.expr(ast, db, comparison.right, target_block).0;
+                return (target_block, target_block);
             }
             Expr::FunCall(call) => {
                 if let Some(obj) = call.object {
-                    target_block = self.expr(ast, db, obj, target_block);
+                    target_block = self.expr(ast, db, obj, target_block).0;
                 }
                 for arg in &call.args {
-                    target_block = self.expr(ast, db, *arg, target_block);
+                    target_block = self.expr(ast, db, *arg, target_block).0;
                 }
 
                 if call.call_type == CallType::Await {
@@ -302,7 +303,7 @@ impl AsyncConvert {
                     target_block = new_block;
                 }
 
-                return target_block;
+                return (target_block, target_block);
             },
             Expr::Block(block) => {
                 // Blocks are somewhat special.
@@ -322,64 +323,74 @@ impl AsyncConvert {
                     inner_target = self.stmt(ast, db, stmt, inner_target);
                 }
 
+                if inner_target != target_block {
+                    let mut binding = ast.get_expr_mut(expr);
+                    let Expr::Block(block) = binding.as_mut() else { unreachable!() };
+                    block.typ = db.types.void;
+                }
+
+                return (inner_target, target_block);
                 // Revert to original target if there were no continuations.
-                if inner_target == expr {
-                    return target_block;
-                }
-                // Otherwise, we do need to keep the continuation block.
-                // But we have to write OURSELVES into our parent block...?
-                //
-                // This does seem a little bad, but the idea is we already double-block up the top-level
-                // of each function, so this shouuuuuld work...
-                if target_block != self.dummy_block {
-                    return inner_target;
-                    // let mut binding = ast.get_expr_mut(expr);
-                    // let Expr::Block(block) = binding.as_mut() else { unreachable!() };
+                // if inner_target == expr {
+                //     return (target_block, target_block);
+                // }
 
-                    // // Sythesize a new block with our statements and push it to the parent. We remain empty.
-                    // let take = std::mem::take(&mut block.stmts);
-                    // let typ = block.typ;
-                    // block.typ = db.types.void;
-                    // drop(binding);
 
-                    // let new_block = Expr::push_block(ast, db.synthetic(), take, typ);
-                    // let new_stmt = Stmt::push_expression(ast, db.synthetic(), new_block);
-                    // push_to_block(ast, target_block, new_stmt);
-                }
-                return target_block;
+                // // Otherwise, we do need to keep the continuation block.
+                // // But we have to write OURSELVES into our parent block...? IF AND ONLY IF WE ARE A stmt...
+                // // So we use a split target_block approach.
+                // //
+                // // This does seem a little bad, but the idea is we already double-block up the top-level
+                // // of each function, so this shouuuuuld work...
+                // if target_block != self.dummy_block {
+                //     //return inner_target;
+                //     let mut binding = ast.get_expr_mut(expr);
+                //     let Expr::Block(block) = binding.as_mut() else { unreachable!() };
+
+                //     // Sythesize a new block with our statements and push it to the parent. We remain empty.
+                //     let take = std::mem::take(&mut block.stmts);
+                //     let typ = block.typ;
+                //     block.typ = db.types.void;
+                //     drop(binding);
+
+                //     let new_block = Expr::push_block(ast, db.synthetic(), take, typ);
+                //     let new_stmt = Stmt::push_expression(ast, db.synthetic(), new_block);
+                //     push_to_block(ast, target_block, new_stmt);
+                // }
+                // return (target_block, target_block);
             }
             Expr::AllocateClosure(alloc) => {
                 return self.expr(ast, db, alloc.inner, target_block)
             }
             Expr::Print(print) => {
                 for arg in &print.exprs {
-                    target_block = self.expr(ast, db, *arg, target_block);
+                    target_block = self.expr(ast, db, *arg, target_block).0;
                 }
-                return target_block;
+                return (target_block, target_block);
             }
             Expr::ArrayLit(lit) => {
                 for arg in &lit.values {
-                    target_block = self.expr(ast, db, *arg, target_block);
+                    target_block = self.expr(ast, db, *arg, target_block).0;
                 }
-                return target_block;
+                return (target_block, target_block);
             }
             Expr::Assign(assign) => {
-                target_block = self.expr(ast, db, assign.value, target_block);
-                return target_block;
+                target_block = self.expr(ast, db, assign.value, target_block).0;
+                return (target_block, target_block);
             }
             Expr::Index(index) => {
-                target_block = self.expr(ast, db, index.index, target_block);
-                target_block = self.expr(ast, db, index.value, target_block);
-                return target_block;
+                target_block = self.expr(ast, db, index.index, target_block).0;
+                target_block = self.expr(ast, db, index.value, target_block).0;
+                return (target_block, target_block);
             }
-            Expr::StrLiteral(_) => { target_block }
-            Expr::NumLiteral(_) => { target_block }
-            Expr::BoolLiteral(_) => { target_block }
-            Expr::Variable(_) => { target_block }
+            Expr::StrLiteral(_) => { (target_block, target_block) }
+            Expr::NumLiteral(_) => { (target_block, target_block) }
+            Expr::BoolLiteral(_) => { (target_block, target_block) }
+            Expr::Variable(_) => { (target_block, target_block) }
             Expr::Return(ret) => {
                 // Returns are special, because they must be replaced with a call to the
                 // async continuation.
-                target_block = self.maybe_expr(ast, db, ret.expression, target_block);
+                target_block = self.maybe_expr(ast, db, ret.expression, target_block).0;
 
                 // Whenever we encounter a return statement, instead call the function's
                 // end_continuation.
@@ -412,23 +423,23 @@ impl AsyncConvert {
                     }
                 }
 
-                return target_block;
+                return (target_block, target_block);
             }
             Expr::ValCall(call) => {
                 // TODO: Actually synthesize the closure. :)
                 for arg in &call.args {
-                    target_block = self.expr(ast, db, *arg, target_block);
+                    target_block = self.expr(ast, db, *arg, target_block).0;
                 }
-                return target_block;
+                return (target_block, target_block);
             }
             Expr::BuiltinCall(call) => {
                 // For now, builtin calls cannot themselves be async, so there is nothing
                 // to convert.
-                target_block = self.expr(ast, db, call.object, target_block);
+                target_block = self.expr(ast, db, call.object, target_block).0;
                 for arg in &call.args {
-                    target_block = self.expr(ast, db, *arg, target_block);
+                    target_block = self.expr(ast, db, *arg, target_block).0;
                 }
-                return target_block;
+                return (target_block, target_block);
             }
             Expr::FunDeclare(fun) => {
                 // TODO: We may want to avoid traversing these through the AST, and instead
@@ -440,7 +451,7 @@ impl AsyncConvert {
                     fun.value = expr;
                 }
                 // Keep same target block.
-                return target_block;
+                return (target_block, target_block);
             }
             Expr::FunCapture(capt) => {
                 return self.maybe_expr(ast, db, capt.object, target_block);
@@ -450,16 +461,16 @@ impl AsyncConvert {
                 return self.expr(ast, db, get.lhs, target_block);
             }
             Expr::MakeRange(make) => {
-                target_block = self.expr(ast, db, make.left, target_block);
-                target_block = self.expr(ast, db, make.right, target_block);
-                return target_block;
+                target_block = self.expr(ast, db, make.left, target_block).0;
+                target_block = self.expr(ast, db, make.right, target_block).0;
+                return (target_block, target_block);
             }
             Expr::WhileLoop(loop_) => {
                 // TODO: Synthesize continuations and stuff. This one will
                 // be interesting. For now we just barely support it for reasons.
-                target_block = self.expr(ast, db, loop_.condition, target_block);
-                target_block = self.expr(ast, db, loop_.inner, target_block);
-                return target_block;
+                target_block = self.expr(ast, db, loop_.condition, target_block).0;
+                target_block = self.expr(ast, db, loop_.inner, target_block).0;
+                return (target_block, target_block);
             }
             Expr::Loop(loop_) => {
                 // The basic idea here is as follows:
@@ -488,13 +499,13 @@ impl AsyncConvert {
                 // In any case... What we want to do is, if the target_block changed, synthesize
                 // one new continuation, and then write into the end of each target_block a jump
                 // to this continuation.
-                target_block = self.expr(ast, db, if_.condition, target_block);
+                target_block = self.expr(ast, db, if_.condition, target_block).0;
 
                 let if_closure = self.current_closure;
 
-                let then_branch = self.expr(ast, db, if_.then_branch, target_block);
+                let then_branch = self.expr(ast, db, if_.then_branch, target_block).0;
                 let else_branch = match if_.else_branch {
-                    Some(branch) => Some(self.expr(ast, db, branch, target_block)),
+                    Some(branch) => Some(self.expr(ast, db, branch, target_block).0),
                     None => None
                 };
 
@@ -547,6 +558,8 @@ impl AsyncConvert {
                     self.splice_continuation_call(ast, db, then_branch, new_function);
                     self.splice_continuation_call(ast, db, else_branch, new_function);
 
+                    if_.typ = db.types.void;
+
                     // As with function calls, we in-place replace the old if statement with the new variable
                     // representing its value. Then, we push the if statement to the OLD target_block.
                     let if_ = std::mem::replace(binding.as_mut(), replacement_expr);
@@ -575,7 +588,7 @@ impl AsyncConvert {
                     target_block = new_block;
                 }
 
-                target_block
+                (target_block, target_block)
             }
             Expr::Promote(promote) => {
                 return self.expr(ast, db, promote.inner, target_block);
@@ -586,23 +599,21 @@ impl AsyncConvert {
         }
     }
 
-    fn maybe_expr(&mut self, ast: &AstProxy, db: &mut Db, expr: Option<ExprId>, target_block: ExprId) -> ExprId {
+    fn maybe_expr(&mut self, ast: &AstProxy, db: &mut Db, expr: Option<ExprId>, target_block: ExprId) -> (ExprId, ExprId) {
         if let Some(expr) = expr {
             return self.expr(ast, db, expr, target_block);
         }
-        return target_block;
+        return (target_block, target_block);
     }
 
-    fn _do_stmt(&mut self, ast: &AstProxy, db: &mut Db, stmt: StmtId, mut target_block: ExprId) -> ExprId {
+    fn _do_stmt(&mut self, ast: &AstProxy, db: &mut Db, stmt: StmtId, mut target_block: ExprId) -> (ExprId, ExprId) {
         let binding = ast.get_stmt(stmt);
         match binding.as_ref() {
             Stmt::Declare(declare) => {
-                target_block = self.maybe_expr(ast, db, declare.value, target_block);
-                return target_block;
+                return self.maybe_expr(ast, db, declare.value, target_block);
             }
             Stmt::Expression(expression) => {
-                target_block = self.expr(ast, db, expression.expression, target_block);
-                return target_block;
+                return self.expr(ast, db, expression.expression, target_block);
             },
             Stmt::ClassDeclare(class_declare) => {
                 // Need to visit each function.
@@ -612,10 +623,11 @@ impl AsyncConvert {
     }
 
     fn stmt(&mut self, ast: &AstProxy, db: &mut Db, stmt: StmtId, mut target_block: ExprId) -> ExprId {
-        target_block = self._do_stmt(ast, db, stmt, target_block);
+        let (target, own) = self._do_stmt(ast, db, stmt, target_block);
+        target_block = target;
 
         // Push the statement into the target block.
-        push_to_block(ast, target_block, stmt);
+        push_to_block(ast, own, stmt);
     
         return target_block;
     }
