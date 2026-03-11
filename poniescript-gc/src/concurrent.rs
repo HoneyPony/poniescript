@@ -406,6 +406,7 @@ impl<'a> Gc<'a> {
     }
 
     pub fn collect(&mut self) {
+        log::info!("begin collection cycle");
         GC_ALLOCATE_MARKED.store(true, Ordering::Relaxed);
 
         self.handshake(GC_FLAG_HANDOFF_ALLOCS);
@@ -488,7 +489,9 @@ impl<'a> Gc<'a> {
 
     fn sweep(&mut self) {
         let mut allocator = self.shared.allocator.lock().unwrap();
+        log::info!("beginning sweep");
         allocator.sweep();
+        log::info!("sweep finished");
     }
 }
 
