@@ -54,6 +54,10 @@ pub fn generate(tests_file: &mut File) {
 		("async/", "unbelievably_basic_actual_defer"),
 		("async/", "actual_defer_crazy"),
 		("async/", "unbelievably_basic_binary"),
+		("async/", "if_basic"),
+		("async/", "if_explicit_return"),
+		("async/", "if_explicit_return_2"),
+		("async/", "if_half_diverge"),
 
 		("assign/", "addition_tuple"),
 		("assign/", "arith_ops_float_promote"),
