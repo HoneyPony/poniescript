@@ -12,7 +12,8 @@ members = [
     "poni-arena",
     "ponyquad",
     "ponyquad-hot-host"
-, "poniescript-gc-benchmark"]
+]
+#, "poniescript-gc-benchmark"]
 
 [workspace.dependencies]
 clap = { version = "4.5.8", features = ["derive"] }

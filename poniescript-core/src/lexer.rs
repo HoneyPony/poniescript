@@ -47,6 +47,8 @@ pub enum Tok {
 
 	Some, Nil,
 
+	Not,
+
 	// (#ff00ff00)
 	// (#fff)
 	// (#0000)
@@ -133,6 +135,7 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {
 	add("while" ,   Tok::While);
 	add("loop"  ,   Tok::Loop);
 	add("new"   ,   Tok::New);
+	add("not"   ,   Tok::Not);
 
 	add("some"  ,   Tok::Some);
 	add("nil"   ,   Tok::Nil);

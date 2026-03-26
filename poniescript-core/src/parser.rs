@@ -1183,7 +1183,8 @@ impl<'b> Parser<'b> {
 				Expr::put_makesumtype_ok(self.ast, tok.location, self.db.put_type(Type::Option(self.db.types.unassigned)))
 			}
 
-			Tok::Plus | Tok::Minus => {
+			// +, -, not all handled the same
+			Tok::Plus | Tok::Minus | Tok::Not => {
 				let location = self.start();
 				let op = self.advance()?;
 

@@ -1134,16 +1134,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "poniescript-gc-benchmark"
-version = "0.1.0"
-dependencies = [
- "env_logger",
- "log",
- "poniescript-gc",
- "poniescript-rt",
-]
-
-[[package]]
 name = "poniescript-lsp"
 version = "0.1.0"
 dependencies = [

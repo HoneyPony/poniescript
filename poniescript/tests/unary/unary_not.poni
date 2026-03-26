@@ -1,0 +1,6 @@
+fun init() {
+    print(not true); //! false
+    print(not false); //! true
+    print(not not true); //! true
+    print(not not false); //! false
+}

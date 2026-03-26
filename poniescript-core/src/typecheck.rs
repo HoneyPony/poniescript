@@ -1136,6 +1136,19 @@ impl<'db> TypeChecker<'db> {
 			Expr::Unary(unary) => {
 				let inner = self.check_expr(ast, unary.inner, value_used)?;
 				
+				if unary.op == Tok::Not {
+					if inner != self.db.types.bool {
+						type_error!(self,
+							unary.location,
+							"Invalid operand to unary 'not': Operand is not a bool"
+						);
+					}
+
+					unary.typ = inner;
+					return Ok(unary.typ);
+				}
+
+				// Otherwise, check numeric operators.
 				if !self.is_numeric_or_vec(inner) {
 					type_error!(self,
 						unary.location,

@@ -846,6 +846,11 @@ impl<'a> Codegen<'a> {
 	fn compile_unary(&mut self, ast: &AstReadonly, unary: &Unary, into: &mut String) -> TypedVal {
 		let inner = self.expr(ast, unary.inner, into);
 
+		if unary.op == Tok::Not {
+			// Handle unary not here as it is simple.
+			return inline_expr!(self, unary.typ, "(!{})", inner);
+		}
+
 		let op = match unary.op {
 			Tok::Plus => '+',
 			Tok::Minus => '-',
