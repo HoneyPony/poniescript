@@ -88,6 +88,18 @@ pub extern "C" fn draw_text_font(_ctx: &mut GcContext, text: Gp<PsStrBuf>, font:
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn measure_text_font(_ctx: &mut GcContext, text: Gp<PsStrBuf>, font: Gp<PqFont>, font_size: f32, _closure: *const c_void) -> Vec3 {
+    let text = text.get_inner();
+    let text = text.get_string();
+
+    let font = font.get_inner();
+
+    let dims = macroquad::prelude::measure_text(&text, font.inner.as_ref(), font_size as u16, 1.0);
+
+    Vec3 { x: dims.width, y: dims.height, z: dims.offset_y }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn screen_width(_ctx: &mut GcContext, _closure: *const c_void) -> PsFloat {
     macroquad::prelude::screen_width()
 }

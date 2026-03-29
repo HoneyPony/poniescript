@@ -64,6 +64,8 @@ PS_FUN() ps_vec3 draw_text(PONI_ABI(ps_strbuf *text, ps_vec2 at, ps_float size, 
 /// Draw text to the screen, using the given font, font size and color.
 PS_FUN() ps_vec3 draw_text_font(PONI_ABI(ps_strbuf *text, struct font *font, ps_vec2 at, ps_float size, ps_vec4 color));
 
+PS_FUN() ps_vec3 measure_text_font(PONI_ABI(ps_strbuf *text, struct font *font, ps_float size));
+
 PS_FUN() void set_camera(PONI_ABI(struct camera2d *camera));
 PS_FUN() void set_default_camera(PONI_ABI());
 
