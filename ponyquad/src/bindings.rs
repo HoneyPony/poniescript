@@ -2,11 +2,15 @@ pub mod texture;
 pub mod input;
 pub mod camera;
 pub mod math;
+pub mod font;
 
 use std::ffi::c_void;
+use macroquad::text::TextParams;
 use poniescript_gc::{GcContext, Gp, PsFloat, PsInt};
 
 use poniescript_rt::{PsStrBuf, Vec2, Vec3, Vec4};
+
+use crate::bindings::font::PqFont;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn clear_background(_ctx: &mut GcContext, color: Vec4, _closure: *const c_void) {
@@ -52,6 +56,31 @@ pub extern "C" fn draw_text(_ctx: &mut GcContext, text: Gp<PsStrBuf>, at: Vec2, 
             at.x, at.y,
             font_size,
             std::mem::transmute(color)
+        );
+
+        Vec3 { x: dims.width, y: dims.height, z: dims.offset_y }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn draw_text_font(_ctx: &mut GcContext, text: Gp<PsStrBuf>, font: Gp<PqFont>, at: Vec2, font_size: f32, color: Vec4, _closure: *const c_void) -> Vec3 {
+    unsafe {
+        let text = text.get_inner();
+        let text = text.get_string();
+
+        let font = font.get_inner();
+
+        let dims = macroquad::prelude::draw_text_ex(
+            &text,
+            at.x, at.y,
+            TextParams {
+                font: font.inner.as_ref(),
+                font_size: font_size as u16,
+                font_scale: 1.0,
+                font_scale_aspect: 1.0,
+                rotation: 0.0,
+                color: std::mem::transmute(color),
+            }
         );
 
         Vec3 { x: dims.width, y: dims.height, z: dims.offset_y }

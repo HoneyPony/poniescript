@@ -84,6 +84,7 @@ async fn macroquad_main() {
         hot.poll(ctx);
 
         bindings::texture::process_queue().await;
+        bindings::font::process_queue().await;
 
         // Poll the gc. We are in theory going to compile the script code to NOT
         // safepoint at all, so we have to do it here.

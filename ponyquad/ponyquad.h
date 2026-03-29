@@ -13,8 +13,7 @@ PS_FUN() void draw_line(PONI_ABI(ps_vec2 from, ps_vec2 to, ps_float thickness, p
 /// Fill a rectangle with the given color, at the given location, with the given
 /// size.
 PS_FUN() void draw_rectangle(PONI_ABI(ps_vec2 at, ps_vec2 size, ps_vec4 color));
-/// Draw text to the screen, using the given font size and color.
-PS_FUN() ps_vec3 draw_text(PONI_ABI(ps_strbuf *text, ps_vec2 at, ps_float size, ps_vec4 color));
+
 
 /// Returns the width of the screen.
 PS_FUN() ps_float screen_width(PONI_ABI());
@@ -29,6 +28,14 @@ struct texture2d {
 
     // This type is not constructible...
     char opaque[16];
+};
+
+PS_CLASS("Font")
+struct font {
+    ps_object header;
+
+    // Technically only needs to be 24 but I will be safe.
+    char opqaue[64];
 };
 
 PS_CLASS("Camera2D")
@@ -50,6 +57,12 @@ struct camera_viewport {
     PS_VAR() ps_vec2 offset;
     PS_VAR() ps_vec2 size;
 };
+
+PS_FUN() struct font* load_font(PONI_ABI(ps_strbuf *path));
+/// Draw text to the screen, using the given font size and color.
+PS_FUN() ps_vec3 draw_text(PONI_ABI(ps_strbuf *text, ps_vec2 at, ps_float size, ps_vec4 color));
+/// Draw text to the screen, using the given font, font size and color.
+PS_FUN() ps_vec3 draw_text_font(PONI_ABI(ps_strbuf *text, struct font *font, ps_vec2 at, ps_float size, ps_vec4 color));
 
 PS_FUN() void set_camera(PONI_ABI(struct camera2d *camera));
 PS_FUN() void set_default_camera(PONI_ABI());
