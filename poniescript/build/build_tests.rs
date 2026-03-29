@@ -490,6 +490,7 @@ pub fn generate(tests_file: &mut File) {
 		("unary/", "unary_int_float"),
 		("unary/", "unary_vec"),
 		("unary/", "unary_not"),
+		("unary/", "err_not_on_nonbool"),
 
 		("range/", "basic_parse"),
 		("range/", "basic_parse_properties"),

@@ -1,6 +1,6 @@
 use std::os::raw::c_void;
-use poniescript_gc::{GcContext, PsFloat};
-use poniescript_rt::{Vec2, Vec3, Vec4};
+use poniescript_gc::{GcContext, PsFloat, PsInt};
+use poniescript_rt::{Vec2, Vec2i, Vec3, Vec4};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pq_norm_vec2(_gc: &mut GcContext, mut v: Vec2, _closure: *mut c_void) -> Vec2 {
@@ -77,4 +77,21 @@ pub extern "C" fn pq_len_vec4(_gc: &mut GcContext, v: Vec4, _closure: *mut c_voi
 #[unsafe(no_mangle)]
 pub extern "C" fn pq_atan2(_gc: &mut GcContext, v: Vec2, _closure: *mut c_void) -> PsFloat {
     v.y.atan2(v.x)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_pow(_gc: &mut GcContext, pow: PsFloat, exp: PsFloat, _closure: *mut c_void) -> PsFloat {
+    pow.powf(exp)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_round2(_gc: &mut GcContext, v: Vec2, _closure: *mut c_void) -> Vec2i {
+    let x = v.x.round() as PsInt;
+    let y = v.y.round() as PsInt;
+    Vec2i { x, y }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_floor(_gc: &mut GcContext, f: PsFloat, _closure: *mut c_void) -> PsInt {
+    f.floor() as PsInt
 }

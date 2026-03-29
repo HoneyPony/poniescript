@@ -110,4 +110,15 @@ PS_FUN("norm4") ps_vec4 pq_norm_vec4(PONI_ABI(ps_vec2 v));
 /// this is in x, y order (e.g. you can pass a vector to get its angle).
 PS_FUN("atan2") ps_float pq_atan2(PONI_ABI(ps_vec2 xy));
 
+/// Gets the power of a base raised to an exponent.
+///
+/// TODO: Make this a PonieScript builtin.
+PS_FUN("pow") ps_float pq_pow(PONI_ABI(ps_float base, ps_float exp));
+
+/// Rounds a vec2 into a vec2i.
+PS_FUN("round2") ps_vec2i pq_round2(PONI_ABI(ps_vec2 v));
+
+/// Floors a float into an int.
+PS_FUN("floor") ps_int pq_floor(PONI_ABI(ps_float f));
+
 #endif
