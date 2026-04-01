@@ -58,6 +58,18 @@ struct camera_viewport {
     PS_VAR() ps_vec2 size;
 };
 
+PS_CLASS("Sound")
+struct sound {
+    ps_object header;
+
+    char opaque[64];
+};
+
+PS_FUN() struct sound* load_sound(PONI_ABI(ps_strbuf *path));
+PS_FUN() void play_sound_once(PONI_ABI(struct sound *sound));
+PS_FUN() void play_sound_looping(PONI_ABI(struct sound *sound));
+
+
 PS_FUN() struct font* load_font(PONI_ABI(ps_strbuf *path));
 /// Draw text to the screen, using the given font size and color.
 PS_FUN() ps_vec3 draw_text(PONI_ABI(ps_strbuf *text, ps_vec2 at, ps_float size, ps_vec4 color));
@@ -87,7 +99,7 @@ PS_FUN() ps_bool is_mouse_button_released(PONI_ABI(ps_int button));
 PS_FUN() ps_vec2 mouse_position(PONI_ABI());
 PS_FUN() ps_vec2 mouse_position_local(PONI_ABI());
 PS_FUN() ps_vec2 mouse_delta_position(PONI_ABI());
-PS_FUN() ps_vec2 mouse_wheel(PONI_ABI());
+PS_FUN("mouse_wheel") ps_vec2 pq_mouse_wheel(PONI_ABI());
 
 PS_FUN() ps_float get_frame_time(PONI_ABI());
 PS_FUN() ps_float get_time(PONI_ABI());
