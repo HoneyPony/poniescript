@@ -66,6 +66,8 @@ PS_FUN() ps_vec3 draw_text_font(PONI_ABI(ps_strbuf *text, struct font *font, ps_
 
 PS_FUN() ps_vec3 measure_text_font(PONI_ABI(ps_strbuf *text, struct font *font, ps_float size));
 
+PS_FUN("is_font_loaded") ps_bool pq_is_font_loaded(PONI_ABI(struct font* font));
+
 PS_FUN() void set_camera(PONI_ABI(struct camera2d *camera));
 PS_FUN() void set_default_camera(PONI_ABI());
 

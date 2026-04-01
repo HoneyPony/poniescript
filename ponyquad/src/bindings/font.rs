@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::Mutex};
 
 use macroquad::texture::DrawTextureParams;
-use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsFloat, PsInt, PsObject};
+use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsBool, PsFloat, PsInt, PsObject};
 use poniescript_rt::{PsStrBuf, Vec2, Vec4};
 
 #[repr(C)]
@@ -71,4 +71,10 @@ pub extern "C" fn load_font(gc: &mut GcContext, path: Gp<PsStrBuf>, _closure: *m
     queue.push(path, result.clone());
 
     result
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_is_font_loaded(gc: &mut GcContext, font: Gp<PqFont>, _closure: *mut c_void) -> PsBool {
+    let font = font.get_inner();
+    return if font.inner.is_some() { 1 } else { 0 };
 }

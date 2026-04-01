@@ -3,6 +3,7 @@ pub mod input;
 pub mod camera;
 pub mod math;
 pub mod font;
+pub mod sound;
 
 use std::ffi::c_void;
 use macroquad::text::TextParams;
@@ -67,7 +68,6 @@ pub extern "C" fn draw_text_font(_ctx: &mut GcContext, text: Gp<PsStrBuf>, font:
     unsafe {
         let text = text.get_inner();
         let text = text.get_string();
-
         let font = font.get_inner();
 
         let dims = macroquad::prelude::draw_text_ex(
