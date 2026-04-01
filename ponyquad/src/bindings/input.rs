@@ -72,6 +72,6 @@ pub extern "C" fn mouse_delta_position(_gc: &mut GcContext, _closure: *mut c_voi
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn mouse_wheel(_gc: &mut GcContext, _closure: *mut c_void) -> Vec2 {
+pub extern "C" fn pq_mouse_wheel(_gc: &mut GcContext, _closure: *mut c_void) -> Vec2 {
     vec2_t(macroquad::prelude::mouse_wheel())
 }
