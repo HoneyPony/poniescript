@@ -438,12 +438,50 @@ ps_strfmt_char(struct poni_gc_context *ctx, ps_strbuf *buf, char c) {
 	buf->length += 1;
 }
 
+// Just for fun, this is a version of ps_strfmt_int that doesn't go through
+// snprintf. I want to see if it is any faster...
 static inline
 void
 ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
-	char buf2[64];
-	snprintf(buf2, 64, "%" PRId64, i);
-	ps_strfmt_cstr(ctx, buf, buf2, strlen(buf2));
+	if(i < 0) {
+		if(i < -9223372036854775807) {
+			char val[] = "-9223372036854775808";
+			ps_strfmt_cstr(ctx, buf, val, sizeof(val) - 1);
+			return;
+		}
+		ps_strfmt_char(ctx, buf, '-');
+		i = -i;
+	}
+
+	if(i == 0) {
+		ps_strfmt_char(ctx, buf, '0');
+		return;
+	}
+
+	char digits[24] = {0};
+	char *str = &digits[23];
+	size_t len = 0;
+
+	char table[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+
+	while(i > 100) {
+		ps_int idx = i % 100;
+		str -= 2;
+		str[0] = table[idx * 2];
+		str[1] = table[idx * 2 + 1];
+		len += 2;
+		i /= 100;
+	}
+
+	while(i > 0) {
+		ps_int digit = i % 10;
+		str--;
+		*str = (char)(digit + '0');		
+		len += 1;
+		i /= 10;
+	}
+
+	ps_strfmt_cstr(ctx, buf, str, len);
 }
 
 static inline
