@@ -64,6 +64,29 @@ pub extern "C" fn draw_text(_ctx: &mut GcContext, text: Gp<PsStrBuf>, at: Vec2, 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn draw_texts(_ctx: &mut GcContext, text: Gp<PsStrBuf>, at: Vec2, font_size: f32, font_scale: f32, color: Vec4, _closure: *const c_void) -> Vec3 {
+    unsafe {
+        let text = text.get_inner();
+        let text = text.get_string();
+
+        let dims = macroquad::prelude::draw_text_ex(
+            &text,
+            at.x, at.y,
+            TextParams {
+                font: None,
+                font_size: font_size as u16,
+                font_scale,
+                font_scale_aspect: 1.0,
+                rotation: 0.0,
+                color: std::mem::transmute(color),
+            }
+        );
+
+        Vec3 { x: dims.width, y: dims.height, z: dims.offset_y }
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn draw_text_font(_ctx: &mut GcContext, text: Gp<PsStrBuf>, font: Gp<PqFont>, at: Vec2, font_size: f32, color: Vec4, _closure: *const c_void) -> Vec3 {
     unsafe {
         let text = text.get_inner();
@@ -88,6 +111,31 @@ pub extern "C" fn draw_text_font(_ctx: &mut GcContext, text: Gp<PsStrBuf>, font:
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn draw_text_fonts(_ctx: &mut GcContext, text: Gp<PsStrBuf>, font: Gp<PqFont>, at: Vec2, font_size: f32, font_scale: f32, color: Vec4, _closure: *const c_void) -> Vec3 {
+    unsafe {
+        let text = text.get_inner();
+        let text = text.get_string();
+        let font = font.get_inner();
+
+        let dims = macroquad::prelude::draw_text_ex(
+            &text,
+            at.x, at.y,
+            TextParams {
+                font: font.inner.as_ref(),
+                font_size: font_size as u16,
+                font_scale,
+                font_scale_aspect: 1.0,
+                rotation: 0.0,
+                color: std::mem::transmute(color),
+            }
+        );
+
+        Vec3 { x: dims.width, y: dims.height, z: dims.offset_y }
+    }
+}
+
+
+#[unsafe(no_mangle)]
 pub extern "C" fn measure_text_font(_ctx: &mut GcContext, text: Gp<PsStrBuf>, font: Gp<PqFont>, font_size: f32, _closure: *const c_void) -> Vec3 {
     let text = text.get_inner();
     let text = text.get_string();
@@ -95,6 +143,18 @@ pub extern "C" fn measure_text_font(_ctx: &mut GcContext, text: Gp<PsStrBuf>, fo
     let font = font.get_inner();
 
     let dims = macroquad::prelude::measure_text(&text, font.inner.as_ref(), font_size as u16, 1.0);
+
+    Vec3 { x: dims.width, y: dims.height, z: dims.offset_y }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn measure_text_fonts(_ctx: &mut GcContext, text: Gp<PsStrBuf>, font: Gp<PqFont>, font_size: f32, font_scale: f32, _closure: *const c_void) -> Vec3 {
+    let text = text.get_inner();
+    let text = text.get_string();
+
+    let font = font.get_inner();
+
+    let dims = macroquad::prelude::measure_text(&text, font.inner.as_ref(), font_size as u16, font_scale);
 
     Vec3 { x: dims.width, y: dims.height, z: dims.offset_y }
 }

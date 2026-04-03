@@ -73,10 +73,15 @@ PS_FUN() void play_sound_looping(PONI_ABI(struct sound *sound));
 PS_FUN() struct font* load_font(PONI_ABI(ps_strbuf *path));
 /// Draw text to the screen, using the given font size and color.
 PS_FUN() ps_vec3 draw_text(PONI_ABI(ps_strbuf *text, ps_vec2 at, ps_float size, ps_vec4 color));
+/// Draw text to the screen, using the given font size and color.
+PS_FUN() ps_vec3 draw_texts(PONI_ABI(ps_strbuf *text, ps_vec2 at, ps_float size, ps_float scale, ps_vec4 color));
 /// Draw text to the screen, using the given font, font size and color.
 PS_FUN() ps_vec3 draw_text_font(PONI_ABI(ps_strbuf *text, struct font *font, ps_vec2 at, ps_float size, ps_vec4 color));
+/// Draw text to the screen, using the given font, font size and color.
+PS_FUN() ps_vec3 draw_text_fonts(PONI_ABI(ps_strbuf *text, struct font *font, ps_vec2 at, ps_float size, ps_float scale, ps_vec4 color));
 
 PS_FUN() ps_vec3 measure_text_font(PONI_ABI(ps_strbuf *text, struct font *font, ps_float size));
+PS_FUN() ps_vec3 measure_text_fonts(PONI_ABI(ps_strbuf *text, struct font *font, ps_float size, ps_float scale));
 
 PS_FUN("is_font_loaded") ps_bool pq_is_font_loaded(PONI_ABI(struct font* font));
 
