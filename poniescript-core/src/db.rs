@@ -1012,6 +1012,10 @@ impl Db {
 			self.builtin_methods.insert((push, dynarray_ty),
 				Arc::clone(&self.builtin_method_table.dynarray_push));
 
+			let pop_or_panic = self.put_str("pop_or_panic");
+			self.builtin_methods.insert((pop_or_panic, dynarray_ty),
+				Arc::clone(&self.builtin_method_table.dynarray_pop_or_panic));
+
 			let any = self.put_str("any");
 			self.builtin_methods.insert((any, dynarray_ty),
 				Arc::clone(&self.builtin_method_table.dynarray_any));

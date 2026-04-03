@@ -11,6 +11,7 @@ pub struct BuiltinMethodTable {
     pub dynarray_any: BuiltinMethodPtr,
     pub dynarray_all: BuiltinMethodPtr,
     pub dynarray_clone_shallow: BuiltinMethodPtr,
+    pub dynarray_pop_or_panic: BuiltinMethodPtr,
 
     pub option_unwrap: BuiltinMethodPtr,
     pub option_is_some: BuiltinMethodPtr,
@@ -26,6 +27,7 @@ impl BuiltinMethodTable {
             dynarray_any: Arc::new(dynarray::DynarrayAny { all: false }),
             dynarray_all: Arc::new(dynarray::DynarrayAny { all: true }),
             dynarray_clone_shallow: Arc::new(dynarray::DynarrayCloneShallow),
+            dynarray_pop_or_panic: Arc::new(dynarray::DynarrayPopOrPanic),
 
             option_unwrap: Arc::new(option::OptionUnwrap),
             option_is_some: Arc::new(option::OptionIsSome { invert: false }),
