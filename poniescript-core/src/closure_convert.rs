@@ -135,6 +135,15 @@ impl<'a> VisitAst for ClosureConvert<'a> {
 
         self.visit_classdeclare_any(ast, db, declare);
     }
+
+    fn visit_new(&mut self, ast: &Ast, db: &mut Db, id: crate::db::ExprId) {
+        let binding = ast.get_expr(id);
+        let Expr::New(new) = binding.as_ref() else { unreachable!() };
+
+        for init in &new.initializers {
+            self.visit_expr(ast, db, init.value);
+        }
+    }
 }
 
 /// Second pass for rewriting any references to now-closed variables with
