@@ -182,7 +182,7 @@ impl Project {
         *cache = None;
     }
 
-    pub fn recompute_cache(self: &Arc<Self>, store: &DocumentStore) -> Arc<Mutex<ProjectCache>> {
+    fn recompute_cache_impl(self: &Arc<Self>, store: &DocumentStore) -> Arc<Mutex<ProjectCache>> {
         eprintln!("--- re-parse modules ---");
         let start = SystemTime::now();
 
@@ -247,10 +247,70 @@ impl Project {
             url_to_id_map,
         }));
 
-        let mut lock = self.cache.lock().unwrap();
+        cache
+    }
+
+    fn build_and_save_dummy_cache(self: &Arc<Self>) -> Arc<Mutex<ProjectCache>> {
+        let mut ast = Ast::new();
+        let db = Db::new(&mut ast);
+        let url_to_id_map = HashMap::new();
+        let id_to_url_map = HashMap::new();
+
+        let cache = Arc::new(Mutex::new(ProjectCache {
+            db,
+            ast,
+            diagnostics: None,
+            id_to_url_map,
+            url_to_id_map,
+        }));
+
+        // Store the dummy cache for later.
+        let mut lock: std::sync::MutexGuard<'_, Option<Arc<Mutex<ProjectCache>>>> = self.cache.lock().unwrap();
         *lock = Some(Arc::clone(&cache));
 
         cache
+    }
+
+    fn recompute_cache(self: &Arc<Self>, store: &DocumentStore) -> Arc<Mutex<ProjectCache>> {
+        // Lock this at the beginning of the function. This ensures that we don't do redundant recomputations
+        // of the cache...?
+        let mut lock: std::sync::MutexGuard<'_, Option<Arc<Mutex<ProjectCache>>>> = self.cache.lock().unwrap();
+
+        let maybe_cache = std::panic::catch_unwind(|| {
+            self.recompute_cache_impl(store)
+        });
+
+        match maybe_cache {
+            Ok(new_cache) => {
+                // Store the new cache and return it.
+                *lock = Some(Arc::clone(&new_cache));
+
+                new_cache
+            }
+            Err(err) => {
+                // Log the error
+                if let Some(str) = err.downcast_ref::<&str>() {
+                    eprintln!("panic during analysis: {}", str);
+                }
+                else if let Some(string) = err.downcast_ref::<String>() {
+                    eprintln!("panic during analysis: {}", string);
+                }
+                else {
+                    eprintln!("panic during analysis of unknown type '{:?}'", err.type_id());
+                }
+
+                // If we panicked, use the old cache if possible...
+                if let Some(existing) = lock.as_ref() {
+                    return existing.clone();
+                }
+
+                drop(lock);
+
+                // Otherwise, recompute a dummy cache, which is infallible.
+                // (TODO: Just make everything else handle not having a cache?)
+                self.build_and_save_dummy_cache()
+            }
+        }
     }
 
     pub fn get_cache(self: &Arc<Self>, store: &DocumentStore) -> Arc<Mutex<ProjectCache>> {
