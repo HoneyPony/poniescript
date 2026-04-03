@@ -1,6 +1,7 @@
 fun test() {
     let q = 40;
 
+    // Likely desugaring issue
     for y in 0..q {
         // Should be fine
         let h = q;
