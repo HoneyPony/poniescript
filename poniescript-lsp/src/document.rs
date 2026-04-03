@@ -250,7 +250,7 @@ impl Project {
         cache
     }
 
-    fn build_and_save_dummy_cache(self: &Arc<Self>) -> Arc<Mutex<ProjectCache>> {
+    fn build_and_save_dummy_cache(self: &Arc<Self>, mut cache_lock: std::sync::MutexGuard<'_, Option<Arc<Mutex<ProjectCache>>>>) -> Arc<Mutex<ProjectCache>> {
         let mut ast = Ast::new();
         let db = Db::new(&mut ast);
         let url_to_id_map = HashMap::new();
@@ -265,16 +265,17 @@ impl Project {
         }));
 
         // Store the dummy cache for later.
-        let mut lock: std::sync::MutexGuard<'_, Option<Arc<Mutex<ProjectCache>>>> = self.cache.lock().unwrap();
-        *lock = Some(Arc::clone(&cache));
+        *cache_lock = Some(Arc::clone(&cache));
 
         cache
     }
 
-    fn recompute_cache(self: &Arc<Self>, store: &DocumentStore) -> Arc<Mutex<ProjectCache>> {
-        // Lock this at the beginning of the function. This ensures that we don't do redundant recomputations
-        // of the cache...?
-        let mut lock: std::sync::MutexGuard<'_, Option<Arc<Mutex<ProjectCache>>>> = self.cache.lock().unwrap();
+    // cache_lock should be a MutexGuard on our 'cache' member.
+    //
+    // We want to hold the lock for the entire process of recomputing the cache. This ensures
+    // that only one LSP response is trying to recompute the cache at once, which should save
+    // on compute (and in practice seems to keep the language server from locking up).
+    fn recompute_cache(self: &Arc<Self>, store: &DocumentStore, mut cache_lock: std::sync::MutexGuard<'_, Option<Arc<Mutex<ProjectCache>>>>) -> Arc<Mutex<ProjectCache>> {
 
         let maybe_cache = std::panic::catch_unwind(|| {
             self.recompute_cache_impl(store)
@@ -283,7 +284,7 @@ impl Project {
         match maybe_cache {
             Ok(new_cache) => {
                 // Store the new cache and return it.
-                *lock = Some(Arc::clone(&new_cache));
+                *cache_lock = Some(Arc::clone(&new_cache));
 
                 new_cache
             }
@@ -300,29 +301,25 @@ impl Project {
                 }
 
                 // If we panicked, use the old cache if possible...
-                if let Some(existing) = lock.as_ref() {
+                if let Some(existing) = cache_lock.as_ref() {
                     return existing.clone();
                 }
 
-                drop(lock);
-
                 // Otherwise, recompute a dummy cache, which is infallible.
                 // (TODO: Just make everything else handle not having a cache?)
-                self.build_and_save_dummy_cache()
+                self.build_and_save_dummy_cache(cache_lock)
             }
         }
     }
 
     pub fn get_cache(self: &Arc<Self>, store: &DocumentStore) -> Arc<Mutex<ProjectCache>> {
-        let lock = self.cache.lock().unwrap();
-        if let Some(cache) = lock.as_ref() {
+        let cache_lock = self.cache.lock().unwrap();
+        if let Some(cache) = cache_lock.as_ref() {
             return Arc::clone(cache);
         }
 
-        drop(lock);
-
         // Steal the Arc from the recompute function.
-        self.recompute_cache(store)
+        self.recompute_cache(store, cache_lock)
     }
 }
 
