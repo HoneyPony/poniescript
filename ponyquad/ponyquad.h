@@ -156,9 +156,9 @@ PS_FUN("round2") ps_vec2i pq_round2(PONI_ABI(ps_vec2 v));
 PS_FUN("floor") ps_int pq_floor(PONI_ABI(ps_float f));
 
 // GL functions
-PS_FUN() void gl_push_rotation(PONI_ABI(ps_float rotation));
-PS_FUN() void gl_push_scale(PONI_ABI(ps_vec2 scale));
-PS_FUN() void gl_push_translation(PONI_ABI(ps_vec2 translation));
-PS_FUN() void gl_pop(PONI_ABI());
+PS_FUN("gl_push_rotation") void pq_gl_push_rotation(PONI_ABI(ps_float rotation));
+PS_FUN("gl_push_scale") void pq_gl_push_scale(PONI_ABI(ps_vec2 scale));
+PS_FUN("gl_push_translation") void pq_gl_push_translation(PONI_ABI(ps_vec2 translation));
+PS_FUN("gl_pop") void pq_gl_pop(PONI_ABI());
 
 #endif
