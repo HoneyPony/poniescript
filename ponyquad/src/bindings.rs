@@ -4,6 +4,7 @@ pub mod camera;
 pub mod math;
 pub mod font;
 pub mod sound;
+pub mod gl;
 
 use std::ffi::c_void;
 use macroquad::text::TextParams;
