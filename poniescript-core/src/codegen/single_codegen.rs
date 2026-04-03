@@ -1291,13 +1291,15 @@ impl<'a> Codegen<'a> {
 			// so return its value.
 			(last, val) => {
 				let last = self.compile_stmt(ast, *last.unwrap(), into);
-				log::trace!("codegen: line: {} is_some(): {}", block.location.offset, last.is_some());
-				let last = last.unwrap();
-				if last.needs_storage() && val.needs_storage() {
-					// Grab fresh copy of indent() because we're in the block,
-					// and may or may not have +1'd it
-					inf_writeln!(into, "{}{} = {};",
-						self.indent(), val, last);
+				log::trace!("codegen: line: {} is_some(): {} val: {}", block.location.offset, last.is_some(), val);
+				
+				if let Some(last) = last {
+					if last.needs_storage() && val.needs_storage() {
+						// Grab fresh copy of indent() because we're in the block,
+						// and may or may not have +1'd it
+						inf_writeln!(into, "{}{} = {};",
+							self.indent(), val, last);
+					}
 				}
 
 				val

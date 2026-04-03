@@ -10,7 +10,7 @@ use crate::typ::{RangeEnd, Type};
 use crate::expr::*;
 use crate::error::Error;
 
-use poni_arena::IndexCell;
+use poni_arena::{ArenaKey, IndexCell};
 
 // Current plan for type inference:
 // variable declarations may infer a type for the variable:
@@ -595,7 +595,8 @@ impl<'db> TypeChecker<'db> {
 		if ast.get_expr(*expr_id).typ(ast, &self.db) != promote_to {
 			let promote_from = ast.get_expr(*expr_id).typ(ast, &self.db);
 
-			log::trace!("synthesizing Promote: {:?}: {} -> {}",
+			log::trace!("synthesizing Promote: {} {:?}: {} -> {}",
+				expr_id.to_index(),
 				ast.get_expr(*expr_id).as_ref(),
 				self.db.repr_type(promote_from),
 				self.db.repr_type(promote_to));
@@ -782,8 +783,9 @@ impl<'db> TypeChecker<'db> {
 					}
 				}
 			}
-			Expr::WhileLoop(_) => {
-				// For now, there is nothing to promote.
+			Expr::WhileLoop(while_) => {
+				self.do_promote_expr(ast, &mut while_.inner, promote_to);
+				while_.typ = while_.inner.typ(ast, &self.db);
 			}
 			Expr::ForLoop(_) => {
 				panic!("ICE: Tried to promote ForLoop: Should have been lowered before promotion")
@@ -1043,7 +1045,7 @@ impl<'db> TypeChecker<'db> {
 	fn check_expr(&mut self, ast: &AstProxy, expr_id: ExprId, value_used: bool) -> Result<TypId> {
 		let mut binding = ast.exprs.get_mut(expr_id);
 		let expr = binding.as_mut();
-		log::trace!("check_expr: {:?}", expr);
+		log::trace!("check_expr: {} {:?}", expr_id.to_index(), expr);
 		let result = Ok(match expr {
 			Expr::AllocateClosure(ac) => {
 				// Merely a wrapper
@@ -1705,6 +1707,7 @@ impl<'db> TypeChecker<'db> {
 					// We also need to assign our own type to void in this case
 					// -- our type is not yet assigned.
 					block.typ = self.db.types.void;
+					log::trace!("value of Block {} isn't used", expr_id.to_index());
 					return Ok(self.db.types.void);
 				}
 
@@ -1721,6 +1724,8 @@ impl<'db> TypeChecker<'db> {
 					type_error!(self, &block.location,
 						"Return value of block is used, but its last statement has no value.");
 				};
+
+				eprintln!("Block {}: Using type of Stmt {}", expr_id.to_index(), stmt.to_index());
 
 				// Return the computed TypId.
 				block.typ = val;
@@ -2614,7 +2619,7 @@ impl<'db> TypeChecker<'db> {
 						// The inner block is the thing that needs its own closure scope,
 						// so do that now.
 						let inner_block = Expr::push_allocateclosure(ast, inner_stmt_loc,
-							for_.closure, inner_block, self.db.types.void, false);
+							for_.closure, inner_block, self.db.types.unassigned, false);
 
 						// Rhs of the comparison.
 						let rhs = Expr::push_get(ast, inner_loc.clone(),
@@ -2643,7 +2648,7 @@ impl<'db> TypeChecker<'db> {
 
 						// These muse encompas the entire for loop in terms of location.
 						let while_loop = Expr::push_whileloop(ast, for_.location.clone(),
-							comparison, inner_block, self.db.types.void, Vec::new());
+							comparison, inner_block, self.db.types.unassigned, Vec::new());
 						
 						let while_stmt = Stmt::push_expression(ast, for_.location.clone(),
 							while_loop);
@@ -2651,7 +2656,7 @@ impl<'db> TypeChecker<'db> {
 						let block = Block {
 							location: for_.location.clone(),
 							stmts: vec![declare, while_stmt],
-							typ: self.db.types.void,
+							typ: self.db.types.unassigned,
 						};
 
 						// Now, drop the binding, modify ourselves to be the
@@ -2728,14 +2733,14 @@ impl<'db> TypeChecker<'db> {
 						// AWKWARD/TODO: Once we care about the value of the while block,
 						// this is not going to be it...?
 						let inner_block = Expr::push_block(ast,  inner_stmt_loc.clone(),
-							vec![ident_declare, inner_stmt], self.db.types.void);
+							vec![ident_declare, inner_stmt], self.db.types.unassigned);
 						// The inner block is the thing that needs its own closure scope,
 						let inner_block = Expr::push_allocateclosure(ast, inner_stmt_loc.clone(),
-							for_.closure, inner_block, self.db.types.void, false);
+							for_.closure, inner_block, self.db.types.unassigned, false);
 
 						let inner_loop = Expr::push_loop(ast, inner_stmt_loc.clone(),
 							// I believe we don't have to explicitly set the breaks...?
-							inner_block, self.db.types.void, Vec::new());
+							inner_block, self.db.types.unassigned, Vec::new());
 						
 						let own_declare = Stmt::push_declare(ast, for_.iterator.location(ast),
 							// This always has an explicit type, so that no inlay hint is
@@ -2747,7 +2752,7 @@ impl<'db> TypeChecker<'db> {
 						let block = Block {
 							location: for_.location.clone(),
 							stmts: vec![own_declare, inner_loop_stmt],
-							typ: self.db.types.void,
+							typ: self.db.types.unassigned,
 						};
 
 						// Now, drop the binding, modify ourselves to be the
@@ -2772,7 +2777,7 @@ impl<'db> TypeChecker<'db> {
 			Expr::Promote(_) => panic!("ICE: Tried to typecheck Promote"),
 		});
 
-		log::trace!("check_expr: {:?} -> {}", expr, self.db.repr_type(expr.typ(ast, self.db)));
+		log::trace!("check_expr: {} {:?} -> {}", expr_id.to_index(), expr, self.db.repr_type(expr.typ(ast, self.db)));
 		result
 	}
 
