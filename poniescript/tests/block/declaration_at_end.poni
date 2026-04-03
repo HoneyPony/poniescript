@@ -1,0 +1,12 @@
+fun test() {
+    let q = 40;
+
+    for y in 0..q {
+        // Should be fine
+        let h = q;
+    }
+}
+
+fun init() {
+    print("success"); //! success
+}

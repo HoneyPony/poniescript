@@ -10,7 +10,7 @@ use crate::{db::*, Args};
 use crate::typ::Type;
 
 use std::io::BufWriter;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::{inf_write, inf_writeln};
 
@@ -680,8 +680,9 @@ poni_gc_get_allocation_size(void *object) {
 		}
 
 		let send0 = sends[0].clone();
+		let join_handles = Arc::new(Mutex::new(Vec::new()));
 		
-		{
+		let handle = {
 			// In order to improve upon the overhead of starting threads, we
 			// start the first thread, then have it start the rest, as we move on
 			// to other codegen tasks.
@@ -689,6 +690,9 @@ poni_gc_get_allocation_size(void *object) {
 			let ast = Arc::clone(&ast);
 			let db = self.db;
 			let disable_gc_frames = args.disable_gc_frames;
+			let join_handles = join_handles.clone();
+
+
 			std::thread::spawn(move || {
 				// Distribute senders to the main codegen threads in a round-robin
 				// fashion. This should work decently well.
@@ -706,13 +710,22 @@ poni_gc_get_allocation_size(void *object) {
 						send_idx = (send_idx + 1) % sends.len();
 						let ast = Arc::clone(&ast);
 
-						std::thread::spawn(move || {
+						let handle = std::thread::spawn(move || {
 							let mut cg = Codegen::new(db, send, disable_gc_frames);
 							cg.handle_tasks(ast, task_set);
 						});
+
+						{
+							let mut lock = join_handles.lock().unwrap();
+							lock.push(handle);
+						}
 					}
 				}
-			});
+			})
+		};
+		{
+			let mut lock = join_handles.lock().unwrap();
+			lock.push(handle);
 		}
 
 		// Use a big capacity for our BufWriter, at least for now.
@@ -833,18 +846,42 @@ poni_gc_get_allocation_size(void *object) {
 
 		std::thread::scope(|s| {
 			let mut do_support_fns = true;
+			let mut join_handles_scoped = Vec::new();
 			for (writer, recv) in writers.into_iter().zip(recvs.into_iter()) {
 				{
 					let do_support_fns = do_support_fns;
 					let outputs = &outputs;
 					let the_self = &self;
-					s.spawn(move || {
+					let handle = s.spawn(move || {
 						Self::per_writer_codegen(the_self, writer, recv, &outputs, args, do_support_fns)
 					});
+
+					join_handles_scoped.push(handle);
 				}
 				do_support_fns = false;
 			}
+
+			// We want to panic if we can't join any thread.
+			for handle in join_handles_scoped {
+				let joined_result = handle.join().unwrap();
+				if let Err(e) = joined_result {
+					// TODO: Is this what we want to do here?
+					panic!("Codegen thread encountered I/O error: {}", e)
+				}
+			}
 		});
+
+		let join_handles = {
+			let mut lock = join_handles.lock().unwrap();
+			let handles: &mut Vec<_> = &mut lock;
+			std::mem::take(handles)
+		};
+
+		// We want to panic is we can't join any thread.
+		for handle in join_handles {
+			handle.join().unwrap();
+		}
+		
 
 		Ok(())
 	}

@@ -61,6 +61,8 @@ pub fn generate(tests_file: &mut File) {
 		("binder/", "arity_resolve"),
 		("binder/", "type_resolve"),
 
+		("block/", "declaration_at_end"),
+
 		("cyclic/", "class_members_and_fun_thru_param"),
 		("cyclic/", "err_class_members_and_fun_thru_param"),
 		("cyclic/", "class_members_and_fun_thru_param_nocycle"),
