@@ -877,7 +877,7 @@ poni_gc_get_allocation_size(void *object) {
 			std::mem::take(handles)
 		};
 
-		// We want to panic is we can't join any thread.
+		// We want to panic if we can't join any thread.
 		for handle in join_handles {
 			handle.join().unwrap();
 		}
