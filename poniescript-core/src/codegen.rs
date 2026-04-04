@@ -522,8 +522,22 @@ poni_gc_get_allocation_size(void *object) {
 				if self.db.is_primitive_type(typ) {
 					continue;
 				}
-				inf_writeln!(visit_roots, "\tponi_gc_visit_valuetype(gc, &{}, {});",
-					self.db.get_cname(*global), self.db.get_type_ctag(typ));
+
+				match self.db.get(typ) {
+					// Even though option types are value types, we have to visit them
+					// as pointers (we don't have optional value types yet.)
+					//
+					// ...Obviously, all this special casing needs some work...
+					Type::Option(_) => {
+						inf_writeln!(visit_roots, "\tponi_gc_mark(gc, {});",
+							self.db.get_cname(*global));
+					}
+					// All other value types should be real value types...?
+					_ => {
+						inf_writeln!(visit_roots, "\tponi_gc_visit_valuetype(gc, &{}, {});",
+							self.db.get_cname(*global), self.db.get_type_ctag(typ));
+					}
+				}
 			}
 			else {
 				inf_writeln!(visit_roots, "\tponi_gc_mark(gc, {});",
