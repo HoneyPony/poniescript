@@ -5,6 +5,7 @@ pub mod math;
 pub mod font;
 pub mod sound;
 pub mod gl;
+pub mod rand;
 
 use std::ffi::c_void;
 use macroquad::text::TextParams;

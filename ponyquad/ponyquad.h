@@ -161,4 +161,10 @@ PS_FUN("gl_push_scale") void pq_gl_push_scale(PONI_ABI(ps_vec2 scale));
 PS_FUN("gl_push_translation") void pq_gl_push_translation(PONI_ABI(ps_vec2 translation));
 PS_FUN("gl_pop") void pq_gl_pop(PONI_ABI());
 
+// Random functions
+
+/// Inclusive range
+PS_FUN("randi_range") ps_int pq_randi_range(PONI_ABI(ps_int low, ps_int high));
+PS_FUN("randf_range") ps_float pq_randf_range(PONI_ABI(ps_float low, ps_float high));
+
 #endif
