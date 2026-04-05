@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::Mutex};
 
 use macroquad::audio::PlaySoundParams;
-use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsFloat, PsInt, PsObject};
+use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsBool, PsFloat, PsInt, PsObject, ps_bool};
 use poniescript_rt::{PsStrBuf, Vec2, Vec4};
 
 #[repr(C)]
@@ -115,4 +115,21 @@ fn play_sound_looping_impl(sound: Gp<PqSound>) {
 #[unsafe(no_mangle)]
 pub extern "C" fn play_sound_looping(gc: &mut GcContext, sound: Gp<PqSound>, _closure: *mut c_void) {
     play_sound_looping_impl(sound);   
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_stop_sound(gc: &mut GcContext, sound: Gp<PqSound>, _closure: *mut c_void) {
+    let inner = sound.get_inner();
+    if let Some(inner) = &inner.inner {
+        macroquad::audio::stop_sound(inner);
+    }
+    else {
+        // TODO: How to handle this...?
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_is_sound_loaded(gc: &mut GcContext, sound: Gp<PqSound>, _closure: *mut c_void) -> PsBool {
+    let inner = sound.get_inner();
+    return ps_bool(inner.inner.is_some());
 }

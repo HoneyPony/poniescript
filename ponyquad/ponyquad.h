@@ -68,7 +68,8 @@ struct sound {
 PS_FUN() struct sound* load_sound(PONI_ABI(ps_strbuf *path));
 PS_FUN() void play_sound_once(PONI_ABI(struct sound *sound));
 PS_FUN() void play_sound_looping(PONI_ABI(struct sound *sound));
-
+PS_FUN("stop_sound") void pq_stop_sound(PONI_ABI(struct sound *sound));
+PS_FUN("is_sound_loaded") ps_bool pq_is_sound_loaded(PONI_ABI(struct sound *sound));
 
 PS_FUN() struct font* load_font(PONI_ABI(ps_strbuf *path));
 /// Draw text to the screen, using the given font size and color.
