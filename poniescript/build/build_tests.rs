@@ -200,6 +200,7 @@ pub fn generate(tests_file: &mut File) {
 		("new/", "fun_call"),
 		("new/", "nested_initializers"),
 		("new/", "nested_initializers_unique_fun_names"),
+		("new/", "vec2_for_floating_point_pair"),
 
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants"),
