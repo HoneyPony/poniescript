@@ -164,6 +164,8 @@ PS_FUN("gl_pop") void pq_gl_pop(PONI_ABI());
 
 // Random functions
 
+PS_FUN("seed_random_with_time") void pq_seed_random_with_time(PONI_ABI());
+
 /// Inclusive range
 PS_FUN("randi_range") ps_int pq_randi_range(PONI_ABI(ps_int low, ps_int high));
 PS_FUN("randf_range") ps_float pq_randf_range(PONI_ABI(ps_float low, ps_float high));
