@@ -77,6 +77,7 @@ pub fn generate(tests_file: &mut File) {
 		("cyclic/", "globals_and_fun_thru_param"),
 		("cyclic/", "globals_expr"),
 		("cyclic/", "globals_same"),
+		("cyclic/", "globals_nice"),
 		("cyclic/", "globals_and_class_thru_difficult"),
 
 		("cyclic/", "class_members_thru_class_fun_thruself"),
