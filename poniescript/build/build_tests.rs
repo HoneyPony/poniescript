@@ -82,6 +82,7 @@ pub fn generate(tests_file: &mut File) {
 		("cyclic/", "class_members_thru_class_fun_thruself"),
 		("cyclic/", "class_members_thru_class_fun"),
 		("cyclic/", "err_class_members_thru_class_fun_thruself"),
+		("cyclic/", "err_class_members_thru_class_fun_thruself_evil"),
 		("cyclic/", "err_class_members_thru_class_fun"),
 		("cyclic/", "err_class_members_thru_class_fun2"),
 
