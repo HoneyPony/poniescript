@@ -1,0 +1,126 @@
+/// Experimental file showing how a HashMap could be implemented
+/// in pure PonieScript if we had generics support.
+
+class K {
+    fun hash() -> int { 0 }
+    fun eq(other: K) -> bool { true }
+    fun clone_shallow() -> K { new K{} }
+}
+
+class V {}
+
+class HashMap // [K: Hash + Eq + CloneShallow, V]
+{
+    // Use a linked list as the most straightforward way to easily represent
+    // empty states and such
+    class Link {
+        var next: Link? = nil;
+        var k: K;
+        var v: V;
+    }
+
+    var links: DynArray[Link?] = [nil, nil, nil, nil, nil, nil, nil, nil];
+
+    fun insert(k: K, v: V) {
+        // TODO: Rehashing...
+        var h = k.hash() % links.length;
+        var bucket = links[h];
+
+        // No bucket at all, overwrite array entry
+        var parent = bucket else {
+            links[h] = new Link { k: k.clone_shallow(), v: v };
+            return;
+        };
+
+        bucket = parent.next;
+        loop {
+            let entry = bucket else { break; };
+            if entry.k.eq(k) {
+                // Found matching bucket, overwrite
+                entry.v = v;
+                return;
+            }
+
+            // Move to next bucket
+            parent = entry;
+            bucket = entry.next;
+        }
+
+        // Found no matching bucket, create new one
+        parent.next = new Link { k: k.clone_shallow(), v: v };
+    }
+
+    fun get(k: K) -> V? {
+        var h = k.hash() % links.length;
+        var bucket = links[h];
+
+        loop {
+            let next = bucket else { return nil; };
+
+            if next.k.eq(k) { return next.v; }
+
+            bucket = next.next;
+        }
+    }
+
+    fun get_or_insert(k: K, f: fun() -> V) -> V {
+        var h = k.hash() % links.length;
+        var bucket = links[h];
+        var parent: Link? = nil;
+
+        loop {
+            let next = bucket else { break; };
+
+            if next.k.eq(k) { return next.v; }
+
+            parent = next;
+            bucket = next.next;
+        }
+
+        // Value not found, insert
+        let v = f();
+
+        let entry = new Link { k: k.clone_shallow(), v: v };
+        let parent = parent else {
+            // nil parent => insert directly in array
+            links[h] = entry;
+            return v;
+        };
+
+        parent.next = entry;
+        return v;
+    }
+
+    fun remove(k: K) -> bool {
+        var h = k.hash() % links.length;
+        var bucket = links[h];
+
+        var parent = bucket else {
+            // No entries on chain, we're done
+            return false;
+        };
+
+        // First check parent, i.e. first entry on chain, in which case the parent
+        // is actually the array itself (TODO: pointers-to-pointers would simplify
+        // this...)
+        if parent.k.eq(k) {
+            links[h] = parent.next;
+            return true;
+        }
+
+        // Otherwise, loop...
+        loop {
+            // Entry not found
+            let entry = bucket else { return false; };
+
+            // De-link entry
+            if entry.k.eq(k) {
+                parent.next = entry.next;
+                return true;
+            }
+
+            parent = entry;
+            bucket = entry.next;
+        }
+    }
+}
