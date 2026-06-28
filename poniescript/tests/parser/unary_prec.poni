@@ -1,0 +1,11 @@
+fun init() {
+    var a = 5;
+    var b = 3;
+    var c = -a + b;
+    print(c); //! 2
+
+    var a = false;
+    var b = true;
+    var c = not a and b; // should be (not a) and (b)
+    print(c); //! true
+}
