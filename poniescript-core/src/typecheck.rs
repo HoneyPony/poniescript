@@ -10,7 +10,7 @@ use crate::typ::{RangeEnd, Type};
 use crate::expr::*;
 use crate::error::Error;
 
-use poni_arena::IndexCell;
+use poni_arena::{ArenaKey, IndexCell};
 
 // Current plan for type inference:
 // variable declarations may infer a type for the variable:
@@ -847,7 +847,23 @@ impl<'db> TypeChecker<'db> {
 					self.do_promote_expr(ast, expr, array_lit.elem_typ);
 				}
 			},
-			Expr::Index(_) => {},
+			Expr::Index(index) => {
+				if self.db.is_not_concrete(index.typ) {
+					// Need to promote any array literals we happen to be indexing.
+					let inner_typ = match self.db.get(index.value.typ(ast, self.db)) {
+						Type::ArrayOf(_) => Type::ArrayOf(promote_to),
+						Type::DynArrayOf(_, _) => {
+							let arrof = self.db.put_type(Type::ArrayOf(promote_to));
+							Type::DynArrayOf(promote_to, arrof)
+						},
+						_ => panic!("ICE: Trying to promote Index on non-array type")
+					};
+					index.typ = promote_to;
+					
+					let inner_typ = self.db.put_type(inner_typ);
+					self.do_promote_expr(ast, &mut index.value, inner_typ);
+				}
+			},
 			Expr::SetIndex(_) => {},
 			Expr::MakeTuple(make_tuple) => {
 				// This is also kind of like a big binary expression.
@@ -1044,7 +1060,7 @@ impl<'db> TypeChecker<'db> {
 	fn check_expr(&mut self, ast: &AstProxy, expr_id: ExprId, value_used: bool) -> Result<TypId> {
 		let mut binding = ast.exprs.get_mut(expr_id);
 		let expr = binding.as_mut();
-		log::trace!("check_expr: {:?}", expr);
+		log::trace!("check_expr: {:?}@{}", expr, expr_id.to_index());
 		let result = Ok(match expr {
 			Expr::AllocateClosure(ac) => {
 				// Merely a wrapper
@@ -2773,7 +2789,7 @@ impl<'db> TypeChecker<'db> {
 			Expr::Promote(_) => panic!("ICE: Tried to typecheck Promote"),
 		});
 
-		log::trace!("check_expr: {:?} -> {}", expr, self.db.repr_type(expr.typ(ast, self.db)));
+		log::trace!("check_expr: {:?}@{} -> {}", expr, expr_id.to_index(), self.db.repr_type(expr.typ(ast, self.db)));
 		result
 	}
 

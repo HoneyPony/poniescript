@@ -174,6 +174,7 @@ impl<'ad> PrettyPrinter<'ad> {
             },
             crate::expr::Expr::New(new_) => {
                 self.start("New"); // TODO: Also show class names...?
+                self.expr_obj(new_.parent);
                 for arg in &new_.initializers {
                     self.expr_prefix(arg.value, self.db.get(arg.ident.lexeme));
                 }

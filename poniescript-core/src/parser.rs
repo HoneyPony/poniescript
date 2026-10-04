@@ -798,62 +798,6 @@ impl<'b> Parser<'b> {
 			inner, closure);
 	}
 
-	fn expr_prefix_callable(&mut self) -> Result<ExprId> {
-		match self.peek_typ() {
-			Tok::LeftBrace => self.block(),
-
-			Tok::LeftParen => {
-				let begin = self.start();
-				// Eat left paren
-				self.advance()?;
-				// Inner expression
-				let inner = self.expression()?;
-
-				// Tuple
-				if self.at(Tok::Comma) {
-					let mut inner = vec![inner];
-
-					self.advance()?;
-
-					while !self.at(Tok::RightParen) && !self.is_at_end() {
-						inner.push(self.expression()?);
-						self.eat_comma(Tok::RightParen)?;
-					}
-
-					expected_no_err!(self, Tok::RightParen, "')' after tuple items");
-
-					return Expr::put_maketuple_ok(self.ast, self.end(begin), inner, self.db.types.unassigned);
-				}
-
-				// Expect right paren after expression
-				expected_no_err!(self, Tok::RightParen, "')' after parenthesized expression");
-				Ok(inner)
-			}
-
-			Tok::Identifier => self.expr_ident(),
-
-			Tok::If => self.expr_if(),
-			Tok::Loop => self.expr_loop(),
-			Tok::While => self.expr_while(),
-			Tok::For => self.expr_for(),
-
-			Tok::StringSimple => {
-				let lit = self.advance()?;
-				let id = self.db.put_str_const_simple(self.db.get(lit.lexeme));
-				// TODO: Make sure the contents of the string literal are
-				// what we expect...
-				Expr::put_strliteral_ok(self.ast, lit.location, id)
-			}
-
-			Tok::Fun => {
-				let (fun, _closure) = self.fun_declaration(false, true)?;
-				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
-			}
-
-			_ => unreachable!()
-		}
-	}
-
 	fn eat_comma(&mut self, terminator: Tok) -> Result<()> {
 		if self.at(terminator) { return Ok(()); }
 		if self.is_at_end() { return Ok(()); }
@@ -917,126 +861,11 @@ impl<'b> Parser<'b> {
 		Expr::put_arraylit_ok(self.ast, self.end(location), values, self.db.types.unassigned, self.db.types.unassigned)
 	}
 
-	fn expr_prefix(&mut self) -> Result<ExprId> {
+	/// Parses any atom, i.e. any single self-encapsulated expression. Includes things like
+	/// numerical literals, single identifiers, or parenthesized expressions. Should only be
+	/// called by extended_atom().
+	fn atom(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
-			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::While | Tok::For | Tok::Fun | Tok::StringSimple => {
-				let location = self.start();
-				let mut inner = self.expr_prefix_callable()?;
-
-				while self.at(Tok::LeftParen) || self.at(Tok::LeftSquare) || self.at(Tok::Dot) {
-					while self.match_(Tok::LeftParen)?.is_some() {
-						// Parse args
-						let mut args = Vec::new();
-						let mut arg_boundaries = Vec::new();
-						arg_boundaries.push((self.current.location.offset - location.offset) as u32);
-
-						while !self.at(Tok::RightParen) && !self.is_at_end() {
-							args.push(self.expression()?);
-
-							// TODO: Make sure we require a Comma after every param but the
-							// last.
-							self.match_(Tok::Comma)?;
-							arg_boundaries.push((self.current.location.offset - location.offset) as u32);
-						}
-
-						expected_no_err!(self, Tok::RightParen, "')' after argument list");
-						arg_boundaries.push((self.current.location.offset - location.offset) as u32);
-						inner = Expr::put_valcall(self.ast, self.end(location.clone()), inner, args, self.db.sig_unassigned, arg_boundaries);
-					}
-					while self.match_(Tok::LeftSquare)?.is_some() {
-						// TODO: Can the index take multiple args?
-						let index = self.expression()?;
-						expected_no_err!(self, Tok::RightSquare, "']' after index expression");
-
-						if self.match_(Tok::Equal)?.is_some() {
-							let rhs = self.expression()?;
-							// TODO: Should this be moved to expr_ident as well...????????
-
-							// Return out of the loop--once we see an equals, we can't keep
-							// consuming more () [].
-							return Expr::put_setindex_ok(self.ast, self.end(location),
-								inner,
-								index,
-								self.db.types.unassigned,
-								rhs);
-						}
-
-						inner = Expr::put_index(self.ast, self.end(location.clone()), inner, index, self.db.types.unassigned);
-					}
-					while self.match_(Tok::Dot)?.is_some() {
-						let mut chain = Vec::new();
-						loop {
-							if self.at(Tok::New) {
-								let inner = if chain.is_empty() {
-									inner
-								}
-								else {
-									Expr::put_get(self.ast, self.end(location.clone()), chain, inner, Vec::new())
-								};
-								return self.new_(Some(inner));
-							}
-							if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
-								got!(self, "Expected identifier after '.'");
-							}
-							let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
-							chain.push(identifier);
-
-							// Keep building the chain
-							if self.match_(Tok::Dot)?.is_some() { continue; }
-							
-							break;
-						}
-
-						assert!(chain.len() >= 1);
-
-						// For get expressions, we can have '.0' and so forth
-						// for tuples.
-
-						// TODO: Do we want to move this logic into expr_ident to go
-						// with the other ones?
-						if matches_assign(self.current.typ) {
-							let op = self.advance()?;
-							let value = self.expression()?;
-							return Expr::put_set_ok(self.ast, self.end(location), chain, inner, Vec::new(), value, op.typ);
-						}
-						// Function calls are mutually exclusive with assignment.
-						//
-						// An assignment would be like:
-						// object.thing() = 5;  or object.thing() = new Thing {};
-						// But this doesn't make sense, because in either case we're
-						// basically creating a new temporary that isn't really an lvalue.
-						//
-						// So function calls are distinct from assignments.
-						// 
-						// Same logic as above with arrays--we return early
-						// if we end up making an assignment.
-						else if self.match_(Tok::LeftParen)?.is_some() {
-							// We have to finish the call right now because
-							// it is a call on this particular idenitifer, not
-							// really a call on the previous property.
-							//
-							// (Although, we could make that work too).
-							if chain.len() == 1 {
-								inner = self.expr_call_finish(location.clone(), chain[0].clone(), Some(inner))?;
-							}
-							else {
-								// We want the original chain to have all but 1 of its elements,
-								// which is the identifier for the expr_call_finish().
-								let split_chain = chain.split_off(chain.len() - 1);
-								assert!(split_chain.len() == 1);
-								let get = Expr::put_get(self.ast, self.end(location.clone()), chain, inner, Vec::new());
-								inner = self.expr_call_finish(location.clone(), split_chain[0].clone(), Some(get))?;
-							}
-						}
-						else {
-							inner = Expr::put_get(self.ast, self.end(location.clone()), chain, inner, Vec::new());
-						}
-					}
-				}
-
-				return Ok(inner);
-			}
-
 			Tok::DecimalNumber | Tok::WholeNumber => {
 				self.number()
 			},
@@ -1188,14 +1017,202 @@ impl<'b> Parser<'b> {
 				let location = self.start();
 				let op = self.advance()?;
 
-				let inner = self.expression()?;
+				// Unary operators have lower binding power than all of the atom extensions.
+				let inner = self.extended_atom()?;
 				Expr::put_unary_ok(self.ast, self.end(location), op.typ, inner, self.db.types.unassigned)
+			}
+
+			Tok::LeftBrace => self.block(),
+
+			Tok::LeftParen => {
+				let begin = self.start();
+				// Eat left paren
+				self.advance()?;
+				// Inner expression
+				let inner = self.expression()?;
+
+				// Tuple
+				if self.at(Tok::Comma) {
+					let mut inner = vec![inner];
+
+					self.advance()?;
+
+					while !self.at(Tok::RightParen) && !self.is_at_end() {
+						inner.push(self.expression()?);
+						self.eat_comma(Tok::RightParen)?;
+					}
+
+					expected_no_err!(self, Tok::RightParen, "')' after tuple items");
+
+					return Expr::put_maketuple_ok(self.ast, self.end(begin), inner, self.db.types.unassigned);
+				}
+
+				// Expect right paren after expression
+				expected_no_err!(self, Tok::RightParen, "')' after parenthesized expression");
+				Ok(inner)
+			}
+
+			Tok::Identifier => self.expr_ident(),
+
+			Tok::If => self.expr_if(),
+			Tok::Loop => self.expr_loop(),
+			Tok::While => self.expr_while(),
+			Tok::For => self.expr_for(),
+
+			Tok::StringSimple => {
+				let lit = self.advance()?;
+				let id = self.db.put_str_const_simple(self.db.get(lit.lexeme));
+				// TODO: Make sure the contents of the string literal are
+				// what we expect...
+				Expr::put_strliteral_ok(self.ast, lit.location, id)
+			}
+
+			Tok::Fun => {
+				let (fun, _closure) = self.fun_declaration(false, true)?;
+				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
 			}
 
 			_ => {
 				got!(self, "Expected expression")
 			}
 		}
+	}
+
+	/// Parses an atom followed by any number of tightly-bound 'extensions'.
+	/// This is basically an alternative to implementing '.', '[', '(' (for calls) and so
+	/// forth as parts of the Pratt parsing loop. Because all of these are more tightly
+	/// bound than any binary expression, we can simply glom them on to an atom as we go.
+	/// 
+	/// If one of them ever is supposed to be high priority than some binary expression, or higher
+	/// priority than the rest of the 'extensions', it will have to be part of the Pratt loop.
+	/// 
+	/// (e.g. I thought 'else' was one of these but I don't think it actually is...)
+	fn extended_atom(&mut self) -> Result<ExprId> {
+		let mut result = self.atom()?;
+		let location = self.start(); // Location encompasses entire chain..?
+		'glom: loop {
+			match self.peek_typ() {
+				Tok::LeftParen => {
+					expected!(self, Tok::LeftParen, "'('")?;
+
+					let mut args = Vec::new();
+					let mut arg_boundaries = Vec::new();
+					arg_boundaries.push((self.current.location.offset - location.offset) as u32);
+
+					while !self.at(Tok::RightParen) && !self.is_at_end() {
+						args.push(self.expression()?);
+
+						// TODO: Make sure we require a Comma after every param but the
+						// last.
+						self.match_(Tok::Comma)?;
+						arg_boundaries.push((self.current.location.offset - location.offset) as u32);
+					}
+
+					expected_no_err!(self, Tok::RightParen, "')' after argument list");
+					arg_boundaries.push((self.current.location.offset - location.offset) as u32);
+					result = Expr::put_valcall(self.ast, self.end(location.clone()), result, args, self.db.sig_unassigned, arg_boundaries);
+				}
+				Tok::LeftSquare => {
+					expected!(self, Tok::LeftSquare, "'['")?;
+
+					// TODO: Can the index take multiple args?
+					let index = self.expression()?;
+					expected_no_err!(self, Tok::RightSquare, "']' after index expression");
+
+					if self.match_(Tok::Equal)?.is_some() {
+						let rhs = self.expression()?;
+						// TODO: Should this be moved to expr_ident as well...????????
+
+						// Return out of the loop--once we see an equals, we can't keep
+						// consuming more () [].
+						return Expr::put_setindex_ok(self.ast, self.end(location),
+							result,
+							index,
+							self.db.types.unassigned,
+							rhs);
+					}
+
+					result = Expr::put_index(self.ast, self.end(location.clone()), result, index, self.db.types.unassigned);
+				}
+				Tok::Dot => {
+					expected!(self, Tok::Dot, "'['")?;
+
+					let mut chain = Vec::new();
+					loop {
+						if self.at(Tok::New) {
+							let inner = if chain.is_empty() {
+								result
+							}
+							else {
+								Expr::put_get(self.ast, self.end(location.clone()), chain, result, Vec::new())
+							};
+							result = self.new_(Some(inner))?;
+							continue 'glom;
+						}
+						if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
+							got!(self, "Expected identifier after '.'");
+						}
+						let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
+						chain.push(identifier);
+
+						// Keep building the chain
+						if self.match_(Tok::Dot)?.is_some() { continue; }
+						
+						break;
+					}
+
+					assert!(chain.len() >= 1);
+
+					// For get expressions, we can have '.0' and so forth
+					// for tuples.
+
+					// TODO: Do we want to move this logic into expr_ident to go
+					// with the other ones?
+					if matches_assign(self.current.typ) {
+						let op = self.advance()?;
+						let value = self.expression()?;
+						return Expr::put_set_ok(self.ast, self.end(location), chain, result, Vec::new(), value, op.typ);
+					}
+					// Function calls are mutually exclusive with assignment.
+					//
+					// An assignment would be like:
+					// object.thing() = 5;  or object.thing() = new Thing {};
+					// But this doesn't make sense, because in either case we're
+					// basically creating a new temporary that isn't really an lvalue.
+					//
+					// So function calls are distinct from assignments.
+					// 
+					// Same logic as above with arrays--we return early
+					// if we end up making an assignment.
+					else if self.match_(Tok::LeftParen)?.is_some() {
+						// We have to finish the call right now because
+						// it is a call on this particular idenitifer, not
+						// really a call on the previous property.
+						//
+						// (Although, we could make that work too).
+						if chain.len() == 1 {
+							result = self.expr_call_finish(location.clone(), chain[0].clone(), Some(result))?;
+						}
+						else {
+							// We want the original chain to have all but 1 of its elements,
+							// which is the identifier for the expr_call_finish().
+							let split_chain = chain.split_off(chain.len() - 1);
+							assert!(split_chain.len() == 1);
+							let get = Expr::put_get(self.ast, self.end(location.clone()), chain, result, Vec::new());
+							result = self.expr_call_finish(location.clone(), split_chain[0].clone(), Some(get))?;
+						}
+					}
+					else {
+						result = Expr::put_get(self.ast, self.end(location.clone()), chain, result, Vec::new());
+					}
+				},
+				_ => {
+					break;
+				}
+			}
+		}
+
+		return Ok(result);
 	}
 
 	fn peek_precedence(&self) -> (u32, u32) {
@@ -1294,70 +1311,6 @@ impl<'b> Parser<'b> {
 				return Expr::put_logical_ok(self.ast, self.end(location), op.typ, lhs, rhs);
 			}
 
-			// TODO: Deduplicate this with the expr_prefix stuff..?
-			Tok::Dot => {
-				let _op = self.advance()?;
-				// TODO: Check number tokens for being simple, e.g. not something
-				// like 0xff or 1234i32 (if we have postfixes at some point)
-
-				// TODO: We really need to deduplicate this code. All of the
-				// crazy stuff in that one branch should probably be turned
-				// into binary expressions.
-				let mut chain = Vec::new();
-				loop {
-					if self.at(Tok::New) {
-						let inner = if chain.is_empty() {
-							lhs
-						}
-						else {
-							Expr::put_get_ok(self.ast, self.end(location.clone()), chain, lhs, Vec::new())?
-						};
-						return self.new_(Some(inner));
-					}
-					if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
-						got_no_err!(self, "Expected identifier after '.'");
-						// Break our get. But, we still made one; this helps us
-						// with completions in the language server.
-						break;
-					}
-					let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
-					chain.push(identifier);
-
-					// Keep building the chain
-					if self.match_(Tok::Dot)?.is_some() { continue; }
-					
-					break;
-				}
-
-				// For get expressions, we can have '.0' and so forth
-				// for tuples.
-
-				// TODO: Do we want to move this logic into expr_ident to go
-				// with the other ones?
-				if matches_assign(self.current.typ) {
-					let op = self.advance()?;
-					let value = self.expression()?;
-					return Expr::put_set_ok(self.ast, self.end(location), chain, lhs, Vec::new(), value, op.typ);
-				}
-
-				else if self.match_(Tok::LeftParen)?.is_some() {
-					if chain.len() == 1 {
-						return self.expr_call_finish(location.clone(), chain[0].clone(), Some(lhs));
-					}
-					else {
-						// We want the original chain to have all but 1 of its elements,
-						// which is the identifier for the expr_call_finish().
-						let split_chain = chain.split_off(chain.len() - 1);
-						assert!(split_chain.len() == 1);
-						let get = Expr::put_get(self.ast, self.end(location.clone()), chain, lhs, Vec::new());
-						return self.expr_call_finish(location.clone(), split_chain[0].clone(), Some(get));
-					}
-				}
-				else {
-					return Expr::put_get_ok(self.ast, self.end(location.clone()), chain, lhs, Vec::new());
-				}
-			}
-
 			// We should never call expr_infix() with an invalid operator,
 			// because we have to go through the peek_precedence() table to
 			// get here.
@@ -1366,7 +1319,7 @@ impl<'b> Parser<'b> {
 	}
 
 	fn expr_precedence(&mut self, precedence: u32) -> Result<ExprId> {
-		let mut expr = self.expr_prefix()?;
+		let mut expr = self.extended_atom()?;
 
 		// Our precedence is coming from the right of the previous expr, so we compare to the left-hand
 		// side precdence.

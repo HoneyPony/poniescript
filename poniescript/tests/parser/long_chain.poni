@@ -1,0 +1,39 @@
+class Outermost {
+    var b: Outer = new Outer{};
+}
+
+class Outer {
+    var c = (123, fun1);
+}
+
+fun fun1() -> fun() -> Array[Inner] {
+    fun2
+}
+
+fun fun2() -> Array[Inner] {
+    [new Inner{}]
+}
+
+class Inner {
+    var d: Innermost = new Innermost{};
+}
+
+class Innermost {
+    var e: Array[fun() -> (int, fun() -> fun() -> int)] = [fun3];
+}
+
+fun fun3() -> (int, fun() -> fun() -> int) {
+    (0, fun4)
+}
+
+fun fun4() -> fun() -> int {
+    fun() -> int {
+        1000
+    }
+}
+
+fun init() {
+    var a = new Outermost{};
+    var value = a.b.c.1()()[0].d.e[0]().1()() + 234;
+    print(value); //! 1234
+}

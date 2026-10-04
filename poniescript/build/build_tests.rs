@@ -264,6 +264,9 @@ pub fn generate(tests_file: &mut File) {
 		("parser/", "err_fun_missing_brace"),
 		("parser/", "err_missing_expr_paren"),
 		("parser/", "unary_prec"),
+		("parser/", "new_chain"),
+		("parser/", "long_chain"),
+		("parser/", "array_index_immediate"),
 
 		("call/", "call_captured_rev"),
 		("call/", "call_captured"),
