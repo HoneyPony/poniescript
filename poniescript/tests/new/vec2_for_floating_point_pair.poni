@@ -1,3 +1,12 @@
+// TODO: In order to fix this test, we basically have to typecheck globals vs. classes
+// based on the dependencies between them.
+//
+// E.g. if we have a class member whose type is inferred from an assignment to a global variable,
+// we need to ensure there is no cycle.
+//
+// ...Or, in other words, we should toplogically sort ALL variable declarations outside of
+// functions, and initialize those in order. (And if there is a cycle without an explicit
+// type, raise an error).
 class Example {
     var property = (0.0, 0.0);
 }
@@ -7,5 +16,5 @@ var e = new Example {
 };
 
 fun init() {
-    print(e.property);
+    print(e.property); //! (20.000000, 20.000000)
 }

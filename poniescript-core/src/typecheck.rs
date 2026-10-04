@@ -512,6 +512,7 @@ impl<'db> TypeChecker<'db> {
 		}
 
 		// Otherwise, just jump straight into really_
+		log::trace!("do_promote_expr: {:?} -> {}", ast.get_expr(*expr_id).as_ref(), self.db.repr_type(promote_to));
 		self.really_do_promote_expr(ast, expr_id, promote_to);
 	}
 

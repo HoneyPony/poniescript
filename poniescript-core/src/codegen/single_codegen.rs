@@ -1900,7 +1900,10 @@ impl<'a> Codegen<'a> {
 					// Run all the initializers from the new{} first.
 					for init in &new.initializers {
 						let rhs = self.expr(ast, init.value, into);
-						assert!(rhs.typ == self.db.get_var_type(init.var));
+						assert!(rhs.typ == self.db.get_var_type(init.var),
+							"rhs = {} ; var type = {}",
+							self.db.repr_type(rhs.typ),
+							self.db.repr_type(self.db.get_var_type(init.var)));
 						let varname = self.db.get_cname(init.var);
 
 						inf_writeln!(into, "{}{}->{} = {};", 
