@@ -1068,7 +1068,13 @@ impl<'b> Parser<'b> {
 			}
 
 			Tok::Fun => {
-				let (fun, _closure) = self.fun_declaration(false, true)?;
+				let (fun, _closure) = self.fun_declaration(false, true, false)?;
+				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
+			}
+
+			// Lambda declaration
+			Tok::VerticalBar => {
+				let (fun, _closure) = self.fun_declaration(false, true, true)?;
 				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
 			}
 
@@ -1683,10 +1689,11 @@ impl<'b> Parser<'b> {
 		Ok(identity)
 	}
 
-	fn fun_declaration(&mut self, require_name: bool, add_to_parser: bool) -> Result<(FunDeclare, ClosureId)> {
+	fn fun_declaration(&mut self, require_name: bool, add_to_parser: bool, parse_lambda: bool) -> Result<(FunDeclare, ClosureId)> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
-		let _key_fun = expected!(self, Tok::Fun, "'fun'")?;
+		
+		if !parse_lambda { let _key_fun = expected!(self, Tok::Fun, "'fun'")?; }
 
 		let mut name = None;
 
@@ -1708,7 +1715,14 @@ impl<'b> Parser<'b> {
 			self.push_name_anon()
 		};
 
-		expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
+		let end_tok = if parse_lambda {
+			expected!(self, Tok::VerticalBar, "'|' at beginning of lambda");
+			Tok::VerticalBar
+		}
+		else {
+			expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
+			Tok::RightParen
+		};
 
 		let enclosing_closure = self.closure;
 		let closure = self.db.push(Closure { class: None, parent: enclosing_closure, parent_class: None });
@@ -1718,33 +1732,60 @@ impl<'b> Parser<'b> {
 
 		let mut parameters = vec![];
 
-		while !self.at(Tok::RightParen) && !self.is_at_end() {
+		while !self.at(end_tok) && !self.is_at_end() {
 			parameters.push(self.parameter()?);
 
 			// NOTE: Right now, this means you can have a trailing comma
 			// in a parameter list. That might be fine though -- trailing commas
 			// are useful in a lot of places -- maybe we should try it?
-			self.match_(Tok::Comma)?;
+			self.eat_comma(end_tok)?;
 		}
 
-		expected!(self, Tok::RightParen, "')' after function parameter list")?;
-
+		// Due to how expected! works, we can't just use end_tok, we need another if.
+		if parse_lambda {
+			expected!(self, Tok::VerticalBar, "'|' after lambda parameter list");
+		}
+		else {
+			expected!(self, Tok::RightParen, "')' after function parameter list")?;
+		}
+		
 		let fun_location = self.end(location.clone());
 
 		let mut return_type = self.db.types.void;
 
+		// Need braces if we are in a fun() {} definition, or a lambda with a return type
+		// (e.g. || -> int {})
+		let mut expect_braces = !parse_lambda;
+
 		if self.match_(Tok::RightArrow)?.is_some() {
 			// Parse return type
 			return_type = self.typ()?;
+			expect_braces = true;
 		}
 
 		// For now, the function body MUST be a block. But, we can change it
 		// to be a single expression, likely we other syntax, later.
 
-		if !self.at(Tok::LeftBrace) {
-			got!(self, "Expected '{{' after function parameter list");
-		}
-		let value = self.block()?;
+		let value = {
+			// Immediately parse a block if we are at a left brace, as we want the inner expression to be a block
+			// (even if we're in a lambda that does not require a block.)
+			if self.at(Tok::LeftBrace) {
+				self.block()?
+			}
+			else {
+				// In this case, there are two options: One, we require a brace, in which case we should error:
+				if expect_braces {
+					got!(self, "Expected '{{' after function parameter list");
+				}
+				else {
+					// Otherwise, we just expect any expression, but we will wrap it in a block ourselves.
+					let value = self.expression()?;
+					let stmts = vec![Stmt::put_expression(self.ast, value.location(self.ast), value)];
+					Expr::put_block(self.ast, value.location(self.ast), stmts, self.db.types.unassigned)
+				}
+			}
+		};
+
 		let value = Expr::put_allocateclosure(self.ast,
 			value.location(self.ast), closure, value, self.db.types.unassigned,
 			// Function closures should copy params.
@@ -1915,7 +1956,7 @@ impl<'b> Parser<'b> {
 					let _ = std::mem::take(&mut annotations);
 				},
 				Tok::Fun => {
-					let (fun, closure) = self.fun_declaration(true, false)?;
+					let (fun, closure) = self.fun_declaration(true, false, false)?;
 					funs.push(fun.identity);
 					fun_closures.push(closure);
 					// We require name so this must have a name.
@@ -2014,7 +2055,7 @@ impl<'b> Parser<'b> {
 			Tok::Fun => {
 				// At the top level, unless preceded by a var .. = , a function
 				// must have a name.
-				let (fun, _closure) = self.fun_declaration(true, false)?;
+				let (fun, _closure) = self.fun_declaration(true, false, false)?;
 				self.get_source().module.functions.push(fun);
 			}
 
