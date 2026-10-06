@@ -1,0 +1,20 @@
+fun evil(e: Example) -> int {
+    return e.a1 + 20;
+}
+
+class Example {
+    // This is invalid because evil() reads from a1.
+
+    // TODO: This test case currently passes... Uh oh.
+    
+    //? Cannot use 'self' in direct member initializer.
+    var a1 = evil(oops());
+
+    var b = 10;
+
+    fun oops() -> Example { self }
+}
+
+fun init() {
+    var e = new Example{};
+}

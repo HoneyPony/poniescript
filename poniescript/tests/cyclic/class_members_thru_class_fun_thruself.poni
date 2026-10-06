@@ -16,6 +16,8 @@ class Example {
     // thing to do is to simply forbid 'self' in any of our
     // initializers; that would mean this test case would error,
     // but that's OK.
+
+    //? Cannot use 'self' in direct member initializer.
     var a1 = evil(self);
 
     var b = 10;

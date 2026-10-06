@@ -16,6 +16,7 @@ use crate::expr::Fun;
 use crate::expr::Sig;
 use crate::expr::Class;
 use crate::expr::Var;
+use crate::expr::Closure;
 use crate::typ::RangeEnd;
 use crate::typ::Type;
 use crate::source::{PathBufFileSource, Source, SourceLocation, SyntheticSource};
@@ -293,6 +294,9 @@ pub struct Db {
 	known_fun_cnames: FxHashMap<FunId, &'static str>,
 	known_class_cnames: FxHashMap<ClassId, &'static str>,
 
+	/// Resolves e.g. struct myclass* to a PS_CLASS() if we've seen one.
+	known_c_structs: FxHashMap<StrId, ClassId>,
+
 	var_cname_cache: Vec<&'static str>,
 	fun_cname_cache: Vec<&'static str>,
 	class_cname_cache: Vec<&'static str>,
@@ -302,6 +306,7 @@ pub struct Db {
 	/// TODO: Supposedly RwLock is needed for LSP stuff. Do we really need it
 	/// here?
 	type_repr_cache: RwLock<FxHashMap<TypId, &'static str>>,
+	sig_repr_cache: RwLock<FxHashMap<SigId, &'static str>>,
 
 	fun_cparams_cache: Vec<&'static str>,
 
@@ -314,6 +319,14 @@ pub struct Db {
 	pub var_unassigned: VarId,
 
 	pub errors: Vec<Error>,
+
+	/// List of tokens used for colors. Used for providing color support in LSP.
+	pub color_tokens: Vec<Token>,
+
+	/// Imported from C code / headers. Need to be visisted by Binder.
+	pub imported_funs: Vec<FunId>,
+	/// Imported from C code / headers. Need to be visited by Binder.
+	pub imported_classes: Vec<ClassId>,
 
 	/// Whether we're compiling in a mode where we're testing the compiler.
 	/// Useful for comments to support the "expected value" of the test.
@@ -397,6 +410,8 @@ pub struct Db {
 	// pub arr_declare_code: String,
 
 	pub str_anonymous: StrId,
+	/// c-valid name for closure classes.
+	pub str_closure: StrId,
 	pub str_lambda: StrId,
 	pub str_lerp: StrId,
 
@@ -407,6 +422,8 @@ pub struct Db {
 	pub str_y: StrId,
 	pub str_z: StrId,
 	pub str_w: StrId,
+
+	pub annotation_inner: StrId,
 
 	/// The list of globals. The initializer ordering pass will sort them.
 	pub globals: Vec<VarId>,
@@ -444,7 +461,12 @@ impl Db {
 			known_fun_cnames: FxHashMap::default(),
 			known_class_cnames: FxHashMap::default(),
 
+			known_c_structs: FxHashMap::default(),
+			imported_funs: Vec::new(),
+			imported_classes: Vec::new(),
+
 			type_repr_cache: RwLock::new(FxHashMap::default()),
+			sig_repr_cache: RwLock::new(FxHashMap::default()),
 			fun_cparams_cache: Vec::new(),
 
 			var_cname_cache: Vec::new(),
@@ -464,6 +486,7 @@ impl Db {
 			value_types: Vec::new(),
 
 			errors: Vec::new(),
+			color_tokens: Vec::new(),
 
 			fun_init: None,
 			types: DbTypes {
@@ -516,6 +539,7 @@ impl Db {
 			tag_cname_cache: FxHashMap::default(),
 
 			str_anonymous: StrId::invalid(),
+			str_closure: StrId::invalid(),
 			str_lambda: StrId::invalid(),
 			str_lerp: StrId::invalid(),
 
@@ -526,6 +550,8 @@ impl Db {
 			str_y: StrId::invalid(),
 			str_z: StrId::invalid(),
 			str_w: StrId::invalid(),
+
+			annotation_inner: StrId::invalid(),
 
 			prop_str: StrProperties {
 				length: VarId::invalid(),
@@ -569,12 +595,47 @@ impl Db {
 			return_type: db.types.unassigned
 		});
 
-		// TODO: Maybe make class_unassigned a special value...?
-		// For now it's going to cause some unsafety..
+		let unknown_class = db.put_str("<unknown class>");
+		let unknown_var = db.put_str("<unknown var>");
+
+		// It is important to use a real variable and class for the unassigned
+		// var and class. Otherwise, the language server will mix them up with
+		// real classes.
+		//
+		// This also prevents us from having memory unsafety if we forget to
+		// check for an unassigned variable, in the language server.
+		db.class_unassigned = db.push(Class {
+			name: unknown_class,
+			vars: Vec::new(),
+			funs: Vec::new(),
+			classes: Vec::new(),
+			parent: None,
+			mandatory_vars: FxHashSet::default(),
+			import_kind: crate::expr::ImportKind::Not,
+			var_map: FxHashMap::default(),
+			fun_map: FxHashMap::default(),
+			class_map: FxHashMap::default(),
+			location: db.synthetic(),
+			doc_comment: None,
+		});
+
+		db.var_unassigned = db.push(Var {
+			name: unknown_var,
+			typ: db.types.unassigned,
+			readonly: false,
+			class: None,
+			fun: None,
+			param_for: None,
+			initializer: None,
+			location: db.synthetic(),
+			doc_comment: None,
+			closure: None,
+		});
 
 		db.types.fun_sig_unassigned = db.put_type(Type::Fun(db.sig_unassigned));
 
 		db.str_anonymous = db.put_str("<anonymous>");
+		db.str_closure = db.put_str("closure");
 		db.str_lambda = db.put_str("lambda");
 		db.str_lerp = db.put_str("lerp");	
 
@@ -586,15 +647,18 @@ impl Db {
 		db.str_z = db.put_str("z");
 		db.str_w = db.put_str("w");
 
+		db.annotation_inner = db.put_str("@inner");
+
 		// Technically, this does waste the initially created
 		// HashMap, but the db is created once per whole program run,
 		// so it's not a huge inefficiency.
 		db.key_lookup_map = crate::lexer::build_key_lookup_map(&mut db);
 		db.glue_key_lookup_map = crate::glue::lexer::build_key_lookup_map(&mut db);
 
-		(db.prop_str.length_key, db.prop_str.length) = db.synthesize_property("length", "length", db.types.int);
+		// These properties are readonly.
+		(db.prop_str.length_key, db.prop_str.length) = db.synthesize_property("length", "length", db.types.int, true);
 
-		(db.prop_array.length_key, db.prop_array.length) = db.synthesize_property("length", "header.length", db.types.int);
+		(db.prop_array.length_key, db.prop_array.length) = db.synthesize_property("length", "header.length", db.types.int, true);
 
 		return db;
 	}
@@ -615,14 +679,16 @@ impl Db {
 		}
 	}
 
-	pub fn synthesize_property(&mut self, str: &str, cname: &'static str, typ: TypId) -> (StrId, VarId) {
+	pub fn synthesize_property(&mut self, str: &str, cname: &'static str, typ: TypId, readonly: bool) -> (StrId, VarId) {
 		let key = self.put_str(str);
 		let var = Var {
 			name: key,
 			typ,
+			readonly,
 			fun: None,
+			param_for: None,
+			closure: None,
 			class: None,
-			init: false,
 			initializer: None,
 			location: self.synthetic(),
 			doc_comment: None,
@@ -646,6 +712,30 @@ impl Db {
 		self.known_class_cnames.insert(class, struct_cname);
 	}
 
+	/// Should be called some time after parsing. Checks that we have all of
+	/// our bound functions.
+	pub fn handle_bound_functions(&mut self, functions: &Vec<String>) {
+		for fun in functions {
+			//let fullname = format!(".{}", fun);
+			let lookup = self.lookup_full_name(&fun);
+			let fun_id = match lookup {
+				ScopeEntry::Fun(fun_id) => fun_id,
+				ScopeEntry::Class(_) | ScopeEntry::Var(_) => {
+					self.report_error(Error::floating(format!("Name '{}' must refer to a function.", fun)));
+					return;
+				}
+				ScopeEntry::None => {
+					self.report_error(Error::floating(format!("Expected top-level function named '{}' to be defined.", fun)));
+					return;
+				}
+			};
+
+			// Now, we know the name of this function, so do that.
+			let known_cname = fun.clone().leak();
+			self.know_fun_cname(fun_id, known_cname);
+		}
+	}
+
 	pub fn put_sig(&mut self, sig: &Sig) -> SigId {
 		if let Some(existing) = self.sig_side_map.get(sig) {
 			return *existing;
@@ -663,6 +753,19 @@ impl Db {
 		idx + 1 // 0 -> 1st
 	}
 
+	pub fn is_sig_not_concrete(&self, id: SigId) -> bool {
+		let sig = self.get(id);
+		for ty in &sig.parameters {
+			if self.is_not_concrete(*ty) { return true; }
+		}
+		if self.is_not_concrete(sig.return_type) { return true; }
+		return false;
+	}
+
+	pub fn is_sig_concrete(&self, id: SigId) -> bool {
+		!self.is_sig_not_concrete(id)
+	}
+
 	pub fn is_not_concrete(&self, id: TypId) -> bool {
 		match self.get(id) {
 			Type::AssumeFloat => true,
@@ -671,6 +774,10 @@ impl Db {
 			// TODO: Is unassigned correct here?
 			// It seems necessary for empty array literals, but it's not clear.
 			Type::Unassigned => true,
+
+			Type::Fun(sig) => {
+				self.is_sig_not_concrete(*sig)
+			}
 
 			Type::ArrayOf(elem) => self.is_not_concrete(*elem),
 			Type::Option(inner) => self.is_not_concrete(*inner),
@@ -701,6 +808,7 @@ impl Db {
 			Type::Bottom => false,
 
 			Type::UnboundIdent(_) => false,
+			Type::UnboundCStructPtr(_) => false,
 			Type::ArrayOf(ty) => self.is_cgen_safe(*ty),
 			Type::Tuple(inner) => {
 				for ty in inner.iter() {
@@ -749,6 +857,18 @@ impl Db {
 		self.str_side_map.insert(leaked.to_string(), id);
 
 		return id;
+	}
+
+	// TODO: Consider just making put_type take a non-mut reference?
+	pub fn get_class_type_or_panic(&self, class: ClassId) -> TypId {
+		let Some(existing) = self.type_side_map.get(&Type::Class(class)) else {
+			panic!("trying to lookup class type that hasn't been put_type'd")
+		};
+		return *existing
+	}
+
+	pub fn try_get_class_type(&self, class: ClassId) -> Option<TypId> {
+		self.type_side_map.get(&Type::Class(class)).copied()
 	}
 
 	pub fn put_type(&mut self, typ: Type) -> TypId {
@@ -909,6 +1029,10 @@ impl Db {
 			self.builtin_methods.insert((push, dynarray_ty),
 				Arc::clone(&self.builtin_method_table.dynarray_push));
 
+			let pop_or_panic = self.put_str("pop_or_panic");
+			self.builtin_methods.insert((pop_or_panic, dynarray_ty),
+				Arc::clone(&self.builtin_method_table.dynarray_pop_or_panic));
+
 			let any = self.put_str("any");
 			self.builtin_methods.insert((any, dynarray_ty),
 				Arc::clone(&self.builtin_method_table.dynarray_any));
@@ -940,8 +1064,17 @@ impl Db {
 
 		self.value_types.push(tuple_ty);
 
-		// It should not be possible to have an empty tuple, I think...?
-		let first = inner.first().unwrap();
+		// .unwrap()'ing here occasionally panics the language server, specifically
+		// when we write a color literal like '(#)'. Not sure the exact cause,
+		// but it should be safe to just not do anything for these types, as
+		// we currently don't support 0-element tuples.
+		//
+		// (If we did support 0-element tuples, we could make them a synonym
+		// for void).
+		let Some(first) = inner.first() else {
+			log::warn!("tried to use_tuple a 0-element tuple");
+			return;
+		};
 		let all_same_ty = inner.iter().all(|t| *t == *first);
 
 		for (idx, ty) in inner.iter().enumerate() {
@@ -966,7 +1099,7 @@ impl Db {
 
 			// Now synthesize the property based on our idx, ty pair and
 			// add it to the map.
-			let (_, var) = self.synthesize_property(self.get(key), self.get(cname), *ty);
+			let (_, var) = self.synthesize_property(self.get(key), self.get(cname), *ty, false);
 
 			self.tuple_vars.insert(var_key, var);
 
@@ -999,14 +1132,14 @@ impl Db {
 
 		if left.is_concrete() {
 			let (_, var) = self.synthesize_property("left", "left",
-				*inner);
+				*inner, false);
 			// Note that the type key has to be the range type.
 			self.range_vars.insert((false, range_ty), var);
 		}
 
 		if right.is_concrete() {
 			let (_, var) = self.synthesize_property("right", "right",
-				*inner);
+				*inner, false);
 			self.range_vars.insert((true, range_ty), var);
 		}
 	}
@@ -1151,13 +1284,24 @@ impl Db {
 		self.name_map.insert(name, entry)
 	}
 
-	pub fn new_var(&mut self, name: StrId, typ: TypId, fun: Option<FunId>, class: Option<ClassId>, init: bool, initializer: Option<ExprId>, location: SourceLocation, doc_comment: Option<Vec<Token>>) -> VarId {
+	pub fn add_known_c_struct(&mut self, name: StrId, class: ClassId) {
+		self.known_c_structs.insert(name, class);
+	}
+
+	/// NOTE: In the future, this might also return value types.
+	pub fn lookup_c_struct(&self, name: StrId) -> Option<ClassId> {
+		self.known_c_structs.get(&name).copied()
+	}
+
+	pub fn new_var(&mut self, name: StrId, typ: TypId, readonly: bool, fun: Option<FunId>, param_for: Option<FunId>, closure: Option<ClosureId>, class: Option<ClassId>, initializer: Option<ExprId>, location: SourceLocation, doc_comment: Option<Vec<Token>>) -> VarId {
 		let var = Var {
 			name,
 			typ,
+			readonly,
 			fun,
+			param_for,
+			closure,
 			class,
-			init,
 			initializer,
 			location,
 			doc_comment,
@@ -1181,7 +1325,7 @@ impl Db {
 		}
 
 		// Didn't get the type -- give a helpful panic message.
-		let ty_name = self.get(typ).to_string(self);
+		let ty_name = self.get(typ).to_string(self, typ);
 		panic!("ICE: Tried to get invalid type in get_ctype: {} (TypId {})", ty_name, typ.to_index());
 
 		// Safety: AS LONG AS we don't call new_id outside of put_type,
@@ -1268,21 +1412,45 @@ impl Db {
 		self.repr_type(self.get(var).typ)
 	}
 
+	pub fn repr_sig(&self, sig_id: SigId) -> &'static str {
+		use crate::inf_write;
+
+		{
+			let lock = self.sig_repr_cache.read().unwrap();
+			if let Some(&cached) = lock.get(&sig_id) {
+				return cached;
+			}
+		}
+
+		let mut repr = String::from("fun(");
+		let sig = self.get(sig_id);
+		let mut comma = false;
+		for typ in &sig.parameters {
+			if comma { inf_write!(repr, ", "); };
+			inf_write!(repr, "{}", self.repr_type(*typ));
+			comma = true;
+		}
+
+		inf_write!(repr, ")");
+		if sig.return_type != self.types.void {
+			inf_write!(repr, " -> ");
+			inf_write!(repr, "{}", self.repr_type(sig.return_type));
+		}
+
+		let repr = repr.leak();
+		let mut lock = self.sig_repr_cache.write().unwrap();
+		lock.insert(sig_id, repr);
+
+		repr
+	}
+
 	pub fn repr_type(&self, typ: TypId) -> &'static str {
 		let mut lock = self.type_repr_cache.write().unwrap();
 		if let Some(&cached) = lock.get(&typ) {
 			return cached;
 		}
 
-		let value = match typ {
-			t if t == self.types.vec2 => "vec2".into(),
-			t if t == self.types.vec3 => "vec3".into(),
-			t if t == self.types.vec4 => "vec4".into(),
-			t if t == self.types.vec2i => "vec2i".into(),
-			t if t == self.types.vec3i => "vec3i".into(),
-			t if t == self.types.vec4i => "vec4i".into(),
-			_ => self.get(typ).to_string(self)
-		}.leak();
+		let value = self.get(typ).to_string(self, typ).leak();
 
 		// Note: Using &'static str as the hash map value makes it possible
 		// to do this with interior mutability. Maybe we should also do that
@@ -1381,9 +1549,17 @@ impl Db {
 				None
 			}
 			Type::Class(class_id) => {
-				let class = self.get(*class_id);
-				let result = class.var_map.get(&propname).copied();
-				result
+				let mut class_id = *class_id;
+				loop {
+					let class = self.get(class_id);
+					let result = class.var_map.get(&propname).copied();
+					if result.is_some() { return result; }
+
+					let Some(next) = class.parent else {
+						return None;
+					};
+					class_id = next;
+				}
 			},
 			Type::Tuple(typs) => {
 				// Look up the property index based on name ('0' => 0)
@@ -1440,6 +1616,23 @@ impl Db {
 			Type::Tuple(_) => true,
 			Type::Option(_) => true,
 			Type::RangeOf(..) => true,
+			// I believe this is right, although it's a bit weird.
+			Type::Fun(_) => true,
+			_ => false
+		}
+	}
+	
+	pub fn is_primitive_type(&self, typ: TypId) -> bool {
+		match self.get(typ) {
+			Type::Int | Type::Float | Type::Bool | Type::Void => true,
+			Type::Tuple(inner) => inner.iter().all(|i| self.is_primitive_type(*i)),
+			Type::Option(inner) => self.is_primitive_type(*inner),
+			Type::RangeOf(.., typ) => self.is_primitive_type(*typ),
+
+			// Technically, FunRaw would be primitive as it is a pointer to something
+			// that can never be deallocated.
+			Type::FunRaw(_) => true,
+
 			_ => false
 		}
 	}
@@ -1474,8 +1667,17 @@ impl Db {
 		let ty = self.get(typ);
 		match ty {
 			Type::Class(class_id) => {
-				let class = self.get(*class_id);
-				class.fun_map.get(&propname).copied()
+				let mut class_id = *class_id;
+				loop {
+					let class = self.get(class_id);
+					let result = class.fun_map.get(&propname).copied();
+					if result.is_some() { return result; }
+
+					let Some(next) = class.parent else {
+						return None;
+					};
+					class_id = next;
+				}
 			}
 
 			_ => None
@@ -1634,6 +1836,13 @@ impl Db {
 			// code that involves them. Maybe this should be a panic?
 			None => "<compile-err:invalid-tag>",
 		}
+	}
+
+	pub fn get_class_ctag(&self, class: ClassId) -> &'static str {
+		let typ = Type::Class(class);
+		let Some(inner) = self.type_side_map.get(&typ) else { return "<compile-err:invalid-tag>"; };
+
+		self.get_type_ctag(*inner)
 	}
 
 	pub fn generate_codegen_caches(&mut self, args: &Args) {
@@ -1799,7 +2008,7 @@ impl Db {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
 					let result = *val.get();
 					*val.get_mut() += 1;
-					format!("v_{}{}", self.get(str_id), result)
+					format!("v{}_{}", result, self.get(str_id))
 				},
 				std::collections::hash_map::Entry::Vacant(val) => {
 					val.insert(0);
@@ -1840,7 +2049,11 @@ impl Db {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
 					let result = *val.get();
 					*val.get_mut() += 1;
-					format!("cl_{}{}", self.get(str_id), result)
+					// Note: it is important that the order is prefix<num>_<name>.
+					// If the order is prefix_<name><num>, than something like
+					// function (num = 2) can collide with function2 (num = none).
+					// Doing it in the other order completely prevents this.
+					format!("cl{}_{}", result, self.get(str_id))
 				},
 				std::collections::hash_map::Entry::Vacant(val) => {
 					val.insert(0);
@@ -1874,7 +2087,7 @@ impl Db {
 				std::collections::hash_map::Entry::Occupied(mut val) => {
 					let result = *val.get();
 					*val.get_mut() += 1;
-					format!("f_{}{}", self.get(cname_id), result)
+					format!("f{}_{}", result, self.get(cname_id))
 				},
 				std::collections::hash_map::Entry::Vacant(val) => {
 					val.insert(0);

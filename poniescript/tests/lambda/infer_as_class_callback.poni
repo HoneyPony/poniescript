@@ -1,0 +1,25 @@
+class Button {
+    var callback: fun();
+
+    fun press() {
+        callback();
+    }
+}
+
+let my_button = new Button {
+    callback: || print("Hello!"),
+};
+
+let button2 = new Button {
+    callback: || print("Second!")
+};
+
+let button3 = new Button {
+    callback: fun() { print("Third!") }
+};
+
+fun init() {
+    my_button.press(); //! Hello!
+    button2.press(); //! Second!
+    button3.press(); //! Third!
+}

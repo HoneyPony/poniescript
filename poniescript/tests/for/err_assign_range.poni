@@ -1,0 +1,7 @@
+fun init() {
+    for i in 0..5 {
+        //? Invalid assignment to 'i': cannot be written to.
+        i = 5;
+        print(i);
+    }
+}

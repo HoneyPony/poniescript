@@ -10,7 +10,7 @@ use crate::typ::{RangeEnd, Type};
 use crate::expr::*;
 use crate::error::Error;
 
-use poni_arena::IndexCell;
+use poni_arena::{ArenaKey, IndexCell};
 
 // Current plan for type inference:
 // variable declarations may infer a type for the variable:
@@ -90,6 +90,18 @@ macro_rules! type_error {
 }
 
 const PANIC_ON_BAD_NODE: bool = false;
+
+/// Maps +=, -= etc to their corresponding +, -, etc
+fn map_assign_op(op: Tok) -> Tok {
+	match op {
+		Tok::PlusEqual    => Tok::Plus,
+		Tok::MinusEqual   => Tok::Minus,
+		Tok::StarEqual    => Tok::Star,
+		Tok::SlashEqual   => Tok::Slash,
+		Tok::PercentEqual => Tok::Percent,
+		_ => unreachable!("ICE: Bad assign operator")
+	}
+}
 
 impl<'db> TypeChecker<'db> {
 	fn new(db: &'db mut Db) -> Self {
@@ -448,6 +460,38 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	/// Computes the intersection between two types such as (int, float) against float,
+	/// or also (((int, int), float), (AssumeFloat)) against float.
+	/// 
+	/// Note that bottom_eats should be irrelevant, but that's OK.
+	fn compute_scalar_tuple_intersect(&mut self, bottom_eats: bool, scalar: TypId, vector: TypId) -> std::result::Result<TypId, TypeComputeErr> {
+		if scalar == vector { panic!("ICE: compute_scalar_tuple_intersect where the types match") }
+
+		let ty_vector = self.db.get(vector).clone();
+
+		match ty_vector {
+			Type::Tuple(inner) => {
+				let mut new_inner = Vec::new();
+				for i in inner.iter() {
+					if self.is_scalar(*i) {
+						// For scalar types, we compute the normal intersect between
+						// the overall scalar and the tuple member.
+						new_inner.push(self.compute_intersect(bottom_eats, scalar, *i)?);
+					}
+					else {
+						// Otherwise, we recursively compute the scalar-vector intersect.
+						new_inner.push(self.compute_scalar_tuple_intersect(bottom_eats, scalar, *i)?);
+					}
+				}
+
+				Ok(self.db.put_type(Type::Tuple(Arc::from(new_inner))))
+			},
+			_ => {
+				panic!("ICE: compute_scalar_tuple_intersect where the vector isn't a vector")
+			}
+		}
+	}
+
 	/// Promotion in the new system works as follows.
 	/// 
 	/// We ONLY need to promote when a value is actually assigned to something.
@@ -468,9 +512,62 @@ impl<'db> TypeChecker<'db> {
 		}
 
 		// Otherwise, just jump straight into really_
+		log::trace!("do_promote_expr: {:?} -> {}", ast.get_expr(*expr_id).as_ref(), self.db.repr_type(promote_to));
 		self.really_do_promote_expr(ast, expr_id, promote_to);
 	}
 
+	/// Computes whether a given promotion is unsynthesizable.
+	/// 
+	/// This applies to something like assign an Array of a particular type
+	/// to an Array of an incompatible one, or an Array[int] to a DynArray[int].
+	/// 
+	/// In these cases, we cannot actually synthesize the promotion, because it  
+	/// would implicitly copy, which is not what we want.
+	/// 
+	/// This might not be the best way to implement this -- maybe we should
+	/// instead change how we determine which expressions are promotable.
+	/// But this should work for now.
+	fn promote_is_unsynthesizable(&self, assign_to: TypId, assign_from: TypId) -> bool {
+		// These are always valid.
+		if assign_to == assign_from { return false; }
+
+		let to = self.db.get(assign_to);
+		let from = self.db.get(assign_from);
+		
+		match (to, from) {
+			(Type::ArrayOf(_), Type::ArrayOf(_)) => {
+				// Not allowed.
+				//
+				// Note that in the future, if we have something like
+				// ReadonlyArray[Animal], an array of Horse would in
+				// theory be valid to assign to this.
+				return true;
+			}
+			(Type::DynArrayOf(..), Type::DynArrayOf(..)) => {
+				// Not allowed.
+				return true;
+			}
+			(Type::DynArrayOf(..), Type::ArrayOf(_)) => {
+				// Not allowed.
+				return true;
+			}
+			(Type::Tuple(to), Type::Tuple(from)) => {
+				if to.len() != from.len() { return false; }
+
+				for i in 0..to.len() {
+					if self.promote_is_unsynthesizable(to[i], from[i]) {
+						return true;
+					}
+				}
+
+				return false;
+			}
+			_ => {
+				// Everything else is allowed, I guess.
+				return false;
+			}
+		}
+	}
 	
 	/// DO NOT CALL THIS FUNCTION UNLESS YOU ARE do_promote_expr OR promote_from_unassigned.
 	/// 
@@ -497,10 +594,19 @@ impl<'db> TypeChecker<'db> {
 		// If the child node's type does NOT equal the promoted type, we synthesize
 		// a runtime promotion.
 		if ast.get_expr(*expr_id).typ(ast, &self.db) != promote_to {
+			let promote_from = ast.get_expr(*expr_id).typ(ast, &self.db);
+
 			log::trace!("synthesizing Promote: {:?}: {} -> {}",
 				ast.get_expr(*expr_id).as_ref(),
-				self.db.repr_type(ast.get_expr(*expr_id).typ(ast, &self.db)),
+				self.db.repr_type(promote_from),
 				self.db.repr_type(promote_to));
+
+			if self.promote_is_unsynthesizable(promote_to, promote_from) {
+				self.had_error = true;
+				let msg = format!("Invalid promotion from {} to {}.",
+					self.db.repr_type(promote_from), self.db.repr_type(promote_to));
+				self.db.report_error(Error::simple(msg, expr_id.location(ast)));
+			}
 
 			let id = ast.exprs.push(Expr::Promote(Promote {
 				location: ast.get_expr(*expr_id).location().clone(),
@@ -528,12 +634,94 @@ impl<'db> TypeChecker<'db> {
 			},
 		}
 	}
+
+	// Helper function for using type_error! and friends while still being called from promote_expr.
+	fn infer_fun_type_through_promotion(&mut self, ast: &AstProxy, fun_declare_id: ExprId, promote_to: TypId) -> Result<()> {
+		let mut binding = ast.exprs.get_mut(fun_declare_id);
+		let Expr::FunDeclare(declare) = binding.as_mut() else { return Ok(()); };
+		
+		// If the incoming type is ALSO not concrete, that means we don't have enough
+		// information to typecheck the function. Raise an error.
+		if self.db.is_not_concrete(promote_to) {
+			type_error!(self,
+				&declare.location,
+				"Cannot infer function type for this lambda.");
+		}
+
+		// Assume that the promote_to type is exactly the right type.
+		declare.typ = promote_to;
+		let sig = match self.db.get(promote_to) {
+			Type::Fun(sig) => *sig,
+			_ => {
+				type_error!(self,
+					&declare.location,
+					"Cannot infer function type for this lambda: incoming type '{}' is not a function type.",
+					self.db.repr_type(promote_to));
+			}
+		};
+
+		let sig_obj = self.db.get(sig).clone(); // TODO: Any way to avoid the clone here?
+
+		{
+			self.db.get_mut(declare.identity).sig = sig;
+			let param_count = self.db.get(declare.identity).parameters.len();
+			let return_type = self.db.get(declare.identity).return_type;
+			if sig_obj.parameters.len() != param_count {
+				type_error!(self,
+					&declare.location,
+					"Cannot infer function type for this lambda: incoming type '{}' has {} parameter{} but the lambda has {}.",
+					self.db.repr_type(promote_to),
+					sig_obj.parameters.len(),
+					if sig_obj.parameters.len() == 1 { "" } else { "s" },
+					param_count);
+			}
+
+			if self.db.is_concrete(return_type) {
+				if return_type!= sig_obj.return_type {
+					type_error!(self,
+						&declare.location,
+						"Invalid inferred type for lambda: incoming return type '{}' does not match declared type '{}'.",
+						self.db.repr_type(sig_obj.return_type),
+						self.db.repr_type(return_type));
+				}
+			}
+			// The types must always match exactly (we currently don't have subtypes for functions, although
+			// we may eventually, in which case this will need new logic).
+			self.db.get_mut(declare.identity).return_type = sig_obj.return_type; 
+		}
+
+		let params = self.db.get(declare.identity).parameters.clone(); // TODO: Any way to avoid the clone here?
+
+		for i in 0..params.len() {
+			let param_type = self.db.get(params[i]).typ;
+			if self.db.is_concrete(param_type) {
+				// Same idea as return type above, right now they must exactly match; if subtyping becomes a thing later,
+				// this will change.
+				if param_type != sig_obj.parameters[i] {
+					type_error!(self,
+						&declare.location,
+						"Invalid inferred type for lambda: incoming type '{}' for parameter '{}' does not match declared type '{}'.",
+						self.db.repr_type(sig_obj.parameters[i]),
+						self.db.get(self.db.get(params[i]).name),
+						self.db.repr_type(param_type));
+				}
+			}
+			self.db.get_mut(params[i]).typ = sig_obj.parameters[i]; // May change with subtyping in future
+		}
+
+		Ok(())
+	}
 	
 	fn promote_expr(&mut self, ast: &AstProxy, expr_id: ExprId, promote_to: TypId) {
 		let mut binding = ast.exprs.get_mut(expr_id);
 		let expr = binding.as_mut();
 
 		match expr {
+			Expr::AllocateClosure(ac) => {
+				self.promote_expr(ast, ac.inner, promote_to);
+				ac.typ = ac.inner.typ(ast, self.db);
+			}
+
 			Expr::Binary(binary) => {
 				// Promote children to own type if we already have a concrete type,
 				// otherwise to the incoming type (in which case that becomes our
@@ -542,8 +730,23 @@ impl<'db> TypeChecker<'db> {
 					binary.typ = promote_to;
 				}
 
-				self.do_promote_expr(ast, &mut binary.left, binary.typ);
-				self.do_promote_expr(ast, &mut binary.right, binary.typ);
+				let left_ty = binary.left.typ(ast, self.db);
+				let right_ty = binary.right.typ(ast, self.db);
+
+				// For scalar-vec ops, we promote the vec to match our own type,
+				// and promote the scalar from unassigned.
+				if self.is_vec(left_ty) && self.is_scalar(right_ty) {
+					self.do_promote_expr(ast, &mut binary.left, binary.typ);
+					self.promote_from_unassigned(ast, &mut binary.right);
+				} 
+				else if self.is_scalar(left_ty) && self.is_vec(right_ty) {
+					self.promote_from_unassigned(ast, &mut binary.left);
+					self.do_promote_expr(ast, &mut binary.right, binary.typ);
+				}
+				else {
+					self.do_promote_expr(ast, &mut binary.left, binary.typ);
+					self.do_promote_expr(ast, &mut binary.right, binary.typ);
+				}
 			},
 			Expr::MakeRange(range) => {
 				if self.db.is_not_concrete(range.typ) {
@@ -606,7 +809,49 @@ impl<'db> TypeChecker<'db> {
 				// a BuiltinCapture that wasn't eaten by a ValCall. For now,
 				// stuff will just explode later.
 			}
-			Expr::FunDeclare(_) => {},
+			Expr::FunDeclare(declare) => {
+				// If the function type is not concrete, that means we have to infer it;
+				// the promotion tells us what type to use.
+				//
+				// That means PonieScript currently does not care at all about e.g. how the
+				// parameters of the function are used inside it for this inference -- it cares
+				// only about the context in which the value was used, and if there is no context,
+				// it is an error.
+				if self.db.is_sig_not_concrete(self.db.get(declare.identity).sig) {
+					drop(binding);
+					if self.infer_fun_type_through_promotion(ast, expr_id, promote_to).is_err() {
+						// Skip other logic if we can't infer the type
+						return;
+					}
+
+					// Rebind
+					let mut binding = ast.exprs.get_mut(expr_id);
+					let Expr::FunDeclare(declare) = binding.as_mut() else { return; };
+					
+					if self.check_fun_declare(ast, declare).is_err() {
+						return;
+					}
+
+					let sig = self.db.get(declare.identity).sig;
+
+					// This is basically the same idea as FunCapture.
+					if sig == self.db.sig_unassigned {
+						panic!("ICE: Tried to typecheck FunDeclare for a function with unassigned sig");
+					}
+
+					// If we're capturing the value from the function, make sure
+					// the sig is used.
+					
+					// Note: We must, at least for now, unconditionally use the sig
+					// here because in codegen.rs we unconditionally generated a value
+					// containing the function object (which requires the sig).
+					self.db.use_sig(sig);
+
+					// TODO: Also support FunRaw -- in this case, I suppose the
+					// function would itself know if it is FunRaw..?
+					declare.typ = self.db.put_type(Type::Fun(sig));
+				}
+			},
 			Expr::ValCall(_) => {},
 			Expr::FunCapture(_) => {},
 			Expr::Assign(_) => {},
@@ -721,7 +966,23 @@ impl<'db> TypeChecker<'db> {
 					self.do_promote_expr(ast, expr, array_lit.elem_typ);
 				}
 			},
-			Expr::Index(_) => {},
+			Expr::Index(index) => {
+				if self.db.is_not_concrete(index.typ) {
+					// Need to promote any array literals we happen to be indexing.
+					let inner_typ = match self.db.get(index.value.typ(ast, self.db)) {
+						Type::ArrayOf(_) => Type::ArrayOf(promote_to),
+						Type::DynArrayOf(_, _) => {
+							let arrof = self.db.put_type(Type::ArrayOf(promote_to));
+							Type::DynArrayOf(promote_to, arrof)
+						},
+						_ => panic!("ICE: Trying to promote Index on non-array type")
+					};
+					index.typ = promote_to;
+					
+					let inner_typ = self.db.put_type(inner_typ);
+					self.do_promote_expr(ast, &mut index.value, inner_typ);
+				}
+			},
 			Expr::SetIndex(_) => {},
 			Expr::MakeTuple(make_tuple) => {
 				// This is also kind of like a big binary expression.
@@ -779,7 +1040,7 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
-	fn check_assign(&mut self, ast: &AstProxy, at: &SourceLocation, var: VarId, expr_id: &mut ExprId, assign_ty: bool) -> Result<TypId> {
+	fn check_assign(&mut self, ast: &AstProxy, at: &SourceLocation, var: VarId, expr_id: &mut ExprId, assign_ty: bool, override_readonly: bool) -> Result<TypId> {
 		let value = self.check_expr(ast, *expr_id, true)?;
 
 		if self.db.get_var_type(var) == self.db.types.unassigned && value == self.db.types.unassigned {
@@ -788,6 +1049,17 @@ impl<'db> TypeChecker<'db> {
 
 		let computed =
 			self.compute_assignable(self.db.get_var_type(var), value);
+
+		// TODO: This will have to NOT be done in certain new{} expressions.
+		if !override_readonly && self.db.get(var).readonly {
+			let readonly_error = Error::simple(
+				format!("Invalid assignment to '{}': cannot be written to.",
+					self.db.repr_var(var)),
+				at.clone()
+			);
+			self.had_error = true;
+			self.db.report_error(readonly_error);
+		}
 
 		let computed = maybe_type_error!(
 			self,
@@ -828,7 +1100,7 @@ impl<'db> TypeChecker<'db> {
 		Ok(computed)
 	}
 
-	fn is_numeric_or_vec(&mut self, typ: TypId) -> bool {
+	fn is_numeric_or_vec(&self, typ: TypId) -> bool {
 		match self.db.get(typ) {
 			// TODO:
 			// We allow bottom here, but I'm not sure that's actually necessary.
@@ -850,40 +1122,129 @@ impl<'db> TypeChecker<'db> {
 		}
 	}
 
+	fn is_vec(&self, typ: TypId) -> bool {
+		match self.db.get(typ) {
+			// Unlike is_numeric_or_vec, we definitely don't want Bottom
+			// to be is_vec or is_scalar, because we use these functions to
+			// decide whether to do certain operations.
+			Type::Bottom => false,
+
+			Type::Tuple(inner) => {
+				let sad = inner.clone();
+				for typ in sad.iter() {
+					if !self.is_numeric_or_vec(*typ) { return false; }
+				}
+				true
+			},
+			_ => false
+		}
+	}
+
+	fn is_scalar(&self, typ: TypId) -> bool {
+		match self.db.get(typ) {
+			Type::Bottom => false,
+
+			Type::Int | Type::Float => true,
+			Type::AssumeInt | Type::AssumeFloat => true,
+
+			_ => false,
+		}
+	}
+
+	fn verify_set_lhs_is_not_readonly(&mut self, ast: &AstProxy, expr_id: ExprId) {
+		let binding = ast.exprs.get(expr_id);
+		let expr = binding.as_ref();
+		match expr {
+			Expr::Variable(var) => {
+				let typ = self.db.get_var_type(var.identity);
+				if self.db.is_value_type(typ) && self.db.get(var.identity).readonly {
+					let readonly_error = Error::simple(
+						format!("Invalid assignment to variable '{}', which cannot be written to.",
+							self.db.repr_var(var.identity)),
+						var.location.clone()
+					);
+					self.had_error = true;
+					self.db.report_error(readonly_error);
+				}
+			},
+			_ => {}
+			// TODO: Do we also need to check for Expr::Get? Seems like we should
+			// maybe coalesce and LHS Expr::Get to just be part of an Expr::Set.
+		}
+	}
+
 	// TODO: We could, inside this function, just directly call
 	// promote_from_unassigned on any expr that has value_used = false -- we
 	// should consider if that would make sense.
 	fn check_expr(&mut self, ast: &AstProxy, expr_id: ExprId, value_used: bool) -> Result<TypId> {
 		let mut binding = ast.exprs.get_mut(expr_id);
 		let expr = binding.as_mut();
-		log::trace!("check_expr: {:?}", expr);
+		log::trace!("check_expr: {:?}@{}", expr, expr_id.to_index());
 		let result = Ok(match expr {
+			Expr::AllocateClosure(ac) => {
+				// Merely a wrapper
+				let typ = self.check_expr(ast, ac.inner, value_used)?;
+				// Store this here for now as it was the most convenient way
+				ac.typ = typ;
+				typ
+			}
+
 			Expr::Binary(binary) => {
 				let left = self.check_expr(ast, binary.left, true)?;
 				let right = self.check_expr(ast, binary.right, true)?;
 
-				let computed = maybe_type_error!(
-					self,
-					self.compute_intersect(true, left, right),
+				if self.is_vec(left) && self.is_scalar(right) {
+					let computed = maybe_type_error!(
+						self,
+						self.compute_scalar_tuple_intersect(true, right, left),
 
-					&binary.location,
-					"Invalid operands to binary operator: LHS is {}, RHS is {}",
-					self.db.repr_type(left),
-					self.db.repr_type(right)
-				);
-
-				if !self.is_numeric_or_vec(computed) {
-					type_error!(self,
-						binary.location,
-						"Invalid operands to binary operator: Type is not numerical"
+						&binary.location,
+						"Invalid operands to binary operator: LHS is {}, RHS is {}",
+						self.db.repr_type(left),
+						self.db.repr_type(right)
 					);
+
+					// Vec op Scalar -- the result type is the vec type. Promotion
+					// occurs later...
+					binary.typ = computed;
 				}
+				else if self.is_scalar(left) && self.is_vec(right) {
+					let computed = maybe_type_error!(
+						self,
+						self.compute_scalar_tuple_intersect(true, left, right),
 
-				// PROMOTION: occurs in promote_expr
+						&binary.location,
+						"Invalid operands to binary operator: LHS is {}, RHS is {}",
+						self.db.repr_type(left),
+						self.db.repr_type(right)
+					);
 
-				binary.typ = computed;
-				
-				computed
+					binary.typ = computed;
+				}
+				else {
+					let computed = maybe_type_error!(
+						self,
+						self.compute_intersect(true, left, right),
+
+						&binary.location,
+						"Invalid operands to binary operator: LHS is {}, RHS is {}",
+						self.db.repr_type(left),
+						self.db.repr_type(right)
+					);
+
+					if !self.is_numeric_or_vec(computed) {
+						type_error!(self,
+							binary.location,
+							"Invalid operands to binary operator: Type is not numerical"
+						);
+					}
+
+					// PROMOTION: occurs in promote_expr
+
+					binary.typ = computed;
+				}
+					
+				binary.typ
 			},
 
 			Expr::MakeRange(range) => {
@@ -911,6 +1272,19 @@ impl<'db> TypeChecker<'db> {
 			Expr::Unary(unary) => {
 				let inner = self.check_expr(ast, unary.inner, value_used)?;
 				
+				if unary.op == Tok::Not {
+					if inner != self.db.types.bool {
+						type_error!(self,
+							unary.location,
+							"Invalid operand to unary 'not': Operand is not a bool"
+						);
+					}
+
+					unary.typ = inner;
+					return Ok(unary.typ);
+				}
+
+				// Otherwise, check numeric operators.
 				if !self.is_numeric_or_vec(inner) {
 					type_error!(self,
 						unary.location,
@@ -1415,7 +1789,30 @@ impl<'db> TypeChecker<'db> {
 			}
 			Expr::Variable(var) => self.db.get(var.identity).typ,
 			Expr::Assign(assign) => {
-				self.check_assign(ast, &assign.location, assign.identity, &mut assign.value, false)?
+				// I'm not sure EXACTLY how I want to do assigns, but I think
+				// it's straightforward enough to do it like this:
+				//
+				// Desugar the assign ahead of time, THEN check it. This ensures
+				// that assigns behave EXACTLY like whatever binary operators
+				// we've implemented.
+				if assign.op != Tok::Equal {
+					// Read from the variable
+					let null_location = assign.location.begin();
+					let read = Expr::push_variable(ast, null_location,
+						assign.identity);
+					// Perform a binary op, with RHS the assign's current value
+					let binop = Expr::push_binary(ast, assign.location.clone(),
+						map_assign_op(assign.op), read, assign.value, self.db.types.unassigned);
+					// That is now what we're assigning.
+					assign.value = binop;
+
+					// The assign is now a regular assign. (As of writing this
+					// comment, nothing else in the code reads this though.)
+					assign.op = Tok::Equal;
+				}
+				self.check_assign(ast, &assign.location, assign.identity, &mut assign.value, false,
+					// Regular assignments cannot assign to readonly vars.
+					false)?
 			},
 			Expr::NumLiteral(lit) => {
 				lit.typ
@@ -1551,6 +1948,13 @@ impl<'db> TypeChecker<'db> {
 					self.do_promote_expr(ast, &mut call.args[i], computed);
 				}
 
+				if let Some(mut object) = call.object {
+					// Always check & promote the value ?
+					let _ = self.check_expr(ast, object, true);
+					self.promote_from_unassigned(ast, &mut object);
+					call.object = Some(object);
+				}
+
 				self.db.get_fun_ret_type(call.identity)
 			},
 
@@ -1605,6 +2009,8 @@ impl<'db> TypeChecker<'db> {
 				// that matter.
 				let value = self.check_expr(ast, call.value, true)?;
 
+				log::trace!("Expr::ValCall => {}", self.db.repr_type(value));
+
 				{
 					// Optimization + semantics: if we are a ValCall of a FunCapture, replace
 					// us with a FunCall.
@@ -1617,10 +2023,11 @@ impl<'db> TypeChecker<'db> {
 						// ValCall(FunCapture).
 						let as_funcall = FunCall {
 							location: call.location.clone(),
-							fn_name: capt.location.clone(),
+							fn_name: capt.fn_name.clone(),
 							identity: capt.identity,
 							args: std::mem::take(&mut call.args),
-							object: capt.object
+							object: capt.object,
+							arg_boundaries: std::mem::take(&mut call.arg_boundaries),
 						};
 
 						*expr = Expr::FunCall(as_funcall);
@@ -1635,7 +2042,7 @@ impl<'db> TypeChecker<'db> {
 						log::trace!("ValCall>BuiltinCapture => BuiltinCall");
 						let as_builtincall = BuiltinCall {
 							location: call.location.clone(),
-							fn_name: capt.location.clone(),
+							fn_name: capt.fn_name.clone(),
 							// TODO: Can I just pass the function pointers themselves?
 							// Arc seems unnecessary.
 							ptr: Arc::clone(&capt.ptr),
@@ -1725,36 +2132,87 @@ impl<'db> TypeChecker<'db> {
 				// Make sure we use this sig.
 				self.db.use_sig(sig);
 
+				if let Some(mut object) = capt.object {
+					// Always check & promote the value ?
+					let _ = self.check_expr(ast, object, true);
+					self.promote_from_unassigned(ast, &mut object);
+					capt.object = Some(object);
+				}
+
 				// TODO: Also support FunRaw captures.
 				capt.typ = self.db.put_type(Type::Fun(sig));
 				capt.typ
 			},
 
 			Expr::FunDeclare(declare) => {
-				self.check_fun_declare(ast, declare)?;
+				// If the function has a non-concrete type (i.e. a type we need to infer),
+				// we can't do anything yet, so defer typing it to the promotion stage.
+				if self.db.is_sig_concrete(self.db.get(declare.identity).sig) {
+					self.check_fun_declare(ast, declare)?;
 
-				let sig = self.db.get(declare.identity).sig;
+					let sig = self.db.get(declare.identity).sig;
 
-				// This is basically the same idea as FunCapture.
-				if sig == self.db.sig_unassigned {
-					panic!("ICE: Tried to typecheck FunDeclare for a function with unassigned sig");
+					// This is basically the same idea as FunCapture.
+					if sig == self.db.sig_unassigned {
+						panic!("ICE: Tried to typecheck FunDeclare for a function with unassigned sig");
+					}
+
+					// If we're capturing the value from the function, make sure
+					// the sig is used.
+					
+					// Note: We must, at least for now, unconditionally use the sig
+					// here because in codegen.rs we unconditionally generated a value
+					// containing the function object (which requires the sig).
+					self.db.use_sig(sig);
+
+					// TODO: Also support FunRaw -- in this case, I suppose the
+					// function would itself know if it is FunRaw..?
+					declare.typ = self.db.put_type(Type::Fun(sig));
 				}
-
-				// If we're capturing the value from the function, make sure
-				// the sig is used.
-				
-				// Note: We must, at least for now, unconditionally use the sig
-				// here because in codegen.rs we unconditionally generated a value
-				// containing the function object (which requires the sig).
-				self.db.use_sig(sig);
-
-				// TODO: Also support FunRaw -- in this case, I suppose the
-				// function would itself know if it is FunRaw..?
-				declare.typ = self.db.put_type(Type::Fun(sig));
 				declare.typ
 			},
 
 			Expr::New(new) => {
+				// If the new is a .new, then the typechecker must figure out
+				// the class. This is because it depends on the parent class.
+				let mut parent_ty = None;
+				if let Some(mut parent) = new.parent {
+					self.check_expr(ast, parent, true)?;
+
+					// I believe this is correct...?
+					let typ = self.promote_from_unassigned(ast, &mut parent);
+					new.parent = Some(parent);
+
+					// Save this for later
+					parent_ty = Some(typ);
+
+					// Now, bind the actual class name using the resolved type.
+					let Type::Class(class) = self.db.get(typ) else {
+						type_error!(self,
+							new.location,
+							".new can only be called on a class (got {}).",
+							self.db.repr_type(typ));
+					};
+
+					let [name] = new.identifiers.as_slice() else {
+						type_error!(self,
+							new.location,
+							".new expects exactly one class name.");
+					};
+
+					let Some(inner) = self.db.get(*class).class_map.get(&name.lexeme) else {
+						type_error!(self,
+							new.location,
+							"Class {} has no such inner class {}.",
+							self.db.repr_class(*class),
+							self.db.get(name.lexeme));
+					};
+
+					// Ok, we've resolved the class type.
+					new.class = *inner;
+					new.typ = self.db.put_type(Type::Class(new.class));
+				}
+
 				if new.typ == self.db.types.unassigned {
 					if PANIC_ON_BAD_NODE {
 						panic!("ICE: New expression has unassigned type from Binder");
@@ -1765,8 +2223,80 @@ impl<'db> TypeChecker<'db> {
 					}
 				}
 
+				let Type::Class(class_id) = *self.db.get(new.typ) else {
+					if PANIC_ON_BAD_NODE {
+						panic!("ICE: New expression with non-class type");
+					}
+					return Ok(new.typ);
+				};
+
+				// Check whether the new expression was called on the correct
+				// parent object.
+				{
+					let class = self.db.get(class_id);
+					match class.parent {
+						Some(parent) => {
+							let Some(inner) = parent_ty else {
+								type_error!(self,
+									new.location,
+									"@inner class can only be constructed with .new on its parent");
+							};
+
+							let target_typ = self.db.put_type(Type::Class(parent));
+							if target_typ != inner {
+								type_error!(self,
+									new.location,
+									"Expected parent object of type {}, got {}",
+									self.db.repr_type(target_typ),
+									self.db.repr_type(inner));
+							}
+						}
+						None => {
+							if parent_ty.is_some() {
+								type_error!(self,
+									new.location,
+									".new construction is only available for @inner classes");
+							}
+						}
+					}
+				}
+
+				// We create a copy of the mandatory vars set so that we can
+				// "check" them off as we go through the initializers.
+				//
+				// This might be slightly less performant than some other
+				// strategies but I believe it should be OK.
+				let mut checklist = self.db.get(class_id).mandatory_vars.clone();
+
 				for init in &mut new.initializers {
-					self.check_assign(ast, &init.location, init.var, &mut init.value, false)?;
+					self.check_assign(ast, &init.location, init.var, &mut init.value, false,
+						// Initializers are allowed to assign to readonly variables.
+						true)?;
+					checklist.remove(&init.var);
+				}
+
+				log::trace!("new expression checklist len: {}", checklist.len());
+				if !checklist.is_empty() {
+					let mut iter = checklist.iter();
+					let mut error = Error::simple(
+						format!("'new' expression is missing initializer for mandatory variable '{}'",
+							// We know the checklist is nonempty, so we can
+							// definitely extract one var.
+							self.db.repr_var(*iter.next().unwrap())),
+						new.location.clone(),
+					);
+
+					// Now attach the rest of the uninitialized vars as notes.
+					for var in iter {
+						error = error.add_note(format!("also missing '{}'", self.db.repr_var(*var)), None);
+					}
+
+					self.db.report_error(error);
+					// A little awkward that we have to remember to put this.
+					self.had_error = true;
+					
+					// I don't actually think there's any reason to return Err here,
+					// as this error can't cause additional type errors.
 				}
 
 				new.typ
@@ -1775,23 +2305,62 @@ impl<'db> TypeChecker<'db> {
 			Expr::Get(get) => {
 				// Get the type of the dotted expression. This lets us look up
 				// the property on that type.
-				let lhs = self.check_expr(ast, get.lhs, true)?;
-				if let Some(property) = self.db.lookup_property(lhs, get.identifier.lexeme) {
+				let mut lhs = self.check_expr(ast, get.lhs, true)?;
+
+				let mut var_chain = Vec::new();
+
+				// First, build a Vec of vars for all but the last item in the
+				// chain.
+				for propname in &get.chain[0..get.chain.len() - 1] {
+					if let Some(property) = self.db.lookup_property(lhs, propname.lexeme) {
+						var_chain.push(property);
+						// The LHS type advances as we walk the chain.
+						lhs = self.db.get_var_type(property);
+					}
+					else {
+						type_error!(self,
+							&propname.location,
+							"Object of type '{}' has no such property '{}'",
+							self.db.repr_type(lhs),
+							self.db.get(propname.lexeme));
+					}
+				}
+
+				// Clone this token just to make life easy. 
+				let Some(last) = get.chain.last().cloned() else {
+					// This shouldn't happen except for in the language server.
+					type_error!(self, &get.location, "Empty getter");
+				};
+
+				// The last property is special. It might just be another var
+				// in the var chain, OR it might be a FunCapture.
+				if let Some(property) = self.db.lookup_property(lhs, last.lexeme) {
 					// We must actually store the looked-up property.
-					get.var = property;
+					var_chain.push(property);
+					get.vars = var_chain;
 
 					return Ok(self.db.get_var_type(property));
 				}
 
 				// Check for possible function capture. If so, then we turn this
 				// Get into a FunCapture.
-				if let Some(fun) = self.db.lookup_member_fn(lhs, get.identifier.lexeme) {
+				if let Some(fun) = self.db.lookup_member_fn(lhs, last.lexeme) {
+					let mut funcapt_lhs = get.lhs;
+					if !var_chain.is_empty() {
+						// Remove the last element in the chain
+						let mut chain = std::mem::take(&mut get.chain);
+						chain.truncate(get.chain.len() - 1);
+
+						funcapt_lhs = Expr::push_get(ast, get.location.clone(),
+							chain, get.lhs, var_chain);
+					}
+
 					let as_funcapture = FunCapture {
 						location: get.location.clone(),
-						fn_name: get.identifier.location.clone(),
+						fn_name: last.location.clone(),
 						identity: fun,
 						typ: self.db.types.unassigned,
-						object: Some(get.lhs),
+						object: Some(funcapt_lhs),
 					};
 
 					*expr = Expr::FunCapture(as_funcapture);
@@ -1799,35 +2368,142 @@ impl<'db> TypeChecker<'db> {
 					return self.check_expr(ast, expr_id, value_used);
 				}
 
+				// Failed to look up the last property.
 				type_error!(self,
-					&get.location,
+					&last.location,
 					"Object of type '{}' has no such property '{}'",
 					self.db.repr_type(lhs),
-					self.db.get(get.identifier.lexeme));
+					self.db.get(last.lexeme))
 			}
 
 			Expr::Set(set) => {
 				// Get the type of the dotted expression. This lets us look up
 				// the property on that type.
-				let lhs = self.check_expr(ast, set.lhs, value_used)?;
-				let property = self.db.lookup_property(lhs, set.identifier.lexeme);
+				// Get the type of the dotted expression. This lets us look up
+				// the property on that type.
+				let mut lhs = self.check_expr(ast, set.lhs, true)?;
 
+				let mut var_chain = Vec::new();
+
+				// First, build a Vec of vars for all but the last item in the
+				// chain.
+				for propname in &set.chain[0..set.chain.len() - 1] {
+					if let Some(property) = self.db.lookup_property(lhs, propname.lexeme) {
+						var_chain.push(property);
+						// The LHS type advances as we walk the chain.
+						lhs = self.db.get_var_type(property);
+					}
+					else {
+						type_error!(self,
+							&propname.location,
+							"Object of type '{}' has no such property '{}'",
+							self.db.repr_type(lhs),
+							self.db.get(propname.lexeme));
+					}
+				}
+
+				let Some(last) = set.chain.last().cloned() else {
+					// This shouldn't happen except for in the language server.
+					type_error!(self, &set.location, "Empty setter");
+				};
+
+				let property = self.db.lookup_property(lhs, last.lexeme);
 				let Some(property) = property else {
 					type_error!(self,
 						&set.location,
 						"Object of type '{}' has no such property '{}'",
 						self.db.repr_type(lhs),
-						self.db.get(set.identifier.lexeme));
+						self.db.get(last.lexeme));
 				};
 
 				// We must actually store the looked-up property.
-				set.var = property;
+				var_chain.push(property); //  Push the last property
+				set.vars = var_chain;
+
+				// Check the last propety for readonly.
+				if self.db.get(property).readonly {
+					let readonly_error = Error::simple(
+						format!("Invalid assignment to property '{}', which cannot be written to.",
+							self.db.repr_var(property)),
+						set.location.clone()
+					);
+					self.had_error = true;
+					self.db.report_error(readonly_error);
+				}
+
+				// Check parent properties to see if they are readonly value
+				// types.
+				//
+				// If any property along the chain is not a value type, we can stop
+				// looking for readonly ones, as the readonly-ness no longer
+				// carries forward.
+				let mut all_parents_are_value_types = true;
+				for property in set.vars[0..set.vars.len() - 1].iter().rev() {
+					let typ = self.db.get_var_type(*property);
+					// If this parent type is a class:
+					// class Parent {
+					//     var property;
+					// }
+					// Then the assignment is always valid, no matter how many
+					// other parent properties are readonly.
+					//
+					// If in the future we have "constant references" this will
+					// not necessarily be true, although I believe the iteration
+					// itself would still stop here.
+					if !self.db.is_value_type(typ) {
+						all_parents_are_value_types = false;
+						break;
+					}
+
+					if self.db.get(*property).readonly {
+						let readonly_error = Error::simple(
+							format!("Invalid assignment to property '{}', which cannot be written to.",
+								self.db.repr_var(*property)),
+							set.location.clone()
+						);
+						self.had_error = true;
+						self.db.report_error(readonly_error);
+
+						// No need to check further.
+						break;
+					}
+				}
+
+				log::trace!("set: all parents value types? {}", all_parents_are_value_types);
+
+				// Now, we also have to check the Set's LHS to see if it is
+				// readonly. This is because the LHS could be e.g. a reference
+				// to a readonly var.
+				if all_parents_are_value_types {
+					self.verify_set_lhs_is_not_readonly(ast, set.lhs);
+				}
+
+				if set.op != Tok::Equal {
+					// very important TODO: We actually need to store the
+					// value in a temporary variable, that we read from as
+					// the LHS of both the set and the get. This is so that
+					// something like call_fun().x += 5 does not cause
+					// a double evaluation of call_fun().
+
+					// Read from the variable
+					let null_location = set.location.begin();
+					let read = Expr::push_get(ast, null_location,
+						set.chain.clone(), set.lhs, set.vars.clone());
+					// Perform a binary op, with RHS the assign's current value
+					let binop = Expr::push_binary(ast, set.location.clone(),
+						map_assign_op(set.op), read, set.rhs, self.db.types.unassigned);
+					// That is now what we're assigning.
+					set.rhs = binop;
+
+					// The assign is now a regular assign. (As of writing this
+					// comment, nothing else in the code reads this though.)
+					set.op = Tok::Equal;
+				}
 
 				// We can't check the variable just like an Assign, as that
 				// will overwrite the type (the type is given ONLY by the class
 				// definition itself). But, we do need to check that the RHS
 				// is assignable to this variable.
-
 				let rhs = self.check_expr(ast, set.rhs, true)?;
 
 				let computed =
@@ -1914,9 +2590,9 @@ impl<'db> TypeChecker<'db> {
 						self.db.get(capt.identifier.lexeme), self.db.repr_type(obj_ty));
 					let as_get = Get {
 						location: capt.location.clone(),
-						identifier: capt.identifier.clone(),
+						chain: vec![capt.identifier.clone()],
 						lhs: capt.object.unwrap(), // Safety: We already checked this above
-						var: property
+						vars: vec![property]
 					};
 					*expr = Expr::Get(as_get);
 					drop(binding);
@@ -1994,15 +2670,40 @@ impl<'db> TypeChecker<'db> {
 				match iter_ty {
 					Type::RangeOf(a, b, typ) if *typ == self.db.types.int => {
 						let _a = *a; let b = *b;
+						// Use a 0-width location for all the synthesized nodes,
+						// so that we don't take up space.
+						let inner_loc = for_.location.begin();
+
+						// To properly desugar the for loop, we need two variables,
+						// in case of closures.
+						//
+						// We basically want to desugar it into:
+						//
+						// <local_identity> = ...
+						// while(...) {
+						//     AllocateClosure {
+						//         <for_.identity> = <local_identity>
+						//     }
+						//     <local_identity> = f(<local_identity>)
+						// }
+						//
+						// This will properly get us a new closure identity
+						// each time through the loop.
+						let local_identity: VarId = {
+							let var = self.db.get(for_.identity);
+							let mut local = var.clone();
+							local.readonly = false; // This variable is mutated.
+							self.db.push(local)
+						};
 						// Desugar the for loop into the following:
 						// var <var> = <start>
 						// while <var> < <end> {
 						//    inner
 						//    var = var + 1;
 						// }
-						let initializer = Expr::push_get(ast, for_.location.clone(),
-							Token::synthesize_ident_from(self.db, "left"),
-							for_.iterator, self.db.get_range_left(iterable));
+						let initializer = Expr::push_get(ast, inner_loc.clone(),
+							vec![Token::synthesize_ident_from(self.db, "left")],
+							for_.iterator, vec![self.db.get_range_left(iterable)]);
 						// NOTE: For now, in order to make for loops work with
 						// 'continue', we will write our loops in a weird way.
 						// (go from start - 1 to end; move increment to beginning
@@ -2010,51 +2711,66 @@ impl<'db> TypeChecker<'db> {
 						// What we should do instead is probably synthesize a label
 						// at the *end* of the loop, that we jump to in the continue
 						// statement.
-						let one = Expr::push_numliteral(ast, for_.location.clone(),
+						let one = Expr::push_numliteral(ast, inner_loc.clone(),
 							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
 							self.db.types.int);
-						let sub = Expr::push_binary(ast, for_.location.clone(),
+						let sub = Expr::push_binary(ast, inner_loc.clone(),
 							Tok::Minus, initializer, one, self.db.types.int);
-						let declare = Stmt::push_declare(ast, for_.location.clone(),
-							for_.ident.clone(), for_.identity, sub, for_.has_explicit_type);
+						// Make the declare have its own location...?
+						let declare = Stmt::push_declare(ast, inner_loc.clone(),
+							// Our local_identity declare has an explicit type,
+							// so that it never shows an inlay hint.
+							inner_loc.clone(), local_identity, Some(sub), true);
 						
-						let read = Expr::push_variable(ast, for_.location.clone(),
-							for_.identity);
-						let one = Expr::push_numliteral(ast, for_.location.clone(),
+						let read = Expr::push_variable(ast, inner_loc.clone(),
+							local_identity);
+						let one = Expr::push_numliteral(ast, inner_loc.clone(),
 							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
 							self.db.types.int);
-						let add = Expr::push_binary(ast, for_.location.clone(),
+						let add = Expr::push_binary(ast, inner_loc.clone(),
 							Tok::Plus, read, one, self.db.types.int);
-						let assign = Expr::push_assign(ast, for_.location.clone(),
-							self.db.srcloc_dummy(), for_.identity, add);
+						let assign = Expr::push_assign(ast, inner_loc.clone(),
+							self.db.srcloc_dummy(), local_identity, add, Tok::Equal);
 
-						let inner_stmt = Stmt::push_expression(ast, for_.location.clone(),
+						// Grab location from the inner
+						let inner_stmt_loc = for_.inner.location(ast);
+						let ident_read = Expr::push_variable(ast, inner_loc.clone(), local_identity);
+						let ident_declare = Stmt::push_declare(ast, inner_stmt_loc.clone(),
+							for_.ident.clone(), for_.identity, Some(ident_read), for_.has_explicit_type);
+						let inner_stmt = Stmt::push_expression(ast, inner_stmt_loc.clone(),
 							for_.inner);
-						let assign_stmt = Stmt::push_expression(ast, for_.location.clone(),
+						let assign_stmt = Stmt::push_expression(ast, inner_loc.clone(),
 							assign);
 							
 						// AWKWARD/TODO: Once we care about the value of the while block,
 						// this is not going to be it...?
-						let inner_block = Expr::push_block(ast, for_.location.clone(),
+						let inner_block = Expr::push_block(ast,  inner_stmt_loc.clone(),
 							// Due to our 'continue' jank, the assign has to come
 							// before the inner.
-							vec![assign_stmt, inner_stmt], self.db.types.void);
+							//
+							// It also has to come before ident_declare for our
+							// closure variable.
+							vec![assign_stmt, ident_declare, inner_stmt], self.db.types.void);
+						// The inner block is the thing that needs its own closure scope,
+						// so do that now.
+						let inner_block = Expr::push_allocateclosure(ast, inner_stmt_loc,
+							for_.closure, inner_block, self.db.types.void, false);
 
 						// Rhs of the comparison.
-						let rhs = Expr::push_get(ast, for_.location.clone(),
-							Token::synthesize_ident_from(self.db, "right"),
-							for_.iterator, self.db.get_range_right(iterable));
+						let rhs = Expr::push_get(ast, inner_loc.clone(),
+							vec![Token::synthesize_ident_from(self.db, "right")],
+							for_.iterator, vec![self.db.get_range_right(iterable)]);
 						// More 'continue' JANK: synthesize a -1 for the RHS
 						// of the loop as well.
-						let one = Expr::push_numliteral(ast, for_.location.clone(),
+						let one = Expr::push_numliteral(ast, inner_loc.clone(),
 							Token::synth_tok_from(self.db, "1", Tok::WholeNumber),
 							self.db.types.int);
-						let rhs = Expr::push_binary(ast, for_.location.clone(),
+						let rhs = Expr::push_binary(ast, inner_loc.clone(),
 							Tok::Minus, rhs, one, self.db.types.int);
 						// TODO: Can we re-used the read above? For now, synthesize
 						// two nodes.
-						let read = Expr::push_variable(ast, for_.location.clone(),
-							for_.identity);
+						let read = Expr::push_variable(ast, inner_loc.clone(),
+							local_identity);
 
 						// Switch comparison based on the range type.
 						let compare_type = match b {
@@ -2062,9 +2778,10 @@ impl<'db> TypeChecker<'db> {
 							RangeEnd::Exclusive => Tok::Less,
 							RangeEnd::Unbounded => todo!(),
 						};
-						let comparison = Expr::push_comparison(ast, for_.location.clone(),
+						let comparison = Expr::push_comparison(ast, inner_loc.clone(),
 							compare_type, read, rhs, self.db.types.int);
 
+						// These muse encompas the entire for loop in terms of location.
 						let while_loop = Expr::push_whileloop(ast, for_.location.clone(),
 							comparison, inner_block, self.db.types.void, Vec::new());
 						
@@ -2086,6 +2803,102 @@ impl<'db> TypeChecker<'db> {
 
 						return self.check_expr(ast, expr_id, value_used);
 					},
+					Type::Fun(sig_id) => {
+						let sig_id = *sig_id;
+						let sig = self.db.get(sig_id);
+						if !sig.parameters.is_empty() {
+							type_error!(self,
+								&for_.location,
+								"Can only iterate over a function of the form fun() -> T?");
+						}
+
+						let ret = self.db.get(sig.return_type);
+						let inner = *match ret {
+							Type::Option(typ) => typ,
+							_ => {
+								type_error!(self,
+									&for_.location,
+									"Can only iterate over a function of the form fun() -> T?")
+							}
+						};
+
+						// Now we desugar it. The form of the loop is:
+						// var our_fun = <eval fun expression>;
+						// loop {
+						//     var the_var = our_fun() else { break; };
+						//     loop-body
+						// }
+
+						let own_var = self.db.get(for_.identity);
+						
+						let fun_obj_var: VarId = self.db.push(Var {
+							name: self.db.str_x,
+							typ: iterable,
+							readonly: false,
+							class: None,
+							param_for: None,
+							fun: own_var.fun,
+							closure: own_var.closure,
+							initializer: Some(for_.iterator),
+							location: own_var.location.clone(),
+							doc_comment: None,
+						});
+
+						let loc_ignore = {
+							let mut loc = for_.location.begin();
+							loc.length = 0;
+							loc
+						};
+
+						let inner_stmt_loc = for_.inner.location(ast);
+
+						let read_fun_obj = Expr::push_variable(ast, loc_ignore.clone(),
+							fun_obj_var);
+						let call_fun = Expr::push_valcall(ast, loc_ignore.clone(),
+							read_fun_obj, Vec::new(), sig_id, Vec::new());
+						let break_out = Expr::push_break(ast, loc_ignore.clone(), None);
+						let call_else_break = Expr::push_optionelse(ast, loc_ignore.clone(),
+							call_fun, break_out, inner);
+
+						let ident_declare = Stmt::push_declare(ast, for_.ident.clone(),
+							for_.ident.clone(), for_.identity, Some(call_else_break), for_.has_explicit_type);
+						let inner_stmt = Stmt::push_expression(ast, inner_stmt_loc.clone(),
+							for_.inner);
+							
+						// AWKWARD/TODO: Once we care about the value of the while block,
+						// this is not going to be it...?
+						let inner_block = Expr::push_block(ast,  inner_stmt_loc.clone(),
+							vec![ident_declare, inner_stmt], self.db.types.void);
+						// The inner block is the thing that needs its own closure scope,
+						let inner_block = Expr::push_allocateclosure(ast, inner_stmt_loc.clone(),
+							for_.closure, inner_block, self.db.types.void, false);
+
+						let inner_loop = Expr::push_loop(ast, inner_stmt_loc.clone(),
+							// I believe we don't have to explicitly set the breaks...?
+							inner_block, self.db.types.void, Vec::new());
+						
+						let own_declare = Stmt::push_declare(ast, for_.iterator.location(ast),
+							// This always has an explicit type, so that no inlay hint is
+							// generated.
+							loc_ignore.clone(), fun_obj_var, Some(for_.iterator), true);
+						let inner_loop_stmt = Stmt::push_expression(ast, inner_stmt_loc.clone(),
+							inner_loop);
+						
+						let block = Block {
+							location: for_.location.clone(),
+							stmts: vec![own_declare, inner_loop_stmt],
+							typ: self.db.types.void,
+						};
+
+						// Now, drop the binding, modify ourselves to be the
+						// new block, and re-check it.
+						drop(binding);
+						let mut binding = ast.get_expr_mut(expr_id);
+						*binding = Expr::Block(block);
+						drop(binding);
+
+						return self.check_expr(ast, expr_id, value_used);
+					}
 					_ => {
 						type_error!(self,
 							&for_.location,
@@ -2099,7 +2912,7 @@ impl<'db> TypeChecker<'db> {
 			Expr::Promote(_) => panic!("ICE: Tried to typecheck Promote"),
 		});
 
-		log::trace!("check_expr: {:?} -> {}", expr, self.db.repr_type(expr.typ(ast, self.db)));
+		log::trace!("check_expr: {:?}@{} -> {}", expr, expr_id.to_index(), self.db.repr_type(expr.typ(ast, self.db)));
 		result
 	}
 
@@ -2112,7 +2925,9 @@ impl<'db> TypeChecker<'db> {
 		for var in &vars {
 			if let Some(initializer) = self.db.get(*var).initializer {
 				let mut init = initializer;
-				self.check_assign(ast, &self.db.get(*var).location.clone(), *var, &mut init, true)?;
+				self.check_assign(ast, &self.db.get(*var).location.clone(), *var, &mut init, true,
+					// Declarations are allowed to assign to readonly variables.
+					true)?;
 				// Be sure to manually copy the expr back
 				self.db.get_mut(*var).initializer = Some(init);
 			}
@@ -2121,6 +2936,10 @@ impl<'db> TypeChecker<'db> {
 
 		for fun in &mut class_declare.funs {
 			self.check_fun_declare(ast, fun)?;
+		}
+
+		for class in &mut class_declare.classes {
+			self.check_class(ast, class)?;
 		}
 
 		self.current_class = enclosing_class;
@@ -2157,7 +2976,17 @@ impl<'db> TypeChecker<'db> {
 	}
 
 	fn check_declare(&mut self, ast: &AstProxy, declare: &mut Declare) -> Result<TypId> {
-		self.check_assign(ast, &declare.location, declare.identity, &mut declare.value, true)
+		if let Some(value) = declare.value.as_mut() {
+			self.check_assign(ast, &declare.location, declare.identity, value, true,
+				// Declarations are allowed to assign to readonly variables.
+				true)
+		}
+		else {
+			// In this case, we shiould (?) have had an explicit type from the
+			// parser, so the variable is good. There is also no RHS to typecheck.
+			// So, just return that value.
+			Ok(self.db.get_var_type(declare.identity))
+		}
 	}
 
 	fn check_fun_declare(&mut self, ast: &AstProxy, fun: &mut FunDeclare) -> Result<()> {
@@ -2281,7 +3110,10 @@ impl<'db> TypeChecker<'db> {
 					continue;
 				}
 			};
-			let _ = self.check_assign(ast, &self.db.get(*global).location.clone(), *global, &mut initializer, true);
+			let _ = self.check_assign(ast, &self.db.get(*global).location.clone(), *global, &mut initializer,
+				true,
+				// Declarations are allowed to assign to readonly variables.
+				true);
 			// Be sure to re-set the initializer
 			self.db.get_mut(*global).initializer = Some(initializer);
 		}

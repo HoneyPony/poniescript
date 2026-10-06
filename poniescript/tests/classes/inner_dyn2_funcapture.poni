@@ -1,0 +1,28 @@
+class Outer {
+    var hello: int = 5;
+
+    @inner
+    class Inner {
+        var xyz: int = 20;
+
+        @inner
+        class Inner {
+            fun getter() -> fun() {
+                my_fun
+            }
+        }
+    }
+
+    fun my_fun() {
+        print(hello);
+    }
+}
+
+fun init() {
+    var outer = new Outer{};
+    var inner = outer.new Inner{};
+    var inner2 = inner.new Inner{};
+
+    var callback = inner2.getter();
+    callback(); //! 5
+}

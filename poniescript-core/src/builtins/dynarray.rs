@@ -217,3 +217,57 @@ impl BuiltinMethod for DynarrayCloneShallow {
         val
     }
 }
+
+pub struct DynarrayPopOrPanic;
+
+impl BuiltinMethod for DynarrayPopOrPanic {
+    fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>) {
+        // DynArray[T]::pop() -> T
+        match db.get(self_ty) {
+            Type::DynArrayOf(elem_ty, _) => (*elem_ty, vec![]),
+            _ => unreachable!()
+        }
+    }
+
+    fn compile(
+        &self,
+        codegen: &mut Codegen,
+        _ast_node: &BuiltinCall,
+        _ast: &AstReadonly,
+        self_val: TypedVal,
+        arg_vals: Vec<TypedVal>,
+        into: &mut String
+    ) -> TypedVal {
+        let Type::DynArrayOf(elem_ty, arr_ty) = self_val.get_type(codegen.db) else { unreachable!() };
+        let [] = arg_vals.as_slice() else { unreachable!() };
+
+        let indent = codegen.indent();
+
+        let idx = codegen.new_val_typed(codegen.db.types.int);
+
+        let val = codegen.new_val_typed(*elem_ty);
+
+        let inner_array = format!("(({}){}->header.buffer)",
+            codegen.db.get_ctype(*arr_ty), self_val);
+
+        // The index that we want to use is the current length of the array minus 1.
+        define_val!(codegen, into, idx, " = {}->header.length - 1;\n", self_val);
+        define_val!(codegen, into, val, ";\n");
+        inf_writeln!(into, "{}if({}->header.length <= 0) {{",
+            indent, self_val);
+        codegen.make_panic(_ast, into, "called .pop_or_panic() on an empty DynArray", &_ast_node.location);
+        inf_writeln!(into, "{}}}", indent);
+        inf_writeln!(into, "{}else {{", indent);
+        // Copy the value out.
+        inf_writeln!(into, "{}\t{} = {}->contents[{}];", indent, val, inner_array, idx);
+        inf_writeln!(into, "{}}}", indent);
+
+        // This is one of the most subtle things, at least it will be.
+        //
+        // We probably (?) want this to be an atomic decrement, and
+        // such...
+        inf_writeln!(into, "{}{}->header.length -= 1;", indent, self_val);
+        
+        val
+    }
+}

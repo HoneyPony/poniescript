@@ -1,8 +1,9 @@
 use tower_lsp::lsp_types::*;
 
 use poniescript_core::{
-    arena::IndexCell, db::*, expr::*
+    db::*, expr::*
 };
+use poni_arena::IndexCell;
 
 use std::sync::Arc;
 
@@ -62,7 +63,9 @@ impl poniescript_core::expr::VisitAstImmut for InlayHintVisitor {
             self.cache.hints.push(hint);
         }
 
-        self.visit_expr(ast, db, declare.value);
+        if let Some(value) = declare.value {
+            self.visit_expr(ast, db, value);
+        }
     }
 }
 

@@ -1,0 +1,22 @@
+class A {
+    var a = 5;
+
+    @inner
+    class B {
+        var b = 10;
+
+        @inner
+        class C {
+            var c = 15;
+
+            fun dbg() {
+                print(a, " ", b, " ", c);
+            }
+        }
+    }
+}
+
+fun init() {
+    var c = new A{}.new B{}.new C{};
+    c.dbg(); //! 5 10 15
+}

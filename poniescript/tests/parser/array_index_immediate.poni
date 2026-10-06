@@ -1,0 +1,11 @@
+fun a(x: int) -> fun() -> int {
+    fun() -> int { x * 20 }
+}
+
+fun init() {
+    var value = [1, 2, 3, 4][3];
+    print(value); //! 4
+
+    value = [[a(1), a(2)], [a(3), a(4)]][1][0]();
+    print(value); //! 60
+}

@@ -5,11 +5,14 @@ use std::path::PathBuf;
 use maud::Markup;
 use maud::PreEscaped;
 use maud::html;
+use poniescript_core::binder;
 use poniescript_core::db::Ast;
 use poniescript_core::db::Db;
 use poniescript_core::db::IdFuncs;
 use poniescript_core::inf_write;
+use poniescript_core::init_ordering;
 use poniescript_core::lexer::Token;
+use poniescript_core::typecheck;
 use pulldown_cmark::CowStr;
 use pulldown_cmark::HeadingLevel;
 use pulldown_cmark::Tag;
@@ -72,6 +75,7 @@ impl Identifier {
 
 struct Variable {
     name: String,
+    readonly: bool,
     type_repr: String,
     doc_markdown: String,
 }
@@ -289,7 +293,7 @@ impl DocPage {
                                     h2 id={"var-" (var.name)} {
                                         code {
                                             span .code-k {
-                                                "var"
+                                                @if var.readonly { "let" } @else { "var" }
                                             }
                                             " "
                                             (var.name)
@@ -344,6 +348,23 @@ fn parse_modules(ast: &mut Ast, db: &mut Db, input_paths: &Vec<PathBuf>) {
 	}
 }
 
+fn parse_imports(ast: &mut Ast, db: &mut Db, input_paths: &Vec<PathBuf>) {
+	for path in input_paths {
+		let source_id = ast.new_source(path.clone());
+		match poniescript_core::glue::parser::parse_import_2(ast, db, source_id) {
+			Ok(false) => { },
+			Ok(true) => {
+                // TODO: Return a Result instead of exiting the process. :(
+				std::process::exit(1);
+			}
+			Err(err) => {
+				eprintln!("Unable to parse source file {}: {err}", path.display());
+				std::process::exit(1);
+			}
+		}
+	}
+}
+
 fn convert_doc_comment(db: &Db, doc_comment: &Option<Vec<Token>>) -> String {
     let mut markdown = String::new();
 
@@ -360,13 +381,54 @@ fn convert_doc_comment(db: &Db, doc_comment: &Option<Vec<Token>>) -> String {
     return markdown;
 }
 
+fn report_errors(ast: &Ast, db: &Db) {
+    for error in &db.errors {
+        poniescript_core::error::show_error(&error, ast);
+    }
+}
+
 /// Generates docs to the given output path. Note that this will always create
 /// the given output path, due to the way it creates the interior paths.
-pub fn generate_docs(input_paths: &Vec<PathBuf>, output_path: &Path) -> std::io::Result<()> {
+pub fn generate_docs(input_paths: &Vec<PathBuf>, import_paths: &Vec<PathBuf>, output_path: &Path) -> std::io::Result<()> {
     let mut ast = Ast::new();
     let mut db = Db::new(&mut ast);
 
     parse_modules(&mut ast, &mut db, input_paths);
+    parse_imports(&mut ast, &mut db, import_paths);
+
+    // Note that we must both bind and typecheck, so that we can identify
+    // variable and class types that come from those passes.
+
+    binder::bind(&mut db, &mut ast);
+    if !db.errors.is_empty() {
+        // TODO: Return error instead of exiting.
+        report_errors(&ast, &db);
+        std::process::exit(1);
+    }
+
+    // We also need to do the topological sort, in order to typecheck properly.
+    let mut globals = std::mem::take(&mut db.globals);
+	init_ordering::topological_sort(&mut globals, &ast, &mut db);
+
+	for class in db.iter_class() {
+		let mut vars = std::mem::take(&mut db.get_mut(class).vars);
+
+		init_ordering::topological_sort(&mut vars, &ast, &mut db);
+
+		db.get_mut(class).vars = vars;
+	}
+	db.globals = globals;
+    if !db.errors.is_empty() {
+		report_errors(&ast, &db);
+		std::process::exit(1);
+	}
+
+    typecheck::typecheck(&mut db, &mut ast);
+    if !db.errors.is_empty() {
+        // TODO: Return error instead of exiting.
+        report_errors(&ast, &db);
+        std::process::exit(1);
+    }
 
     // TODO: How to distribute directories for these files?
     let generated = output_path.join("generated");
@@ -393,6 +455,7 @@ pub fn generate_docs(input_paths: &Vec<PathBuf>, output_path: &Path) -> std::io:
 
             let var = Variable {
                 name: name.to_string(),
+                readonly: var.readonly,
                 // TODO: Reduce number of to_string()'s here? There might be
                 // a way to just have stuff pointing into the Db.
                 type_repr: typ.to_string(),

@@ -1,0 +1,9 @@
+fun init() {
+    var example = (
+        (1, (2, 3)),
+        (4, (5, 6))
+    );
+
+    example.0.1.0 = 5;
+    print(example.0.1.0); //! 5
+}

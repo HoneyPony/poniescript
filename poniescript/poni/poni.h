@@ -1,22 +1,25 @@
 #ifndef PONI_H
 #define PONI_H
 
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <inttypes.h>
+#include "poni_cstd.h"
 
 #include "poni_gc.h"
 
 #define PONI_TAG_FLOAT    0x8000000000000002ULL
 #define PONI_TAG_INT      0x8000000000000004ULL
 #define PONI_TAG_BOOL     0x8000000000000006ULL
-#define PONI_TAG_STRCONST 8
-#define PONI_TAG_STR      10
-#define PONI_TAG_STRBUF   12
-#define PONI_TAG_ARRAY    14
-#define PONI_TAG_DYNARRAY 16
+#define PONI_TAG_STRCONST 0x8
+#define PONI_TAG_STR      0xA
+#define PONI_TAG_STRBUF   0xC
+#define PONI_TAG_ARRAY    0xE
+#define PONI_TAG_DYNARRAY 0x10
+// Tag for Opaque classes. These are essentially any class that:
+// - Does not refer to any other member
+// - Does not have its own unique type
+// They are essentially a hack so that we can "safely" implement the Gc for
+// certain bound-types without actually implementing all the logic to visit
+// them in the Gc.
+#define PONI_TAG_OPAQUE   0x12
 
 typedef float   ps_float;
 typedef int64_t ps_int;
@@ -36,7 +39,7 @@ typedef struct ps_vec2 {
 			ps_float v_0;
 			ps_float v_1;
 		};
-		ps_float at[2];
+		//ps_float at[2];
 	};
 } ps_vec2;
 
@@ -68,7 +71,7 @@ typedef struct ps_vec3 {
 			ps_float v_1;
 			ps_float v_2;
 		};
-		ps_float at[3];
+		//ps_float at[3];
 	};
 } ps_vec3;
 
@@ -103,7 +106,7 @@ typedef struct ps_vec4 {
 			ps_float v_2;
 			ps_float v_3;
 		};
-		ps_float at[4];
+		//ps_float at[4];
 	};
 } ps_vec4;
 
@@ -135,7 +138,7 @@ typedef struct ps_vec2i {
 			ps_int v_0;
 			ps_int v_1;
 		};
-		ps_int at[2];
+		//ps_int at[2];
 	};
 } ps_vec2i;
 
@@ -168,7 +171,7 @@ typedef struct ps_vec3i {
 			ps_int v_1;
 			ps_int v_2;
 		};
-		ps_int at[3];
+		//ps_int at[3];
 	};
 } ps_vec3i;
 
@@ -203,7 +206,7 @@ typedef struct ps_vec4i {
 			ps_int v_2;
 			ps_int v_3;
 		};
-		ps_int at[4];
+		//ps_int at[4];
 	};
 } ps_vec4i;
 
@@ -232,8 +235,7 @@ typedef struct ps_object {
 typedef struct ps_str {
 	ps_object object;
 
-	// TODO: ps_int?
-	size_t length;
+	ps_int length;
 
 	char contents[];
 } ps_str;
@@ -243,7 +245,7 @@ typedef struct ps_strbuf {
 
 	// Note: buffer->length == allocated, essentially
 	ps_str *buffer;
-	size_t length;
+	ps_int length;
 } ps_strbuf;
 
 struct ps_array_header {
@@ -275,7 +277,7 @@ struct ps_dynarray_header {
 	void     *buffer;
 };
 
-void*
+static inline void*
 poni_array_ensure(void *ctx, void* old_array, ps_int elem_sz, ps_int desired_idx) {
 	struct ps_array_header *header = old_array;
 	ps_int new_size = header->length;
@@ -313,6 +315,12 @@ poni_array_ensure(void *ctx, void* old_array, ps_int elem_sz, ps_int desired_idx
 	#define PONI_NORETURN _Noreturn
 #endif
 
+#ifdef __GNUC__
+    #define PONI_COLD __attribute__((cold))
+#else
+	#define PONI_COLD
+#endif
+
 #define PONI_INIT_ARRAY(arr, elem_sz, elem_cnt, elem_tag) \
 	arr = poni_gc_alloc_tagged(ctx, sizeof(struct ps_array_header) + elem_sz * elem_cnt, PONI_TAG_ARRAY); \
 	arr->header.length = elem_cnt; \
@@ -328,7 +336,7 @@ poni_array_ensure(void *ctx, void* old_array, ps_int elem_sz, ps_int desired_idx
 	arr->header.buffer = inner_arr;
 
 static inline
-PONI_NORETURN void
+PONI_NORETURN PONI_COLD void
 ps_fatal_error(const char *message) {
 	printf("fatal error: %s\n", message);
 	exit(1);
@@ -336,7 +344,7 @@ ps_fatal_error(const char *message) {
 
 // It is currently unclear if this should essentially throw an exception somehow.
 static inline
-PONI_NORETURN void
+PONI_NORETURN PONI_COLD void
 ps_panic(struct poni_gc_context *ctx, const char *src, ps_int line, ps_int column, const char *message) {
 	printf("%s:%" PRId64 ":%" PRId64 ": panic: %s\n", src, line, column, message);
 	struct poni_gc_frame *frame = ctx->frame;
@@ -432,98 +440,49 @@ ps_strfmt_char(struct poni_gc_context *ctx, ps_strbuf *buf, char c) {
 
 // Just for fun, this is a version of ps_strfmt_int that doesn't go through
 // snprintf. I want to see if it is any faster...
-// static inline
-// void
-// ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
-// 	if(i < 0) {
-// 		if(i == INT64_MIN) {
-// 			char val[] = "-9223372036854775808";
-// 			ps_strfmt_cstr(ctx, buf, val, sizeof(val) - 1);
-// 			return;
-// 		}
-// 		ps_strfmt_char(ctx, buf, '-');
-// 		i = -i;
-// 	}
-
-// 	if(i == 0) {
-// 		ps_strfmt_char(ctx, buf, '0');
-// 		return;
-// 	}
-
-// 	char digits[24] = {0};
-// 	char *str = &digits[23];
-// 	size_t len = 0;
-
-// 	char table[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
-
-// 	while(i > 10000) {
-// 		ps_int rem = (i % 10000);
-// 		i /= 10000;
-
-// 		ps_int idx1 = (rem / 100) << 1;
-// 		ps_int idx2 = (rem % 100) << 1;
-
-// 		str -= 4;
-// 		str[0] = table[idx1];
-// 		str[1] = table[idx1 + 1];
-// 		str[2] = table[idx2];
-// 		str[3] = table[idx2 + 1];
-// 		len += 4;
-// 	}
-
-// 	while(i > 100) {
-// 		ps_int idx = i % 100;
-// 		str -= 2;
-// 		str[0] = table[idx * 2];
-// 		str[1] = table[idx * 2 + 1];
-// 		len += 2;
-// 		i /= 100;
-// 	}
-
-// 	while(i > 0) {
-// 		ps_int digit = i % 10;
-// 		str--;
-// 		*str = (char)(digit + '0');		
-// 		len += 1;
-// 		i /= 10;
-// 	}
-
-// 	ps_strfmt_cstr(ctx, buf, str, len - 1);
-// }
-
 static inline
 void
 ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
-	char buf2[64];
-	snprintf(buf2, 64, "%" PRId64, i);
-	ps_strfmt_cstr(ctx, buf, buf2, strlen(buf2));
+	if(i < 0) {
+		if(i < -9223372036854775807) {
+			char val[] = "-9223372036854775808";
+			ps_strfmt_cstr(ctx, buf, val, sizeof(val) - 1);
+			return;
+		}
+		ps_strfmt_char(ctx, buf, '-');
+		i = -i;
+	}
+
+	if(i == 0) {
+		ps_strfmt_char(ctx, buf, '0');
+		return;
+	}
+
+	char digits[24] = {0};
+	char *str = &digits[23];
+	size_t len = 0;
+
+	char table[] = "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+
+	while(i > 100) {
+		ps_int idx = i % 100;
+		str -= 2;
+		str[0] = table[idx * 2];
+		str[1] = table[idx * 2 + 1];
+		len += 2;
+		i /= 100;
+	}
+
+	while(i > 0) {
+		ps_int digit = i % 10;
+		str--;
+		*str = (char)(digit + '0');		
+		len += 1;
+		i /= 10;
+	}
+
+	ps_strfmt_cstr(ctx, buf, str, len);
 }
-// static inline
-// void
-// ps_strfmt_int(struct poni_gc_context *ctx, ps_strbuf *buf, ps_int i) {
-// 	// We will compare the snprintf() result against the total chars -1,
-// 	// because snprintf() returns the length of everything BUT the NUL
-// 	// terminator.
-// 	size_t rem = (buf->buffer->length - buf->length) - 1;
-// 	int needed = snprintf(buf->buffer->contents + buf->length, rem, "%" PRId64, i);
-
-// 	if(rem < needed) {
-// 		// If we didn't have enough room, we will reallocate and do the
-// 		// snprintf() again. Reserve needed + 1 so that we include the NUL terminator.
-// 		ps_strbuf_reserve(ctx, buf, needed + 1);
-
-// 		// Do the snprintf again. The output should not change.
-// 		// We will recompute rem, although it should be the case that
-// 		// there's always enough room.
-// 		//rem = (buf->buffer->length - buf->length) - 1;
-// 		snprintf(buf->buffer->contents + buf->length, needed + 1, "%" PRId64, i);
-// 	}
-
-// 	// Finally, the length of the string should increase by needed.
-// 	// Then, we should write a NUL terminator.
-// 	buf->length += needed;
-// 	buf->buffer->contents[buf->length] = '\0';
-// }
 
 static inline
 void
@@ -606,23 +565,9 @@ ps_promote_str_const_to_str(struct poni_gc_context *ctx, const ps_str* input) {
 	return ps_str_from_literal_size(ctx, input->contents, input->length);
 }
 
-static inline
-void
-ps_print_int(ps_int i) {
-	printf("%" PRId64, i);
-}
-
-static inline
-void
-ps_print_float(float f) {
-	printf("%f", f);
-}
-
-static inline
-void
-ps_print_bool(ps_bool b) {
-	if(b) { printf("true"); } else { printf("false"); }
-}
+void ps_print_int(ps_int i);
+void ps_print_float(float f);
+void ps_print_bool(ps_bool b);
 
 // Note: functions are like, struct { fun; closure; }
 
@@ -638,34 +583,15 @@ ps_print_ptr(const char *tag, uintptr_t ptr) {
 // If we do eventually use the length value, we will have to add a
 // ps_print_strbuf() method, as the length value will be different from its
 // internal str.
-static inline
-void
-ps_print_str(const ps_str *str) {
-	// TODO: Should the NULL check be part of the print() codegen?
-	if(str) {
-		printf("%s", str->contents);
-	}
-}
-
-static inline void ps_print_vec2(ps_vec2 v) { printf("(%f, %f)", v.x, v.y); }
-static inline void ps_print_vec3(ps_vec3 v) { printf("(%f, %f, %f)", v.x, v.y, v.z); }
-static inline void ps_print_vec4(ps_vec4 v) { printf("(%f, %f, %f, %f)", v.x, v.y, v.z, v.w); }
-
-static inline void ps_print_vec2i(ps_vec2i v) { printf("(%" PRId64 ", %" PRId64 ")", v.x, v.y); }
-static inline void ps_print_vec3i(ps_vec3i v) { printf("(%" PRId64 ", %" PRId64 ", %" PRId64 ")", v.x, v.y, v.z); }
-static inline void ps_print_vec4i(ps_vec4i v) { printf("(%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 ")", v.x, v.y, v.z, v.w); }
-
-static inline
-void
-ps_print_const(const char *what) {
-	printf("%s", what);
-}
-
-static inline
-void
-ps_println(void) {
-	putc('\n', stdout);
-}
+void ps_print_str(const ps_str *str);
+void ps_print_vec2(ps_vec2 v);
+void ps_print_vec3(ps_vec3 v);
+void ps_print_vec4(ps_vec4 v);
+void ps_print_vec2i(ps_vec2i v);
+void ps_print_vec3i(ps_vec3i v);
+void ps_print_vec4i(ps_vec4i v);
+void ps_print_const(const char *what);
+void ps_println(void);
 
 static inline
 float
@@ -688,5 +614,19 @@ ctx->frame = (void*)&gc_frame
 #else
 	#define PONI_ABI(...) struct poni_gc_context *ctx, __VA_ARGS__ __VA_OPT__(,) void *closure
 #endif
+
+static inline ps_int
+ps_mod_int(ps_int a, ps_int b) {
+	// TODO: What to do for INT_MIN?
+	if(b < 0) { b = -b; }
+	ps_int remainder = a % b;
+	if(remainder < 0) {
+		remainder += b;
+	}
+	return remainder;
+}
+
+ps_float
+ps_mod_float(ps_float a, ps_float b);
 
 #endif

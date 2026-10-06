@@ -1,0 +1,13 @@
+[package]
+name = "poniescript-gc-benchmark"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+env_logger = "0.11.9"
+log = "0.4.29"
+poniescript-gc = { version = "0.1.0", path = "../poniescript-gc" }
+poniescript-rt = { version = "0.1.0", path = "../poniescript-rt" }

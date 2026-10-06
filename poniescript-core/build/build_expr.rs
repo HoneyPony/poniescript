@@ -222,7 +222,7 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 		writeln!(locate_trait, "\t\tlet own_loc = &{lname}.location;")?;
 		writeln!(locate_trait, "\t\teprintln!(\"visit {ty_name}: {{}} ? {{}} ? {{}}\", own_loc.offset, loc.offset, own_loc.offset + own_loc.length);")?;
 		writeln!(locate_trait, "\t\tif loc.offset < own_loc.offset {{ return false; }}")?;
-		writeln!(locate_trait, "\t\tif loc.offset >= own_loc.offset + own_loc.length {{ return false; }}")?;
+		writeln!(locate_trait, "\t\tif loc.offset > own_loc.offset + own_loc.length {{ return false; }}")?;
 		for field in &fields {
 			if field.0 == "ExprId" {
 				writeln!(visit_trait, "\t\tself.visit_expr(ast, db, {lname}.{});", field.1)?;
@@ -376,19 +376,20 @@ fn generate_spec(name: &str, ast_field: &str, mut spec: &str, opt: Opt, file: &m
 pub fn generate(file: &mut File) {
 	let expr_spec = r#"
 
+	AllocateClosure : ClosureId id, Expr inner, TypId typ, bool copy_params
 	Binary        : Tok op, Expr left, Expr right, TypId typ
 	Unary         : Tok op, Expr inner, TypId typ
 	Comparison    : Tok op, Expr left, Expr right, TypId compare_as
 	Variable      : VarId identity
 	Logical       : Tok op, Expr left, Expr right
-	FunCall       : SourceLocation fn_name, FunId identity, Vec<Expr> args, Option<Expr> object
+	FunCall       : SourceLocation fn_name, FunId identity, Vec<Expr> args, Option<Expr> object, Vec<u32> arg_boundaries,
 	BuiltinCall   : SourceLocation fn_name, BuiltinMethodPtr ptr, TypId typ, Vec<Expr> args, Expr object
 	BuiltinCapture : SourceLocation fn_name, BuiltinMethodPtr ptr, Expr object
 	FunDeclare    : FunId identity, Expr value, TypId typ
-	ValCall       : Expr value, Vec<Expr> args, SigId sig
+	ValCall       : Expr value, Vec<Expr> args, SigId sig, Vec<u32> arg_boundaries,
 	FunCapture    : SourceLocation fn_name, FunId identity, TypId typ, Option<Expr> object
-	Assign        : SourceLocation var_name, VarId identity, Expr value
-	UnboundAssign : Token identifier, Expr value
+	Assign        : SourceLocation var_name, VarId identity, Expr value, Tok op
+	UnboundAssign : Token identifier, Expr value, Tok op
 	NumLiteral    : Token contents, TypId typ
 	StrLiteral    : StrConstId id
 	BoolLiteral   : bool value
@@ -398,9 +399,9 @@ pub fn generate(file: &mut File) {
 	UnboundFunCapture : Token identifier, Option<Expr> object
 	Print         : Vec<Expr> exprs, TypId typ
 	Str           : Vec<Expr> exprs
-	New           : Token identifier, ClassId class, TypId typ, Vec<NewInitElem> initializers
-	Get           : Token identifier, Expr lhs, VarId var
-	Set           : Token identifier, Expr lhs, VarId var, Expr rhs
+	New           : Vec<Token> identifiers, ClassId class, TypId typ, Vec<NewInitElem> initializers, Option<Expr> parent
+	Get           : Vec<Token> chain, Expr lhs, Vec<VarId> vars
+	Set           : Vec<Token> chain, Expr lhs, Vec<VarId> vars, Expr rhs, Tok op
 	SelfVal       : TypId typ
 	ArrayLit      : Vec<Expr> values, TypId elem_typ, TypId arr_typ
 	Index         : Expr value, Expr index, TypId typ
@@ -416,7 +417,7 @@ pub fn generate(file: &mut File) {
 	Continue      : 
 	Return        : Option<Expr> expression
 	WhileLoop     : Expr condition, Expr inner, TypId typ, Vec<ExprId> breaks
-	ForLoop       : SourceLocation ident, VarId identity, Expr iterator, bool has_explicit_type, Expr inner
+	ForLoop       : SourceLocation ident, VarId identity, Expr iterator, bool has_explicit_type, Expr inner, ClosureId closure
 	Undefined     : 
 
 	"#;
@@ -424,9 +425,9 @@ pub fn generate(file: &mut File) {
 	// 	FunDeclare : FunId identity, Vec<VarId> args, 
 	let stmt_spec = r#"
 	
-	Declare      : SourceLocation ident, VarId identity, Expr value, bool has_explicit_type
+	Declare      : SourceLocation ident, VarId identity, Option<Expr> value, bool has_explicit_type
 	Expression   : Expr expression
-	ClassDeclare : ClassId identity, Vec<FunDeclare> funs, Vec<Declare> vars
+	ClassDeclare : ClassId identity, Vec<FunDeclare> funs, Vec<Declare> vars, Vec<ClassDeclare> classes
 
 	"#;
 
@@ -466,6 +467,35 @@ pub fn generate(file: &mut File) {
 
 		for it in &module.classes {{
 			self.visit_classdeclare(ast, db, loc, it);
+		}}
+	}}").unwrap();
+
+	// We don't quite have a good way to do this yet.
+	writeln!(visit_immut_trait, 
+	"/// So in theory these should visit any Declare, whether it is associated
+	/// with an ExprId or not. In practice, we have not yet implemented this
+	/// for the tree itself; implementors must manually override visit_declare
+	/// to defer to this method (and similar with the other two). But, these methods
+	/// *are* called by visit_ast_for_source, allowing us to implement visitors
+	/// that visit everything.
+	fn visit_declare_any(&mut self, ast: &Ast, db: &Db, declare: &Declare) {{}}
+	fn visit_fundeclare_any(&mut self, ast: &Ast, db: &Db, fundeclare: &FunDeclare) {{}}
+	fn visit_classdeclare_any(&mut self, ast: &Ast, db: &Db, classdeclare: &ClassDeclare) {{}}
+
+	fn visit_ast_for_source(&mut self, ast: &Ast, db: &Db, source: SourceId) {{
+		let source = ast.sources.get(source);
+		let module = &source.module;
+
+		for it in &module.globals {{
+			self.visit_declare_any(ast, db, it);
+		}}
+
+		for it in &module.functions {{
+			self.visit_fundeclare_any(ast, db, it);
+		}}
+
+		for it in &module.classes {{
+			self.visit_classdeclare_any(ast, db, it);
 		}}
 	}}").unwrap();
 

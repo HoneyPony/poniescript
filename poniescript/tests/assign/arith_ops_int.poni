@@ -1,0 +1,16 @@
+fun init() {
+    var x: int = 30;
+    var y: int = 100;
+
+    x += 5;
+    print(x); //! 35
+    x *= 5;
+    print(x); //! 175
+    x -= 2;
+    print(x); //! 173
+
+    y += 50;
+    print(y); //! 150
+    y /= 3;
+    print(y); //! 50
+}

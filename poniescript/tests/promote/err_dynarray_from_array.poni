@@ -1,0 +1,13 @@
+fun init() {
+    var dynarray: DynArray[int] = [1, 2, 3];
+    var array: Array[int] = [4, 5, 6];
+
+    // Should fail.
+
+    //? Invalid promotion from Array[int] to DynArray[int].
+    dynarray = array;
+
+    print(dynarray[0]);
+    print(dynarray[1]);
+    print(dynarray[2]);
+}

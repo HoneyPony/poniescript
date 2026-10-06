@@ -8,6 +8,64 @@ fn default_rust_profile() -> String {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Platform {
+    Windows,
+    Linux,
+    MacOS,
+    Web,
+
+    None,
+}
+
+impl Default for Platform {
+    fn default() -> Self {
+        Platform::None
+    }
+}
+
+impl Platform {
+    fn empty_args() -> &'static [&'static str] {
+        static EMPTY: &[&'static str] = &[];
+        EMPTY
+    }
+
+    /// Get platform-specific C arguments.
+    pub fn get_c_args(&self) -> &'static [&'static str] {
+        match self {
+            Platform::Web => {
+                static ARGS: &[&'static str] = &["-target", "wasm32", "-DPONI_WASM32", "-nostdinc", "-nostdlib"];
+                ARGS
+            },
+            _ => {
+                Self::empty_args()
+            }
+        }
+    }
+
+    pub fn get_link_args(&self) -> &'static [&'static str] {
+        match self {
+            Platform::Web => {
+                static ARGS: &[&'static str] = &[
+                    "--export-all",
+                    "--allow-undefined",
+                    // This arg taken from RustC
+                    "--no-demangle",
+                    // These args also taken from RustC
+                    "-z", "stack-size=1048576",
+                    "--stack-first",
+                ];
+                ARGS
+            },
+            _ => {
+                static LM: &[&str] = &["-lm"];
+                LM
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Toolchain {
     /// The command to use for compiling C files.
     pub cc: String,
@@ -40,6 +98,10 @@ pub struct Toolchain {
     /// else.)
     #[serde(default = "default_rust_profile")]
     pub rust_profile: String,
+
+    /// A known platform.
+    #[serde(default)]
+    pub target_platform: Platform,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -63,6 +125,10 @@ pub struct EnvironmentConfig {
 
     pub default_profile: String,
     pub default_target: String,
+
+    /// Warning messages about the environment config.
+    #[serde(skip)]
+    pub warnings: Vec<String>,
 }
 
 impl EnvironmentConfig {
@@ -79,6 +145,55 @@ impl EnvironmentConfig {
 
         (name, set.0.contains_key(profile))
     }
+
+    pub fn lookup_rust_artifact(&self, profile: Option<&String>, target: Option<&String>, path: &PathBuf) -> Option<PathBuf> {
+        let profile = profile.unwrap_or(&self.default_profile);
+        let target = target.unwrap_or(&self.default_target);
+
+        let Some(set) = self.toolchain.get(target) else {
+            return None;
+        };
+
+        let Some(toolchain) = set.0.get(profile) else {
+            return None;
+        };
+
+        let poni_target_path = self.poni_src_path.join("target");
+
+        let poni_gc_path = match &toolchain.rust_name {
+            // E.g. target/x86_64-pc-windows-gnu/debug
+            Some(name) => poni_target_path.join(name).join(&toolchain.rust_profile),
+            // E.g. target/debug
+            None => poni_target_path.join(&toolchain.rust_profile)
+        };
+
+        Some(poni_gc_path.join(path))
+    }
+
+    fn generate_warnings(&mut self) {
+        let mut warnings = Vec::new();
+
+        for (target, set) in &self.toolchain {
+            for (profile, toolchain) in &set.0 {
+                match toolchain.target_platform {
+                    Platform::Web => {
+                        if !toolchain.linker.starts_with("wasm-ld") {
+                            warnings.push(format!("{}-{}: expected linker 'wasm-ld'",
+                                target, profile))
+                        }
+
+                        if !toolchain.cc.starts_with("clang") {
+                            warnings.push(format!("{}-{}: expected c compiler 'clang'",
+                                target, profile))
+                        }
+                    },
+                    _ => {}
+                }
+            }
+        }
+
+        self.warnings = warnings;
+    }
 }
 
 /// The top-level configuration for the build, described by a .toml file,
@@ -89,12 +204,78 @@ pub struct BuildConfig {
 }
 
 #[derive(Serialize, Deserialize)]
+pub enum ProjectKind {
+    /// Project using the small Ponyquad "game engine" / macroquad wrapper.
+    Ponyquad,
+}
+
+impl ProjectKind {
+    /// Gets additional C imports that this project kind requires. These are
+    /// local to the poni_src_path.
+    pub fn get_imports(&self) -> Vec<PathBuf> {
+        match self {
+            ProjectKind::Ponyquad => vec!["ponyquad/ponyquad.h".into()],
+        }
+    }
+
+    /// Gets additional scripts that this project kind requires. These are
+    /// local to the poni_src_path.
+    pub fn get_poniescripts(&self) -> Vec<PathBuf> {
+        match self {
+            ProjectKind::Ponyquad => vec!["ponyquad/keycodes.poni".into()],
+        }
+    }
+
+    /// Gets the name of the runtime library that this project kind requires.
+    /// 
+    /// For standalone projects, we just link against poniescript_rt. Otherwise,
+    /// we may require something more in-depth.
+    fn get_runtime_lib(&self) -> &'static str {
+        match self {
+            ProjectKind::Ponyquad => "ponyquad".into()
+        }
+    }
+
+    /// Returns a vector of bound function names for this project types,
+    /// e.g. 'update'.
+    fn get_required_binds(&self) -> Vec<&'static str> {
+        match self {
+            ProjectKind::Ponyquad => vec!["update"]
+        }
+    }
+
+    /// Returns whether this kind of project expects the '-e' argument to
+    /// PonieScript.
+    fn is_engine(&self) -> bool {
+        match self {
+            ProjectKind::Ponyquad => true,
+        }
+    }
+
+    /// Path to the host we would use for hot reloading.
+    pub fn get_hot_reload_host(&self) -> Option<PathBuf> {
+        match self {
+            ProjectKind::Ponyquad => Some("ponyquad-hot-host".into()),
+        }
+    }
+
+    pub fn get_poniescript_args(&self) -> Vec<&'static str> {
+        match self {
+            // Ponyquad is a single threaded runtime and does not need GC frames.
+            ProjectKind::Ponyquad => vec!["--disable-gc-frames"],
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Project {
     /// The .poni files that make up this project.
     pub files: Vec<PathBuf>,
 
     /// .h files that are imported for this project.
     pub imports: Vec<PathBuf>,
+
+    pub kind: Option<ProjectKind>,
 }
 
 pub struct GeneratedNinjaInfo {
@@ -155,12 +336,27 @@ impl BuildConfig {
         //writeln!(ninja, "  command = {} $in -o $out -L$poni_gc_path -lponiescript_gc",
         //    toolchain.linker)?;
         //writeln!(ninja, "  poni_gc_path = {}", poni_gc_path.display())?;
-        writeln!(ninja, "  command = {} $in -o $out -L{} -lponiescript_gc {}",
+
+        // For now, always add -lm, although this might be wrong.
+        write!(ninja, "  command = {} $in -o $out -L{} -l$runtime_lib {}",
             toolchain.linker, poni_gc_path.display(), toolchain.linker_args_extra)?;
+        for arg in toolchain.target_platform.get_link_args() {
+            write!(ninja, " {}", arg)?;
+        }
+        writeln!(ninja, "")?;
         writeln!(ninja, "  description = {BLUE}link{RESET}{DIM}.{name}.{profile}{RESET} -> $outdesc")?;
 
+        writeln!(ninja, "rule hot-link-{name}-{profile}")?;
+        writeln!(ninja, "  command = {} $in -o $out -shared {}",
+            toolchain.linker, toolchain.linker_args_extra)?;
+        writeln!(ninja, "  description = {BLUE}hot {RESET}{DIM}.{name}.{profile}{RESET} -> $outdesc")?;
+
         writeln!(ninja, "rule cc-{name}-{profile}")?;
-        writeln!(ninja, "  command = {} -c $in -o $out -MD -MF $out.d -I$poni_h_path -I. {}", toolchain.cc, toolchain.cc_args_extra)?;
+        write!(ninja, "  command = {} -c $in -o $out -MD -MF $out.d -I$poni_h_path -I. {}", toolchain.cc, toolchain.cc_args_extra)?;
+        for arg in toolchain.target_platform.get_c_args() {
+            write!(ninja, " {}", arg)?;
+        }
+        writeln!(ninja, "")?;
         writeln!(ninja, "  depfile = $out.d")?;
         writeln!(ninja, "  deps = gcc")?;
         writeln!(ninja, "  description = {GREEN}cc  {RESET}{DIM}.{name}.{profile}{RESET} $indesc")?;
@@ -208,14 +404,26 @@ impl BuildConfig {
             for obj in &object_files {
                 write!(ninja, " {dir}/{obj}")?;
             }
+            
             // Include a dependency on any of the Rust runtime libraries. That
             // way, if they change, we will automatically rebuild. (Or we can
             // build the Rust library if it hasn't been built yet).
 
             // TODO: Is this the same on windows? :)
-            let poni_gc_bin_path = poni_gc_path.join("libponiescript_gc.a");
-            write!(ninja, " | {}", poni_gc_bin_path.display())?;
+            let runtime_lib = project.kind.as_ref().map(|p| p.get_runtime_lib())
+                .unwrap_or("poniescript_rt");
+            let runtime_artefact_path = poni_gc_path.join(format!("lib{}.a", runtime_lib));
+            write!(ninja, " | {}", runtime_artefact_path.display())?;
 
+            write!(ninja, "\n")?;
+            writeln!(ninja, "  outdesc = {project_name}")?;
+            writeln!(ninja, "  runtime_lib = {runtime_lib}")?;
+
+            // Link rule for hot reloading.
+            write!(ninja, "build {dir}/{project_name}.so: hot-link-{name}-{profile}")?;
+            for obj in &object_files {
+                write!(ninja, " {dir}/hot-{obj}")?;
+            }
             write!(ninja, "\n")?;
             writeln!(ninja, "  outdesc = {project_name}")?;
 
@@ -229,53 +437,92 @@ impl BuildConfig {
                 for (c, obj) in c_files.iter().zip(object_files.iter()) {
                     writeln!(ninja, "build {dir}/{obj}: cc-{name}-{profile} {dir}/{c} | {c_file_deps}")?;
                     writeln!(ninja, "  indesc = {c}")?;
+
+                    writeln!(ninja, "build {dir}/hot-{obj}: cc-{name}-{profile} {dir}/hot-{c} | {c_file_deps}")?;
+                    writeln!(ninja, "  indesc = hot-{c}")?;
                 }
             }
 
             // Now generate the PonieScript rule. If the output is piped, then
             // the PonieScript command generates all of the .o files; otherwise,
             // it generates all of the .c files.
-            let outputs = if toolchain.piped { &object_files } else { &c_files };
-            write!(ninja, "build")?;
-            for output in outputs {
-                write!(ninja, " {dir}/{output}")?;
-            }
-            write!(ninja, ": poni-{name}-{profile}")?;
-            
-            // TODO: Escape spaces in paths
+            let mut build_poniescript_cmd = |hot| -> std::io::Result<()> {
+                let outputs = if toolchain.piped { &object_files } else { &c_files };
+                write!(ninja, "build")?;
+                for output in outputs {
+                    if hot {
+                        write!(ninja, " {dir}/hot-{output}")?;
+                    }
+                    else {
+                        write!(ninja, " {dir}/{output}")?;
+                    }
+                }
+                write!(ninja, ": poni-{name}-{profile}")?;
+                
+                // TODO: Escape spaces in paths
 
-            // Pass all the PonieScript files to the PonieScript compiler.
-            for poni in &project.files {
-                write!(ninja, " {}", poni.display())?;
-            }
+                // Pass all the PonieScript files to the PonieScript compiler.
+                for poni in &project.files {
+                    write!(ninja, " {}", poni.display())?;
+                }
+                // ProjectKind-specific PonieScript source files..
+                for poni in &project.kind.as_ref().map(|p| p.get_poniescripts()).unwrap_or(Vec::new()) {
+                    write!(ninja, " {}", poni_src_path.join(poni).display())?;
+                }
 
-            if toolchain.piped {
-                write!(ninja, " | {c_file_deps}")?;
-            }
+                if toolchain.piped {
+                    write!(ninja, " | {c_file_deps}")?;
+                }
 
-            // Create the imports variable.
-            write!(ninja, "\n  imports =")?;
-            for import in &project.imports {
-                write!(ninja, " -i {}", import.display())?;
-            }
+                // Create the imports variable.
+                write!(ninja, "\n  imports =")?;
+                for import in &project.imports {
+                    write!(ninja, " -i {}", import.display())?;
+                }
+                // ProjectKind-specific imports.
+                for import in &project.kind.as_ref().map(|p: &ProjectKind| p.get_imports()).unwrap_or(Vec::new()) {
+                    write!(ninja, " -i {}", poni_src_path.join(import).display())?;
+                }
+                // So, technically imports is just imports, not any arguments, but
+                // we'll include the -e in imports for now.
+                if project.kind.as_ref().map(|p| p.is_engine()).unwrap_or(false) {
+                    write!(ninja, " -e")?;
+                }
+                if hot {
+                    write!(ninja, " --hot")?;
+                }
+                for bind in &project.kind.as_ref().map(|p| p.get_required_binds()).unwrap_or(Vec::new()) {
+                    write!(ninja, " --bind-fun {}", bind)?;
+                }
+                for arg in &project.kind.as_ref().map(|p| p.get_poniescript_args()).unwrap_or(Vec::new()) {
+                    write!(ninja, " {}", arg)?;
+                }
 
-            // Create the outputargs variable. This is similar to outputs,
-            // except with -o in front of each one.
-            write!(ninja, "\n  outputargs =")?;
-            for output in outputs {
-                write!(ninja, " -o {dir}/{output}")?;
-            }
-            write!(ninja, "\n  indesc = {project_name}")?;
-            write!(ninja, "\n\n")?;
+
+                // Create the outputargs variable. This is similar to outputs,
+                // except with -o in front of each one.
+                write!(ninja, "\n  outputargs =")?;
+                for output in outputs {
+                    let hot = if hot { "hot-" } else { "" };
+                    write!(ninja, " -o {dir}/{hot}{output}")?;
+                }
+                write!(ninja, "\n  indesc = {project_name}")?;
+                write!(ninja, "\n\n")?;
+
+                Ok(())
+            };
+
+            build_poniescript_cmd(false)?;
+            build_poniescript_cmd(true)?;
 
             // Generate rules for building Rust dependencies.
-            if info.generated_rust_rules.insert(poni_gc_bin_path.clone()) {
+            if info.generated_rust_rules.insert(runtime_artefact_path.clone()) {
                 let cargotoml = poni_src_path.join("Cargo.toml");
-                writeln!(ninja, "build {} : cargo-{name}-{profile}", poni_gc_bin_path.display())?;
+                writeln!(ninja, "build {} : cargo-{name}-{profile}", runtime_artefact_path.display())?;
                     // We could depend on the cargo.toml path... seems a bit
                     // silly...
                     //cargotoml.display())?;
-                writeln!(ninja, "  package = poniescript-gc")?;
+                writeln!(ninja, "  package = {}", runtime_lib.replace("_", "-"))?;
                 writeln!(ninja, "  cargotoml = {}", cargotoml.display())?;
                 writeln!(ninja, "")?;
             }
@@ -390,6 +637,29 @@ pub fn read_build_config_precise(build_config_search_path: &Path) -> Result<Buil
     Ok(build)
 }
 
+pub fn read_build_config_from_string(text: &str) -> Result<BuildConfig, ConfigReadError> {
+    let build: BuildConfig = toml::from_str(text)
+        .map_err(|err| ConfigReadError::BadPoniesToml(err.to_string()))?;
+
+    Ok(build)
+}
+
+pub fn read_environment_config() -> Result<EnvironmentConfig, ConfigReadError> {
+    let app = XdgApp::new("poniescript")?;
+
+    let build_cfg_path = app.app_config_file("build-config.toml")?;
+
+    let config_str = fs::read_to_string(&build_cfg_path)
+        .map_err(|_| ConfigReadError::NoEnvironmentToml(build_cfg_path))?;
+
+    let mut env: EnvironmentConfig = toml::from_str(&config_str)
+        .map_err(|err| ConfigReadError::BadEnvironmentToml(err.to_string()))?;
+
+    env.generate_warnings();
+
+    return Ok(env);
+}
+
 pub fn read_configs(build_config_search_path: &Path) -> Result<(BuildConfig, EnvironmentConfig), ConfigReadError> {
     let app = XdgApp::new("poniescript")?;
 
@@ -398,8 +668,9 @@ pub fn read_configs(build_config_search_path: &Path) -> Result<(BuildConfig, Env
     let config_str = fs::read_to_string(&build_cfg_path)
         .map_err(|_| ConfigReadError::NoEnvironmentToml(build_cfg_path))?;
 
-    let env: EnvironmentConfig = toml::from_str(&config_str)
+    let mut env: EnvironmentConfig = toml::from_str(&config_str)
         .map_err(|err| ConfigReadError::BadEnvironmentToml(err.to_string()))?;
+    env.generate_warnings();
 
     let build_str = fs::read_to_string(build_config_search_path.join("ponies.toml"))
         .map_err(|_| ConfigReadError::NoPoniesToml)?;

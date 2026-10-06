@@ -1,0 +1,13 @@
+class Horse {
+    var name: StrBuf = "Horse";
+}
+
+fun init() {
+    let horses = (new Horse{}, new Horse{});
+
+    // Valid because the Horse itself is not constant.
+    horses.0.name = "hello";
+    horses.1.name = "goodbye";
+
+    print(horses.0.name, " ", horses.1.name); //! hello goodbye
+}

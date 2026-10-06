@@ -84,14 +84,14 @@ pub enum Type {
 	AssumeFloat,
 
 	// A type that only exists before the name-binding pass.
-	UnboundIdent(StrId),
+	UnboundIdent(Vec<StrId>),
 
 	// A type that comes from imported C code.
 	UnboundCStructPtr(StrId),
 }
 
 impl Type {
-	pub fn to_string(&self, db: &Db) -> String {
+	pub fn to_string(&self, db: &Db, input_typ_id: TypId, ) -> String {
 		match self {
 			Type::Int => "int".to_string(),
 			Type::Float => "float".to_string(),
@@ -110,8 +110,11 @@ impl Type {
 					if comma { result.push_str(", "); }
 					comma = true;
 
+					let id = *ty;
 					let ty = db.get(*ty);
-					result.push_str(&ty.to_string(db));
+					// TODO: Consider calling repr_type instead on all these
+					// inner calls.
+					result.push_str(&ty.to_string(db, id));
 				}
 				result.push(')');
 
@@ -126,16 +129,29 @@ impl Type {
 					if comma { result.push_str(", "); }
 					comma = true;
 
+					let id = *ty;
 					let ty = db.get(*ty);
-					result.push_str(&ty.to_string(db));
+					result.push_str(&ty.to_string(db, id));
 				}
 				result.push_str(") -> ");
-				result.push_str(&db.get(db.get(*sig).return_type).to_string(db));
+				let ret_type = db.get(*sig).return_type;
+				result.push_str(&db.get(ret_type).to_string(db, ret_type));
 
 				result
 			},
 
 			Type::Tuple(typs) => {
+				// Handle special names for vec types.
+				match input_typ_id {
+					t if t == db.types.vec2 => return "vec2".into(),
+					t if t == db.types.vec3 => return "vec3".into(),
+					t if t == db.types.vec4 => return "vec4".into(),
+					t if t == db.types.vec2i => return "vec2i".into(),
+					t if t == db.types.vec3i => return "vec3i".into(),
+					t if t == db.types.vec4i => return "vec4i".into(),
+					_ => {}
+				}
+
 				let mut result = "(".to_string();
 				let mut comma = false;
 				for typ in typs.iter() {
@@ -143,7 +159,7 @@ impl Type {
 					comma = true;
 
 					let ty = db.get(*typ);
-					result.push_str(&ty.to_string(db));
+					result.push_str(&ty.to_string(db, *typ));
 				}
 				if typs.len() == 0 {
 					// Single-element tuple must be indicated
@@ -158,13 +174,13 @@ impl Type {
 				db.get(db.get(*class).name).to_string()
 			}
 			Type::ArrayOf(typ) => {
-				format!("Array[{}]", db.get(*typ).to_string(db))
+				format!("Array[{}]", db.get(*typ).to_string(db, *typ))
 			}
 			Type::DynArrayOf(elem_ty, _) => {
-				format!("DynArray[{}]", db.get(*elem_ty).to_string(db))
+				format!("DynArray[{}]", db.get(*elem_ty).to_string(db, *elem_ty))
 			}
 			Type::Option(typ) => {
-				format!("{}?", db.get(*typ).to_string(db))
+				format!("{}?", db.get(*typ).to_string(db, *typ))
 			}
 			Type::RangeOf(left, right, typ) => {
 				let name = match (left, right) {
@@ -178,7 +194,7 @@ impl Type {
 					(RangeEnd::Unbounded, RangeEnd::Exclusive) => "InfOpen",
 					(RangeEnd::Unbounded, RangeEnd::Unbounded) => "Every",
 				};
-				format!("{}[{}]", name, db.get(*typ).to_string(db))
+				format!("{}[{}]", name, db.get(*typ).to_string(db, *typ))
 			}
 
 			Type::AssumeInt => "a number".to_string(),
@@ -219,8 +235,8 @@ impl Type {
 			Type::Unassigned => "<pony:compiler-err:unassigned-type>".into(),
 			Type::AssumeInt => "<pony:compiler-err:unassigned-int-type>".into(),
 			Type::AssumeFloat => "<pony:compiler-err:unassigned-float-type>".into(),
-			Type::UnboundIdent(name) =>
-				format!("<pony:compiler-err:unassigned-named-type[{}]>", db.get(*name)),
+			Type::UnboundIdent(names) =>
+				format!("<pony:compiler-err:unassigned-named-type[{}]>", db.get(*names.first().unwrap())),
 			Type::UnboundCStructPtr(name) =>
 				format!("[compiler error: unbound struct {}*]", db.get(*name))
 		}

@@ -1,0 +1,25 @@
+fun test() -> fun() {
+	fun helper(a: int, b: int) {
+		print(a + b);
+	}
+
+	fun uses_helper() {
+		helper(1, 2);
+		helper(3, 4);
+		helper(5, 6);
+	}
+
+	return uses_helper;
+}
+
+fun init() {
+	var f = test();
+	//! 3
+	//! 7
+	//! 11
+	f();
+	//! 3
+	//! 7
+	//! 11
+	f();
+}

@@ -1,0 +1,13 @@
+class Horse{}
+
+fun iter() -> Horse? {
+    new Horse{}
+}
+
+fun init() {
+    for i in iter {
+        //? Invalid assignment to 'i': cannot be written to.
+        i = new Horse{};
+        print(i);
+    }
+}

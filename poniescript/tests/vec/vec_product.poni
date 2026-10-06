@@ -4,6 +4,7 @@ fun init() {
 
     print(a * 2); //! (2, 4)
     print(b * 2); //! (6.000000, 8.000000)
+    // It's important to try it in both orders, this did actually catch a bug.
     print(3 * a); //! (3, 6)
     print(3 * b); //! (9.000000, 12.000000)
 }

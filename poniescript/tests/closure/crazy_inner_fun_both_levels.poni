@@ -1,0 +1,18 @@
+fun factory(x: int) -> fun(int) -> fun(int) -> int {
+    fun factory(y: int) -> fun(int) -> int {
+        fun add(z: int) -> int {
+            x + y + z
+        }
+    }
+}
+
+fun init() {
+    var add_3 = factory(3);
+    var add_3_5 = add_3(5);
+    print(add_3_5(7)); //! 15
+
+    print(factory(5)(10)(20)); //! 35
+
+    print(add_3_5(-5)); //! 3
+    print(add_3(4)(20)); //! 27
+}

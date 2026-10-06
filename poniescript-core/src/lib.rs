@@ -1,5 +1,6 @@
 #[macro_use]
 pub mod builtins;
+pub mod closure_convert;
 pub mod db;
 pub mod expr;
 pub mod typ;
@@ -14,6 +15,7 @@ pub mod binder;
 pub mod dead_code;
 pub mod init_ordering;
 pub mod glue;
+pub mod pretty_print;
 
 use std::path::PathBuf;
 
@@ -78,6 +80,32 @@ pub struct Args {
 	/// The number of threads to use for codegen. Note that high numbers can
 	/// result in a panic.
 	pub codegen_threads: usize,
+
+	#[arg(long = "bind-fun")]
+	/// Special functions that we expect to have implemented.
+	/// 
+	/// These are treated specially in two ways: First, we MUST define a global
+	/// function with this name, and second, its C name will also be this name
+	/// (no f_ prefix), which should mean it's guaranteed to refer to the global
+	/// function rather than e.g. a class member function of the same name.
+	pub bind_funs: Vec<String>,
+
+	#[arg(long="disable-gc-frames")]
+	/// Completely disable the generation of GC frames.
+	/// 
+	/// This prevents any GC-frame based backtrace for panic messages. However,
+	/// it also removes a lot of extra code for shuffling information around for
+	/// the GC.
+	/// 
+	/// This option is only appropriate if EVERY PonieScript thread in your program
+	/// will regularly safepoint.
+	pub disable_gc_frames: bool,
+
+	#[arg(long = "pretty-print")]
+	/// Stop after semantic analysis and pretty-print the AST.
+	/// 
+	/// TODO: Also support printing it at other stages.
+	pub pretty_print: bool,
 }
 
 #[cfg(test)]

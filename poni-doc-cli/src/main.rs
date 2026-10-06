@@ -9,12 +9,16 @@ struct Args {
     input_files: Vec<PathBuf>,
 
     #[arg(short, long)]
+    /// Imported .h files.
+    import: Vec<PathBuf>,
+
+    #[arg(short, long)]
     output_path: PathBuf,
 }
 
 fn main() {
     let args = Args::parse();
-    match poni_doc::generate_docs(&args.input_files, &args.output_path) {
+    match poni_doc::generate_docs(&args.input_files, &args.import, &args.output_path) {
         Ok(_) => {
             eprintln!("successfully wrote docs.");
         }

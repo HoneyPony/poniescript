@@ -42,13 +42,27 @@ fn generate_test(bt: &mut BuiltTests, bt_valgrind: &mut BuiltTests, path: &str, 
 
 pub fn generate(tests_file: &mut File) {
 	let tests = [
+		("assign/", "addition_tuple"),
+		("assign/", "arith_ops_float_promote"),
+		("assign/", "arith_ops_int"),
+		("assign/", "compound_in_tuple"),
+		("assign/", "compound_set_basic"),
+		("assign/", "compound_set_fun_call"),
+		("assign/", "err_arith_ops"),
+
 		("binary/", "binary_doubleblock"),
 		("binary/", "binary_bottom"),
 		("binary/", "binary_parens"),
 		("binary/", "tuples"),
 		("binary/", "err_class"),
+		("binary/", "modulo"),
 
 		("binder/", "sneaky"),
+		("binder/", "arity_resolve"),
+		("binder/", "type_resolve"),
+
+		("block/", "declaration_at_end_for_fun"),
+		("block/", "declaration_at_end_for_range"),
 
 		("cyclic/", "class_members_and_fun_thru_param"),
 		("cyclic/", "err_class_members_and_fun_thru_param"),
@@ -63,11 +77,13 @@ pub fn generate(tests_file: &mut File) {
 		("cyclic/", "globals_and_fun_thru_param"),
 		("cyclic/", "globals_expr"),
 		("cyclic/", "globals_same"),
+		("cyclic/", "globals_nice"),
 		("cyclic/", "globals_and_class_thru_difficult"),
 
 		("cyclic/", "class_members_thru_class_fun_thruself"),
 		("cyclic/", "class_members_thru_class_fun"),
 		("cyclic/", "err_class_members_thru_class_fun_thruself"),
+		("cyclic/", "err_class_members_thru_class_fun_thruself_evil"),
 		("cyclic/", "err_class_members_thru_class_fun"),
 		("cyclic/", "err_class_members_thru_class_fun2"),
 
@@ -126,6 +142,7 @@ pub fn generate(tests_file: &mut File) {
 		("string/", "very_simple_str"),
 
 		("tuple/", "assign"),
+		("tuple/", "nested_assign"),
 		("tuple/", "big_tuple"),
 		("tuple/", "create_tuple"),
 		("tuple/", "print_tuple"),
@@ -160,6 +177,22 @@ pub fn generate(tests_file: &mut File) {
 		("gc/", "tuple_as_member"),
 		("gc/", "fun_as_member"),
 
+		("lambda/", "explicit"),
+		("lambda/", "infer_as_arg"),
+		("lambda/", "infer_as_assign"),
+		("lambda/", "infer_as_return"),
+		("lambda/", "infer_as_builtin_arg"),
+		("lambda/", "infer_as_class_callback"),
+		("lambda/", "multiple_in_array"),
+		("lambda/", "multiple_on_lines"),
+		("lambda/", "err_bad_return_type"),
+		("lambda/", "err_cant_infer"),
+		("lambda/", "err_not_a_function"),
+		("lambda/", "err_param_mismatch"),
+		("lambda/", "err_wrong_count"),
+		("lambda/", "err_array_insufficient_infer"),
+		("lambda/", "err_conflicting_array_entries"),
+
 		("scope/", "block_shadow"),
 
 		("if/", "basic_if_expr_ret"),
@@ -176,11 +209,16 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "err_if_incompat_types"),
 		("if/", "err_if_no_else_bad_type"),
 
+		("new/", "err_new_mandatory_without_type"),
+		("new/", "err_new_mandatory"),
 		("new/", "new_dotted"),
+		("new/", "new_mandatory"),
 		("new/", "new_bad_self_ints"),
 		("new/", "new_bad_self_str"),
 		("new/", "fun_call"),
 		("new/", "nested_initializers"),
+		("new/", "nested_initializers_unique_fun_names"),
+		("new/", "vec2_for_floating_point_pair"),
 
 		("comparison/", "compare_basic"),
 		("comparison/", "compare_constants"),
@@ -194,6 +232,7 @@ pub fn generate(tests_file: &mut File) {
 		("lerp/", "tuple"),
 		("lerp/", "tuple_nest"),
 
+		("lexer/", "color_literal"),
 		("lexer/", "err_unterminated_string"),
 		("lexer/", "string_lit_basic_escapes"),
 		("lexer/", "utf8"),
@@ -222,6 +261,7 @@ pub fn generate(tests_file: &mut File) {
 		("loop/", "while_with_continue"),
 		("loop/", "for_with_continue"),
 
+		("misc/", "panicking_color_literal"),
 		("misc/", "array_of_str"),
 		("misc/", "array_of_strbuf"),
 		("misc/", "array_of_tuple_of_opt_class_opt_strbuf"),
@@ -239,6 +279,10 @@ pub fn generate(tests_file: &mut File) {
 
 		("parser/", "err_fun_missing_brace"),
 		("parser/", "err_missing_expr_paren"),
+		("parser/", "unary_prec"),
+		("parser/", "new_chain"),
+		("parser/", "long_chain"),
+		("parser/", "array_index_immediate"),
 
 		("call/", "call_captured_rev"),
 		("call/", "call_captured"),
@@ -256,6 +300,33 @@ pub fn generate(tests_file: &mut File) {
 		("call/", "if_simple_lambda"),
 		("call/", "uses_fun_with_class_retval"),
 		("call/", "uses_fun_with_class_param"),
+
+		("closure/", "simple"),
+		("closure/", "simple_class"),
+		("closure/", "self_in_class"),
+		("closure/", "simple_no_param"),
+		("closure/", "simple_no_param_psuedo_obj"),
+		("closure/", "for_loop"),
+		("closure/", "while_loop"),
+		("closure/", "param_mut"),
+		("closure/", "crazy_inner_fun"),
+		("closure/", "crazy_inner_fun_both_levels"),
+		("closure/", "funs_of_funs"),
+		("closure/", "nested_class"),
+		("closure/", "closure_in_new"),
+
+		// old closure tests
+		("closure/", "capture_fun_lambda"),
+		("closure/", "capture_fun_with_closure_lambda"),
+		("closure/", "capture_fun_with_closure"),
+		("closure/", "capture_fun"),
+		("closure/", "capture_strbuf"),
+		("closure/", "double_nested_param"),
+		("closure/", "double_nested"),
+		("closure/", "nested_param"),
+		("closure/", "nested_var"),
+		("closure/", "returns_closure_notinit"),
+		("closure/", "returns_closure"),
 
 		("classes/", "basic_class"),
 		("classes/", "basic_new_inferred_get"),
@@ -286,6 +357,31 @@ pub fn generate(tests_file: &mut File) {
 		("classes/", "noout_pure_data_initializers"),
 		("classes/", "noout_pure_data"),
 
+		("classes/", "class_member_after_fun"),
+
+		("classes/", "inner_static_simple"),
+		("classes/", "inner_static_scoped"),
+		("classes/", "inner_wrongscope_err"),
+		("classes/", "inner_wrongscope_fullname"),
+		("classes/", "inner_many_scopes"),
+
+		("classes/", "inner_dyn_simple"),
+		("classes/", "inner_dyn_construct"),
+		("classes/", "inner_dyn_construct_weirder"),
+		("classes/", "inner_dyn_funcapture"),
+		("classes/", "inner_dyn_funcall"),
+		("classes/", "inner_dyn_funcapture_getter"),
+		("classes/", "inner_dyn_funcall_getter"),
+		("classes/", "inner_dyn2_funcapture"),
+		("classes/", "inner_dyn2_funcall"),
+		("classes/", "inner_dyn2_funcapture_getter"),
+		("classes/", "inner_dyn2_funcall_getter"),
+
+		("classes/", "inner_err_not_dyn"),
+		("classes/", "inner_err_not_dyn_get"),
+		("classes/", "inner_err_not_dyn_set"),
+		("classes/", "inner_err_not_dyn_funcapture"),
+
 		("classes/", "err_assign_to_class"),
 		("classes/", "err_get_nonexistent_member"),
 		("classes/", "err_new_unknown_property"),
@@ -304,7 +400,18 @@ pub fn generate(tests_file: &mut File) {
 		("set/", "set_bottom_etc"),
 		("set/", "set_chain"),
 
-		("promote/", "array_assign"),
+		("let/", "let_err_classmem_reassign"),
+		("let/", "let_err_reassign"),
+		("let/", "let_err_tuple"),
+		("let/", "let_new"),
+		("let/", "let_read"),
+		("let/", "let_success_tuple"),
+
+		("promote/", "err_array_assign"),
+		("promote/", "err_array_assign_in_tuple"),
+		("promote/", "err_array_lit"),
+		("promote/", "err_dynarray_assign"),
+		("promote/", "err_dynarray_from_array"),
 		("promote/", "blocks_float_print"),
 		("promote/", "blocks_float_var"),
 		("promote/", "blocks_int_print"),
@@ -313,6 +420,7 @@ pub fn generate(tests_file: &mut File) {
 		("promote/", "tuples"),
 		("promote/", "tuple_matrix"),
 		("promote/", "weird_tuple"),
+		("promote/", "tuple_of_optional"),
 	
 		("variable/", "assign_numbers"),
 		("variable/", "assign_to_bottom_binop"),
@@ -350,6 +458,7 @@ pub fn generate(tests_file: &mut File) {
 		("dynarray/", "builtin_any"),
 		("dynarray/", "builtin_all"),
 		("dynarray/", "builtin_clone_shallow"),
+		("dynarray/", "builtin_pop_or_panic"),
 
 		("array/", "array_nested_empty_lhs"),
 		("array/", "array_nested_empty_rhs"),
@@ -402,16 +511,24 @@ pub fn generate(tests_file: &mut File) {
 		("vec/", "vec_ret"),
 		("vec/", "vec_lerp"),
 		("vec/", "vec_product"),
+		("vec/", "weird_vec_product_promote"),
+		("vec/", "weird_vec_product_expr_promote"),
 		("vec/", "builtin_map"),
 
 		("unary/", "unary_int_float"),
 		("unary/", "unary_vec"),
+		("unary/", "unary_not"),
+		("unary/", "err_not_on_nonbool"),
 
 		("range/", "basic_parse"),
 		("range/", "basic_parse_properties"),
 		("range/", "basic_var"),
 		("range/", "two_main_types"),
 
+		("readonly/", "readonly_properties"),
+
+		("for/", "err_assign_fun"),
+		("for/", "err_assign_range"),
 		("for/", "correct_scope"),
 		("for/", "correct_scope2"),
 		("for/", "for_basic_i"),
@@ -422,6 +539,8 @@ pub fn generate(tests_file: &mut File) {
 		("for/", "for_basic_nospace"),
 		("for/", "for_closed_i_nospace"),
 		("for/", "for_closed_nospace"),
+
+		("for/", "for_optfun"),
 	];
 
 	let mut bt = BuiltTests {

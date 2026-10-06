@@ -5,11 +5,12 @@ use std::fs::File;
 use std::io::Write;
 
 use poni_arena::ArenaKey;
+use crate::expr::ImportKind;
 use crate::{db::*, Args};
 use crate::typ::Type;
 
 use std::io::BufWriter;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::{inf_write, inf_writeln};
 
@@ -67,6 +68,8 @@ impl CodegenOutputs {
 
 impl CodegenCoordinator {
 	fn compile_class_declare(&mut self, class: ClassId, out: &mut CodegenOutputs) {
+		if class == self.db.class_unassigned { return; }
+		
 		// Write the struct declaration. These must come before signature declarations
 		// in case the signature needs to use the struct; The signature declarations
 		// must then come before structs in case the struct needs to use the signature.
@@ -74,8 +77,20 @@ impl CodegenCoordinator {
 	}
 
 	fn compile_class_define(&mut self, class: ClassId, out: &mut CodegenOutputs) {
+		if class == self.db.class_unassigned { return; }
+		
+		// Don't generate struct definitinos for CHeader imports, for now.
+		if matches!(self.db.get(class).import_kind, ImportKind::CHeader) { return; }
+
 		// Write the struct definition.
 		inf_writeln!(out.struct_define, "struct {} {{", self.db.get_class_cname(class));
+
+		// The object used for garbage collection / virtual dispatch.
+		inf_writeln!(out.struct_define, "\tstruct ps_object object;");
+
+		if let Some(parent) = self.db.get(class).parent {
+			inf_writeln!(out.struct_define, "\tstruct {} *parent;", self.db.get_class_cname(parent));
+		}
 
 		for var in &self.db.get(class).vars {
 			// Compile the variable declaration into the struct.
@@ -101,8 +116,8 @@ impl CodegenCoordinator {
 	fn compile_string_constant_init(&mut self, declare: &mut String, define: &mut String, init: &mut String) {
 		inf_writeln!(init, "void poni_init_strings(struct poni_gc_context *ctx) {{");
 		for id in self.db.iter_strconst() {
-			inf_writeln!(declare, "extern const ps_str *ps_str_const{};", id.to_index());
-			inf_writeln!(define, "const ps_str* ps_str_const{} = NULL;", id.to_index());
+			inf_writeln!(declare, "extern ps_str *ps_str_const{};", id.to_index());
+			inf_writeln!(define, "ps_str* ps_str_const{} = NULL;", id.to_index());
 			inf_writeln!(init, "\tps_str_const{} = ps_str_from_literal(ctx, {});",
 				id.to_index(), self.db.get(id));
 		}
@@ -242,7 +257,8 @@ poni_gc_visit_object(struct poni_gc *gc, void *object) {
 				size_t stride = poni_get_type_stride(header->type);
 
 				for(ps_int i = 0; i < header->length; ++i) {
-					poni_gc_mark(gc, elem_root);
+					uintptr_t as_ptr = *(uintptr_t*)(elem_root);
+					poni_gc_mark(gc, (void*)as_ptr);
 					elem_root += stride;
 				}
 			}
@@ -259,6 +275,7 @@ poni_gc_visit_object(struct poni_gc *gc, void *object) {
 			// of this array. So, instead we directly mark the inner buffer,
 			// and then walk the children manually.
 			struct ps_array_header *inner = header->buffer;
+			poni_gc_mark(gc, inner);
 			char *elem_root = (char*)inner + sizeof(struct ps_array_header);
 
 			// Note that although the DynArray's length might be changed by
@@ -291,7 +308,8 @@ poni_gc_visit_object(struct poni_gc *gc, void *object) {
 				size_t stride = poni_get_type_stride(header->type);
 
 				for(ps_int i = 0; i < length; ++i) {
-					poni_gc_mark(gc, elem_root);
+					uintptr_t as_ptr = *(uintptr_t*)(elem_root);
+					poni_gc_mark(gc, (void*)as_ptr);
 					elem_root += stride;
 				}
 			}
@@ -333,14 +351,49 @@ poni_gc_get_allocation_size(void *object) {
 
 		for typ in self.db.iter_typ() {
 			if !self.db.is_cgen_safe(typ) { continue; }
-
 			let tag = self.db.get_type_ctag(typ);
+
+			let should_define_size = match self.db.get(typ) {
+				// Doesn't have a tag
+				Type::Void | Type::Bottom => false,
+				// Defined above
+				Type::Str | Type::StrConst | Type::StrBuf => false,
+				Type::ArrayOf(_) | Type::DynArrayOf(..) => false,
+				// For now this is false, but this will probably change..?
+				Type::Option(_) => false,
+				_ => true
+			};
+
+			let use_fun_size = match self.db.get(typ) {
+				Type::Fun(..) => true,
+				_ => false,
+			};
+
+			if should_define_size {
+				if use_fun_size {
+					inf_writeln!(allocation_size, "\tcase {}: return sizeof(struct {{ void *a, *b; }});", tag);
+				}
+				else {
+					let deref = if self.db.is_value_type(typ) { ("", "") } else { ("*(", ")(0)") };
+					inf_writeln!(allocation_size, "\tcase {}: return sizeof({}{}{});", tag, deref.0, self.db.get_ctype(typ), deref.1);
+				}
+			}
+
+			
 			match self.db.get(typ) {
 				Type::Class(id) => {
 					inf_writeln!(visit_object, "\tcase {}: {{", tag);
 					inf_writeln!(visit_object, "\t\tstruct {} *self = object;", self.db.get_class_cname(*id));
+					
+					if self.db.get(*id).parent.is_some() {
+						inf_writeln!(visit_object, "\t\tponi_gc_mark(gc, self->parent);");
+					}
+
 					for field in &self.db.get(*id).vars {
 						let field_ty = self.db.get(*field).typ;
+
+						// Don't mark any primtive types.
+						if self.db.is_primitive_type(field_ty) { continue; }
 
 						match self.db.get(field_ty) {
 							Type::Int | Type::Float | Type::Bool => {}
@@ -383,6 +436,12 @@ poni_gc_get_allocation_size(void *object) {
 				},
 
 				Type::Tuple(typs) => {
+					// Don't mark any primtive types.
+					if self.db.is_primitive_type(typ) {
+						inf_writeln!(valuetype, "\tcase {}: break;", tag);
+						continue;
+					}
+
 					inf_writeln!(valuetype, "\tcase {}: {{", tag);
 					inf_writeln!(valuetype, "\t\t{} *self = object;", self.db.get_ctype(typ));
 
@@ -452,6 +511,43 @@ poni_gc_get_allocation_size(void *object) {
 		inf_writeln!(valuetype, "\t}}\n}}");
 		inf_writeln!(visit_object, "\t}}\n}}");
 		inf_writeln!(allocation_size, "\t}}\n}}");
+
+		for global in &self.db.globals {
+			let typ = self.db.get_var_type(*global);
+			let is_valty = self.db.is_value_type(typ);
+
+			if is_valty {
+				// Don't bother marking primitive types. (Primitives are a subset
+				// of value types).
+				if self.db.is_primitive_type(typ) {
+					continue;
+				}
+
+				match self.db.get(typ) {
+					// Even though option types are value types, we have to visit them
+					// as pointers (we don't have optional value types yet.)
+					//
+					// ...Obviously, all this special casing needs some work...
+					Type::Option(_) => {
+						inf_writeln!(visit_roots, "\tponi_gc_mark(gc, {});",
+							self.db.get_cname(*global));
+					}
+					// All other value types should be real value types...?
+					_ => {
+						inf_writeln!(visit_roots, "\tponi_gc_visit_valuetype(gc, &{}, {});",
+							self.db.get_cname(*global), self.db.get_type_ctag(typ));
+					}
+				}
+			}
+			else {
+				inf_writeln!(visit_roots, "\tponi_gc_mark(gc, {});",
+					self.db.get_cname(*global));
+			}
+		}
+
+		for id in self.db.iter_strconst() {
+			inf_writeln!(visit_roots, "\tponi_gc_mark(gc, ps_str_const{});", id.to_index());
+		}
 
 		inf_writeln!(visit_roots, "}}");
 
@@ -598,14 +694,19 @@ poni_gc_get_allocation_size(void *object) {
 		}
 
 		let send0 = sends[0].clone();
+		let join_handles = Arc::new(Mutex::new(Vec::new()));
 		
-		{
+		let handle = {
 			// In order to improve upon the overhead of starting threads, we
 			// start the first thread, then have it start the rest, as we move on
 			// to other codegen tasks.
 			let send = sends[0].clone();
 			let ast = Arc::clone(&ast);
 			let db = self.db;
+			let disable_gc_frames = args.disable_gc_frames;
+			let join_handles = join_handles.clone();
+
+
 			std::thread::spawn(move || {
 				// Distribute senders to the main codegen threads in a round-robin
 				// fashion. This should work decently well.
@@ -614,7 +715,7 @@ poni_gc_get_allocation_size(void *object) {
 				for (idx, task_set) in task_sets.into_iter().enumerate() {
 					// For the last task, we will just handle it ourselves.
 					if idx == thread_count - 1 {
-						let mut cg = Codegen::new(db, send.clone());
+						let mut cg = Codegen::new(db, send.clone(), disable_gc_frames);
 						cg.handle_tasks(Arc::clone(&ast), task_set);
 					}
 					// Otherwise, spawn more threads.
@@ -622,13 +723,23 @@ poni_gc_get_allocation_size(void *object) {
 						let send = sends[send_idx].clone();
 						send_idx = (send_idx + 1) % sends.len();
 						let ast = Arc::clone(&ast);
-						std::thread::spawn(|| {
-							let mut cg = Codegen::new(db, send);
+
+						let handle = std::thread::spawn(move || {
+							let mut cg = Codegen::new(db, send, disable_gc_frames);
 							cg.handle_tasks(ast, task_set);
 						});
+
+						{
+							let mut lock = join_handles.lock().unwrap();
+							lock.push(handle);
+						}
 					}
 				}
-			});
+			})
+		};
+		{
+			let mut lock = join_handles.lock().unwrap();
+			lock.push(handle);
 		}
 
 		// Use a big capacity for our BufWriter, at least for now.
@@ -649,7 +760,7 @@ poni_gc_get_allocation_size(void *object) {
 		// initializer (it shouldn't be able to GC).
 
 		// For any extras in the globals code, just send it to the 0th channel.
-		let mut cg = Codegen::new(&self.db, send0);
+		let mut cg = Codegen::new(&self.db, send0, args.disable_gc_frames);
 
 		cg.disable_gc_frames = true;
 
@@ -749,18 +860,42 @@ poni_gc_get_allocation_size(void *object) {
 
 		std::thread::scope(|s| {
 			let mut do_support_fns = true;
+			let mut join_handles_scoped = Vec::new();
 			for (writer, recv) in writers.into_iter().zip(recvs.into_iter()) {
 				{
 					let do_support_fns = do_support_fns;
 					let outputs = &outputs;
 					let the_self = &self;
-					s.spawn(move || {
+					let handle = s.spawn(move || {
 						Self::per_writer_codegen(the_self, writer, recv, &outputs, args, do_support_fns)
 					});
+
+					join_handles_scoped.push(handle);
 				}
 				do_support_fns = false;
 			}
+
+			// We want to panic if we can't join any thread.
+			for handle in join_handles_scoped {
+				let joined_result = handle.join().unwrap();
+				if let Err(e) = joined_result {
+					// TODO: Is this what we want to do here?
+					panic!("Codegen thread encountered I/O error: {}", e)
+				}
+			}
 		});
+
+		let join_handles = {
+			let mut lock = join_handles.lock().unwrap();
+			let handles: &mut Vec<_> = &mut lock;
+			std::mem::take(handles)
+		};
+
+		// We want to panic if we can't join any thread.
+		for handle in join_handles {
+			handle.join().unwrap();
+		}
+		
 
 		Ok(())
 	}

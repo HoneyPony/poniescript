@@ -1,0 +1,19 @@
+class Animals {
+    var dummy = 0;
+
+    class Horse {
+        var name: StrBuf = "hello";
+    }
+}
+
+fun make_horse() -> Animals.Horse {
+    return new Animals.Horse {
+        name: "Make Horse"
+    };
+}
+
+fun init() {
+    var horse = make_horse();
+
+    print(horse.name); //! Make Horse
+}

@@ -1,0 +1,20 @@
+fun init() {
+    var x: StrConst = "hello";
+    var y: Str = "goodbye";
+    var z: StrBuf = "yes";
+
+    var a = [1, 2, 3];
+    var b: DynArray[int] = [4, 5, 6];
+
+    //? Invalid assignment to property 'length', which cannot be written to.
+    x.length = 10;
+    //? Invalid assignment to property 'length', which cannot be written to.
+    y.length = 10;
+    //? Invalid assignment to property 'length', which cannot be written to.
+    z.length = 10;
+
+    //? Invalid assignment to property 'length', which cannot be written to.
+    a.length = 10;
+    //? Invalid assignment to property 'length', which cannot be written to.
+    b.length = 10;
+}

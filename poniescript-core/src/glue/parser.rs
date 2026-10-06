@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{db::*, expr::{Class, Fun, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
+use crate::{db::*, expr::{Class, Fun, ImportKind, Sig}, glue::lexer::{GlueTok, GlueToken, Lexer}, source::SourceLocation, typ::Type};
 use crate::error::Error;
 
 use poni_arena::IndexCell;
@@ -15,6 +15,10 @@ pub struct Parser<'b> {
 	last_location: SourceLocation,
 
 	pub had_error: bool,
+
+    /// Store a Vec of the normal Token for the doc comment, just like the
+    /// PonieScript parser.
+    prev_doc_comment: Vec<crate::lexer::Token>,
 }
 
 // TODO: Deduplicate this with the other parser? Maybe build a small general
@@ -134,6 +138,8 @@ impl<'b> Parser<'b> {
 			},
 
 			had_error: false,
+
+            prev_doc_comment: Vec::new(),
 		};
 
 		Ok(parser)
@@ -165,10 +171,38 @@ impl<'b> Parser<'b> {
 
 	fn advance(&mut self) -> Result<GlueToken> {
 		self.last_location = self.current.location.clone();
-		let next = self.lexer
+
+        let mut cur_doc_comment = Vec::new();
+
+        let next = loop {
+			let next = self.lexer
 			.next_token(self.db)
 			.map_err(|err| ParseErr::IoErr(err))?;
+
+			if matches!(next.typ, GlueTok::DocComment) {
+                // We're able to mutate between the token types because they
+                // both have a DocComment kind.
+				cur_doc_comment.push(crate::lexer::Token {
+                    typ: crate::lexer::Tok::DocComment,
+                    lexeme: next.lexeme,
+                    location: next.location,
+                });
+			}
+			else {
+				self.prev_doc_comment = cur_doc_comment;
+				break next;
+			}
+		};
+
 		Ok(std::mem::replace(&mut self.current, next))
+	}
+
+    fn get_doc_comment(&mut self) -> Option<Vec<crate::lexer::Token>> {
+		let doc_comment = std::mem::take(&mut self.prev_doc_comment);
+		if !doc_comment.is_empty() {
+			return Some(doc_comment);
+		}
+		return None;
 	}
 
 	fn is_at_end(&self) -> bool {
@@ -192,6 +226,7 @@ impl<'b> Parser<'b> {
     }
 
     fn class(&mut self) -> Result<()> {
+        let doc_comment = self.get_doc_comment();
         let location = self.start();
         expected!(self, GlueTok::AnnotateClass, "PS_CLASS")?;
 
@@ -208,6 +243,8 @@ impl<'b> Parser<'b> {
 
 		let mut var_map = FxHashMap::default();
 		let fun_map = FxHashMap::default();
+
+        let mut mandatory_vars = FxHashSet::default();
 
         // If there's a semicolon, this is a completely opaque class (which is
         // fine). Otherwise, we can look for member variables in the struct
@@ -226,6 +263,8 @@ impl<'b> Parser<'b> {
                     let var = self.var()?;
                     vars.push(var);
                     var_map.insert(self.db.get(var).name, var);
+
+                    mandatory_vars.insert(var);
                 }
                 else {
                     self.advance()?;
@@ -245,15 +284,24 @@ impl<'b> Parser<'b> {
             None => c_name.lexeme
         };
 
+        log::trace!("got C class name: '{}'", self.db.get(class_name));
+
         let class: ClassId = self.db.push(Class {
             name: class_name,
             vars: vars.clone(),
             funs,
+            classes: Vec::new(),
+            parent: None,
             var_map,
             fun_map,
+            class_map: FxHashMap::default(),
+            import_kind: ImportKind::CHeader,
+            // TODO: For imported classes, we need both the ability to mark
+            // which vars are mandatory, and ALSO a way to mark the class
+            // as unconstructible from PonieScript.
+            mandatory_vars,
             location,
-            // TODO: Doc comments for imported functions
-            doc_comment: None,
+            doc_comment,
         });
 
         for var in vars {
@@ -261,12 +309,15 @@ impl<'b> Parser<'b> {
         }
 
         self.db.add_full_name(self.db.get(class_name), ScopeEntry::Class(class));
+        self.db.add_known_c_struct(c_name.lexeme, class);
         self.db.know_class_cname(class, self.db.get(c_name.lexeme));
+        self.db.imported_classes.push(class);
 
         Ok(())
     }
 
     fn fun(&mut self) -> Result<()> {
+        let doc_comment = self.get_doc_comment();
         let location = self.start();
         expected!(self, GlueTok::AnnotateFun, "PS_FUN")?;
 
@@ -291,7 +342,7 @@ impl<'b> Parser<'b> {
             // We could possibly skip variable names, but for now it's easy
             // enough to require them.
             let var_cname = expected!(self, GlueTok::Identifier, "Parameter name")?;
-            let identity = self.db.new_var(var_cname.lexeme, c_type, None, None, false, None,
+            let identity = self.db.new_var(var_cname.lexeme, c_type, false, None, None, None, None, None,
 			    self.last_location.clone(),
                 // No doc comments for function params for now
                 None);
@@ -330,19 +381,20 @@ impl<'b> Parser<'b> {
             parameters: params,
             return_type: c_ret_type,
             class: None,
+            closure: None,
             expression: None,
             location,
-            // TODO: Doc comments for imported functions
-            doc_comment: None,
+            doc_comment,
         });
 
         for param in params_for_fun {
-            self.db.get_mut(param).fun = Some(fun);
+            self.db.get_mut(param).param_for = Some(fun);
         }
 
         // TODO: Handle name collisions here as well?
         self.db.add_full_name(self.db.get(fun_name), ScopeEntry::Fun(fun));
         self.db.know_fun_cname(fun, self.db.get(c_name.lexeme));
+        self.db.imported_funs.push(fun);
 
         if self.match_(GlueTok::Semicolon)?.is_some() {
             // Ok, function declaration, we're good
@@ -362,7 +414,14 @@ impl<'b> Parser<'b> {
         if self.match_(GlueTok::Struct)?.is_some() {
             let struct_name = expected!(self, GlueTok::Identifier, "Identifier after 'struct'")?;
             expected!(self, GlueTok::Star, "'*' after struct name")?;
-            self.db.put_type(Type::UnboundCStructPtr(struct_name.lexeme));
+            return Ok(self.db.put_type(Type::UnboundCStructPtr(struct_name.lexeme)));
+        }
+
+        if self.match_(GlueTok::AnnotateOption)?.is_some() {
+            expected!(self, GlueTok::LeftParen, "'(' after PS_OPTION")?;
+            let inner = self.c_type()?;
+            expected!(self, GlueTok::RightParen, "')' after type name")?;
+            return Ok(self.db.put_type(Type::Option(inner)));
         }
 
         let id = expected!(self, GlueTok::Identifier, "C type expression")?;
@@ -376,16 +435,26 @@ impl<'b> Parser<'b> {
         if id.lexeme == self.db.put_str("ps_bool") {
             return Ok(self.db.types.bool)
         }
+        if id.lexeme == self.db.put_str("void") {
+            return Ok(self.db.types.void)
+        }
+        if id.lexeme == self.db.put_str("ps_vec2") { return Ok(self.db.types.vec2); }
+        if id.lexeme == self.db.put_str("ps_vec3") { return Ok(self.db.types.vec3); }
+        if id.lexeme == self.db.put_str("ps_vec4") { return Ok(self.db.types.vec4); }
+        if id.lexeme == self.db.put_str("ps_vec2i") { return Ok(self.db.types.vec2i); }
+        if id.lexeme == self.db.put_str("ps_vec3i") { return Ok(self.db.types.vec3i); }
+        if id.lexeme == self.db.put_str("ps_vec4i") { return Ok(self.db.types.vec4i); }
         if id.lexeme == self.db.put_str("ps_strbuf") {
-            expected!(self, GlueTok::Star, "'*' after ps_strbuf");
+            expected!(self, GlueTok::Star, "'*' after ps_strbuf")?;
             return Ok(self.db.types.str_buf);
         }
 
-        parse_error!(self, "Unknown C type");
+        parse_error!(self, "Unknown C type '{}'", self.db.get(id.lexeme));
         Err(ParseErr::SyntaxErr)
     }
 
     fn var(&mut self) -> Result<VarId> {
+        let doc_comment = self.get_doc_comment();
         let location = self.start();
         expected!(self, GlueTok::AnnotateVar, "PS_VAR")?;
 
@@ -408,9 +477,8 @@ impl<'b> Parser<'b> {
             None => c_name.lexeme
         };
 
-        let var = self.db.new_var(var_name, c_type, None, None, false, None, self.end(location),
-            // TOOD: Doc comments, at least for classes.
-            None);
+        let var = self.db.new_var(var_name, c_type, false, None, None, None, None, None, self.end(location),
+            doc_comment);
         self.db.know_var_cname(var, self.db.get(c_name.lexeme));
 
         // TODO: Handle name collisions here as well?
@@ -507,6 +575,17 @@ pub fn parse_import(ast: &mut Ast, db: &mut Db, path: &Path) -> std::io::Result<
 	let source_id = ast.new_source(path.to_path_buf());
 
 	let file = ast.sources.get(source_id).to_reader()?;
+
+	let mut parser = Parser::new(file, source_id, db)?;
+	parser.parse()?;
+
+	let had_error = parser.had_error;
+
+	Ok(had_error)
+}
+
+pub fn parse_import_2(ast: &mut Ast, db: &mut Db, source_id: SourceId) -> std::io::Result<bool> {
+    let file = ast.sources.get(source_id).to_reader()?;
 
 	let mut parser = Parser::new(file, source_id, db)?;
 	parser.parse()?;

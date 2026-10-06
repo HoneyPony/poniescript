@@ -3,8 +3,9 @@ use std::{collections::HashMap, path::PathBuf, sync::{Arc, Mutex}, time::SystemT
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
 
 use poniescript_core::{
-    arena::IndexCell, binder, db::*, init_ordering, module::{self}, source::*, typecheck, Args
+    Args, binder, db::*, glue, init_ordering, module::{self}, source::*, typecheck
 };
+use poni_arena::IndexCell;
 
 use crate::{inlay_hint::{compute_inlay_hint_cache, InlayHintCache}, LspArgs};
 
@@ -32,6 +33,23 @@ fn parse_all_modules(ast: &mut Ast, db: &mut Db, doc_map: &mut HashMap<SourceId,
 			}
 		}
 	}
+
+    for doc in &project.imports {
+        let source = LSPSource::new(doc.clone());
+        let source_id = ast.sources.push(Source::new(source));
+
+        url_to_id_map.insert(doc.url.clone(), source_id);
+        id_to_url_map.insert(source_id, doc.url.clone());
+
+        doc_map.insert(source_id, doc.clone());
+
+        match glue::parser::parse_import_2(ast, db, source_id) {
+            Ok(_) => {},
+            Err(_) => {
+                todo!("Report I/O errors to LSP?");
+            }
+        }
+    }
 }
 
 // TODO: Respect utf-16, utf-8, etc
@@ -73,8 +91,11 @@ fn report_errors(ast: &Ast, db: &Db, doc_map: &HashMap<SourceId, Arc<Document>>)
     }
 
     for error in &db.errors {
+        // Can we show diagnostics without a location..?
+        let Some(main_loc) = &error.main_location else { continue; };
+
         let diag = Diagnostic {
-            range: convert_range(ast, &error.main_location),
+            range: convert_range(ast, &main_loc),
             severity: Some(if error.is_warning { DiagnosticSeverity::WARNING } else { DiagnosticSeverity::ERROR }),
             code: None,
             code_description: None,
@@ -86,7 +107,7 @@ fn report_errors(ast: &Ast, db: &Db, doc_map: &HashMap<SourceId, Arc<Document>>)
         };
 
         // Safety: We should have pushed an idx for every SourceId.
-        let idx = *idx_map.get(&error.main_location.source).unwrap();
+        let idx = *idx_map.get(&main_loc.source).unwrap();
         diags.all[idx].1.push(diag);
 	}
 
@@ -151,6 +172,8 @@ pub struct Project {
     cache: Mutex<Option<Arc<Mutex<ProjectCache>>>>,
 
     files: Vec<Arc<Document>>,
+
+    imports: Vec<Arc<Document>>,
 }
 
 impl Project {
@@ -159,7 +182,7 @@ impl Project {
         *cache = None;
     }
 
-    pub fn recompute_cache(self: &Arc<Self>, store: &DocumentStore) -> Arc<Mutex<ProjectCache>> {
+    fn recompute_cache_impl(self: &Arc<Self>, store: &DocumentStore) -> Arc<Mutex<ProjectCache>> {
         eprintln!("--- re-parse modules ---");
         let start = SystemTime::now();
 
@@ -211,7 +234,7 @@ impl Project {
             args.hot = true;
             args.engine = true;
 
-            if let Some(output) = &store.c_output {
+            if let Some(_output) = &store.c_output {
                 //ast = do_finish_compile(&mut db, ast, output, &args);
             }
         }
@@ -224,22 +247,79 @@ impl Project {
             url_to_id_map,
         }));
 
-        let mut lock = self.cache.lock().unwrap();
-        *lock = Some(Arc::clone(&cache));
+        cache
+    }
+
+    fn build_and_save_dummy_cache(self: &Arc<Self>, mut cache_lock: std::sync::MutexGuard<'_, Option<Arc<Mutex<ProjectCache>>>>) -> Arc<Mutex<ProjectCache>> {
+        let mut ast = Ast::new();
+        let db = Db::new(&mut ast);
+        let url_to_id_map = HashMap::new();
+        let id_to_url_map = HashMap::new();
+
+        let cache = Arc::new(Mutex::new(ProjectCache {
+            db,
+            ast,
+            diagnostics: None,
+            id_to_url_map,
+            url_to_id_map,
+        }));
+
+        // Store the dummy cache for later.
+        *cache_lock = Some(Arc::clone(&cache));
 
         cache
     }
 
+    // cache_lock should be a MutexGuard on our 'cache' member.
+    //
+    // We want to hold the lock for the entire process of recomputing the cache. This ensures
+    // that only one LSP response is trying to recompute the cache at once, which should save
+    // on compute (and in practice seems to keep the language server from locking up).
+    fn recompute_cache(self: &Arc<Self>, store: &DocumentStore, mut cache_lock: std::sync::MutexGuard<'_, Option<Arc<Mutex<ProjectCache>>>>) -> Arc<Mutex<ProjectCache>> {
+
+        let maybe_cache = std::panic::catch_unwind(|| {
+            self.recompute_cache_impl(store)
+        });
+
+        match maybe_cache {
+            Ok(new_cache) => {
+                // Store the new cache and return it.
+                *cache_lock = Some(Arc::clone(&new_cache));
+
+                new_cache
+            }
+            Err(err) => {
+                // Log the error
+                if let Some(str) = err.downcast_ref::<&str>() {
+                    eprintln!("panic during analysis: {}", str);
+                }
+                else if let Some(string) = err.downcast_ref::<String>() {
+                    eprintln!("panic during analysis: {}", string);
+                }
+                else {
+                    eprintln!("panic during analysis of unknown type '{:?}'", err.type_id());
+                }
+
+                // If we panicked, use the old cache if possible...
+                if let Some(existing) = cache_lock.as_ref() {
+                    return existing.clone();
+                }
+
+                // Otherwise, recompute a dummy cache, which is infallible.
+                // (TODO: Just make everything else handle not having a cache?)
+                self.build_and_save_dummy_cache(cache_lock)
+            }
+        }
+    }
+
     pub fn get_cache(self: &Arc<Self>, store: &DocumentStore) -> Arc<Mutex<ProjectCache>> {
-        let lock = self.cache.lock().unwrap();
-        if let Some(cache) = lock.as_ref() {
+        let cache_lock = self.cache.lock().unwrap();
+        if let Some(cache) = cache_lock.as_ref() {
             return Arc::clone(cache);
         }
 
-        drop(lock);
-
         // Steal the Arc from the recompute function.
-        self.recompute_cache(store)
+        self.recompute_cache(store, cache_lock)
     }
 }
 
@@ -263,7 +343,143 @@ impl DocumentStore {
         }
     }
 
+    pub fn initialize_projects_from_toml(&mut self, url: &Url, toml: String) -> Option<()> {
+        eprintln!("initializing from toml: {}", url);
+        let build = poni_build::read_build_config_from_string(&toml)
+            .map_err(|e| {
+                match e {
+                    poni_build::ConfigReadError::NoPoniesToml => eprintln!("-- no such toml"),
+                    poni_build::ConfigReadError::BadPoniesToml(err) => eprintln!("-- parse error: {err}"),
+                    poni_build::ConfigReadError::NoEnvironmentToml(path_buf) => eprintln!("-- no env toml: {}", path_buf.display()),
+                    poni_build::ConfigReadError::BadEnvironmentToml(err) => eprintln!("-- bad env toml: {err}"),
+                    poni_build::ConfigReadError::XdgError(_) => eprintln!("-- xdg error"),
+                    poni_build::ConfigReadError::FsError => eprintln!("-- file system error"),
+                }
+                
+            }).ok()?;
+        eprintln!("-- successfully parsed ponies.toml: {} projects", build.projects.len());
+
+        // There is no need to modify the url -- url.join() already overwrites
+        // the last segment.
+        // let mut my_url = url.clone();
+        // my_url.path_segments_mut().ok()?
+        //     .pop_if_empty()
+        //     .pop();
+        // eprintln!("-- successfully extracted url");
+
+        for (name, project) in &build.projects {
+            eprintln!("initializing project: '{}'", name);
+            let mut proj = Project {
+                cache: Mutex::new(None),
+                files: Vec::new(),
+                imports: Vec::new(),
+            };
+
+            for file in &project.files {
+                eprintln!("-- trying to process: {}", file.display());
+                // Skip file paths we can't process
+                let Some(str) = file.to_str() else { continue; };
+
+                // Skip file paths we can't process
+                let Ok(url) = url.join(str) else { continue; };
+
+                eprintln!("-- got url: {}", url);
+                if let Some(document) = self.get_or_create_document(&url) {
+                    proj.files.push(document.clone());
+                }
+            }
+
+            for import in &project.imports {
+                eprintln!("-- trying to process import: {}", import.display());
+
+                // Skip file paths we can't process
+                let Some(str) = import.to_str() else { continue; };
+
+                // Skip file paths we can't process
+                let Ok(url) = url.join(str) else { continue; };
+                eprintln!("-- got import url: {}", url);
+                if let Some(document) = self.get_or_create_document(&url) {
+                    proj.imports.push(document);
+                }
+            }
+
+            // If we have an environment config, we can also add the system
+            // imports.
+            if let Some(kind) = &project.kind {
+                eprintln!("importing non-standalone project");
+                if let Ok(env) = poni_build::read_environment_config() {
+                    eprintln!("-- succesfully read environment config");
+                    // Note: We don't reverse-index these. That is, we don't
+                    // map them to a specific project in our DocumentStore. That
+                    // is because these (both the imports and the scripts) do
+                    // not belong to any specific project, at least right now.
+                    for import in kind.get_imports() {
+                        let full_path = env.poni_src_path.join(&import);
+                        let Ok(url) = Url::from_file_path(full_path) else { continue; };
+
+                        // TODO: How do we make the LSP refresh these files?
+                        // Maybe we have to manually check it...?
+                        if let Some(document) = self.get_or_create_document(&url) {
+                            eprintln!("-- added extern import document: {}", url);
+                            proj.imports.push(document);
+                        }
+                    }
+
+                    for script in kind.get_poniescripts() {
+                        let full_path = env.poni_src_path.join(&script);
+                        let Ok(url) = Url::from_file_path(full_path) else { continue; };
+
+                        // TODO: How do we make the LSP refresh these files?
+                        // Maybe we have to manually check it...?
+                        if let Some(document) = self.get_or_create_document(&url) {
+                            eprintln!("-- added extern poniescript document: {}", url);
+                            proj.files.push(document);
+                        }
+                    }
+                }
+            }
+
+            let proj = Arc::new(proj);
+
+            for file in &proj.files {
+                // Map each of the project's files to this project
+                self.projects.insert(file.url.clone(), proj.clone());
+            }
+        }
+
+        Some(())
+    }
+
+    fn get_or_create_document(&mut self, url: &Url) -> Option<Arc<Document>> {
+        if self.documents.contains_key(url) {
+            return self.documents.get(url).cloned();
+        }
+
+        if let Ok(file_path) = url.to_file_path() {
+            let contents = std::fs::read_to_string(file_path).ok()?;
+            let document = Arc::new(Document {
+                text: Mutex::new(contents),
+                url: url.clone(),
+            });
+
+            self.documents.insert(url.clone(), document.clone());
+            return Some(document);
+        }
+        
+        return None;
+    }
+
     pub fn update(&mut self, url: &Url, text: String) {
+        eprintln!("update: {}", url);
+        if let Some(segments) = url.path_segments() {
+            if let Some(last) = segments.last() {
+                if last == "ponies.toml" {
+                    self.initialize_projects_from_toml(url, text);
+                    return;
+                }
+            }
+        }
+
         let doc = self.documents.entry(url.clone())
             .or_insert_with(|| {
                 // For now, if we are getting a new Document, also create a new
@@ -272,7 +488,8 @@ impl DocumentStore {
             
                 let project = Project {
                     cache: Mutex::new(None),
-                    files: vec![Arc::clone(&doc)]
+                    files: vec![Arc::clone(&doc)],
+                    imports: Vec::new(),
                 };
 
                 self.projects.insert(url.clone(), Arc::new(project));

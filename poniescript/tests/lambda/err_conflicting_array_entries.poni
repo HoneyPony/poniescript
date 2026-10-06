@@ -1,0 +1,7 @@
+fun init() {
+    var my_funs_2 = [
+        |x: int, y: float| -> int { 20 },
+        //? Invalid inferred type for lambda: incoming type 'float' for parameter 'y' does not match declared type 'int'.
+        |x, y: int| -> int { 30 },
+    ];
+}

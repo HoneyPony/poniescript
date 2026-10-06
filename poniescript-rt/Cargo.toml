@@ -1,0 +1,17 @@
+[package]
+name = "poniescript-rt"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+# Note: This might have to be cdylib, actually, for wasm. Unclear.
+# Also should be 'lib' if we want to link it with other Rust stuff...?
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+poniescript-gc = { path = "../poniescript-gc" }
+
+[features]
+# Use this for the runtime to define a main() function, which initializes
+# the PonieScript script and calls into it.
+entry = []

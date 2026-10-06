@@ -1,0 +1,15 @@
+class Horse {}
+
+fun iterator() -> Horse? { nil }
+
+fun test() {
+    // Likely desugaring issue
+    for y in iterator {
+        // Should be fine
+        let h = 5;
+    }
+}
+
+fun init() {
+    print("success"); //! success
+}

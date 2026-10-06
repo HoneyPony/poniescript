@@ -1,9 +1,11 @@
 use std::io;
 use std::sync::Arc;
 
+use poni_arena::ArenaKey;
 use rustc_hash::FxHashMap;
 
 use poni_arena::ArenaBorrowMut;
+use rustc_hash::FxHashSet;
 use crate::db::*;
 
 use crate::lexer::*;
@@ -98,6 +100,17 @@ pub struct Parser<'b> {
 	scope_name: String,
 	global_scope: Scope,
 
+	/// The current closure that we're in.
+	closure: Option<ClosureId>,
+
+	/// List of VarId's local to the current function.
+	fun_vars: Vec<VarId>,
+
+	/// Tracks whether we are currently in a member initializer. If so, we
+	/// forbid the 'self' keyword as a straightforward way to keep things
+	/// more correct.
+	in_member_initializer: bool,
+
 	cur_doc_comment: Vec<Token>,
 	prev_doc_comment: Vec<Token>,
 
@@ -143,21 +156,23 @@ macro_rules! semantic_error_with {
 
 macro_rules! parse_error {
 	($parser:ident, $($arg:tt)*) => {
-		// For now, just eprintln()... TODO Implement error handling system
-		$parser.had_error = true;
+		{
+			// For now, just eprintln()... TODO Implement error handling system
+			$parser.had_error = true;
 
-		if $parser.should_report_errors() {
-			$parser.db.report_error(Error::simple(
-				format!($($arg)*),
-				$parser.current.location.clone()
-			)) 
+			if $parser.should_report_errors() {
+				$parser.db.report_error(Error::simple(
+					format!($($arg)*),
+					$parser.current.location.clone()
+				)) 
+			}
 		}
     };
 }
 
 macro_rules! consume {
-    ($parser:ident, $ty:expr, $($arg:tt)*) => {
-        if($parser.peek_typ() != $ty) {
+    ($parser:ident, $ty:pat, $($arg:tt)*) => {
+        if !matches!($parser.peek_typ(), $ty) {
 			parse_error!($parser, $($arg)*);
 			return Err(ParseErr::SyntaxErr);
         }
@@ -167,12 +182,29 @@ macro_rules! consume {
     };
 }
 
+macro_rules! consume_no_err {
+    ($parser:ident, $ty:pat, $($arg:tt)*) => {
+        if !matches!($parser.peek_typ(), $ty) {
+			let _ = parse_error!($parser, $($arg)*);
+        }
+		else {
+			$parser.advance()?;
+		}
+    };
+}
+
 // Note: A somewhat helpful regex for finding places where we forgot the question
 // mark:
 //    expected(_after)?!\([^;]+\);
 macro_rules! expected {
-	($parser:ident, $ty:expr, $($arg:tt)*) => {
+	($parser:ident, $ty:pat, $($arg:tt)*) => {
 		consume!($parser, $ty, "Expected {}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()))
+	}
+}
+
+macro_rules! expected_no_err {
+	($parser:ident, $ty:pat, $($arg:tt)*) => {
+		consume_no_err!($parser, $ty, "Expected {}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()))
 	}
 }
 
@@ -185,8 +217,16 @@ macro_rules! got {
 	}
 }
 
+macro_rules! got_no_err {
+	($parser:ident, $($arg:tt)*) => {
+		{
+			parse_error!($parser, "{}, got '{}'", format!($($arg)*), $parser.db.get($parser.peek_lexeme()));
+		}
+	}
+}
+
 macro_rules! expected_after {
-	($parser:ident, $ty:expr, $prev_tok:expr, $($arg:tt)*) => {
+	($parser:ident, $ty:pat, $prev_tok:expr, $($arg:tt)*) => {
 		consume!($parser, $ty, "Expected {} after '{}', got '{}'",
 			format!($($arg)*),
 			$parser.db.get($prev_tok.lexeme),
@@ -195,11 +235,15 @@ macro_rules! expected_after {
 	}
 }
 
+fn matches_assign(tok: Tok) -> bool {
+	matches!(tok, Tok::Equal | Tok::PlusEqual | Tok::MinusEqual | Tok::StarEqual | Tok::SlashEqual | Tok::PercentEqual)
+}
+
 impl<'b> Parser<'b> {
 	pub fn new(input: Box<dyn std::io::Read>, source_id: SourceId, db: &'b mut Db, ast: &'b mut Ast) -> std::io::Result<Self> {
 		// TODO: Technically we only need one of this, even with multiple parsers...
 		let range_types = RangeTypes::build(db);
-		let mut lexer = Lexer::new(input, source_id);
+		let lexer = Lexer::new(input, source_id);
 
 		// TODO: Move File initialization to Lexer
 
@@ -216,6 +260,9 @@ impl<'b> Parser<'b> {
 
 			range_types,
 
+			closure: None,
+			fun_vars: Vec::new(),
+
 			scopes: Vec::new(),
 			// TODO: Push and pop things from this name
 			scope_name: String::new(),
@@ -223,6 +270,8 @@ impl<'b> Parser<'b> {
 
 			cur_doc_comment: Vec::new(),
 			prev_doc_comment: Vec::new(),
+
+			in_member_initializer: false,
 
 			current,
 			last_location: SourceLocation {
@@ -289,16 +338,32 @@ impl<'b> Parser<'b> {
 		}
 	}
 
-	fn scope_put_entry(&mut self, name: StrId, entry: ScopeEntry) {
+	fn scope_put_entry(
+		&mut self,
+		name: StrId,
+		entry: ScopeEntry,
+		// Whether this entry should also be put into the parser's symbol table.
+		// If it is, the parser will attempt to resolve it when it sees it.
+		// 
+		// Should not be done for e.g. class members, as they may not actually
+		// be valid to resolve.
+		include_parser: bool
+	) {
 		log::trace!("scope: put entry with name {}", self.db.get(name));
 		match self.scopes.last_mut() {
 			Some(last) => {
 				// For local scopes, it is OK to redefine the name with a new
 				// value -- that's just shadowing.
-				last.map.insert(name, entry);
+				if include_parser {
+					last.map.insert(name, entry);
+				}
+
+				log::trace!("scope: put entry into scope {}", self.scopes.len());
 			},
 			None => {
-				self.global_scope.map.insert(name, entry);
+				if include_parser {
+					self.global_scope.map.insert(name, entry);
+				}
 
 				// TODO: Can this concatenation be made more efficient..?
 				// Maybe the DB could have a buffer for this purpose...
@@ -313,6 +378,8 @@ impl<'b> Parser<'b> {
 					note!(error, Some(self.location_of(&old)), "Previous definition was here");
 					semantic_error_with!(self, error);
 				}
+
+				log::trace!("scope: put entry into global scope with name {}", full_name);
 			}
 		}
 	}
@@ -416,15 +483,20 @@ impl<'b> Parser<'b> {
 	fn expr_call_finish(&mut self, location: SourceLocation, ident: Token, object: Option<ExprId>) -> Result<ExprId> {
 		let mut args = Vec::new();
 
+		let mut arg_boundaries = Vec::new();
+		arg_boundaries.push((self.current.location.offset - location.offset) as u32);
+
 		while !self.at(Tok::RightParen) && !self.is_at_end() {
 			args.push(self.expression()?);
 
 			// TODO: Make sure we require a Comma after every param but the
 			// last.
 			self.match_(Tok::Comma)?;
+			arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 		}
 
-		expected!(self, Tok::RightParen, "')' after argument list")?;
+		expected_no_err!(self, Tok::RightParen, "')' after argument list");
+		arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 
 		// Note: This is handled by expr_prefix() now.
 		//if self.match_(Tok::LeftParen)?.is_some() {
@@ -442,7 +514,7 @@ impl<'b> Parser<'b> {
 		match lookup {
 			ScopeEntry::Var(v) => {
 				let inner = Expr::put_variable(self.ast, location.clone(), v);
-				return Expr::put_valcall_ok(self.ast, self.end(location), inner, args, self.db.sig_unassigned)
+				return Expr::put_valcall_ok(self.ast, self.end(location), inner, args, self.db.sig_unassigned, arg_boundaries)
 			},
 
 			// It may seem in poor taste to have a specific Expr for function
@@ -453,14 +525,14 @@ impl<'b> Parser<'b> {
 			ScopeEntry::Fun(fun) => {
 				log::trace!("new bound fun: {} object.is_some(): {}",
 					self.db.get(ident.lexeme), object.is_some());
-				Expr::put_funcall_ok(self.ast, self.end(location), ident.location, fun, args, None)
+				Expr::put_funcall_ok(self.ast, self.end(location), ident.location, fun, args, None, arg_boundaries)
 			}
 			ScopeEntry::Class(_) => {
 				semantic_error_with!(self, Error::simple("Can't call a class.".to_string(), self.current.location.clone()));
 
 				// Just return an UnboundCall, as we have a semantic error rather than parse error.
 				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
-				Expr::put_valcall_ok(self.ast, self.end(location), call, args, self.db.sig_unassigned)
+				Expr::put_valcall_ok(self.ast, self.end(location), call, args, self.db.sig_unassigned, arg_boundaries)
 			}
 
 			ScopeEntry::None => {
@@ -480,8 +552,8 @@ impl<'b> Parser<'b> {
 				log::trace!("new unbound fun capture: {} object.is_some(): {}",
 					self.db.get(ident.lexeme), object.is_some());
 
-				let call = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
-				Expr::put_valcall_ok(self.ast, location, call, args, self.db.sig_unassigned)
+				let capt = Expr::put_unboundfuncapture(self.ast, self.end(location.clone()), ident, object);
+				Expr::put_valcall_ok(self.ast, self.end(location), capt, args, self.db.sig_unassigned, arg_boundaries)
 			}
 		}
 	}
@@ -507,13 +579,15 @@ impl<'b> Parser<'b> {
 			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
 		};
 
-		if self.match_(Tok::Equal)?.is_some() {
+		if matches_assign(self.current.typ) {
+			let op = self.advance()?;
 			let rhs = self.expression()?;
 
 			// Assignment
 			match expr {
 				Expr::Variable(variable) => 
-					return Expr::put_assign_ok(self.ast, self.end(location), variable.location, variable.identity, rhs),
+					return Expr::put_assign_ok(self.ast, self.end(location), variable.location, variable.identity, rhs,
+						op.typ),
 				Expr::FunCapture(_) => {
 					let error = Error::simple(format!("Cannot assign to a function"), self.end(location));
 					semantic_error_with!(self, error);
@@ -522,7 +596,7 @@ impl<'b> Parser<'b> {
 					return Ok(self.ast.exprs.push(expr));
 				}
 				Expr::Unbound(unbound) => {
-					return Expr::put_unboundassign_ok(self.ast, self.end(location), unbound.identifier, rhs)
+					return Expr::put_unboundassign_ok(self.ast, self.end(location), unbound.identifier, rhs, op.typ)
 				}
 				Expr::Get(_) => {
 					panic!("ICE: Tried to assign to Get. This should have generated a Set.");
@@ -538,9 +612,7 @@ impl<'b> Parser<'b> {
 		let kind = if is_print { "print" } else { "str" };
 
 		let location = self.start();
-		let key_print = expected!(self,
-			if is_print { Tok::Print } else { Tok::Str },
-			"'{kind}'")?;
+		let key_print = if is_print { expected!(self, Tok::Print, "'print'")? } else { expected!(self, Tok::Str, "'str'")? };
 
 		expected_after!(self, Tok::LeftParen, key_print, "'('")?;
 
@@ -618,7 +690,15 @@ impl<'b> Parser<'b> {
 			got!(self, "'{{' after loop keyword");
 		}
 
+		let enclosing_closure = self.closure;
+		let closure = self.db.push(Closure { class: None, parent: enclosing_closure, parent_class: None });
+		self.closure = Some(closure);
+
 		let inner = self.block()?;
+		let inner = Expr::put_allocateclosure(self.ast, self.end(location.clone()), closure,
+			inner, self.db.types.unassigned, false);
+
+		self.closure = enclosing_closure;
 
 		// Loops are infinite (i.e. Never) until proven otherwise...
 		Expr::put_loop_ok(self.ast, self.end(location), inner, self.db.types.bottom, Vec::new())
@@ -634,7 +714,16 @@ impl<'b> Parser<'b> {
 		if !self.at(Tok::LeftBrace) {
 			got!(self, "'{{' after while condition");
 		}
+		// For while loops, the closure comes after the expression, before the block.
+		let enclosing_closure = self.closure;
+		let closure = self.db.push(Closure { class: None, parent: enclosing_closure, parent_class: None });
+		self.closure = Some(closure);
+
 		let inner = self.block()?;
+		let inner = Expr::put_allocateclosure(self.ast, self.end(location.clone()), closure,
+			inner, self.db.types.unassigned, false);
+
+		self.closure = enclosing_closure;
 
 		return Expr::put_whileloop_ok(self.ast, self.end(location), condition, inner,
 			self.db.types.unassigned, Vec::new())
@@ -643,6 +732,10 @@ impl<'b> Parser<'b> {
 	fn expr_for(&mut self) -> Result<ExprId> {
 		let location = self.start();
 		let key_for = expected!(self, Tok::For, "'for'")?;
+
+		let enclosing_closure = self.closure;
+		let closure = self.db.push(Closure { class: None, parent: enclosing_closure, parent_class: None });
+		self.closure = Some(closure);
 
 		let name = expected_after!(self, Tok::Identifier, key_for,
 			"variable name")?;
@@ -679,77 +772,30 @@ impl<'b> Parser<'b> {
 		// When we create variables, don't set the class yet, as we don't
 		// know what it is -- we wire it back in once we're done parsing a 
 		// class.
-		//
-		// TODO: For classes, support variables that don't have an initializer?
-		let identity = self.db.new_var(name.lexeme, typ, None, None, true, None, name.location, 
+		let identity = self.db.new_var(name.lexeme, typ,
+			// These are readonly.
+			true,
+			None, None, self.closure, None, None, name.location, 
 			// Currently, the for loop variable can't have a doc comment?
 			// This could be changed.
 			None);
-		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
+		// TODO: Consider making our own helper function for vars so we don't
+		// forget this in the future.
+		self.fun_vars.push(identity);
+		self.scope_put_entry(name_str, ScopeEntry::Var(identity), true);
 
 		let inner = self.block()?;
+		// For now, for loops do not have an AllocateClosure created by the parser,
+		// instead it is created during desugaring.
+
 		self.pop_scope();
+
+		self.closure = enclosing_closure;
 
 		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
 		
 		return Expr::put_forloop_ok(self.ast, self.end(location), name_loc, identity, iterable, has_explicit_type,
-			inner);
-	}
-
-	fn expr_prefix_callable(&mut self) -> Result<ExprId> {
-		match self.peek_typ() {
-			Tok::LeftBrace => self.block(),
-
-			Tok::LeftParen => {
-				let begin = self.start();
-				// Eat left paren
-				self.advance()?;
-				// Inner expression
-				let inner = self.expression()?;
-
-				// Tuple
-				if self.at(Tok::Comma) {
-					let mut inner = vec![inner];
-
-					self.advance()?;
-
-					while !self.at(Tok::RightParen) && !self.is_at_end() {
-						inner.push(self.expression()?);
-						self.eat_comma(Tok::RightParen)?;
-					}
-
-					expected!(self, Tok::RightParen, "')' after tuple items")?;
-
-					return Expr::put_maketuple_ok(self.ast, self.end(begin), inner, self.db.types.unassigned);
-				}
-
-				// Expect right paren after expression
-				expected!(self, Tok::RightParen, "')' after parenthesized expression")?;
-				Ok(inner)
-			}
-
-			Tok::Identifier => self.expr_ident(),
-
-			Tok::If => self.expr_if(),
-			Tok::Loop => self.expr_loop(),
-			Tok::While => self.expr_while(),
-			Tok::For => self.expr_for(),
-
-			Tok::StringSimple => {
-				let lit = self.advance()?;
-				let id = self.db.put_str_const_simple(self.db.get(lit.lexeme));
-				// TODO: Make sure the contents of the string literal are
-				// what we expect...
-				Expr::put_strliteral_ok(self.ast, lit.location, id)
-			}
-
-			Tok::Fun => {
-				let fun = self.fun_declaration(false)?;
-				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
-			}
-
-			_ => unreachable!()
-		}
+			inner, closure);
 	}
 
 	fn eat_comma(&mut self, terminator: Tok) -> Result<()> {
@@ -761,11 +807,18 @@ impl<'b> Parser<'b> {
 	}
 
 	/// Parses a 'new' expression, e.g. new Example {}
-	fn new_(&mut self) -> Result<ExprId> {
+	fn new_(&mut self, object: Option<ExprId>) -> Result<ExprId> {
 		let location = self.start();
 
 		let key_new = expected!(self, Tok::New, "'new'")?;
 		let name = expected_after!(self, Tok::Identifier, key_new, "class name after 'new'")?;
+
+		let mut chain = vec![name];
+
+		while let Some(dot) = self.match_(Tok::Dot)? {
+			let next = expected_after!(self, Tok::Identifier, dot, "class name after '.'")?;
+			chain.push(next);
+		}
 
 		let mut initializers = Vec::new();
 
@@ -774,7 +827,7 @@ impl<'b> Parser<'b> {
 		while !self.at(Tok::RightBrace) && !self.is_at_end() {
 			let location = self.start();
 			let ident = expected!(self, Tok::Identifier, "identifier inside 'new' block")?;
-			expected_after!(self, Tok::Colon, name, "':' after member name")?;
+			expected_after!(self, Tok::Colon, ident, "':' after member name")?;
 
 			let value = self.expression()?;
 			initializers.push(NewInitElem { var: self.db.var_unassigned, ident, value, location: self.end(location) });
@@ -784,10 +837,11 @@ impl<'b> Parser<'b> {
 		// TODO: Parse inner arguments, etc.
 		expected!(self, Tok::RightBrace, "'}}' in 'new' expression")?;
 
-		Expr::put_new_ok(self.ast, self.end(location), name, 
+		Expr::put_new_ok(self.ast, self.end(location), chain, 
 			self.db.class_unassigned,
 			self.db.types.unassigned,
-			initializers)
+			initializers,
+		object)
 	}
 
 	fn array_literal(&mut self) -> Result<ExprId> {
@@ -807,93 +861,76 @@ impl<'b> Parser<'b> {
 		Expr::put_arraylit_ok(self.ast, self.end(location), values, self.db.types.unassigned, self.db.types.unassigned)
 	}
 
-	fn expr_prefix(&mut self) -> Result<ExprId> {
+	/// Parses any atom, i.e. any single self-encapsulated expression. Includes things like
+	/// numerical literals, single identifiers, or parenthesized expressions. Should only be
+	/// called by extended_atom().
+	fn atom(&mut self) -> Result<ExprId> {
 		match self.peek_typ() {
-			Tok::LeftBrace | Tok::LeftParen | Tok::Identifier | Tok::If | Tok::Loop | Tok::While | Tok::For | Tok::Fun | Tok::StringSimple => {
-				let location = self.start();
-				let mut inner = self.expr_prefix_callable()?;
-
-				while self.at(Tok::LeftParen) || self.at(Tok::LeftSquare) || self.at(Tok::Dot) {
-					while self.match_(Tok::LeftParen)?.is_some() {
-						// Parse args
-						let mut args = Vec::new();
-
-						while !self.at(Tok::RightParen) && !self.is_at_end() {
-							args.push(self.expression()?);
-
-							// TODO: Make sure we require a Comma after every param but the
-							// last.
-							self.match_(Tok::Comma)?;
-						}
-
-						expected!(self, Tok::RightParen, "')' after argument list")?;
-						inner = Expr::put_valcall(self.ast, self.end(location.clone()), inner, args, self.db.sig_unassigned);
-					}
-					while self.match_(Tok::LeftSquare)?.is_some() {
-						// TODO: Can the index take multiple args?
-						let index = self.expression()?;
-						expected!(self, Tok::RightSquare, "']' after index expression")?;
-
-						if self.match_(Tok::Equal)?.is_some() {
-							let rhs = self.expression()?;
-							// TODO: Should this be moved to expr_ident as well...????????
-
-							// Return out of the loop--once we see an equals, we can't keep
-							// consuming more () [].
-							return Expr::put_setindex_ok(self.ast, self.end(location),
-								inner,
-								index,
-								self.db.types.unassigned,
-								rhs);
-						}
-
-						inner = Expr::put_index(self.ast, self.end(location.clone()), inner, index, self.db.types.unassigned);
-					}
-					while self.match_(Tok::Dot)?.is_some() {
-						// For get expressions, we can have '.0' and so forth
-						// for tuples.
-						if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
-							got!(self, "Expected identifier after '.'");
-						}
-						let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
-
-						// TODO: Do we want to move this logic into expr_ident to go
-						// with the other ones?
-						if self.match_(Tok::Equal)?.is_some() {
-							let value = self.expression()?;
-							return Expr::put_set_ok(self.ast, self.end(location), identifier, inner, self.db.var_unassigned, value);
-						}
-						// Function calls are mutually exclusive with assignment.
-						//
-						// An assignment would be like:
-						// object.thing() = 5;  or object.thing() = new Thing {};
-						// But this doesn't make sense, because in either case we're
-						// basically creating a new temporary that isn't really an lvalue.
-						//
-						// So function calls are distinct from assignments.
-						// 
-						// Same logic as above with arrays--we return early
-						// if we end up making an assignment.
-						else if self.match_(Tok::LeftParen)?.is_some() {
-							// We have to finish the call right now because
-							// it is a call on this particular idenitifer, not
-							// really a call on the previous property.
-							//
-							// (Although, we could make that work too).
-							inner = self.expr_call_finish(location.clone(), identifier, Some(inner))?;
-						}
-						else {
-							inner = Expr::put_get(self.ast, self.end(location.clone()), identifier, inner, self.db.var_unassigned);
-						}
-					}
-				}
-
-				return Ok(inner);
-			}
-
 			Tok::DecimalNumber | Tok::WholeNumber => {
 				self.number()
 			},
+
+			Tok::ColorLiteral => {
+				let lit = self.advance()?;
+
+				let subslice = {
+					let string = self.db.get(lit.lexeme);
+					// Unfortunately, we create a new String to avoid the borrow.
+					let subslice = &string[2..string.len() - 1];
+					subslice.to_string()
+				};
+
+				let mut values = Vec::new();
+
+				fn conv(x: char) -> u32 {
+					match x {
+						'0'..='9' => { x as u32 - '0' as u32 }
+						'a'..='f' => { x as u32 - 'a' as u32 + 10 }
+						'A'..='F' => { x as u32 - 'A' as u32 + 10 }
+						_ => unreachable!("ICE: Bad color literal")
+					}
+				}
+
+				if subslice.len() <= 4 {
+					for c in subslice.chars() {
+						let value = conv(c);
+						let value = value * 16 + value;
+						let value = value as f32 / 255.0;
+						let literal = format!("{}", value);
+						let literal = self.db.put_str(&literal);
+						values.push(Expr::put_numliteral(self.ast, lit.location.clone(),
+							self.db.synthetic_id(literal),
+							self.db.types.float));
+					}
+				}
+				else {
+					let mut on_even = false;
+					let mut current: u32 = 0;
+					for c in subslice.chars() {
+						let value = conv(c);
+						current = current * 16 + value;
+						
+						if on_even {
+							log::trace!("color literal: {}", current);
+							// IMPORTANT: Use 'current' here, not 'value'.
+							let value = current as f32 / 255.0;
+							let literal = format!("{}", value);
+							let literal = self.db.put_str(&literal);
+							log::trace!("into literal: {}", self.db.get(literal));
+							values.push(Expr::put_numliteral(self.ast, lit.location.clone(),
+								self.db.synthetic_id(literal),
+								self.db.types.float));
+
+							current = 0;
+						}
+
+						on_even = !on_even;
+					}
+				}
+				
+				let typ = if values.len() == 3 { self.db.types.vec3 } else { self.db.types.vec4 };
+				return Expr::put_maketuple_ok(self.ast, lit.location.clone(), values, typ);
+			}
 
 			Tok::Print => self.expr_print_or_str(true),
 			Tok::Str => self.expr_print_or_str(false),
@@ -951,10 +988,17 @@ impl<'b> Parser<'b> {
 			}
 
 			Tok::New => {
-				self.new_()
+				self.new_(None)
 			}
 
 			Tok::KeySelf => {
+				if self.in_member_initializer {
+					// TODO: Come up with good terminology for how this works.
+					semantic_error_with!(self,
+						Error::simple("Cannot use 'self' in direct member initializer.".into(),
+						self.current.location.clone())
+					);
+				}
 				let location = self.advance()?.location;
 				Expr::put_selfval_ok(self.ast, location, self.db.types.unassigned)
 			}
@@ -968,18 +1012,213 @@ impl<'b> Parser<'b> {
 				Expr::put_makesumtype_ok(self.ast, tok.location, self.db.put_type(Type::Option(self.db.types.unassigned)))
 			}
 
-			Tok::Plus | Tok::Minus => {
+			// +, -, not all handled the same
+			Tok::Plus | Tok::Minus | Tok::Not => {
 				let location = self.start();
 				let op = self.advance()?;
 
-				let inner = self.expression()?;
+				// Unary operators have lower binding power than all of the atom extensions.
+				let inner = self.extended_atom()?;
 				Expr::put_unary_ok(self.ast, self.end(location), op.typ, inner, self.db.types.unassigned)
+			}
+
+			Tok::LeftBrace => self.block(),
+
+			Tok::LeftParen => {
+				let begin = self.start();
+				// Eat left paren
+				self.advance()?;
+				// Inner expression
+				let inner = self.expression()?;
+
+				// Tuple
+				if self.at(Tok::Comma) {
+					let mut inner = vec![inner];
+
+					self.advance()?;
+
+					while !self.at(Tok::RightParen) && !self.is_at_end() {
+						inner.push(self.expression()?);
+						self.eat_comma(Tok::RightParen)?;
+					}
+
+					expected_no_err!(self, Tok::RightParen, "')' after tuple items");
+
+					return Expr::put_maketuple_ok(self.ast, self.end(begin), inner, self.db.types.unassigned);
+				}
+
+				// Expect right paren after expression
+				expected_no_err!(self, Tok::RightParen, "')' after parenthesized expression");
+				Ok(inner)
+			}
+
+			Tok::Identifier => self.expr_ident(),
+
+			Tok::If => self.expr_if(),
+			Tok::Loop => self.expr_loop(),
+			Tok::While => self.expr_while(),
+			Tok::For => self.expr_for(),
+
+			Tok::StringSimple => {
+				let lit = self.advance()?;
+				let id = self.db.put_str_const_simple(self.db.get(lit.lexeme));
+				// TODO: Make sure the contents of the string literal are
+				// what we expect...
+				Expr::put_strliteral_ok(self.ast, lit.location, id)
+			}
+
+			Tok::Fun => {
+				let (fun, _closure) = self.fun_declaration(false, true, false)?;
+				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
+			}
+
+			// Lambda declaration
+			Tok::VerticalBar => {
+				let (fun, _closure) = self.fun_declaration(false, true, true)?;
+				return Ok(self.ast.exprs.push(Expr::FunDeclare(fun)));
 			}
 
 			_ => {
 				got!(self, "Expected expression")
 			}
 		}
+	}
+
+	/// Parses an atom followed by any number of tightly-bound 'extensions'.
+	/// This is basically an alternative to implementing '.', '[', '(' (for calls) and so
+	/// forth as parts of the Pratt parsing loop. Because all of these are more tightly
+	/// bound than any binary expression, we can simply glom them on to an atom as we go.
+	/// 
+	/// If one of them ever is supposed to be high priority than some binary expression, or higher
+	/// priority than the rest of the 'extensions', it will have to be part of the Pratt loop.
+	/// 
+	/// (e.g. I thought 'else' was one of these but I don't think it actually is...)
+	fn extended_atom(&mut self) -> Result<ExprId> {
+		let mut result = self.atom()?;
+		let location = self.start(); // Location encompasses entire chain..?
+		'glom: loop {
+			match self.peek_typ() {
+				Tok::LeftParen => {
+					expected!(self, Tok::LeftParen, "'('")?;
+
+					let mut args = Vec::new();
+					let mut arg_boundaries = Vec::new();
+					arg_boundaries.push((self.current.location.offset - location.offset) as u32);
+
+					while !self.at(Tok::RightParen) && !self.is_at_end() {
+						args.push(self.expression()?);
+
+						// TODO: Make sure we require a Comma after every param but the
+						// last.
+						self.match_(Tok::Comma)?;
+						arg_boundaries.push((self.current.location.offset - location.offset) as u32);
+					}
+
+					expected_no_err!(self, Tok::RightParen, "')' after argument list");
+					arg_boundaries.push((self.current.location.offset - location.offset) as u32);
+					result = Expr::put_valcall(self.ast, self.end(location.clone()), result, args, self.db.sig_unassigned, arg_boundaries);
+				}
+				Tok::LeftSquare => {
+					expected!(self, Tok::LeftSquare, "'['")?;
+
+					// TODO: Can the index take multiple args?
+					let index = self.expression()?;
+					expected_no_err!(self, Tok::RightSquare, "']' after index expression");
+
+					if self.match_(Tok::Equal)?.is_some() {
+						let rhs = self.expression()?;
+						// TODO: Should this be moved to expr_ident as well...????????
+
+						// Return out of the loop--once we see an equals, we can't keep
+						// consuming more () [].
+						return Expr::put_setindex_ok(self.ast, self.end(location),
+							result,
+							index,
+							self.db.types.unassigned,
+							rhs);
+					}
+
+					result = Expr::put_index(self.ast, self.end(location.clone()), result, index, self.db.types.unassigned);
+				}
+				Tok::Dot => {
+					expected!(self, Tok::Dot, "'['")?;
+
+					let mut chain = Vec::new();
+					loop {
+						if self.at(Tok::New) {
+							let inner = if chain.is_empty() {
+								result
+							}
+							else {
+								Expr::put_get(self.ast, self.end(location.clone()), chain, result, Vec::new())
+							};
+							result = self.new_(Some(inner))?;
+							continue 'glom;
+						}
+						if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
+							got!(self, "Expected identifier after '.'");
+						}
+						let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
+						chain.push(identifier);
+
+						// Keep building the chain
+						if self.match_(Tok::Dot)?.is_some() { continue; }
+						
+						break;
+					}
+
+					assert!(chain.len() >= 1);
+
+					// For get expressions, we can have '.0' and so forth
+					// for tuples.
+
+					// TODO: Do we want to move this logic into expr_ident to go
+					// with the other ones?
+					if matches_assign(self.current.typ) {
+						let op = self.advance()?;
+						let value = self.expression()?;
+						return Expr::put_set_ok(self.ast, self.end(location), chain, result, Vec::new(), value, op.typ);
+					}
+					// Function calls are mutually exclusive with assignment.
+					//
+					// An assignment would be like:
+					// object.thing() = 5;  or object.thing() = new Thing {};
+					// But this doesn't make sense, because in either case we're
+					// basically creating a new temporary that isn't really an lvalue.
+					//
+					// So function calls are distinct from assignments.
+					// 
+					// Same logic as above with arrays--we return early
+					// if we end up making an assignment.
+					else if self.match_(Tok::LeftParen)?.is_some() {
+						// We have to finish the call right now because
+						// it is a call on this particular idenitifer, not
+						// really a call on the previous property.
+						//
+						// (Although, we could make that work too).
+						if chain.len() == 1 {
+							result = self.expr_call_finish(location.clone(), chain[0].clone(), Some(result))?;
+						}
+						else {
+							// We want the original chain to have all but 1 of its elements,
+							// which is the identifier for the expr_call_finish().
+							let split_chain = chain.split_off(chain.len() - 1);
+							assert!(split_chain.len() == 1);
+							let get = Expr::put_get(self.ast, self.end(location.clone()), chain, result, Vec::new());
+							result = self.expr_call_finish(location.clone(), split_chain[0].clone(), Some(get))?;
+						}
+					}
+					else {
+						result = Expr::put_get(self.ast, self.end(location.clone()), chain, result, Vec::new());
+					}
+				},
+				_ => {
+					break;
+				}
+			}
+		}
+
+		return Ok(result);
 	}
 
 	fn peek_precedence(&self) -> (u32, u32) {
@@ -1000,7 +1239,7 @@ impl<'b> Parser<'b> {
 				Tok::DotDotEqual | Tok::EqualDotDot => (9, 10),
 
 			Tok::Plus | Tok::Minus => (11, 12),
-			Tok::Star | Tok::Slash => (13, 14),
+			Tok::Star | Tok::Slash | Tok::Percent => (13, 14),
 
 			Tok::Dot => (15, 16),
 
@@ -1028,7 +1267,7 @@ impl<'b> Parser<'b> {
 			}
 
 			// Binary expressions
-			Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash => {
+			Tok::Plus | Tok::Minus | Tok::Star | Tok::Slash | Tok::Percent => {
 				let op = self.advance()?;
 				let rhs = self.expr_precedence(cur_prec)?;
 				return Expr::put_binary_ok(self.ast, self.end(location), op.typ, lhs, rhs, self.db.types.unassigned);
@@ -1078,46 +1317,6 @@ impl<'b> Parser<'b> {
 				return Expr::put_logical_ok(self.ast, self.end(location), op.typ, lhs, rhs);
 			}
 
-			// TODO: Deduplicate this with the expr_prefix stuff..?
-			Tok::Dot => {
-				let _op = self.advance()?;
-				// TODO: Check number tokens for being simple, e.g. not something
-				// like 0xff or 1234i32 (if we have postfixes at some point)
-				if !self.at(Tok::Identifier) && !self.at(Tok::WholeNumber) {
-					got!(self, "Expected identifier after '.'");
-				}
-				let identifier = self.advance()?; //expected!(self, Tok::Identifier, "identifier after '.'")?;
-
-				// TODO: Do we want to move this logic into expr_ident to go
-				// with the other ones?
-				if self.match_(Tok::Equal)?.is_some() {
-					let value = self.expression()?;
-					return Expr::put_set_ok(self.ast, self.end(location), identifier, lhs, self.db.var_unassigned, value);
-				}
-				// Function calls are mutually exclusive with assignment.
-				//
-				// An assignment would be like:
-				// object.thing() = 5;  or object.thing() = new Thing {};
-				// But this doesn't make sense, because in either case we're
-				// basically creating a new temporary that isn't really an lvalue.
-				//
-				// So function calls are distinct from assignments.
-				// 
-				// Same logic as above with arrays--we return early
-				// if we end up making an assignment.
-				else if self.match_(Tok::LeftParen)?.is_some() {
-					// We have to finish the call right now because
-					// it is a call on this particular idenitifer, not
-					// really a call on the previous property.
-					//
-					// (Although, we could make that work too).
-					return self.expr_call_finish(location.clone(), identifier, Some(lhs));
-				}
-				else {
-					return Expr::put_get_ok(self.ast, self.end(location.clone()), identifier, lhs, self.db.var_unassigned);
-				}
-			}
-
 			// We should never call expr_infix() with an invalid operator,
 			// because we have to go through the peek_precedence() table to
 			// get here.
@@ -1126,7 +1325,7 @@ impl<'b> Parser<'b> {
 	}
 
 	fn expr_precedence(&mut self, precedence: u32) -> Result<ExprId> {
-		let mut expr = self.expr_prefix()?;
+		let mut expr = self.extended_atom()?;
 
 		// Our precedence is coming from the right of the previous expr, so we compare to the left-hand
 		// side precdence.
@@ -1231,7 +1430,12 @@ impl<'b> Parser<'b> {
 					return Ok(self.db.put_type(self.range_types.into_type(tok.lexeme, inner)));
 				}
 
-				self.db.put_type(Type::UnboundIdent(tok.lexeme))
+				let mut idents = vec![tok.lexeme];
+				while let Some(dot) = self.match_(Tok::Dot)? {
+					let next = expected_after!(self, Tok::Identifier, dot, "identifier after '.'")?;
+					idents.push(next.lexeme);
+				}
+				self.db.put_type(Type::UnboundIdent(idents))
 			},
 
 			Tok::Fun => {
@@ -1257,7 +1461,7 @@ impl<'b> Parser<'b> {
 
 				expected!(self, Tok::RightParen, "')' after parameter list for fun type")?;
 
-				if self.match_(Tok::LeftArrow)?.is_some() {
+				if self.match_(Tok::RightArrow)?.is_some() {
 					sig.return_type = self.typ()?;
 				}
 
@@ -1295,10 +1499,10 @@ impl<'b> Parser<'b> {
 		})
 	}
 
-	fn var_declaration(&mut self) -> Result<Declare> {
+	fn var_declaration(&mut self, require_initializer: bool, add_to_scope: bool) -> Result<Declare> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
-		let key_var = expected!(self, Tok::Var, "'var''")?;
+		let key_var = expected!(self, Tok::Var | Tok::Let, "'var' or 'let'")?;
 
 		let name = expected_after!(self, Tok::Identifier, key_var,
 			"variable name")?;
@@ -1311,30 +1515,55 @@ impl<'b> Parser<'b> {
 			has_explicit_type = true;
 		}
 
-		// TODO: This should be after the typ if we see a type declaration...
-		expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
+		// We are always *allowed* to have an initializer, but it is *required*
+		// for local variables.
+		let initializer = if require_initializer || self.at(Tok::Equal) {
+			expected_after!(self, Tok::Equal, name, "'=' in declaration")?;
 
-		let initializer = self.expression()?;
+			Some(self.expression()?)
+		}
+		else {
+			None
+		};
 
-		expected!(self, Tok::Semicolon, "';' after initializer expression")?;
+		// We cannot have a variable without an initializer and without an
+		// explicit type.
+		//
+		// This could technically be relaxed with global type inference or
+		// whatever, but I think that would be bad design for my purposes.
+		if initializer.is_none() && !has_explicit_type {
+			semantic_error_with!(self, Error::simple(
+				"Variable without an initializer must have an explicit type annotation".into(),
+				self.current.location.clone()
+			));
+		}
+
+		expected!(self, Tok::Semicolon, "';' after variable declaration")?;
 
 		// eprintln!("-- trace parser: {}:[{}] var '{}'", name.location.offset, name.location.length, self.db.get(name.lexeme));
 		
 		let name_str = name.lexeme;
 		let name_loc = name.location.clone();
+
+		let readonly = matches!(key_var.typ, Tok::Let);
+
 		// When we create variables, don't set the class yet, as we don't
 		// know what it is -- we wire it back in once we're done parsing a 
 		// class.
 		//
-		// TODO: For classes, support variables that don't have an initializer?
+		// TODO: Readonly variables...?
 		let identity = self.db.new_var(name.lexeme,
-			typ, None, None, true,
-			Some(initializer), name.location,
+			typ, readonly, None, None, self.closure, None,
+			initializer, name.location,
 			doc_comment);
+		self.fun_vars.push(identity);
 
 		// Note that the var is added to the scope AFTER it is created, so it
 		// by nature can't refer to itself.
-		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
+		//
+		// For globals and class members, we don't want to add them to the
+		// Parser's own scope, which is the purpose of add_to_scope.
+		self.scope_put_entry(name_str, ScopeEntry::Var(identity), add_to_scope);
 
 		return Stmt::new_declare_ok(self.end(location), name_loc, identity, initializer, has_explicit_type);
 	}
@@ -1404,8 +1633,9 @@ impl<'b> Parser<'b> {
 	fn stmt(&mut self) -> Result<StmtId> {
 		let location = self.start();
 		match self.peek_typ() {
-			Tok::Var => {
-				let inner = self.var_declaration()?;
+			Tok::Var | Tok::Let => {
+				// Var declarations in general require initializers
+				let inner = self.var_declaration(true, true)?;
 				Ok(self.ast.stmts.push(Stmt::Declare(inner)))
 			},
 			_ => {
@@ -1439,26 +1669,38 @@ impl<'b> Parser<'b> {
 		}
 	}
 
-	fn parameter(&mut self) -> Result<VarId> {
+	fn parameter(&mut self, require_type: bool) -> Result<VarId> {
 		let name = expected!(self, Tok::Identifier, "parameter name")?;
-		expected!(self, Tok::Colon, "':' after parameter name")?;
-		let typ = self.typ()?;
+		
+		// Or branch handles case where we don't require the type but there is one anyway
+		let typ = if require_type || self.at(Tok::Colon) {
+			expected!(self, Tok::Colon, "':' after parameter name")?;
+			self.typ()?
+		}
+		else {
+			self.db.types.unassigned
+		};
 
 		let name_str = name.lexeme;
 
-		let identity = self.db.new_var(name.lexeme, typ, None, None, false, None,
+		let identity = self.db.new_var(name.lexeme, typ, false,
+			// We will fix up fun and param_for later.
+			None, None,
+			self.closure, None, None,
 			name.location,
 			// Currenlty, doc comments are not supported for parameters.
 			None);
-		self.scope_put_entry(name_str, ScopeEntry::Var(identity));
+		self.fun_vars.push(identity);
+		self.scope_put_entry(name_str, ScopeEntry::Var(identity), true);
 
 		Ok(identity)
 	}
 
-	fn fun_declaration(&mut self, require_name: bool) -> Result<FunDeclare> {
+	fn fun_declaration(&mut self, require_name: bool, add_to_parser: bool, parse_lambda: bool) -> Result<(FunDeclare, ClosureId)> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
-		let _key_fun = expected!(self, Tok::Fun, "'fun'")?;
+		
+		if !parse_lambda { let _key_fun = expected!(self, Tok::Fun, "'fun'")?; }
 
 		let mut name = None;
 
@@ -1480,41 +1722,87 @@ impl<'b> Parser<'b> {
 			self.push_name_anon()
 		};
 
-		expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
+		let end_tok = if parse_lambda {
+			expected!(self, Tok::VerticalBar, "'|' at beginning of lambda")?;
+			Tok::VerticalBar
+		}
+		else {
+			expected!(self, Tok::LeftParen, "'(' to begin function parameter list")?;
+			Tok::RightParen
+		};
 
+		let enclosing_closure = self.closure;
+		let closure = self.db.push(Closure { class: None, parent: enclosing_closure, parent_class: None });
+		self.closure = Some(closure);
+		let enclosing_vars = std::mem::take(&mut self.fun_vars);
 		self.push_scope();
 
 		let mut parameters = vec![];
 
-		while !self.at(Tok::RightParen) && !self.is_at_end() {
-			parameters.push(self.parameter()?);
+		while !self.at(end_tok) && !self.is_at_end() {
+			// Require parameters to have explicit types if we're in a fun() style declarator, but
+			// not in a || style declarator.
+			parameters.push(self.parameter(!parse_lambda)?);
 
 			// NOTE: Right now, this means you can have a trailing comma
 			// in a parameter list. That might be fine though -- trailing commas
 			// are useful in a lot of places -- maybe we should try it?
-			self.match_(Tok::Comma)?;
+			self.eat_comma(end_tok)?;
 		}
 
-		expected!(self, Tok::RightParen, "')' after function parameter list")?;
-
+		// Due to how expected! works, we can't just use end_tok, we need another if.
+		if parse_lambda {
+			expected!(self, Tok::VerticalBar, "'|' after lambda parameter list")?;
+		}
+		else {
+			expected!(self, Tok::RightParen, "')' after function parameter list")?;
+		}
+		
 		let fun_location = self.end(location.clone());
 
-		let mut return_type = self.db.types.void;
+		// An unspecified return type is void for fun() and unassigned (i.e. to be inferred) for ||
+		let mut return_type = if parse_lambda { self.db.types.unassigned } else { self.db.types.void };
 
-		if self.match_(Tok::LeftArrow)?.is_some() {
+		// Need braces if we are in a fun() {} definition, or a lambda with a return type
+		// (e.g. || -> int {})
+		let mut expect_braces = !parse_lambda;
+
+		if self.match_(Tok::RightArrow)?.is_some() {
 			// Parse return type
 			return_type = self.typ()?;
+			expect_braces = true;
 		}
 
 		// For now, the function body MUST be a block. But, we can change it
 		// to be a single expression, likely we other syntax, later.
 
-		if !self.at(Tok::LeftBrace) {
-			got!(self, "Expected '{{' after function parameter list");
-		}
-		let value = self.block()?;
+		let value = {
+			// Immediately parse a block if we are at a left brace, as we want the inner expression to be a block
+			// (even if we're in a lambda that does not require a block.)
+			if self.at(Tok::LeftBrace) {
+				self.block()?
+			}
+			else {
+				// In this case, there are two options: One, we require a brace, in which case we should error:
+				if expect_braces {
+					got!(self, "Expected '{{' after function parameter list");
+				}
+				else {
+					// Otherwise, we just expect any expression, but we will wrap it in a block ourselves.
+					let value = self.expression()?;
+					let stmts = vec![Stmt::put_expression(self.ast, value.location(self.ast), value)];
+					Expr::put_block(self.ast, value.location(self.ast), stmts, self.db.types.unassigned)
+				}
+			}
+		};
+
+		let value = Expr::put_allocateclosure(self.ast,
+			value.location(self.ast), closure, value, self.db.types.unassigned,
+			// Function closures should copy params.
+			true);
 
 		self.pop_scope();
+		self.closure = enclosing_closure;
 
 		let name_str = name.as_ref().map(|t| t.lexeme);
 
@@ -1526,6 +1814,8 @@ impl<'b> Parser<'b> {
 			name: name_str,
 			parameters,
 			return_type,
+			// The closure for this function is the enclosing closure.
+			closure: enclosing_closure,
 			sig: self.db.sig_unassigned,
 			class: None, // Class is not assigned for now, the class parser will assign it later.
 			expression: Some(value),
@@ -1537,8 +1827,13 @@ impl<'b> Parser<'b> {
 		});
 
 		for param in parameters_for_set {
-			self.db.get_mut(param).fun = Some(identity);
+			self.db.get_mut(param).param_for = Some(identity);
 		}
+		
+		for var in &self.fun_vars {
+			self.db.get_mut(*var).fun = Some(identity);
+		}
+		self.fun_vars = enclosing_vars;
 
 		// We must pop our pushed_name before we put the function name in the scope.
 		self.pop_name(pushed_name);
@@ -1548,7 +1843,7 @@ impl<'b> Parser<'b> {
 		// TODO: Do we want to be able to have mutually recursive functions local
 		// to a function...?
 		if let Some(name_str) = name_str {
-			self.scope_put_entry(name_str, ScopeEntry::Fun(identity));
+			self.scope_put_entry(name_str, ScopeEntry::Fun(identity), add_to_parser);
 
 			// TODO: Function names that are nested should be <something>.<something>,
 			// so this will work even for methods and other nestedly-named functions.
@@ -1561,7 +1856,10 @@ impl<'b> Parser<'b> {
 			}
 		}
 
-		Expr::new_fundeclare_ok(self.end(location), identity, value, self.db.types.unassigned, )
+		Ok((Expr::new_fundeclare(self.end(location), identity, value, self.db.types.unassigned),
+		// We need the own closure ID for the function so we can backpatch
+		// its parent_class.
+			closure))
 	}
 
 	fn push_name(&mut self, name: &Token) -> usize {
@@ -1594,7 +1892,7 @@ impl<'b> Parser<'b> {
 		return None;
 	}
 
-	fn class_declaration(&mut self) -> Result<ClassDeclare> {
+	fn class_declaration(&mut self, annotations: Vec<Token>) -> Result<ClassDeclare> {
 		let doc_comment = self.get_doc_comment();
 		let location = self.start();
 		let key_class = expected!(self, Tok::Class, "'class'")?;
@@ -1604,34 +1902,85 @@ impl<'b> Parser<'b> {
 
 		let pushed_name = self.push_name(&name);
 
+		let mut parent = None;
+		for annotation in annotations {
+			if annotation.lexeme == self.db.annotation_inner {
+				parent = Some(self.db.class_unassigned);
+			}
+			else {
+				semantic_error_with!(self,
+					Error::simple(format!("Unknown annotation '{}'", self.db.get(annotation.lexeme)),
+					self.current.location.clone()
+				));
+			}
+		}
+
 		expected!(self, Tok::LeftBrace, "'{{' at beginning of class")?;
 
 		let mut declare_funs = Vec::<FunDeclare>::new();
 		let mut declare_vars = Vec::<Declare>::new();
+		let mut declare_classes = Vec::<ClassDeclare>::new();
 
 		let mut funs = Vec::<FunId>::new();
 		let mut vars = Vec::<VarId>::new();
+		let mut classes = Vec::<ClassId>::new();
+
+		let mut fun_closures = Vec::<ClosureId>::new();
 
 		let mut var_map = FxHashMap::default();
 		let mut fun_map = FxHashMap::default();
+		let mut class_map = FxHashMap::default();
+
+		let mut mandatory_vars = FxHashSet::default();
+
+		let mut annotations = Vec::new();
 
 		loop {
 			match self.peek_typ() {
-				Tok::Var => {
-					let declare = self.var_declaration()?;
+				Tok::Annotation => {
+					annotations.push(self.advance()?);
+				}
+				Tok::Var | Tok::Let => {
+					// Disallow 'self' in member initializers.
+					let enclosing_in_member = self.in_member_initializer;
+					self.in_member_initializer = true;
+
+					// Var declarations in classes do NOT require initializers.
+					//
+					// If a var doesn't have an initializer, it must be provided
+					// when the class is constructed.
+					//
+					// Don't add these variables to the scope.
+					let declare = self.var_declaration(false, false)?;
 					vars.push(declare.identity);
+					if declare.value.is_none() {
+						// Add any variable without an initializer to the mandatory
+						// var map.
+						mandatory_vars.insert(declare.identity);
+					}
 					var_map.insert(self.db.get(declare.identity).name, declare.identity);
 					declare_vars.push(declare);
+
+					self.in_member_initializer = enclosing_in_member;
+
+					let _ = std::mem::take(&mut annotations);
 				},
 				Tok::Fun => {
-					let fun = self.fun_declaration(true)?;
+					let (fun, closure) = self.fun_declaration(true, false, false)?;
 					funs.push(fun.identity);
+					fun_closures.push(closure);
 					// We require name so this must have a name.
 					fun_map.insert(*self.db.get(fun.identity).name.as_ref().unwrap(), fun.identity);
 					declare_funs.push(fun);
+
+					let _ = std::mem::take(&mut annotations);
 				},
 				Tok::Class => {
-					todo!("nested class support")
+					let class = self.class_declaration(std::mem::take(&mut annotations))?;
+					class_map.insert(self.db.get(class.identity).name, class.identity);
+					classes.push(class.identity);
+
+					declare_classes.push(class);
 				}
 				Tok::RightBrace => {
 					break;
@@ -1647,12 +1996,19 @@ impl<'b> Parser<'b> {
 
 		let name_str = name.lexeme;
 
+		log::trace!("mandatory var count: {}", mandatory_vars.len());
+
 		let identity = self.db.push(Class {
 			name: name_str,
 			vars,
 			funs,
+			classes,
+			parent,
 			var_map,
 			fun_map,
+			class_map,
+			import_kind: ImportKind::Not,
+			mandatory_vars,
 			location: name.location,
 			doc_comment,
 		});
@@ -1665,11 +2021,24 @@ impl<'b> Parser<'b> {
 			self.db.get_mut(fun.identity).class = Some(identity);
 		}
 
+		for closure in &fun_closures {
+			log::trace!("setting parent class for closure {} to {}", closure.to_index(), identity.to_index());
+			self.db.get_mut(*closure).parent_class = Some(identity);
+		}
+
+		for class in &declare_classes {
+			let class = self.db.get_mut(class.identity);
+			if class.parent.is_some() {
+				// Replace parent with actual ID
+				class.parent = Some(identity);
+			}
+		}
+
 		self.pop_name(pushed_name);
 
-		self.scope_put_entry(name_str, ScopeEntry::Class(identity));
+		self.scope_put_entry(name_str, ScopeEntry::Class(identity), false);
 
-		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars)
+		Stmt::new_classdeclare_ok(self.end(location), identity, declare_funs, declare_vars, declare_classes)
 	}
 
 	fn get_source(&self) -> ArenaBorrowMut<'_, Source, SourceId> {
@@ -1677,11 +2046,18 @@ impl<'b> Parser<'b> {
 	}
 
 	fn parse_top_level(&mut self) -> Result<()> {
+		let mut annotations = Vec::new();
+
 		match self.peek_typ() {
 			Tok::Eof => { },
 
-			Tok::Var => {
-				let global = self.var_declaration()?;
+			Tok::Annotation => {
+				annotations.push(self.advance()?);
+			}
+
+			Tok::Var | Tok::Let => {
+				// Global variables require initializers.
+				let global = self.var_declaration(true, false)?;
 				self.db.globals.push(global.identity);
 				self.get_source().module.globals.push(global);
 			},
@@ -1689,13 +2065,21 @@ impl<'b> Parser<'b> {
 			Tok::Fun => {
 				// At the top level, unless preceded by a var .. = , a function
 				// must have a name.
-				let fun = self.fun_declaration(true)?;
+				let (fun, _closure) = self.fun_declaration(true, false, false)?;
 				self.get_source().module.functions.push(fun);
 			}
 
 			Tok::Class => {
-				let class = self.class_declaration()?;
+				let class = self.class_declaration(annotations)?;
+				let id = class.identity;
 				self.get_source().module.classes.push(class);
+
+				let class = self.db.get(id);
+				if class.parent.is_some() {
+					semantic_error_with!(self,
+						Error::simple("Top level class can't be @inner.".into(),
+						class.location.clone()));
+				}
 			}
 
 			_ => {

@@ -1,0 +1,22 @@
+class LinkedList {
+    var next: LinkedList? = nil;
+}
+
+fun make_list(size: int) -> LinkedList {
+    var list = new LinkedList{};
+    var head = list;
+
+    for i in 0..size {
+        var next = new LinkedList{};
+        head.next = next;
+        head = next;
+    }
+
+    list
+}
+
+var big_list = make_list(50000000);
+
+fun update() {
+    make_list(10000);
+}

@@ -1,0 +1,105 @@
+class A {
+    var a = 0;
+
+    class B {
+        var b = 0;
+
+        class C {
+            var c = 0;
+
+            class D {
+                var d = 0;
+
+                fun make_a() -> A { return new A{}; }
+                fun make_b() -> B { return new B{}; }
+                fun make_c() -> C { return new C{}; }
+                fun make_d() -> D { return new D{}; }
+
+                fun make_a2() -> A { return new A{}; }
+                fun make_b2() -> A.B { return new B{}; }
+                fun make_c2() -> A.B.C { return new B.C{}; }
+                fun make_d2() -> A.B.C.D { return new B.C.D{}; }
+            }
+
+            fun make_a() -> A { return new A{}; }
+            fun make_b() -> B { return new B{}; }
+            fun make_c() -> C { return new C{}; }
+            fun make_d() -> D { return new D{}; }
+        }
+
+        fun make_a() -> A { return new A{}; }
+        fun make_b() -> B { return new B{}; }
+        fun make_c() -> C { return new B.C{}; }
+        fun make_d() -> C.D { return new B.C.D{}; }
+    }
+
+    fun make_a() -> A { return new A{}; }
+    fun make_b() -> B { return new B{}; }
+    fun make_c() -> B.C { return new B.C{}; }
+    fun make_d() -> B.C.D { return new B.C.D{}; }
+}
+
+fun make_a() -> A { return new A{}; }
+fun make_b() -> A.B { return new A.B{}; }
+fun make_c() -> A.B.C { return new A.B.C{}; }
+fun make_d() -> A.B.C.D { return new A.B.C.D{}; }
+
+fun do_a(f: fun() -> A) -> A {
+    var a = f();
+    a.a = 20;
+    print(a.a);
+    a
+}
+
+fun do_b(f: fun() -> A.B) -> A.B {
+    var b = f();
+    b.b = 30;
+    print(b.b);
+    b
+}
+
+fun do_c(f: fun() -> A.B.C) -> A.B.C {
+    var c = f();
+    c.c = 40;
+    print(c.c);
+    c
+}
+
+fun do_d(f: fun() -> A.B.C.D) -> A.B.C.D {
+    var d = f();
+    d.d = 50;
+    print(d.d);
+    d
+}
+
+fun init() {
+    var a = do_a(make_a); //! 20
+    var b = do_b(make_b); //! 30
+    var c = do_c(make_c); //! 40
+    var d = do_d(make_d); //! 50
+
+    do_a(a.make_a); //! 20
+    do_b(a.make_b); //! 30
+    do_c(a.make_c); //! 40
+    do_d(a.make_d); //! 50
+
+    do_a(b.make_a); //! 20
+    do_b(b.make_b); //! 30
+    do_c(b.make_c); //! 40
+    do_d(b.make_d); //! 50
+
+    do_a(c.make_a); //! 20
+    do_b(c.make_b); //! 30
+    do_c(c.make_c); //! 40
+    do_d(c.make_d); //! 50
+
+    do_a(d.make_a); //! 20
+    do_b(d.make_b); //! 30
+    do_c(d.make_c); //! 40
+    do_d(d.make_d); //! 50
+
+    do_a(d.make_a2); //! 20
+    do_b(d.make_b2); //! 30
+    do_c(d.make_c2); //! 40
+    do_d(d.make_d2); //! 50
+}

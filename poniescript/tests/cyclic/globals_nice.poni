@@ -1,0 +1,31 @@
+// TODO:
+// This isn't necessarily the best example, as really it should probably involve some
+// classes and such, but the point is...
+//
+// I think that the cycle checker needs to not consider these "deferred" reads of a
+// variable as a read, as it really gets in the way of nicely using globals.
+//
+// Perhaps the simplest thing to do in the short term is say that a global (or class member)
+// doesn't require further analysis if all it is is a single function definition.
+//
+// Another option would be to say that any references to globals inside function definitions
+// in any initializer don't count, UNLESS that initializer calls the function directly or
+//     a) makes a call to any function-typed variable
+//     b) passes a function typed variable to another function
+//
+// So e.g. var hook1 = { fun whatever() { hook2(); } var irrelevant = some_other_fun; irrelevant(); }
+//
+// Would count as referring to hook2, at least in the short term, even though the ValCall could not
+// possibly refer to whatever.
+
+var hook1 = fun(cond: bool) {
+    if cond { hook2(123); }
+};
+
+var hook2 = fun(val: int) {
+    if val > 500 { hook1(false); }
+};
+
+fun init() {
+    print("success"); //! success
+}

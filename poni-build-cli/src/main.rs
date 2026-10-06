@@ -27,6 +27,22 @@ enum CliCommand {
         #[arg(short, long)]
         target: Option<String>
     },
+    /// Build a hot-reload shared library for the given project, and copy it
+    /// to the given target file name.
+    HotBuild {
+        project: String,
+
+        target_file: PathBuf,
+
+        /// The profile to use (e.g. debug, release).
+        #[arg(short, long)]
+        profile: Option<String>,
+
+        /// The target platform, which should correspond with one of your
+        /// defined toolchains (e.g. 'local', 'windows', 'web')
+        #[arg(short, long)]
+        target: Option<String>
+    },
     /// Build and run the project with the given name.
     Run {
         project: String,
@@ -39,6 +55,11 @@ enum CliCommand {
         /// defined toolchains (e.g. 'local', 'windows', 'web')
         #[arg(short, long)]
         target: Option<String>
+    },
+
+    /// Generate documentation for the given project.
+    Doc {
+        project: String,
     },
 
     /// Create a new project in the current directory's ponies.toml, or
@@ -64,7 +85,7 @@ macro_rules! exit_with_error {
 use poni_build::DIM;
 use poni_build::RESET;
 
-fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<ExitStatus, &'static str> {
+fn try_run_ninja(project: Option<&String>, toolchain: &String, hot: Option<&PathBuf>) -> Result<ExitStatus, &'static str> {
     // Now, spawn the ninja process.
     // TODO: Configurable ninja path?
     let mut process = Command::new("ninja");
@@ -82,10 +103,21 @@ fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<ExitSta
         .env("CLICOLOR_FORCE", "1")
         .env("NINJA_STATUS", format!("{DIM}%e{RESET} %f{DIM}/{RESET}%t 🦄 "));
 
+    let mut hot_source_file = None;
+
     // If we're only building one project, then pass that as an argument.
     if let Some(project) = project {
         // TODO: Make this less, like, stringly typed or whatever...
-        process.arg(format!(".build/{toolchain}/{project}"));
+        if hot.is_some() {
+            // Build the shared library. We may want this to be a bit more
+            // sophisticated in the future.
+            let hot_source_file_str = format!(".build/{toolchain}/{project}.so");
+            process.arg(&hot_source_file_str);
+            hot_source_file = Some(hot_source_file_str);
+        }
+        else {
+            process.arg(format!(".build/{toolchain}/{project}"));
+        }
     }
     else {
         // If we are building all projects, we still only want to use the default
@@ -97,11 +129,29 @@ fn try_run_ninja(project: Option<&String>, toolchain: &String) -> Result<ExitSta
     let mut child = process.spawn()
         .map_err(|_| "couldn't spawn 'ninja' process")?;
 
-    child.wait()
-        .map_err(|_| "couldn't wait for 'ninja' process")
+    let result = child.wait()
+        .map_err(|_| "couldn't wait for 'ninja' process")?;
+
+    if let Some(path) = hot {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let source_file = hot_source_file.expect("should always have a project name when hot building");
+        fs::copy(&source_file, path)
+            .map_err(|e| {
+                eprintln!("warning: failed to copy hot-reload file: {}", e)
+            });
+    }
+
+    Ok(result)
 }
 
 fn do_regenerate(build: &BuildConfig, env: &EnvironmentConfig) {
+    // Print warnings only when we regenerate.
+    for warning in &env.warnings {
+        eprintln!("warning: {}", warning);
+    }
+
     // First, create the .build folder and the build.ninja file.
     fs::create_dir_all(".build")
         .unwrap_or_else(|_| show_error_msg("couldn't create .build directory"));
@@ -115,7 +165,7 @@ fn do_regenerate(build: &BuildConfig, env: &EnvironmentConfig) {
 }
 
 /// Returns the exit status of the ninja process.
-fn do_build(build: &BuildConfig, env: &EnvironmentConfig, toolchain: &String, project: Option<&String>) -> ExitStatus {
+fn do_build(build: &BuildConfig, env: &EnvironmentConfig, toolchain: &String, project: Option<&String>, hot: Option<&PathBuf>) -> ExitStatus {
     // Check the project before doing anything else.
     if let Some(project) = project {
         if !build.projects.contains_key(project) {
@@ -133,12 +183,12 @@ fn do_build(build: &BuildConfig, env: &EnvironmentConfig, toolchain: &String, pr
     if fs::exists(".build/build.ninja")
         .unwrap_or_else(|_| show_error_msg("couldn't check if .build/build.ninja exists")) {
         
-        return try_run_ninja(project, toolchain).unwrap_or_else(|err| show_error_msg(err));
+        return try_run_ninja(project, toolchain, hot).unwrap_or_else(|err| show_error_msg(err));
     }
 
     do_regenerate(build, env);
 
-    return try_run_ninja(project, toolchain).unwrap_or_else(|err| show_error_msg(err));
+    return try_run_ninja(project, toolchain, hot).unwrap_or_else(|err| show_error_msg(err));
 }
 
 fn show_error(err: ConfigReadError) -> ! {
@@ -187,25 +237,48 @@ fn handle_build_cmd(cmd: CliCommand) {
                 show_toolchain_error(toolchain);
             };
 
-            do_build(&build, &env, &toolchain, project.as_ref());
+            do_build(&build, &env, &toolchain, project.as_ref(), None);
         },
+        CliCommand::HotBuild { project, target_file, profile, target } => {
+            let (toolchain, exists) = env.lookup_toolchain(profile.as_ref(), target.as_ref());
+            if !exists {
+                show_toolchain_error(toolchain);
+            };
+
+            do_build(&build, &env, &toolchain, Some(&project), Some(&target_file));
+        }
         CliCommand::Run { project, profile, target } => {
-            if !build.projects.contains_key(&project) {
+            let Some(proj) = build.projects.get(&project) else {
                 eprintln!("error: no such project '{}'", project);
                 std::process::exit(1);
-            }
+            };
+
+            let hot_reload = proj.kind.as_ref().map(|p| p.get_hot_reload_host()).flatten();
 
             let (toolchain, exists) = env.lookup_toolchain(profile.as_ref(), target.as_ref());
             if !exists {
                 show_toolchain_error(toolchain);
             };
 
-            let status = do_build(&build, &env, &toolchain, Some(&project));
+            let hot_reload_script_path: Option<PathBuf> = match hot_reload {
+                Some(_) => Some(Path::new(".build/hot/script-init.so").into()),
+                None => None
+            };
+
+            let status = do_build(&build, &env, &toolchain, Some(&project),
+                // If we're hot reloading, build to the initial script library path.
+                hot_reload_script_path.as_ref());
             // Only execute the child process if it successfully built.
             if status.success() {
                 // Now run that specific project.
                 // TODO: Support arguments to the project?
-                let mut child = Command::new(format!(".build/{toolchain}/{project}"))
+                let executable_path = match hot_reload {
+                    Some(host) => env.lookup_rust_artifact(profile.as_ref(), target.as_ref(), &host)
+                        .expect("already validated toolchain"),
+                    None => format!(".build/{toolchain}/{project}").into()
+                };
+
+                let mut child = Command::new(executable_path)
                     .spawn()
                     .unwrap_or_else(|_| show_error_msg("couldn't spawn child process."));
 
@@ -213,6 +286,45 @@ fn handle_build_cmd(cmd: CliCommand) {
                     .unwrap_or_else(|_| show_error_msg("couldn't wait for child process."));
             }
         },
+        CliCommand::Doc { project } => {
+            let Some(proj) = build.projects.get(&project) else {
+                eprintln!("error: no such project '{}'", project);
+                std::process::exit(1);
+            };
+
+            let mut doc_cmd = Command::new("poni-doc-cli");
+            doc_cmd.arg("--output-path").arg(format!(".build/doc/{}", project));
+            for file in &proj.files {
+                // TODO: We should probably prefix these with something so the user
+                // isn't messed up if they have a file called "-i"
+                doc_cmd.arg(file);
+            }
+            for import in &proj.imports {
+                doc_cmd.arg("-i").arg(import);
+            }
+
+            if let Some(kind) = &proj.kind {
+                for file in &kind.get_poniescripts() {
+                    doc_cmd.arg(env.poni_src_path.join(file));
+                }
+                for import in &kind.get_imports() {
+                    doc_cmd.arg("-i").arg(env.poni_src_path.join(import));
+                }
+            }
+
+            let mut child = doc_cmd.spawn().map_err(|e| {
+                eprintln!("error spawning poni-doc-cli: {}", e);
+                std::process::exit(1);
+            }).unwrap();
+
+            child.wait().map_err(|e| {
+                eprintln!("error waiting for poni-doc-cli: {}", e);
+            });
+
+            // Done.
+            // We could also consider not even waiting for the poni-doc-cli
+            // child...
+        }
         _ => unreachable!()
     }
 }
@@ -221,7 +333,7 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        CliCommand::Regenerate | CliCommand::Build { .. } | CliCommand::Run { .. } => {
+        CliCommand::Regenerate | CliCommand::Build { .. } | CliCommand::HotBuild { .. } | CliCommand::Run { .. } | CliCommand::Doc { .. } => {
             handle_build_cmd(cli.command);
         },
         CliCommand::New { name } => {
@@ -248,6 +360,7 @@ fn main() {
             let project = Project {
                 files: vec![PathBuf::from(format!("{name}.poni"))],
                 imports: vec![],
+                kind: None,
             };
 
             cfg.projects.insert(name.clone(), project);

@@ -1,6 +1,6 @@
 include!(concat!(env!("OUT_DIR"), "/expr.gen.rs"));
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use poni_arena::ArenaKey;
 use crate::{db::*, lexer::Token};
@@ -64,6 +64,10 @@ impl Expr {
 	// (either alongside the class or instead of), but should we...?
 	pub fn typ(&self, ast: &impl AstAbstract, db: &Db) -> TypId {
 		match self {
+			Expr::AllocateClosure(c) => {
+				// These are never nested particularly deeply, so just defer.
+				c.inner.typ(ast, db)
+			}
 			Expr::ArrayLit(lit) => {
 				lit.arr_typ
 			}
@@ -137,8 +141,8 @@ impl Expr {
 			},
 			Expr::Str(_) => db.types.str_buf,
 			Expr::New(new) => new.typ,
-			Expr::Get(get) => db.get_var_type(get.var),
-			Expr::Set(set) => db.get_var_type(set.var),
+			Expr::Get(get) => db.get_var_type(get.vars.last().copied().unwrap_or(db.var_unassigned)),
+			Expr::Set(set) => db.get_var_type(set.vars.last().copied().unwrap_or(db.var_unassigned)),
 			Expr::Undefined(_) => db.types.unassigned, //panic!("ICE: Called Expr::typ() on Undefined"),
 			Expr::SelfVal(selfval) => selfval.typ,
 			Expr::Index(index) => index.typ,
@@ -154,17 +158,25 @@ impl Expr {
 }
 
 /// Information for a variable.
+#[derive(Clone)]
 pub struct Var {
 	pub name: StrId,
 	pub typ: TypId,
 
+	/// Stores whether this variable is readonly.
+	pub readonly: bool,
+
 	/// If this variable is a member of a class, this stores the class id.
 	pub class: Option<ClassId>,
 	/// If this variable is a function parameter, this stores the function id.
+	pub param_for: Option<FunId>,
+
+	/// If this is a local variable for a function, this stores the ID.
+	/// (necessary for closure conversion (?))
 	pub fun: Option<FunId>,
-	/// For class members, stores whether this variable was initialized.
-	/// (TODO: Is there a way to not have this field on non-class variables?)
-	pub init: bool,
+
+	/// The closure for this variable.
+	pub closure: Option<ClosureId>,
 
 	/// The initializer for this variable.
 	pub initializer: Option<ExprId>,
@@ -186,6 +198,12 @@ pub struct Fun {
 
 	pub class: Option<ClassId>,
 
+	/// The closure that this function would be attached to.
+	/// 
+	/// Global functions have no closure. Functions that are inside another
+	/// function get that function's closure.
+	pub closure: Option<ClosureId>,
+
 	/// Should be Some() if this is a function we are compiling, or None if
 	/// this is an imported function from a C module.
 	pub expression: Option<ExprId>,
@@ -205,17 +223,52 @@ pub struct Sig {
 	pub return_type: TypId,
 }
 
+pub enum ImportKind {
+	Not,
+	/// For now, things imported from C headers should *not* be declared by us.
+	/// 
+	/// This may change.
+	CHeader,
+}
+
 pub struct Class {
 	pub name: StrId,
 	pub vars: Vec<VarId>,
 	pub funs: Vec<FunId>,
+	/// Any class that is scoped inside this class, including @inner ones
+	/// and "static" ones.
+	pub classes: Vec<ClassId>,
+
+	/// Optional parent for this class. Applies for inner classes.
+	pub parent: Option<ClassId>,
+
+	/// Variables that new{} expressions are mandated to initialize.
+	/// 
+	/// We store these in a set so that we can easily "check them off" in the
+	/// type checker.
+	pub mandatory_vars: FxHashSet<VarId>,
+
+	pub import_kind: ImportKind,
 
 	pub var_map: FxHashMap<StrId, VarId>,
 	pub fun_map: FxHashMap<StrId, FunId>,
+	pub class_map: FxHashMap<StrId, ClassId>,
 
 	/// Location pointing to where the class is declared/defined.
 	pub location: SourceLocation,
 
 	/// Doc comment for this class.
 	pub doc_comment: Option<Vec<Token>>,
+}
+
+/// Type that maps to ClosureIds. Used to track the synthesized classes associated
+/// with each closure. Also allows for Expr::AllocateClosure to perform the actual
+/// closure allocation.
+pub struct Closure {
+	pub class: Option<ClassId>,
+	/// Parent ClosureId. May end up being the closure that is relevant for
+	/// a particular function.
+	pub parent: Option<ClosureId>,
+
+	pub parent_class: Option<ClassId>,
 }

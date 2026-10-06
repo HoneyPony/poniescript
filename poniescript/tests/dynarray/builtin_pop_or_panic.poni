@@ -1,0 +1,7 @@
+fun init() {
+    var items: DynArray[int] = [20, 30, 40];
+    print(items.pop_or_panic()); //! 40
+    print(items.length); //! 2
+    print(items[0]); //! 20
+    print(items[1]); //! 30
+}

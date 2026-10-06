@@ -3,6 +3,14 @@ fun get_name() -> StrBuf {
 }
 
 class StuffedHorse {
+    // TODO:
+    // Right now the binder is resolving this to our own get_name, which is
+    // sort of reasonable, but does make this not compile.
+    //
+    // Do we want unbound function calls to resolve based on:
+    // - Their entire signature
+    // - Their arity
+    // - Just their name?
     var name: StrBuf = get_name();
 
     fun get_name(concat: StrConst) -> StrBuf {

@@ -44,8 +44,11 @@ pub enum GlueTok {
 	AnnotateClass,
     AnnotateMember,
 	AnnotateAbi,
+	AnnotateOption,
 
     Struct, Void, 
+
+	DocComment,
 
     Unknown,
 
@@ -71,6 +74,7 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, GlueTok> {
     add("PS_VAR"   , GlueTok::AnnotateVar);
 	add("PS_CLASS" , GlueTok::AnnotateClass);
     add("PS_MEMBER", GlueTok::AnnotateMember);
+	add("PS_OPTION", GlueTok::AnnotateOption);
 	add("PONI_ABI"   , GlueTok::AnnotateAbi);
 	add("struct"   , GlueTok::Struct);
 
@@ -344,11 +348,19 @@ impl Lexer {
 
             '/' => {
                 if self.advance_if('/', db)? {
+					let mut is_doc_comment = false;
+					if self.advance_if('/', db)? {
+						is_doc_comment = true;
+						self.buffer.clear();
+					}
                     while !self.at_eof {
                         if self.advance(db)? == '\n' {
                             break;
                         }
                     }
+					if is_doc_comment {
+						return self.mk_token_res(db, GlueTok::DocComment);
+					}
                     return self.next_token(db);
                 }
                 if self.advance_if('*', db)? {

@@ -1,0 +1,4 @@
+fun init() {
+    let my_fun: fun(int) -> int = |x| x * 20;
+    print(my_fun(4)); //! 80
+}

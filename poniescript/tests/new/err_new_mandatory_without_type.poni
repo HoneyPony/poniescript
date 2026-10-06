@@ -1,0 +1,10 @@
+class Example {
+    var x: int = 20;
+    //? Variable without an initializer must have an explicit type annotation
+    var y;
+}
+
+fun init() {
+    var e = new Example { x: 80 };
+    print(e.x, " ", e.y);
+}

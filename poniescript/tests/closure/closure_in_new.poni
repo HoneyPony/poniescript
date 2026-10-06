@@ -1,0 +1,23 @@
+class Example {
+    var callback: fun(int) -> int;
+}
+
+fun adder(x: int) -> Example {
+    new Example {
+        callback: fun(y: int) -> int {
+            x + y
+        }
+    }
+}
+
+fun init() {
+    var add = adder(5);
+    print(add.callback(10)); //! 15
+    print(add.callback(20)); //! 25
+
+    var add2 = adder(10);
+    print(add2.callback(3)); //! 13
+    print(add2.callback(4)); //! 14
+
+    print(add.callback(add2.callback(5))); //! 20
+}

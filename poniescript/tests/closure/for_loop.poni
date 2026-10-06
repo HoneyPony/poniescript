@@ -1,0 +1,24 @@
+fun make_funs() -> DynArray[fun() -> int] {
+    var funs: DynArray[fun() -> int] = [];
+
+    for i in 0..5 {
+        funs.push(fun() -> int {
+            return i * i;
+        });
+    }
+
+    funs
+}
+
+fun init() {
+    var funs = make_funs();
+
+    //! 0
+    //! 1
+    //! 4
+    //! 9
+    //! 16
+    for i in 0..funs.length {
+        print(funs[i]());
+    }
+}

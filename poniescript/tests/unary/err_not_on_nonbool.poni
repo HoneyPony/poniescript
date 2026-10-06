@@ -1,0 +1,8 @@
+class Horse{}
+
+fun init() {
+    var h = new Horse{};
+    
+    //? Invalid operand to unary 'not': Operand is not a bool
+    print(not h);
+}

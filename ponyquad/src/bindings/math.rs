@@ -1,0 +1,97 @@
+use std::os::raw::c_void;
+use poniescript_gc::{GcContext, PsFloat, PsInt};
+use poniescript_rt::{Vec2, Vec2i, Vec3, Vec4};
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_norm_vec2(_gc: &mut GcContext, mut v: Vec2, _closure: *mut c_void) -> Vec2 {
+    let len = (v.x * v.x + v.y * v.y).sqrt();
+
+    if len != 0.0 {
+        v.x /= len;
+        v.y /= len;
+    }
+    else {
+        // Zero length means the vector is ~(0, 0). I guess just return that?
+        v.x = 0.0;
+        v.y = 0.0;
+    }
+
+    v
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_norm_vec3(_gc: &mut GcContext, mut v: Vec3, _closure: *mut c_void) -> Vec3 {
+    let len = (v.x * v.x + v.y * v.y + v.z * v.z).sqrt();
+
+    if len != 0.0 {
+        v.x /= len;
+        v.y /= len;
+        v.z /= len;
+    }
+    else {
+        // Zero length means the vector is ~(0, 0). I guess just return that?
+        v.x = 0.0;
+        v.y = 0.0;
+        v.z = 0.0;
+    }
+
+    v
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_norm_vec4(_gc: &mut GcContext, mut v: Vec4, _closure: *mut c_void) -> Vec4 {
+    let len = (v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w).sqrt();
+
+    if len != 0.0 {
+        v.x /= len;
+        v.y /= len;
+        v.z /= len;
+        v.w /= len;
+    }
+    else {
+        // Zero length means the vector is ~(0, 0). I guess just return that?
+        v.x = 0.0;
+        v.y = 0.0;
+        v.z = 0.0;
+        v.w = 0.0;
+    }
+
+    v
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_len_vec2(_gc: &mut GcContext, v: Vec2, _closure: *mut c_void) -> PsFloat {
+    (v.x * v.x + v.y * v.y).sqrt()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_len_vec3(_gc: &mut GcContext, v: Vec3, _closure: *mut c_void) -> PsFloat {
+    (v.x * v.x + v.y * v.y + v.z * v.z).sqrt()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_len_vec4(_gc: &mut GcContext, v: Vec4, _closure: *mut c_void) -> PsFloat {
+    (v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w).sqrt()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_atan2(_gc: &mut GcContext, v: Vec2, _closure: *mut c_void) -> PsFloat {
+    v.y.atan2(v.x)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_pow(_gc: &mut GcContext, pow: PsFloat, exp: PsFloat, _closure: *mut c_void) -> PsFloat {
+    pow.powf(exp)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_round2(_gc: &mut GcContext, v: Vec2, _closure: *mut c_void) -> Vec2i {
+    let x = v.x.round() as PsInt;
+    let y = v.y.round() as PsInt;
+    Vec2i { x, y }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_floor(_gc: &mut GcContext, f: PsFloat, _closure: *mut c_void) -> PsInt {
+    f.floor() as PsInt
+}

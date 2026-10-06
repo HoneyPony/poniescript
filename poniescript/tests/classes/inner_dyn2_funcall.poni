@@ -1,0 +1,27 @@
+class Outer {
+    var hello: int = 5;
+
+    @inner
+    class Inner {
+        var value = 10;
+
+        @inner
+        class Inner2 {
+            fun caller() {
+                my_fun();
+            }
+        }
+    }
+
+    fun my_fun() {
+        print(hello);
+    }
+}
+
+fun init() {
+    var outer = new Outer{};
+    var inner = outer.new Inner{};
+    var inner2 = inner.new Inner2{};
+
+    inner2.caller(); //! 5
+}

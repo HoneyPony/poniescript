@@ -1,0 +1,84 @@
+// The idea of this file is to show how we could implement a DynArray in terms of
+// an Array that had just a little bit more of an API.
+//
+// In particular, the fundamental thing that is difficult to implement outside
+// the compiler is "a block of memory that holds multiple of the same item."
+//
+// To keep such a thing memory safe, it must know which values are uninitialized, and
+// which are initialized, and do bounds checking as appropriate.
+//
+// But, we can solve this by making the Array have two sizes: its allocated size,
+// and its initialized size. This does mean arrays are a little less efficient by
+// themselves, but we could add additional array types to get around that.
+
+class T{}
+
+class Array_ {
+    // Language built-in properties...
+    let length = 12;
+    let allocated = 16; // might be private...
+
+    fun full() -> bool { return length >= allocated; }
+    fun __index__(idx: int) -> T {
+        // Bounds check => panic, etc...
+        new T{}
+    }
+
+    fun get(idx: int) -> T? {
+        // Bounds check => nil, etc...
+        nil
+    }
+
+    fun push(val: T) -> bool {
+        if full() { return false; }
+
+        // Increase length by 1, write the value into the end of the array
+        return true;
+    }
+
+    fun pop() -> T? {
+        if length > 0 {
+            // something something...
+            // Will have to be careful to decrease length atomically
+            // (compare-and-swap loop)
+            new T{}
+        }
+        else { nil }
+    }
+
+    // Creates a clone of this array, with the same length, but with more allocated space.
+    fun clone_with_space(space: int) -> Array_ {
+        new Array_{};
+    }
+}
+
+fun debug_assert(condition: bool) {}
+
+class DynArray_ {
+    var inner: Array_ = new Array_{};
+
+    fun push(val: T) {
+        if not inner.push(val) {
+            inner = inner.clone_with_space(inner.allocated * 2);
+            debug_assert(inner.push(val));
+        }
+    }
+
+    fun pop() -> T? {
+        // Kind of need this to be on the inner array...
+        inner.pop()
+    }
+
+    fun get(index: int) -> T? {
+        inner.get(index)
+    }
+
+    fun iter() -> fun() -> T? {
+        fun() -> T? {
+            var i = 0;
+            let result = inner.get(i);
+            i += 1;
+            result
+        }
+    }
+}

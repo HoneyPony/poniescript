@@ -1,0 +1,19 @@
+fun make_globber() -> fun(StrConst) {
+	var buf: StrBuf = "";
+
+	return fun(what: StrConst) {
+		// TODO: Also create some sort of "append" operation so we can test
+		// that kind of thing... That might not be for a while..
+		buf = str(buf, what);
+		print(buf);
+	};
+}
+
+fun init() {
+	var glob = make_globber();
+
+	glob("hello");    //! hello
+	glob(" my");      //! hello my
+	glob(" little");  //! hello my little
+	glob(" ponies");  //! hello my little ponies
+}

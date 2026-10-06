@@ -1,0 +1,12 @@
+fun has_nested(x: int) {
+	fun increment() {
+		x = x + 1;
+	}
+
+	increment();
+	print(x);
+}
+
+fun init() {
+	has_nested(10); //! 11
+}

@@ -1,0 +1,19 @@
+class Outer {
+    var property = (1, 2);
+
+    class Inner {
+        var inner_property = (20, 30);
+
+        fun should_fail() -> vec2i {
+            //? Identifier 'property' is not available in this scope.
+            property = inner_property;
+        }
+    }
+}
+
+fun init() {
+    var outer = new Outer{};
+    var inner = new Outer.Inner{};
+
+    print(inner.inner_property);
+}

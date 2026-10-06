@@ -1,0 +1,4 @@
+fun init() {
+    //? Invalid inferred type for lambda: incoming type 'int' for parameter 'y' does not match declared type 'float'.
+    var f: fun(float, int) = |x, y: float| x * y;
+}

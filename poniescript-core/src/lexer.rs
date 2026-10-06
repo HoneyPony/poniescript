@@ -26,20 +26,19 @@ pub enum Tok {
 
 	Semicolon, Colon,
 
-	Question, Percent, Ampersand, VerticalBar,
+	Question, Percent, PercentEqual, Ampersand, VerticalBar,
 
 	Bang, BangEqual,
 	Equal, EqualEqual,
 	Greater, GreaterEqual,
 	Less, LessEqual,
 
-	// TODO: Rename this to RightArrow... Oops...
-	LeftArrow,
+	RightArrow,
 
 	Identifier, StringSimple, WholeNumber, DecimalNumber,
 
 	And, Class, Else, False, Fun, For, If, In, Null, Or,
-	Return, Super, KeySelf, True, Using, Var, While,
+	Return, Super, KeySelf, True, Using, Var, Let, While,
 	Loop, Break, Continue,
 
 	New,
@@ -47,6 +46,16 @@ pub enum Tok {
 	Print, Str,
 
 	Some, Nil,
+
+	Not,
+
+	// (#ff00ff00)
+	// (#fff)
+	// (#0000)
+	// #(ff00ff)
+	ColorLiteral,
+
+	Annotation,
 
 	DocComment,
 
@@ -122,9 +131,11 @@ pub fn build_key_lookup_map(db: &mut Db) -> FxHashMap<StrId, Tok> {
 	add("true"  ,   Tok::True);
 	add("using" ,   Tok::Using);
 	add("var"   ,   Tok::Var);
+	add("let"   ,   Tok::Let);
 	add("while" ,   Tok::While);
 	add("loop"  ,   Tok::Loop);
 	add("new"   ,   Tok::New);
+	add("not"   ,   Tok::Not);
 
 	add("some"  ,   Tok::Some);
 	add("nil"   ,   Tok::Nil);
@@ -370,6 +381,15 @@ impl Lexer {
 		return Ok(token);
 	}
 
+	fn annotation(&mut self, db: &mut Db) -> std::io::Result<Token> {
+		self.advance(db)?; // Move past '@'
+
+		// The dummy next char at eof will terminate this automatically.
+		while is_ident(self.peek()) { self.advance(db)?; }
+
+		self.mk_token_res(db, Tok::Annotation)
+	}
+
 	fn number(&mut self, db: &mut Db) -> std::io::Result<Token> {
 		while is_num(self.peek()) { self.advance(db)?; }
 
@@ -465,7 +485,34 @@ impl Lexer {
 		// case first, so that we can have a big match at the end.
 
 		let ty = match c {
-			'(' => Tok::LeftParen,
+			'(' => {
+				if self.next_char == '#' {
+					self.advance(db)?;
+					let mut len = 0;
+					for _ in 0..8 {
+						if !matches!(self.next_char, '0'..='9' | 'a'..='f' | 'A'..='F') {
+							break;
+						}
+						// Eat digits & hex characters.
+						self.advance(db)?;
+						len += 1;
+					}
+					if self.next_char != ')' {
+						self.error(db, "Expected ')' at end of color literal.".into());
+					}
+					self.advance(db)?; // Eat the )
+					if !matches!(len, 3 | 4 | 6 | 8) {
+						self.error(db, "Color literal should be 3, 4, 6, or 8 numerals.".into());
+					}
+
+					let tok = self.mk_token(db, Tok::ColorLiteral);
+					db.color_tokens.push(tok.clone());
+					return Ok(tok);
+				}
+				else {
+					Tok::LeftParen
+				}
+			}
 			')' => Tok::RightParen,
 			'{' => Tok::LeftBrace,
 			'}' => Tok::RightBrace,
@@ -489,7 +536,7 @@ impl Lexer {
 			';' => Tok::Semicolon,
 			':' => Tok::Colon,
 			'?' => Tok::Question,
-			'%' => Tok::Percent,
+			'%' => self.tok_eq(Tok::Percent, Tok::PercentEqual, db)?,
 			'&' => Tok::Ampersand,
 			'|' => Tok::VerticalBar,
 
@@ -498,7 +545,7 @@ impl Lexer {
 					Tok::MinusEqual
 				}
 				else if self.advance_if('>', db)? {
-					Tok::LeftArrow
+					Tok::RightArrow
 				}
 				else {
 					Tok::Minus
@@ -557,6 +604,10 @@ impl Lexer {
 			'a'..='z' | 'A'..='Z' | '_' => {
 				return self.ident(db);
 			},
+
+			'@' => {
+				return self.annotation(db);
+			}
 
 			'0'..='9' => {
 				return self.number(db);

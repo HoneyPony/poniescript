@@ -1,0 +1,8 @@
+class Horse {}
+
+class Unrelated {}
+
+fun init() {
+    //? Invalid assignment to 'array': need Array[Unrelated], but value is Array[Horse]
+    var array: Array[Unrelated] = [new Horse{}, new Horse{}];
+}

@@ -1,0 +1,19 @@
+// This test is currently UNIMP because we don't have a stable ordering of
+// the member names when we use the FxHashSet 'checklist' approach.
+//
+// We could consider sorting them by name or by declaration order.
+//
+// (We could even probably use a Vec of fields instead of an FxHashSet...)
+
+class Example {
+    var x: int = 20;
+    var y: int;
+    var z: int;
+    var w: int;
+}
+
+fun init() {
+    //? 'new' expression is missing initializer for mandatory variable 'y'
+    var e = new Example { x: 80 };
+    print(e.x, " ", e.y);
+}

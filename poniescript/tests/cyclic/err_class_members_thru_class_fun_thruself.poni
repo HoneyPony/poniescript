@@ -7,7 +7,10 @@ class Example {
 
     // TODO: This test case currently passes... Uh oh.
 
-    //? Cycle in variable initialization order
+    // -- this error is no longer applicable, because we have a parser error now.
+    // //? Cycle in variable initialization order
+
+    //? Cannot use 'self' in direct member initializer.
     var a1 = evil(self);
 
     var b = 10;

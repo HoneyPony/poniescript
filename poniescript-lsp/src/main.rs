@@ -2,13 +2,19 @@ mod document;
 mod inlay_hint;
 mod goto;
 mod hover;
+mod color;
+mod completion;
+mod semantic_locate;
+mod semantic_tokens;
+mod signature_help;
+mod documentation;
 
 use std::path::PathBuf;
 
 use clap::Parser;
-use poniescript_core::arena::IndexCell;
+use poni_arena::IndexCell;
 use tokio::sync::Mutex;
-use tower_lsp::jsonrpc::Result;
+use tower_lsp::jsonrpc::{Error, Result};
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
@@ -21,111 +27,14 @@ use poniescript_core::{
 
 use crate::document::*;
 
-
-
-struct SemanticTokenVisitor {
-    tokens: Vec<SemanticToken>,
-    cursor_start: u64,
-    cursor_line: u64,
-}
-
-impl SemanticTokenVisitor {
-    fn push_token(&mut self, ast: &Ast, _db: &Db, location: &SourceLocation, token_type: u32, token_modifiers_bitset: u32) {
-        let (line, col) = ast.sources.get(location.source).get_line_column(location);
-        let (line, col) = (line - 1, col - 1);
-
-        let mut delta_line: u32 = 0;
-        let delta_start: u32;
-
-        if line == self.cursor_line {
-            delta_start = (col - self.cursor_start) as u32;
-        }
-        else {
-            if line < self.cursor_line {
-                // TODO: Apparently our visit is not necessarily in-order.
-                // We need to do stuff to fix that (probably sort all the tokens)
-                eprintln!("bad semantic token");
-                return;
-            }
-            delta_line = (line - self.cursor_line) as u32;
-            delta_start = col as u32;
-        }
-
-        self.cursor_line = line;
-        self.cursor_start = col;
-
-        eprintln!("{}:{}: length: {}", self.cursor_line, self.cursor_start, location.length);
-
-        self.tokens.push(SemanticToken { delta_line, delta_start, length: location.length as u32, token_type, token_modifiers_bitset });
-    }
-
-    fn push_var(&mut self, ast: &Ast, db: &Db, location: &SourceLocation, id: VarId) {
-        let is_param = db.get(id).fun.is_some();
-
-        self.push_token(ast, db, location, if is_param { 1 } else { 0 }, 0);
-    }
-
-    fn push_fun(&mut self, ast: &Ast, db: &Db, location: &SourceLocation) {
-        eprintln!("push fun: {}", location.length);
-        self.push_token(ast, db, location, 2, 0);
-    }
-}
-
-// TODO: Deduplicate this
-macro_rules! into {
-    ($value:expr, $variant:ident) => {
-        {
-            let Expr::$variant(v) = $value else { unreachable!() };
-            v
-        }
-    };
-}
-
-// TODO: Consider making VisitAst visit each node strongly-typed or something..?
-impl poniescript_core::expr::VisitAst for SemanticTokenVisitor {
-    fn visit_assign(&mut self, ast: &Ast, db: &mut Db, id: ExprId) {
-        // TODO: Visit nested
-        let binding = ast.get_expr(id);
-        let assign = into!(binding.as_ref(), Assign);
-
-        self.push_var(ast, db, &assign.var_name, assign.identity);
-        self.visit_expr(ast, db, assign.value);
-    }
-
-    fn visit_variable(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
-        let binding = ast.get_expr(id);
-        let var = into!(binding.as_ref(), Variable);
-
-        self.push_var(ast, db, &var.location, var.identity);
-    }
-
-    fn visit_funcapture(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
-        let binding = ast.get_expr(id);
-        let capt = into!(binding.as_ref(), FunCapture);
-
-        self.push_fun(ast, db, &capt.fn_name);
-    }
-
-    fn visit_funcall(&mut self,ast: &Ast, db: &mut Db,id:ExprId) {
-        let binding = ast.get_expr(id);
-        let call = into!(binding.as_ref(), FunCall);
-
-        self.push_fun(ast, db, &call.fn_name);
-
-        for arg in &call.args {
-            self.visit_expr(ast, db, *arg);
-        }
-    }
-}
-
 struct Backend {
     client: Client,
     store: Mutex<DocumentStore>,
 }
 
-fn supports_utf8_encoding(params: InitializeParams) -> bool {
-    if let Some(general) = params.capabilities.general {
-        if let Some(encodings) = general.position_encodings {
+fn supports_utf8_encoding(params: &InitializeParams) -> bool {
+    if let Some(general) = &params.capabilities.general {
+        if let Some(encodings) = &general.position_encodings {
             for e in encodings {
                 if e.as_str() == "utf-8" {
                     return true;
@@ -157,7 +66,7 @@ impl LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
         let mut encoding = PositionEncodingKind::UTF8;
 
-        if !supports_utf8_encoding(params) {
+        if !supports_utf8_encoding(&params) {
             // In the case that the server does not support utf-8 position encodings:
             //
             // We just lie and say we support utf16, even though we don't. I really
@@ -176,13 +85,30 @@ impl LanguageServer for Backend {
             // });
         }
 
+        if let Some(uri) = &params.root_uri {
+            if let Ok(path) = uri.to_file_path() {
+                let maybe_poni_toml = path.join("ponies.toml");
+                eprintln!("checking for possible ponies.toml: {}", maybe_poni_toml.display());
+                if let Ok(as_uri) = Url::from_file_path(&maybe_poni_toml) {
+                    if let Ok(text) = std::fs::read_to_string(&maybe_poni_toml) {
+                        let mut doc = self.store.lock().await;
+                        doc.initialize_projects_from_toml(&as_uri, text);
+                    }
+                }
+            }
+        }
+
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 // We only support UTF-8 position encoding.
                 position_encoding: Some(encoding),
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
-                completion_provider: Some(CompletionOptions::default()),
-                semantic_tokens_provider: None, /*Some(
+                completion_provider: Some(CompletionOptions {
+                    // Include @ as a trigger character for annotations
+                    trigger_characters: Some(vec!["@".into(), ".".into()]),
+                    ..Default::default()
+                }),
+                semantic_tokens_provider: Some(
                     SemanticTokensServerCapabilities::SemanticTokensOptions(
                         SemanticTokensOptions {
                             legend: SemanticTokensLegend {
@@ -190,21 +116,33 @@ impl LanguageServer for Backend {
                                     SemanticTokenType::VARIABLE,
                                     SemanticTokenType::PARAMETER,
                                     SemanticTokenType::FUNCTION,
+                                    SemanticTokenType::PROPERTY,
+                                    SemanticTokenType::METHOD,
                                 ],
-                                token_modifiers: vec![],
+                                token_modifiers: vec![
+                                    SemanticTokenModifier::READONLY,
+                                ],
                             },
                             full: Some(SemanticTokensFullOptions::Bool(true)),
                             range: None,
                             work_done_progress_options: Default::default(),
                         },
                     )
-                ),*/
+                ),
 
                 inlay_hint_provider: Some(OneOf::Left(true)),
 
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
 
                 definition_provider: Some(OneOf::Left(true)),
+                
+                color_provider: Some(ColorProviderCapability::ColorProvider(ColorProviderOptions{})),
+
+                signature_help_provider: Some(SignatureHelpOptions {
+                    trigger_characters: Some(vec!["(".into(), ",".into()]),
+                    retrigger_characters: None,
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                }),
 
                 ..Default::default()
             },
@@ -229,15 +167,9 @@ impl LanguageServer for Backend {
         Ok(())
     }
 
-    async fn completion(&self, _: CompletionParams) -> Result<Option<CompletionResponse>> {
-        let mut print = CompletionItem::new_simple("print".to_string(), "Print out any series of expressions.".to_string());
-        print.kind = Some(CompletionItemKind::FUNCTION);
-        let mut str = CompletionItem::new_simple("str".to_string(), "Convert any series of expressions to a new StrBuf.".to_string());
-        str.kind = Some(CompletionItemKind::FUNCTION);
-
-        Ok(Some(CompletionResponse::Array(vec![
-            print, str
-        ])))
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
+        let mut store = self.store.lock().await;
+        Ok(completion::completion(&mut store, params))
     }
 
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
@@ -267,7 +199,6 @@ impl LanguageServer for Backend {
         &self,
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
-        return Ok(None);
         // Disable semantic tokens for now. They're not very useful and the LSP
         // is pretty unstable.
         //const ENABLE_SEMANTIC_TOKEN_SUPPORT: bool = false;
@@ -275,25 +206,9 @@ impl LanguageServer for Backend {
 
         //  TODO: Make semantic tokens work with new Project setup.
         // self.client.log_message(MessageType::INFO, format!("Semantic tokens requested for {}", params.text_document.uri)).await;
-
-        // let mut lock = self.store.lock().await;
+         let mut store = self.store.lock().await;
+        Ok(semantic_tokens::semantic_tokens(&mut store, params))
         
-        // let (db, ast, ..) = lock.get_cached_stuff();
-
-        // let mut visitor = SemanticTokenVisitor { tokens: vec![], cursor_line: 0, cursor_start: 0 };
-
-        // for source in ast.sources.iter() {
-        //     let source = ast.sources.get(source);
-        //     let module = &source.module;
-        //     for fun in &module.functions {
-        //         visitor.visit_expr(&ast, db, fun.value);
-        //     }
-        // }
-
-        // let tokens = SemanticTokens { result_id: None, data: visitor.tokens };
-
-        // self.client.log_message(MessageType::INFO, format!("Found {} semantic tokens", tokens.data.len())).await;
-        // Ok(Some(SemanticTokensResult::Tokens(tokens)))
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -328,6 +243,82 @@ impl LanguageServer for Backend {
     ) -> Result<Option<GotoDefinitionResponse>> {
         let mut lock = self.store.lock().await;
         Ok(goto::goto_definition(&mut lock, params))
+    }
+
+    async fn signature_help(
+        &self,
+        params: SignatureHelpParams
+    ) -> Result<Option<SignatureHelp>> {
+        let mut store = self.store.lock().await;
+        Ok(signature_help::signature_help(&mut store, params))
+    }
+
+    async fn document_color(&self, params: DocumentColorParams) -> Result<Vec<ColorInformation>> {
+        let lock = self.store.lock().await;
+
+        let Some(project) = lock.projects.get(&params.text_document.uri) else {
+            return Ok(Vec::new());
+        };
+
+        let proj = project.get_cache(&lock);
+        let proj = proj.lock().unwrap();
+
+        let Some(document) = proj.url_to_id_map.get(&params.text_document.uri) else {
+            return Ok(Vec::new());
+        };
+
+        let mut colors = Vec::new();
+
+        for color in &proj.db.color_tokens {
+            let mut location = color.location.clone();
+            // Collect only color tokens for this document.
+            // Note that we expect there to be pretty few color tokens overall,
+            // so it shouldn't be hugely inefficient to filter them this way.
+            if location.source != *document { continue; }
+            // Cut out the (#)
+            location.offset += 2;
+            location.length -= 3;
+            colors.push(ColorInformation {
+                range: convert_range(&proj.ast, &location),
+                color: color::convert_color(&proj.db, color)
+            })
+        }
+       
+        Ok(colors)
+    }
+
+    async fn color_presentation(
+        &self,
+        params: ColorPresentationParams,
+    ) -> Result<Vec<ColorPresentation>> {
+        // For now, as a hack, determine whether we want a 3-elem color or a 
+        // 4-elem color based on the approximate length of the range.
+        let approx_len = params.range.end.character - params.range.start.character;
+
+        let elems = match approx_len {
+            3 => 3,
+            4 => 4,
+            6 => 3,
+            8 => 4,
+            _ => 4
+        };
+
+        let r = (params.color.red   * 255.0) as u8;
+        let g = (params.color.green * 255.0) as u8;
+        let b = (params.color.blue  * 255.0) as u8;
+        let a = (params.color.alpha * 255.0) as u8;
+
+        let label = match elems {
+            3 => format!("{:02x}{:02x}{:02x}", r, g, b),
+            4 => format!("{:02x}{:02x}{:02x}{:02x}", r, g, b, a),
+            _ => unreachable!()
+        };
+
+        Ok(vec![ColorPresentation {
+            label,
+            text_edit: None,
+            additional_text_edits: None
+        }])
     }
 }
 

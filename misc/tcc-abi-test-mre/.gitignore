@@ -1,0 +1,4 @@
+*.o
+/bin-clang
+/bin-tcc
+/bin-gcc

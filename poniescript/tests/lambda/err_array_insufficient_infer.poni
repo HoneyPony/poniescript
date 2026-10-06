@@ -1,0 +1,9 @@
+fun init() {
+    //? Invalid assignment: Type annotations needed.
+    var my_funs = [
+        |x: int, y| -> int { 20 },
+        |x, y: float| -> int { 30 },
+    ];
+
+    // This could be doable with more powerful type inference.
+}

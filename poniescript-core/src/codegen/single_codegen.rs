@@ -186,9 +186,9 @@ impl ufmt::uDisplay for Val {
 						// AST nodes of some sort.
 						uwrite!(f, "this->")?;
 					}
-					let depth_loop = depth - 1;
+					let mut depth_loop = depth - 1;
 					while depth_loop > 0 {
-						todo!("nested class support");
+						uwrite!(f, "parent->")?;
 						depth_loop -= 1;
 					}
 				}
@@ -238,9 +238,9 @@ impl std::fmt::Display for Val {
 						// AST nodes of some sort.
 						write!(f, "this->")?;
 					}
-					let depth_loop = depth - 1;
+					let mut depth_loop = depth - 1;
 					while depth_loop > 0 {
-						todo!("nested class support");
+						write!(f, "parent->")?;
 						depth_loop -= 1;
 					}
 				}
@@ -289,7 +289,7 @@ impl std::fmt::Display for TypedVal {
 }
 
 pub struct Indenter {
-	level: usize,
+	pub level: usize,
 }
 
 impl ufmt::uDisplay for Indenter {
@@ -451,6 +451,13 @@ pub struct Codegen<'a> {
 	/// global initialization)
 	pub disable_gc_frames: bool,
 
+	/// A compile option for disabling GC frames entirely. In this case, GC frames
+	/// will not be generated at all, which saves a lot of shuffling around the
+	/// shadow stack.
+	/// 
+	/// Useful for game code where we can forcibly safepoint every game loop.
+	pub completely_disable_gc_frames: bool,
+
 	/// The 'return' value of the current Loop, if any.
 	loop_val: Option<TypedVal>,
 
@@ -463,8 +470,68 @@ pub struct Codegen<'a> {
 	current_buffer: String,
 }
 
+fn lookup_var_in_parent(db: &Db, var: VarId, parent: TypId) -> (usize, &str, &str) {
+	let arrow = db.get_c_member_lookup(parent);		
+	let varname = db.get_cname(var);
+
+	log::trace!("looking up {} in {} ({})", db.repr_var(var),
+		db.repr_type(parent), parent.to_index());
+
+	let Some(var_class) = db.get(var).class else {
+		return (0, arrow, varname);
+	};
+
+	log::trace!("var class = {}", var_class.to_index());
+
+	let mut depth = 0;
+	let mut parent = match db.get(parent) {
+		Type::Class(class) => { *class },
+		// TODO: Consider panicking here?
+		_ => { return (0, arrow, varname) }
+	};
+
+	loop {
+		if parent == var_class {
+			log::trace!("identified member in class: {} (depth {})", db.repr_class(parent), depth);
+			return (depth, arrow, varname);
+		}
+
+		depth += 1;
+
+		parent = db.get(parent).parent.unwrap_or_else(||
+			panic!("ICE: Trying to lookup a chained var that doesn't have any more parents."));
+	}
+}
+
+fn find_function_depth(db: &Db, typ: TypId, fun: FunId) -> usize {
+	let mut depth = 0;
+
+	log::trace!("looking up {} in {}", db.get_fun_name(fun), db.repr_type(typ));
+	let mut class = match db.get(typ) {
+		Type::Class(class) => { *class },
+		// Non-classes can't have parents (for now).
+		_ => { return 0; }
+	};
+
+	// Freestanding functions don't have a class.
+	let Some(fun_class) = db.get(fun).class else  { return 0; };
+
+	loop {
+		// NOTE: This will have to change with virtual functions...
+		if class == fun_class {
+			log::trace!("identified function in class: {} (depth {})", db.repr_class(class), depth);
+			return depth;
+		}
+
+		depth += 1;
+
+		class = db.get(class).parent.unwrap_or_else(||
+			panic!("ICE: Trying to lookup a function's parents but we ran out."));
+	}
+}
+
 impl<'a> Codegen<'a> {
-	pub fn new(db: &'a Db, send: channel::Sender<String>) -> Self {
+	pub fn new(db: &'a Db, send: channel::Sender<String>, completely_disable_gc_frames: bool,) -> Self {
 		return Codegen {
 			return_types: Vec::new(),
 
@@ -482,6 +549,7 @@ impl<'a> Codegen<'a> {
 			block_scopes: Vec::new(),
 
 			disable_gc_frames: false,
+			completely_disable_gc_frames,
 
 			loop_val: None,
             send,
@@ -634,7 +702,7 @@ impl<'a> Codegen<'a> {
 	pub fn save_gc_values(&mut self, into: &mut String) {
 		// If we're disabling gc frames, trying to save the values will cause
 		// issues.
-		if self.disable_gc_frames { return; }
+		if self.disable_gc_frames || self.completely_disable_gc_frames { return; }
 
 		let saved = self.gc_frame.saved.borrow();
 		let indent = self.indent();
@@ -657,18 +725,43 @@ impl<'a> Codegen<'a> {
 		self.val_alloc_slots(Val::InlineExpr { expr: buf }, typ)
 	}
 
-	fn compile_partial_binary(&mut self, result_val: &TypedVal, lhs_val: &TypedVal, rhs_val: &TypedVal, op: char, cur_typ: TypId, postfix: &String, into: &mut String) {
+	fn compile_partial_binary(&mut self, is_scalar: (bool, bool), result_val: &TypedVal, lhs_val: &TypedVal, rhs_val: &TypedVal, op: char, cur_typ: TypId, postfix: &String, into: &mut String) {
 		let indent = self.indent();
 		match self.db.get(cur_typ) {
 			Type::Int | Type::Float => {
-				inf_writeln!(into, "{}{}{} = {}{} {} {}{};",
-					indent, result_val, postfix, lhs_val, postfix, op, rhs_val, postfix);
+				// This allows us to compile e.g. (1, (2, 3)) * 4
+				let (op_prefix, op, op_postfix) = match op {
+					'%' => {
+						// Modulo is implemented through a function.
+						let prefix = if cur_typ == self.db.types.int {
+							"ps_mod_int("
+						}
+						else {
+							"ps_mod_float("
+						};
+						(prefix, ',', ")")
+					},
+					_ => {
+						("", op, "")
+					}
+				};
+				inf_write!(into, "{}{}{} = {}{}", indent, result_val, postfix, op_prefix, lhs_val);
+				if !is_scalar.0 {
+					// LHS postfix
+					inf_write!(into, "{}", postfix);
+				}
+				inf_write!(into, " {} {}", op, rhs_val);
+				if !is_scalar.1 {
+					// RHS postfix
+					inf_write!(into, "{}", postfix);
+				}
+				inf_writeln!(into, "{};", op_postfix);
 			}
 			Type::Tuple(typ_ids) => {
 				// Iterate over each tuple member and perform the operator.
 				for i in 0..typ_ids.len() {
 					let postfix = format!("{postfix}.v_{i}");
-					self.compile_partial_binary(result_val, lhs_val, rhs_val,
+					self.compile_partial_binary(is_scalar, result_val, lhs_val, rhs_val,
 						op,
 							typ_ids[i],
 						&postfix,
@@ -693,12 +786,17 @@ impl<'a> Codegen<'a> {
 			Tok::Plus => '+',
 			Tok::Minus => '-',
 			Tok::Slash => '/',
+			Tok::Percent => '%',
 			_ => panic!("ICE: Tried to codegen unknown binary operator")
 		};
 
 		// For simple binary expressions, write them out as one line & make them
 		// a constant value
 		if binary.typ == self.db.types.int || binary.typ == self.db.types.float {
+			if op == '%' {
+				let fun = if binary.typ == self.db.types.int { "ps_mod_int" } else { "ps_mod_float" };
+				return inline_expr!(self, binary.typ, "{}({}, {})", fun, left, right);
+			}
 			return inline_expr!(self, binary.typ, "({} {} {})", left, op, right);
 		}
 		else {
@@ -710,8 +808,11 @@ impl<'a> Codegen<'a> {
 
 			define_val!(self, into, val, ";\n");
 
+			let lhs_scalar = left.typ == self.db.types.int || left.typ == self.db.types.float;
+			let rhs_scalar = right.typ == self.db.types.int || right.typ == self.db.types.float;
+
 			let postfix = "".to_string();
-			self.compile_partial_binary(&val, &left, &right, 
+			self.compile_partial_binary((lhs_scalar, rhs_scalar), &val, &left, &right, 
 				op, val.typ, &postfix, into);
 
 			return val;
@@ -744,6 +845,11 @@ impl<'a> Codegen<'a> {
 
 	fn compile_unary(&mut self, ast: &AstReadonly, unary: &Unary, into: &mut String) -> TypedVal {
 		let inner = self.expr(ast, unary.inner, into);
+
+		if unary.op == Tok::Not {
+			// Handle unary not here as it is simple.
+			return inline_expr!(self, unary.typ, "(!{})", inner);
+		}
 
 		let op = match unary.op {
 			Tok::Plus => '+',
@@ -1186,12 +1292,19 @@ impl<'a> Codegen<'a> {
 			(last, val) => {
 				let last = self.compile_stmt(ast, *last.unwrap(), into);
 				log::trace!("codegen: line: {} is_some(): {}", block.location.offset, last.is_some());
-				let last = last.unwrap();
-				if last.needs_storage() && val.needs_storage() {
-					// Grab fresh copy of indent() because we're in the block,
-					// and may or may not have +1'd it
-					inf_writeln!(into, "{}{} = {};",
-						self.indent(), val, last);
+				if let Some(last) = last {
+					if last.needs_storage() && val.needs_storage() {
+						// Grab fresh copy of indent() because we're in the block,
+						// and may or may not have +1'd it
+						inf_writeln!(into, "{}{} = {};",
+							self.indent(), val, last);
+					}
+				}
+				else {
+					eprintln!("BUG: Block {} codegen wanted to .unwrap() last but it was None\n\tBlock type = {}\n\tVal = {}",
+						expr.to_index(),
+						self.db.repr_type(block.typ),
+						val);
 				}
 
 				val
@@ -1332,8 +1445,6 @@ impl<'a> Codegen<'a> {
 				Val::Bottom.typed(self.db.types.bottom, None)
 			}
 			Expr::Return(ret) => {
-				inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
-
 				match &ret.expression {
 					Some(value) => {
 						let needed_type = *self.return_types.last().unwrap();
@@ -1345,11 +1456,18 @@ impl<'a> Codegen<'a> {
 							// If it's not bottom, check the typechecker's work.
 							assert!(val.typ == needed_type);
 
+							// This must occur right before the actual return statement.
+							if !self.completely_disable_gc_frames {
+								inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
+							}
 							inf_writeln!(into, "{}return {};",
 								indent, val);
 						}
 					},
 					None => {
+						if !self.completely_disable_gc_frames {
+							inf_writeln!(into, "{}ctx->frame = gc_frame.prev;", indent);
+						}
 						inf_writeln!(into, "{}return;", indent);
 					}
 				}
@@ -1443,29 +1561,7 @@ impl<'a> Codegen<'a> {
 				// Note that, if the type checking and binding stages are correct,
 				// this code should be fine, as the varaible should be bound to
 				// a variable inside a class that we are also inside now.
-
-				let mut depth = 0;
-
-				if let Some(class) = self.db.get(variable.identity).class {
-					for inside in self.inside_class.iter().rev() {
-						// Depth is at least one, because we're in a class, so
-						// increment before checking.
-						depth += 1;
-						if *inside == class {
-							break;
-						}
-					}
-
-					// TODO: Panic if we run out of classes before finding the
-					// right one.
-				}
-
-				// For GC Slots, DirectVars are special.
-				//
-				// The variable itself should already have a gc slot. So the
-				// DirectVar does not need any additional slots.
-				Val::DirectVar { this_val: self.this_val, name: self.db.get_cname(variable.identity), depth }
-					.typed(self.db.get_var_type(variable.identity), None)
+				self.get_direct_var(variable.identity)
 			},
 			Expr::Assign(assign) => {
 				self.compile_assign(ast, assign.identity, assign.value, into, false)
@@ -1502,6 +1598,9 @@ impl<'a> Codegen<'a> {
 				// for a function call, we have to be sure to always generate
 				// the cname separately.
 				define_val!(self, into, val, " = ");
+				// Commonly, for function calls, our define_val! does not need storage,
+				// in which case it does nothing. In those cases, manually add the indent.
+				if !val.needs_storage() { inf_write!(into, "{}", indent); }
 				inf_write!(into, "{}(ctx", self.db.get_fun_cname(call.identity));
 
 				let comma = ", ";
@@ -1510,7 +1609,12 @@ impl<'a> Codegen<'a> {
 				}
 				// TODO: Implement closure, gc scoping, etc
 				if let Some(object) = object {
-					inf_writeln!(into, "{}{});", comma, object);
+					let depth = find_function_depth(&self.db, object.typ, call.identity);
+					inf_write!(into, "{}{}", comma, object);
+					for _ in 0..depth {
+						inf_write!(into, "->parent");
+					}
+					inf_writeln!(into, ");");
 				}
 				else {
 					inf_writeln!(into, "{}NULL);", comma);
@@ -1659,7 +1763,12 @@ impl<'a> Codegen<'a> {
 					if let Some(closure) = closure {
 						// TODO: We need to promote Closure into essentially
 						// the class type for the function?
-						inf_writeln!(into, ".closure = {} }};", closure.val);
+						let depth = find_function_depth(&self.db, closure.typ, capt.identity);
+						inf_write!(into, ".closure = {}", closure);
+						for _ in 0..depth {
+							inf_write!(into, "->parent");
+						}
+						inf_writeln!(into, "}};");
 					}
 					else {
 						inf_writeln!(into, ".closure = NULL }};");
@@ -1729,10 +1838,23 @@ impl<'a> Codegen<'a> {
 				// matter here..?
 				let val = self.new_val_typed(declare.typ);
 
+				let closure = match self.db.get(declare.identity).class {
+					// TODO: Is no gc slots really correct here?
+					Some(class) => Some(Val::DirectSelf.typed(self.db.get_class_type_or_panic(class), None)),
+					None => None
+				};
+
 				define_val!(self, into, val,
-					" = ({}) {{ .fun = {}, .closure = NULL }};\n",
+					" = ({}) {{ .fun = {}, .closure = ",
 					self.db.get_ctype(declare.typ), // TODO: Maybe use a sig-specific fucntion
 					self.db.get_fun_cname(declare.identity));
+
+				if val.needs_storage() {
+					match closure {
+						Some(closure) => inf_writeln!(into, "{} }};", closure),
+						None          => inf_writeln!(into, "NULL }};")
+					}
+				}
 
 				val
 			},
@@ -1746,6 +1868,14 @@ impl<'a> Codegen<'a> {
 				// which is terrible, but it's a start.
 				define_val!(self, into, val, " = poni_gc_alloc_tagged(ctx, sizeof(struct {}), {});\n",
 					self.db.get_class_cname(new.class), self.db.get_type_ctag(new.typ));
+
+				let parent = match new.parent {
+					Some(parent) => {
+						Some(self.expr(ast, parent, into))
+					}
+					None => None
+				};
+
 				// Initialize the value.
 				if val.needs_storage() {
 					// Note: The value is a pointer-to-struct cl_Thing, so
@@ -1762,10 +1892,18 @@ impl<'a> Codegen<'a> {
 						panic!("ICE: New class val wasn't a Tmp");
 					};
 
+					// First-first, initialize the parent..?
+					if let Some(parent) = parent {
+						inf_writeln!(into, "{}{}->parent = {};", indent, val, parent);
+					}
+
 					// Run all the initializers from the new{} first.
 					for init in &new.initializers {
 						let rhs = self.expr(ast, init.value, into);
-						assert!(rhs.typ == self.db.get_var_type(init.var));
+						assert!(rhs.typ == self.db.get_var_type(init.var),
+							"rhs = {} ; var type = {}",
+							self.db.repr_type(rhs.typ),
+							self.db.repr_type(self.db.get_var_type(init.var)));
 						let varname = self.db.get_cname(init.var);
 
 						inf_writeln!(into, "{}{}->{} = {};", 
@@ -1785,7 +1923,11 @@ impl<'a> Codegen<'a> {
 					// are the default initializers.
 					let enclosing_this_val = self.this_val;
 					self.this_val = Some(idx);
-					self.inside_class.push(new.class);
+
+					// Need to fetch the class list / scope from the class, as
+					// that's the static syntantical context for its constructor.
+					let enclosing_inside_class = std::mem::take(&mut self.inside_class);
+					self.inside_class = Self::get_class_list_class(&self.db, new.class);
 
 					// Run all the initializers from the class second.
 					for var in &self.db.get(new.class).vars {
@@ -1803,7 +1945,7 @@ impl<'a> Codegen<'a> {
 						}
 					}
 
-					self.inside_class.pop();
+					self.inside_class = enclosing_inside_class;
 					self.this_val = enclosing_this_val;
 				}
 
@@ -1811,28 +1953,48 @@ impl<'a> Codegen<'a> {
 			},
 
 			Expr::Get(get) => {
-				let lhs = self.expr(ast, get.lhs, into);
-				let arrow = self.db.get_c_member_lookup(lhs.typ);
-				
-				let varname = self.db.get_cname(get.var);
-
-				// Don't define our own val until we've evaluated inner expr,
-				// for GC.
-				let typ = self.db.get_var_type(get.var);
-
+				// OLD code: Created some cheap re-evals. Not sure if
+				// this is relevant for longer chains..>?
+				//
 				// For integer, float members, etc, we don't care if we generate
 				// something like t1->x t1->x multiple times. Technically this
 				// could change the semantic, but I don't think there's any
 				// cases where that will pop up for these types? E.g. there's
 				// no OptionElse for plain integers.
-				if self.db.is_cheap_re_eval_type(typ) {
-					return inline_expr!(self, typ, "{}{}{}", lhs.val, arrow, varname);
-				}
+				// if self.db.is_cheap_re_eval_type(typ) {
+				// 	return inline_expr!(self, typ, "{}{}{}", lhs.val, arrow, varname);
+				// }
 
-				let val = self.new_val_typed(typ);
+				// Don't define our own val until we've evaluated inner expr,
+				// for GC.
+				let lhs = self.expr(ast, get.lhs, into);
 
-				// TODO: Should lhs be promoted...??
-				define_val!(self, into, val, " = {}{}{};\n", lhs.val, arrow, varname);
+				let val = self.new_val_typed(self.db.get_var_type(get.vars.last().copied().unwrap()));
+				// Start with the define_val!, then start building the chain.
+				//
+				// (The chain starts with the lhs.)
+				define_val!(self, into, val, " = {}", lhs);
+
+				
+
+				let mut lhs = lhs.typ;
+				if val.needs_storage() {
+					for var in &get.vars {
+						let (depth, arrow, varname) = lookup_var_in_parent(&self.db, *var, lhs);
+
+						// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
+						for _ in 0..depth {
+							inf_write!(into, "->parent");
+						}
+
+						inf_write!(into, "{}{}", arrow, varname);
+						// Walk the tree of types
+						lhs = self.db.get_var_type(*var);
+					}
+
+					// End the line.
+					inf_writeln!(into, ";");
+				}				
 
 				val
 			}
@@ -1843,18 +2005,32 @@ impl<'a> Codegen<'a> {
 					return rhs;
 				}
 				let lhs = self.expr(ast, set.lhs, into);
-				// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
-				let arrow = self.db.get_c_member_lookup(lhs.typ);
-				
-				let varname = self.db.get_cname(set.var);
 
-				// Define our own val as late as possible, for GC.
-				let typ = self.db.get_var_type(set.var);
-				let val = self.new_val_typed(typ);
+				let val = self.new_val_typed(self.db.get_var_type(set.vars.last().copied().unwrap()));
+				// Start with the define_val!, then start building the chain.
+				//
+				// (The chain starts with the lhs.)
+				define_val!(self, into, val, " = {}", lhs);
 
-				// TODO: Should lhs be promoted...??
-				// This is a bit hacky (the double assign), but I think it is overall fine.
-				define_val!(self, into, val, " = {}{}{} = {};\n", lhs.val, arrow, varname, rhs);
+				let mut lhs = lhs.typ;
+				if val.needs_storage() {
+					for var in &set.vars {
+						let (depth, arrow, varname) = lookup_var_in_parent(&self.db, *var, lhs);
+
+						// TODO: What happens if lhs is Bottom? (this TODO written when we are promoting)
+						for _ in 0..depth {
+							inf_write!(into, "->parent");
+						}
+
+						inf_write!(into, "{}{}", arrow, varname);
+						// Walk the tree of types
+						lhs = self.db.get_var_type(*var);
+					}
+
+					// We can finally write the rhs.
+					// This is a bit hacky (the double assign), but I think it is overall fine.
+					inf_writeln!(into, " = {};", rhs);
+				}				
 
 				val
 			}
@@ -2173,6 +2349,69 @@ impl<'a> Codegen<'a> {
 				// Right now, this is nothing but nil, which cannot need a GC frame.
 				Val::DirectNull.typed(sum.typ, None) 
 			}
+
+			Expr::AllocateClosure(ac) => {
+				if let Some(class) = self.db.get(ac.id).class {
+					self.inside_class.push(class);
+					log::trace!("inside_class now includes closure; len = {}", self.inside_class.len());
+
+					// To get the val in the right scope.
+					// What might be cleaner is to not introduce a new scope
+					// at all, and instead have a better SelfVal system.
+					let val = self.new_val_typed_tmp(ac.typ);
+
+					define_val!(self, into, val, ";\n");
+
+					inf_writeln!(into, "{}{{", indent);
+					self.indent_level += 1;
+
+					// If we have a parent class, generate an initializer for
+					// it. This should be the enclosing 'this' value.
+					if let Some(parent) = self.db.get(class).parent {
+						inf_writeln!(into, "{}\tstruct {} *const parent = this;",
+							indent, self.db.get_class_cname(parent));
+					}
+
+					inf_writeln!(into, "{}\tstruct {} *const this = poni_gc_alloc_tagged(ctx, sizeof(struct {}), {});",
+						indent, self.db.get_class_cname(class),
+						self.db.get_class_cname(class),
+						self.db.get_class_ctag(class));
+
+					if self.db.get(class).parent.is_some() {
+						// Set the parent member.
+						inf_writeln!(into, "{}\tthis->parent = parent;", indent);
+					}
+
+					if ac.copy_params {
+						for var in &self.db.get(class).vars {
+							if self.db.get(*var).param_for.is_some() {
+								let cname = self.db.get_cname(*var);
+								// This feels a little jank but I think it is
+								// totally legit. The only thing we will have to
+								// worry about is if we ever change the calling
+								// convention for e.g. structs.
+								inf_writeln!(into, "{}\tthis->{} = {};",
+									indent, cname, cname);
+							}
+						}
+					}
+
+					let inner_val = self.expr(ast, ac.inner, into);
+					self.indent_level -= 1;
+					if val.needs_storage() {
+						inf_writeln!(into, "{}\t{} = {};", indent, val, inner_val);
+					}
+					inf_writeln!(into, "{}}}", indent);
+
+					log::trace!("inside_class: popping closure -> {}", self.inside_class.len());
+					self.inside_class.pop();
+					self.tmp_to_used_val(val)
+				}
+				else {
+					// TODO: Allocate the class for the closure if there is one.
+					self.expr(ast, ac.inner, into)
+				}
+			}
 		}
 	}
 
@@ -2292,10 +2531,22 @@ impl<'a> Codegen<'a> {
 	// }
 
 	fn compile_stmt(&mut self, ast: &AstReadonly, stmt: StmtId, into: &mut String) -> Option<TypedVal> {
-		let indent = self.indent();
+		// We currently do not use the indenter at all in this function!
+		// let indent = self.indent();
+
 		match ast.stmts.get(stmt) {
 			Stmt::Declare(declare) => {
-				self.compile_assign(ast, declare.identity, declare.value, into, true);
+				if let Some(value) = declare.value {
+					self.compile_assign(ast, declare.identity, value, into, true);
+				}
+				else {
+					// In general, this should be impossible. We should have
+					// reached the codegen stage without having issues here.
+					//
+					// Even in the LSP, we should never *try* to run codegen
+					// if the code is invalid.
+					panic!("ICE: Compile Stmt::Declare without a value.");
+				}
 
 				// Each variable obtains a single GC slot for itself, if relevant.
 				// These are stored in the "block scopes" vector.
@@ -2347,7 +2598,11 @@ impl<'a> Codegen<'a> {
 		let mut depth = 0;
 
 		if let Some(class) = self.db.get(var).class {
+			log::trace!("codegen assign to class member {}.{} using Expr::Assign",
+				self.db.repr_class(class),
+				self.db.repr_var(var));
 			for inside in self.inside_class.iter().rev() {
+				log::trace!("- checking class {}", self.db.repr_class(*inside));
 				// Depth is at least one, because we're in a class, so
 				// increment before checking.
 				depth += 1;
@@ -2355,6 +2610,7 @@ impl<'a> Codegen<'a> {
 					break;
 				}
 			}
+			log::trace!("--> depth = {}", depth);
 
 			// TODO: Panic if we run out of classes before finding the
 			// right one.
@@ -2392,6 +2648,38 @@ impl<'a> Codegen<'a> {
 		var_lvalue
 	}
 
+	fn get_class_list(db: &Db, fun: FunId) -> Vec<ClassId> {
+		let mut list = Vec::new();
+
+		let mut class = db.get(fun).class;
+		while let Some(actual) = class {
+			list.push(actual);
+			class = db.get(actual).parent;
+		}
+
+		// This is a little awkward, but this is what the rest of the code
+		// is expecting for now.
+		list.reverse();
+
+		list
+	}
+
+	fn get_class_list_class(db: &Db, class: ClassId) -> Vec<ClassId> {
+		let mut list = Vec::new();
+		let mut class = Some(class);
+
+		while let Some(actual) = class {
+			list.push(actual);
+			class = db.get(actual).parent;
+		}
+
+		// This is a little awkward, but this is what the rest of the code
+		// is expecting for now.
+		list.reverse();
+
+		list
+	}
+
 	// Does not generate the code for a function declaration (e.g. assigning
 	// it to a local).
 	fn compile_function(&mut self, ast: &AstReadonly, fun: FunId) {
@@ -2400,8 +2688,7 @@ impl<'a> Codegen<'a> {
         let Some(body) = self.db.get(fun).expression else { return; };
 
         // Necessary due to the new structure of the code
-        self.inside_class = self.db.get(fun).class.iter().copied().collect();
-
+        self.inside_class = Self::get_class_list(&self.db, fun);
 		let is_init = Some(fun) == self.db.fun_init;
 
 		let enclosing_val = self.val_idx;
@@ -2451,7 +2738,9 @@ impl<'a> Codegen<'a> {
 		let val = self.expr_block_unwrapped(ast, body, &mut own_buffer);
 
 		// Generate unconditional GC-frame pop
-		inf_writeln!(own_buffer, "{}ctx->frame = gc_frame.prev;", indent);
+		if !self.completely_disable_gc_frames {
+			inf_writeln!(own_buffer, "{}ctx->frame = gc_frame.prev;", indent);
+		}
 
 		if val.needs_storage() {
 			assert!(val.typ == own_return_type);
@@ -2475,9 +2764,11 @@ impl<'a> Codegen<'a> {
 		// inf_writeln!(own_buffer_beginning, "{}ctx->frame = (void*)&gc_frame;", indent);
 
 		// Instead of generating the code directly, use a macro.
-		inf_writeln!(own_buffer_beginning, "{}PONI_GC_FRAME({}, \"{}\");",
-			indent, gc_frame_count, self.db.get(
-				self.db.get(fun).name.unwrap_or(self.db.str_anonymous)));
+		if !self.completely_disable_gc_frames {
+			inf_writeln!(own_buffer_beginning, "{}PONI_GC_FRAME({}, \"{}\");",
+				indent, gc_frame_count, self.db.get(
+					self.db.get(fun).name.unwrap_or(self.db.str_anonymous)));
+		}
 		
 		// Pop type value
 		self.return_types.pop();

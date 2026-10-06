@@ -70,4 +70,10 @@
  */
 #define PS_METHOD(class_name, name)
 
+/*
+ * Indicates that this value is an optional member of the given
+ * reference type, rather than a non-nullable one.
+ */
+#define PS_OPTION(ref_ty) ref_ty
+
 #endif

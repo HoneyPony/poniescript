@@ -1,0 +1,17 @@
+fun maker(x: int) -> fun() {
+	fun inner() -> fun() {
+		fun superinner() {
+			x = x + 1;
+			print(x);
+		}
+		return superinner;
+	}
+	return inner();
+}
+
+fun init() {
+	var m = maker(10);
+	m(); //! 11
+	m(); //! 12
+	m(); //! 13
+}

@@ -1,0 +1,8 @@
+fun call(f: fun(int) -> int) -> int {
+    f(20)
+}
+
+fun init() {
+    let x = call(|x| x + 1);
+    print(x); //! 21
+}

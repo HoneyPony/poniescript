@@ -1,0 +1,9 @@
+class Example {
+    var x: int = 20;
+    var y: int;
+}
+
+fun init() {
+    var e = new Example { y: 80 };
+    print(e.x, " ", e.y); //! 20 80
+}

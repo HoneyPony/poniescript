@@ -1,4 +1,4 @@
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{db::*, error::Error};
 use crate::expr::*;
@@ -90,6 +90,35 @@ impl<'a> VisitAst for OrderVisitor<'a> {
             // variable initialization? On the other hand, imported functions
             // should simply not actually read from those variables...
             self.visit_expr(ast, db, expression);
+        }
+    }
+
+    fn visit_new(&mut self, ast: &Ast, db: &mut Db, id: ExprId) {
+        let borrow = ast.get_expr(id);
+        let Expr::New(new) = borrow.as_ref() else { return; };
+
+        let mut dont_initialize = FxHashSet::default();
+
+        // So, technically, we should just implement this directly in the AstVisit,
+        // at least for the NewInitElem. But we also need to visit the class's
+        // own initializers, at least in the case of a global.
+
+        for init in &new.initializers {
+            self.visit_expr(ast, db, init.value);
+            dont_initialize.insert(init.var);
+        }
+
+        // Janky loop:
+        // Cache the number of vars in the class, then re-get the class each
+        // time. This would be better with an &Db. Maybe later.
+        let var_count = db.get(new.class).vars.len();
+        for i in 0..var_count {
+            let var = db.get(new.class).vars[i];
+            if dont_initialize.contains(&var) { continue; }
+
+            if let Some(expr) = db.get(var).initializer {
+                self.visit_expr(ast, db, expr);
+            }
         }
     }
 }
