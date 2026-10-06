@@ -181,6 +181,7 @@ pub fn generate(tests_file: &mut File) {
 		("lambda/", "infer_as_arg"),
 		("lambda/", "infer_as_assign"),
 		("lambda/", "infer_as_return"),
+		("lambda/", "infer_as_builtin_arg"),
 
 		("scope/", "block_shadow"),
 

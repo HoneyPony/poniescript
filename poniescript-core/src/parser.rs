@@ -1669,10 +1669,17 @@ impl<'b> Parser<'b> {
 		}
 	}
 
-	fn parameter(&mut self) -> Result<VarId> {
+	fn parameter(&mut self, require_type: bool) -> Result<VarId> {
 		let name = expected!(self, Tok::Identifier, "parameter name")?;
-		expected!(self, Tok::Colon, "':' after parameter name")?;
-		let typ = self.typ()?;
+		
+		// Or branch handles case where we don't require the type but there is one anyway
+		let typ = if require_type || self.at(Tok::Colon) {
+			expected!(self, Tok::Colon, "':' after parameter name")?;
+			self.typ()?
+		}
+		else {
+			self.db.types.unassigned
+		};
 
 		let name_str = name.lexeme;
 
@@ -1716,7 +1723,7 @@ impl<'b> Parser<'b> {
 		};
 
 		let end_tok = if parse_lambda {
-			expected!(self, Tok::VerticalBar, "'|' at beginning of lambda");
+			expected!(self, Tok::VerticalBar, "'|' at beginning of lambda")?;
 			Tok::VerticalBar
 		}
 		else {
@@ -1733,7 +1740,9 @@ impl<'b> Parser<'b> {
 		let mut parameters = vec![];
 
 		while !self.at(end_tok) && !self.is_at_end() {
-			parameters.push(self.parameter()?);
+			// Require parameters to have explicit types if we're in a fun() style declarator, but
+			// not in a || style declarator.
+			parameters.push(self.parameter(!parse_lambda)?);
 
 			// NOTE: Right now, this means you can have a trailing comma
 			// in a parameter list. That might be fine though -- trailing commas
@@ -1743,7 +1752,7 @@ impl<'b> Parser<'b> {
 
 		// Due to how expected! works, we can't just use end_tok, we need another if.
 		if parse_lambda {
-			expected!(self, Tok::VerticalBar, "'|' after lambda parameter list");
+			expected!(self, Tok::VerticalBar, "'|' after lambda parameter list")?;
 		}
 		else {
 			expected!(self, Tok::RightParen, "')' after function parameter list")?;
@@ -1751,7 +1760,8 @@ impl<'b> Parser<'b> {
 		
 		let fun_location = self.end(location.clone());
 
-		let mut return_type = self.db.types.void;
+		// An unspecified return type is void for fun() and unassigned (i.e. to be inferred) for ||
+		let mut return_type = if parse_lambda { self.db.types.unassigned } else { self.db.types.void };
 
 		// Need braces if we are in a fun() {} definition, or a lambda with a return type
 		// (e.g. || -> int {})

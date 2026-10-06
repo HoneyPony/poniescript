@@ -732,7 +732,83 @@ impl<'db> TypeChecker<'db> {
 				// a BuiltinCapture that wasn't eaten by a ValCall. For now,
 				// stuff will just explode later.
 			}
-			Expr::FunDeclare(_) => {},
+			Expr::FunDeclare(declare) => {
+				// If the function type is not concrete, that means we have to infer it;
+				// the promotion tells us what type to use.
+				//
+				// That means PonieScript currently does not care at all about e.g. how the
+				// parameters of the function are used inside it for this inference -- it cares
+				// only about the context in which the value was used, and if there is no context,
+				// it is an error.
+				if self.db.is_sig_not_concrete(self.db.get(declare.identity).sig) {
+					// If the incoming type is ALSO not concrete, that means we don't have enough
+					// information to typecheck the function. Raise an error.
+					if self.db.is_not_concrete(promote_to) {
+						// TODO: type_error macro not usable here... hmmm...
+						self.had_error = true;
+						self.db.report_error(Error::simple(
+							format!("Cannot infer function type for this lambda."),
+							declare.location.clone()
+						));
+						return;
+					}
+
+					// Assume that the promote_to type is exactly the right type.
+					declare.typ = promote_to;
+					let sig = match self.db.get(promote_to) {
+						Type::Fun(sig) => *sig,
+						_ => {
+							// TODO: type error
+							todo!("This should cause a type error");
+						}
+					};
+
+					
+
+					let sig_obj = self.db.get(sig).clone(); // TODO: Any way to avoid the clone here?
+
+					{
+						let fun = self.db.get_mut(declare.identity);
+						fun.sig = sig;
+						if sig_obj.parameters.len() != fun.parameters.len() {
+							// TODO: type error
+							todo!("This should cause a type error");
+						}
+
+						fun.return_type = sig_obj.return_type; // TODO: Promote instead of assign, or whatever
+					}
+
+					let parms = self.db.get(declare.identity).parameters.clone(); // TODO: Any way to avoid the clone here?
+
+					for i in 0..parms.len() {
+						self.db.get_mut(parms[i]).typ = sig_obj.parameters[i]; // TODO: Promote instead of assign, or whatever
+					}
+					
+
+					if self.check_fun_declare(ast, declare).is_err() {
+						return;
+					}
+
+					let sig = self.db.get(declare.identity).sig;
+
+					// This is basically the same idea as FunCapture.
+					if sig == self.db.sig_unassigned {
+						panic!("ICE: Tried to typecheck FunDeclare for a function with unassigned sig");
+					}
+
+					// If we're capturing the value from the function, make sure
+					// the sig is used.
+					
+					// Note: We must, at least for now, unconditionally use the sig
+					// here because in codegen.rs we unconditionally generated a value
+					// containing the function object (which requires the sig).
+					self.db.use_sig(sig);
+
+					// TODO: Also support FunRaw -- in this case, I suppose the
+					// function would itself know if it is FunRaw..?
+					declare.typ = self.db.put_type(Type::Fun(sig));
+				}
+			},
 			Expr::ValCall(_) => {},
 			Expr::FunCapture(_) => {},
 			Expr::Assign(_) => {},
@@ -2026,26 +2102,30 @@ impl<'db> TypeChecker<'db> {
 			},
 
 			Expr::FunDeclare(declare) => {
-				self.check_fun_declare(ast, declare)?;
+				// If the function has a non-concrete type (i.e. a type we need to infer),
+				// we can't do anything yet, so defer typing it to the promotion stage.
+				if self.db.is_sig_concrete(self.db.get(declare.identity).sig) {
+					self.check_fun_declare(ast, declare)?;
 
-				let sig = self.db.get(declare.identity).sig;
+					let sig = self.db.get(declare.identity).sig;
 
-				// This is basically the same idea as FunCapture.
-				if sig == self.db.sig_unassigned {
-					panic!("ICE: Tried to typecheck FunDeclare for a function with unassigned sig");
+					// This is basically the same idea as FunCapture.
+					if sig == self.db.sig_unassigned {
+						panic!("ICE: Tried to typecheck FunDeclare for a function with unassigned sig");
+					}
+
+					// If we're capturing the value from the function, make sure
+					// the sig is used.
+					
+					// Note: We must, at least for now, unconditionally use the sig
+					// here because in codegen.rs we unconditionally generated a value
+					// containing the function object (which requires the sig).
+					self.db.use_sig(sig);
+
+					// TODO: Also support FunRaw -- in this case, I suppose the
+					// function would itself know if it is FunRaw..?
+					declare.typ = self.db.put_type(Type::Fun(sig));
 				}
-
-				// If we're capturing the value from the function, make sure
-				// the sig is used.
-				
-				// Note: We must, at least for now, unconditionally use the sig
-				// here because in codegen.rs we unconditionally generated a value
-				// containing the function object (which requires the sig).
-				self.db.use_sig(sig);
-
-				// TODO: Also support FunRaw -- in this case, I suppose the
-				// function would itself know if it is FunRaw..?
-				declare.typ = self.db.put_type(Type::Fun(sig));
 				declare.typ
 			},
 

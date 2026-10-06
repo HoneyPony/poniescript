@@ -753,6 +753,19 @@ impl Db {
 		idx + 1 // 0 -> 1st
 	}
 
+	pub fn is_sig_not_concrete(&self, id: SigId) -> bool {
+		let sig = self.get(id);
+		for ty in &sig.parameters {
+			if self.is_not_concrete(*ty) { return true; }
+		}
+		if self.is_not_concrete(sig.return_type) { return true; }
+		return false;
+	}
+
+	pub fn is_sig_concrete(&self, id: SigId) -> bool {
+		!self.is_sig_not_concrete(id)
+	}
+
 	pub fn is_not_concrete(&self, id: TypId) -> bool {
 		match self.get(id) {
 			Type::AssumeFloat => true,
@@ -761,6 +774,10 @@ impl Db {
 			// TODO: Is unassigned correct here?
 			// It seems necessary for empty array literals, but it's not clear.
 			Type::Unassigned => true,
+
+			Type::Fun(sig) => {
+				self.is_sig_not_concrete(*sig)
+			}
 
 			Type::ArrayOf(elem) => self.is_not_concrete(*elem),
 			Type::Option(inner) => self.is_not_concrete(*inner),
