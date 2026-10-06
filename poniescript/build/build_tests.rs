@@ -182,11 +182,16 @@ pub fn generate(tests_file: &mut File) {
 		("lambda/", "infer_as_assign"),
 		("lambda/", "infer_as_return"),
 		("lambda/", "infer_as_builtin_arg"),
+		("lambda/", "infer_as_class_callback"),
+		("lambda/", "multiple_in_array"),
+		("lambda/", "multiple_on_lines"),
 		("lambda/", "err_bad_return_type"),
 		("lambda/", "err_cant_infer"),
 		("lambda/", "err_not_a_function"),
 		("lambda/", "err_param_mismatch"),
 		("lambda/", "err_wrong_count"),
+		("lambda/", "err_array_insufficient_infer"),
+		("lambda/", "err_conflicting_array_entries"),
 
 		("scope/", "block_shadow"),
 

@@ -1,0 +1,9 @@
+fun init() {
+    var a: fun(int) -> int = |x| x * 4;
+    var b: fun() = || print("hello");
+    var c: fun(float, float) -> vec2 = |a, b| (b, a);
+
+    print(a(7)); //! 28
+    b(); //! hello
+    print(c(1, 2)); //! (2.000000, 1.000000)
+}
