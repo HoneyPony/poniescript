@@ -1,0 +1,7 @@
+fun init() {
+    let f = |x: int| -> int {
+        x + 1
+    };
+
+    print(f(2)); //! 3
+}

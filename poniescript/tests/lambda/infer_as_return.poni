@@ -1,0 +1,8 @@
+fun adder(y: int) -> fun(int) -> int {
+    |x| x + y
+}
+
+fun init() {
+    let add_three = adder(3);
+    print(add_three(5)); //! 8
+}

@@ -177,6 +177,11 @@ pub fn generate(tests_file: &mut File) {
 		("gc/", "tuple_as_member"),
 		("gc/", "fun_as_member"),
 
+		("lambda/", "explicit"),
+		("lambda/", "infer_as_arg"),
+		("lambda/", "infer_as_assign"),
+		("lambda/", "infer_as_return"),
+
 		("scope/", "block_shadow"),
 
 		("if/", "basic_if_expr_ret"),
