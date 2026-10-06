@@ -1,0 +1,4 @@
+fun init() {
+    //? Cannot infer function type for this lambda: incoming type 'int' is not a function type.
+    var x: int = |x| x + 1;
+}

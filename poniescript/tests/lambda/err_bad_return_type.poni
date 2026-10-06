@@ -1,0 +1,10 @@
+class Horse {
+    var name = "hi";
+}
+
+fun init() {
+    //? Invalid inferred type for lambda: incoming return type 'int' does not match declared type '(Array[Horse], int)'.
+    var f: fun(int) -> int = |x| -> (Array[Horse], int) {
+        ([new Horse{}], 20)
+    };
+}

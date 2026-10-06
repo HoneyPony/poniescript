@@ -1,0 +1,6 @@
+fun init() {
+    //? Cannot infer function type for this lambda: incoming type 'fun(int) -> void' has 1 parameter but the lambda has 2.
+    var f: fun(int) = |x, y| x + y;
+    //? Cannot infer function type for this lambda: incoming type 'fun(int, int) -> void' has 2 parameters but the lambda has 1.
+    var g: fun(int, int) = |x| x + 5;
+}

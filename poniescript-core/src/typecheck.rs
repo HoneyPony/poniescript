@@ -634,6 +634,83 @@ impl<'db> TypeChecker<'db> {
 			},
 		}
 	}
+
+	// Helper function for using type_error! and friends while still being called from promote_expr.
+	fn infer_fun_type_through_promotion(&mut self, ast: &AstProxy, fun_declare_id: ExprId, promote_to: TypId) -> Result<()> {
+		let mut binding = ast.exprs.get_mut(fun_declare_id);
+		let Expr::FunDeclare(declare) = binding.as_mut() else { return Ok(()); };
+		
+		// If the incoming type is ALSO not concrete, that means we don't have enough
+		// information to typecheck the function. Raise an error.
+		if self.db.is_not_concrete(promote_to) {
+			type_error!(self,
+				&declare.location,
+				"Cannot infer function type for this lambda.");
+		}
+
+		// Assume that the promote_to type is exactly the right type.
+		declare.typ = promote_to;
+		let sig = match self.db.get(promote_to) {
+			Type::Fun(sig) => *sig,
+			_ => {
+				type_error!(self,
+					&declare.location,
+					"Cannot infer function type for this lambda: incoming type '{}' is not a function type.",
+					self.db.repr_type(promote_to));
+			}
+		};
+
+		let sig_obj = self.db.get(sig).clone(); // TODO: Any way to avoid the clone here?
+
+		{
+			self.db.get_mut(declare.identity).sig = sig;
+			let param_count = self.db.get(declare.identity).parameters.len();
+			let return_type = self.db.get(declare.identity).return_type;
+			if sig_obj.parameters.len() != param_count {
+				type_error!(self,
+					&declare.location,
+					"Cannot infer function type for this lambda: incoming type '{}' has {} parameter{} but the lambda has {}.",
+					self.db.repr_type(promote_to),
+					sig_obj.parameters.len(),
+					if sig_obj.parameters.len() == 1 { "" } else { "s" },
+					param_count);
+			}
+
+			if self.db.is_concrete(return_type) {
+				if return_type!= sig_obj.return_type {
+					type_error!(self,
+						&declare.location,
+						"Invalid inferred type for lambda: incoming return type '{}' does not match declared type '{}'.",
+						self.db.repr_type(sig_obj.return_type),
+						self.db.repr_type(return_type));
+				}
+			}
+			// The types must always match exactly (we currently don't have subtypes for functions, although
+			// we may eventually, in which case this will need new logic).
+			self.db.get_mut(declare.identity).return_type = sig_obj.return_type; 
+		}
+
+		let params = self.db.get(declare.identity).parameters.clone(); // TODO: Any way to avoid the clone here?
+
+		for i in 0..params.len() {
+			let param_type = self.db.get(params[i]).typ;
+			if self.db.is_concrete(param_type) {
+				// Same idea as return type above, right now they must exactly match; if subtyping becomes a thing later,
+				// this will change.
+				if param_type != sig_obj.parameters[i] {
+					type_error!(self,
+						&declare.location,
+						"Invalid inferred type for lambda: incoming type '{}' for parameter '{}' does not match declared type '{}'.",
+						self.db.repr_type(sig_obj.parameters[i]),
+						self.db.get(self.db.get(params[i]).name),
+						self.db.repr_type(param_type));
+				}
+			}
+			self.db.get_mut(params[i]).typ = sig_obj.parameters[i]; // May change with subtyping in future
+		}
+
+		Ok(())
+	}
 	
 	fn promote_expr(&mut self, ast: &AstProxy, expr_id: ExprId, promote_to: TypId) {
 		let mut binding = ast.exprs.get_mut(expr_id);
@@ -741,50 +818,16 @@ impl<'db> TypeChecker<'db> {
 				// only about the context in which the value was used, and if there is no context,
 				// it is an error.
 				if self.db.is_sig_not_concrete(self.db.get(declare.identity).sig) {
-					// If the incoming type is ALSO not concrete, that means we don't have enough
-					// information to typecheck the function. Raise an error.
-					if self.db.is_not_concrete(promote_to) {
-						// TODO: type_error macro not usable here... hmmm...
-						self.had_error = true;
-						self.db.report_error(Error::simple(
-							format!("Cannot infer function type for this lambda."),
-							declare.location.clone()
-						));
+					drop(binding);
+					if self.infer_fun_type_through_promotion(ast, expr_id, promote_to).is_err() {
+						// Skip other logic if we can't infer the type
 						return;
 					}
 
-					// Assume that the promote_to type is exactly the right type.
-					declare.typ = promote_to;
-					let sig = match self.db.get(promote_to) {
-						Type::Fun(sig) => *sig,
-						_ => {
-							// TODO: type error
-							todo!("This should cause a type error");
-						}
-					};
-
+					// Rebind
+					let mut binding = ast.exprs.get_mut(expr_id);
+					let Expr::FunDeclare(declare) = binding.as_mut() else { return; };
 					
-
-					let sig_obj = self.db.get(sig).clone(); // TODO: Any way to avoid the clone here?
-
-					{
-						let fun = self.db.get_mut(declare.identity);
-						fun.sig = sig;
-						if sig_obj.parameters.len() != fun.parameters.len() {
-							// TODO: type error
-							todo!("This should cause a type error");
-						}
-
-						fun.return_type = sig_obj.return_type; // TODO: Promote instead of assign, or whatever
-					}
-
-					let parms = self.db.get(declare.identity).parameters.clone(); // TODO: Any way to avoid the clone here?
-
-					for i in 0..parms.len() {
-						self.db.get_mut(parms[i]).typ = sig_obj.parameters[i]; // TODO: Promote instead of assign, or whatever
-					}
-					
-
 					if self.check_fun_declare(ast, declare).is_err() {
 						return;
 					}

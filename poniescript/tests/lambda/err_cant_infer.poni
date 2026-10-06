@@ -1,0 +1,6 @@
+fun init() {
+    //? Invalid assignment: Type annotations needed.
+    var my_fun = |x| x + 1;
+
+    // TODO: Any way to trigger the 'Cannot infer function type for this lambda.' error?
+}
