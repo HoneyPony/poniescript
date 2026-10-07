@@ -55,7 +55,7 @@ impl poniescript_core::expr::VisitAstImmut for InlayHintVisitor {
                 kind: Some(InlayHintKind::TYPE),
                 text_edits: None,
                 tooltip: None,
-                padding_left: Some(true),
+                padding_left: Some(false),
                 padding_right: Some(false),
                 data: None,
             };
@@ -66,6 +66,72 @@ impl poniescript_core::expr::VisitAstImmut for InlayHintVisitor {
         if let Some(value) = declare.value {
             self.visit_expr(ast, db, value);
         }
+    }
+
+    fn visit_fundeclare(&mut self, ast: &Ast, db: &Db, id: ExprId) {
+        let binding = ast.get_expr(id);
+        let declare = into!(binding.as_ref(), FunDeclare);
+
+        let fun = db.get(declare.identity);
+        for i in 0..fun.parameters.len() {
+            if declare.untyped_params.contains(i) {
+                let var = db.get(fun.parameters[i]);
+
+                let position = var.location.end();
+                let (line, col) = ast.sources.get(position.source).get_line_column(&position);
+                let (line, col) = ((line - 1) as u32, (col - 1) as u32);
+                let position = Position { line, character: col };
+
+                // TODO: Re-use db type repr's somehow...?
+                let label = format!(": {}", db.repr_type(var.typ));
+
+                let hint = InlayHint {
+                    position,
+                    label: InlayHintLabel::String(label),
+                    kind: Some(InlayHintKind::TYPE),
+                    text_edits: None,
+                    tooltip: None,
+                    padding_left: Some(false), // TODO: Maybe make the padding configurable?
+                    padding_right: Some(false),
+                    data: None,
+                };
+
+                self.cache.hints.push(hint);
+            }
+        }
+
+        // This parameter index is treated as corresponding to the return type.
+        // TODO: Allow configuring these. I like rust-analyzer's options, where they can either be off,
+        // only on lambdas with blocks (e.g. |a, b|` -> int` {}), or always on. And of course the rest of
+        // the inlay hints we do should be optional as well.
+        if declare.untyped_params.contains(fun.parameters.len())
+            && fun.return_type != db.types.void // Don't generate them for -> void as that's redundant
+        {
+            let mut position = declare.location.begin();
+            position.offset += declare.ret_boundary as u64 - 1; // This seems to give the right offset..
+
+            let (line, col) = ast.sources.get(position.source).get_line_column(&position);
+            let (line, col) = ((line - 1) as u32, (col - 1) as u32);
+            let position = Position { line, character: col };
+
+            // TODO: Re-use db type repr's somehow...?
+            let label = format!(" -> {}", db.repr_type(fun.return_type));
+
+            let hint = InlayHint {
+                position,
+                label: InlayHintLabel::String(label),
+                kind: Some(InlayHintKind::TYPE),
+                text_edits: None,
+                tooltip: None,
+                padding_left: Some(false),
+                padding_right: Some(false),
+                data: None,
+            };
+
+            self.cache.hints.push(hint);
+        }
+
+
     }
 }
 

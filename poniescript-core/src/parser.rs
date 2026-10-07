@@ -1,6 +1,7 @@
 use std::io;
 use std::sync::Arc;
 
+use bit_set::BitSet;
 use poni_arena::ArenaKey;
 use rustc_hash::FxHashMap;
 
@@ -1669,16 +1670,18 @@ impl<'b> Parser<'b> {
 		}
 	}
 
-	fn parameter(&mut self, require_type: bool) -> Result<VarId> {
+	/// Parses a parameter. Returns the VarId for the created parameter, plus a boolean representing
+	/// if it was untyped (had no explicit : type annotation).
+	fn parameter(&mut self, require_type: bool) -> Result<(VarId, bool)> {
 		let name = expected!(self, Tok::Identifier, "parameter name")?;
 		
 		// Or branch handles case where we don't require the type but there is one anyway
-		let typ = if require_type || self.at(Tok::Colon) {
+		let (typ, untyped) = if require_type || self.at(Tok::Colon) {
 			expected!(self, Tok::Colon, "':' after parameter name")?;
-			self.typ()?
+			(self.typ()?, false)
 		}
 		else {
-			self.db.types.unassigned
+			(self.db.types.unassigned, true)
 		};
 
 		let name_str = name.lexeme;
@@ -1693,7 +1696,7 @@ impl<'b> Parser<'b> {
 		self.fun_vars.push(identity);
 		self.scope_put_entry(name_str, ScopeEntry::Var(identity), true);
 
-		Ok(identity)
+		Ok((identity, untyped))
 	}
 
 	fn fun_declaration(&mut self, require_name: bool, add_to_parser: bool, parse_lambda: bool) -> Result<(FunDeclare, ClosureId)> {
@@ -1738,11 +1741,18 @@ impl<'b> Parser<'b> {
 		self.push_scope();
 
 		let mut parameters = vec![];
+		let mut untyped_parameters = BitSet::new();
+		let mut untyped_parameter_idx = 0;
 
 		while !self.at(end_tok) && !self.is_at_end() {
 			// Require parameters to have explicit types if we're in a fun() style declarator, but
 			// not in a || style declarator.
-			parameters.push(self.parameter(!parse_lambda)?);
+			let (param, untyped) = self.parameter(!parse_lambda)?;
+			parameters.push(param);
+			if untyped {
+				untyped_parameters.insert(untyped_parameter_idx);
+			}
+			untyped_parameter_idx += 1;
 
 			// NOTE: Right now, this means you can have a trailing comma
 			// in a parameter list. That might be fine though -- trailing commas
@@ -1757,6 +1767,9 @@ impl<'b> Parser<'b> {
 		else {
 			expected!(self, Tok::RightParen, "')' after function parameter list")?;
 		}
+
+		// For the language server
+		let ret_boundary = (self.current.location.offset - location.offset) as u32;
 		
 		let fun_location = self.end(location.clone());
 
@@ -1772,6 +1785,12 @@ impl<'b> Parser<'b> {
 			return_type = self.typ()?;
 			expect_braces = true;
 		}
+
+		// The return type of the function is untyped if expect_braces is false. 
+		// Use the bit set for untyped params, but treat the return type as the (params.len()'nth)
+		// param, so we don't need additional variables. (And, as usual, for the common case where
+		// everything in a function is typed, the bit set will have nothing set).
+		if !expect_braces { untyped_parameters.insert(parameters.len()); }
 
 		// For now, the function body MUST be a block. But, we can change it
 		// to be a single expression, likely we other syntax, later.
@@ -1856,7 +1875,7 @@ impl<'b> Parser<'b> {
 			}
 		}
 
-		Ok((Expr::new_fundeclare(self.end(location), identity, value, self.db.types.unassigned),
+		Ok((Expr::new_fundeclare(self.end(location), identity, value, self.db.types.unassigned, untyped_parameters, ret_boundary),
 		// We need the own closure ID for the function so we can backpatch
 		// its parent_class.
 			closure))

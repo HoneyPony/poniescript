@@ -7,6 +7,7 @@ build = "build/main.rs"
 [dependencies]
 anstream = "0.6.14"
 anstyle = "1.0.7"
+bit-set = "0.11.1"
 clap = { workspace = true }
 crossbeam = { version = "0.8.4", features = ["crossbeam-channel", "crossbeam-queue"] }
 log = "0.4.28"

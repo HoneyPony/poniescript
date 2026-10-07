@@ -10,6 +10,8 @@ use crate::lexer::Tok;
 
 use poni_arena::IndexCell;
 
+use bit_set::BitSet;
+
 pub struct NewInitElem {
 	pub var: VarId,
 	pub ident: Token,
