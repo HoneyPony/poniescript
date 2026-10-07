@@ -279,6 +279,7 @@ pub fn generate(tests_file: &mut File) {
 
 		("parser/", "err_fun_missing_brace"),
 		("parser/", "err_missing_expr_paren"),
+		("parser/", "err_calls_without_commas"),
 		("parser/", "unary_prec"),
 		("parser/", "new_chain"),
 		("parser/", "long_chain"),

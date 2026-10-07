@@ -116,6 +116,7 @@ pub struct Parser<'b> {
 	prev_doc_comment: Vec<Token>,
 
 	pub had_error: bool,
+	panic_mode: bool, // Whether we are currently skipping additional parse errors
 }
 
 pub enum ParseErr {
@@ -160,13 +161,15 @@ macro_rules! parse_error {
 		{
 			// For now, just eprintln()... TODO Implement error handling system
 			$parser.had_error = true;
-
+			
 			if $parser.should_report_errors() {
 				$parser.db.report_error(Error::simple(
 					format!($($arg)*),
 					$parser.current.location.clone()
 				)) 
 			}
+
+			$parser.panic_mode = true;
 		}
     };
 }
@@ -282,6 +285,7 @@ impl<'b> Parser<'b> {
 			},
 
 			had_error: false,
+			panic_mode: false,
 		};
 
 		// Prime the parser with the first token in the file (and collect
@@ -305,7 +309,7 @@ impl<'b> Parser<'b> {
 		// TODO: panic mode, etc
 
 		// Don't report parse errors if the lexer has an error
-		!self.lexer.had_error
+		!self.lexer.had_error && !self.panic_mode
 	}
 
 	fn push_scope(&mut self) {
@@ -433,6 +437,11 @@ impl<'b> Parser<'b> {
 				break next;
 			}
 		};
+
+		if matches!(self.current.typ, Tok::Semicolon) {
+			// For now, reset panic mode on semicolons...
+			self.panic_mode = false;
+		}
 
 		Ok(std::mem::replace(&mut self.current, next))
 	}
@@ -804,7 +813,7 @@ impl<'b> Parser<'b> {
 		if self.is_at_end() { return Ok(()); }
 		if self.match_(Tok::Comma)?.is_some() { return Ok(()); }
 
-		got!(self, "','");
+		got!(self, "Expected ','");
 	}
 
 	/// Parses a 'new' expression, e.g. new Example {}

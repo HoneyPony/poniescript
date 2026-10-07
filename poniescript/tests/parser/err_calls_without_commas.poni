@@ -1,0 +1,22 @@
+fun a(x: int, y: int) {}
+
+fun init() {
+    //? Expected ',', got '{'
+    a({1} {2});
+
+    var b = a;
+    //? Expected ',', got '{'
+    b({1} {2});
+
+    //? Expected ',', got '{'
+    var q = [{1} {2}];
+
+    //? Expected ',', got '{'
+    print({1} {2});
+
+    //? Expected ',', got '{'
+    str({1} {2});
+
+    //? Expected ',', got 'int'
+    var z: fun(int int) = a;
+}
