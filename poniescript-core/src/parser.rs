@@ -499,9 +499,7 @@ impl<'b> Parser<'b> {
 		while !self.at(Tok::RightParen) && !self.is_at_end() {
 			args.push(self.expression()?);
 
-			// TODO: Make sure we require a Comma after every param but the
-			// last.
-			self.match_(Tok::Comma)?;
+			self.eat_comma(Tok::RightParen)?;
 			arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 		}
 
@@ -630,7 +628,7 @@ impl<'b> Parser<'b> {
 		while !self.at(Tok::RightParen) && !self.is_at_end() {
 			let expr = self.expression()?;
 			exprs.push(expr);
-			self.match_(Tok::Comma)?;
+			self.eat_comma(Tok::RightParen)?;
 		}
 
 		expected!(self, Tok::RightParen, "')' after '{kind}' arguments")?;
@@ -1118,9 +1116,7 @@ impl<'b> Parser<'b> {
 					while !self.at(Tok::RightParen) && !self.is_at_end() {
 						args.push(self.expression()?);
 
-						// TODO: Make sure we require a Comma after every param but the
-						// last.
-						self.match_(Tok::Comma)?;
+						self.eat_comma(Tok::RightParen)?;
 						arg_boundaries.push((self.current.location.offset - location.offset) as u32);
 					}
 
@@ -1464,9 +1460,7 @@ impl<'b> Parser<'b> {
 					let next_ty = self.typ()?;
 
 					sig.parameters.push(next_ty);
-
-					// TODO: Expect comma or rightparen
-					self.match_(Tok::Comma)?;
+					self.eat_comma(Tok::RightParen)?;
 				}
 
 				expected!(self, Tok::RightParen, "')' after parameter list for fun type")?;

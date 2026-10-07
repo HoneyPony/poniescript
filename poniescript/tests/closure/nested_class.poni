@@ -7,7 +7,7 @@ class Stable {
 
         fun how_to_greet(entity: StrBuf) -> fun(StrBuf) {
             fun(additional_greet: StrBuf) {
-                print(greeting, additional_greet, ", " entity, "! i'm from ", name)
+                print(greeting, additional_greet, ", ", entity, "! i'm from ", name)
             }
         }
     }

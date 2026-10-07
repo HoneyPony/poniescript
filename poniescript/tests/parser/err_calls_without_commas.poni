@@ -1,22 +1,26 @@
 fun a(x: int, y: int) {}
 
 fun init() {
-    //? Expected ',', got '{'
-    a({1} {2});
+    //? Expected ',', got '2'
+    a((1) 2);
 
     var b = a;
-    //? Expected ',', got '{'
-    b({1} {2});
+    //? Expected ',', got '2'
+    b((1) 2);
 
-    //? Expected ',', got '{'
-    var q = [{1} {2}];
+    //? Expected ',', got '2'
+    var q = [(1) 2];
 
-    //? Expected ',', got '{'
-    print({1} {2});
+    //? Expected ',', got '2'
+    print((1) 2);
 
-    //? Expected ',', got '{'
-    str({1} {2});
+    //? Expected ',', got '2'
+    str((1) 2);
 
     //? Expected ',', got 'int'
     var z: fun(int int) = a;
 }
+
+// NOTE: Before, the test case was {1} {2} for these..
+// this caused a lot of cascading errors. Making the parser
+// more resilient in general would still be smart...
