@@ -1310,6 +1310,12 @@ impl Db {
 		return self.push(var);
 	}
 
+	pub fn new_var_temporary(&mut self, typ: TypId, initializer: Option<ExprId>) -> VarId {
+		// Temporary name: 'ftmp', i.e. frontend-tmp
+		let name = self.put_str("ftmp");
+		self.new_var(name, typ, false, None, None, None, None, initializer, self.synthetic(), None)
+	}
+
 	pub fn get_cname(&self, var: VarId) -> &'static str {
 		// TODO: Cname generation, as well as 'extern C' sort of thing
 		unsafe { self.var_cname_cache.get_unchecked(var.to_index()) }

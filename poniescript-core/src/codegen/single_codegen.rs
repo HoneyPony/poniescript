@@ -2632,7 +2632,11 @@ impl<'a> Codegen<'a> {
 			return value;
 		}
 
-		assert!(value.typ == needed_type);
+		assert!(value.typ == needed_type, "Need to assign {} to {}, but we got {} from RHS {:?}",
+			self.db.repr_type(value.typ),
+			self.db.repr_var(var),
+			self.db.repr_type(needed_type),
+			ast.exprs.get(expr));
 
 		let (declaration, space) = if is_declaration {
 			(self.db.get_var_ctype(var), " ")

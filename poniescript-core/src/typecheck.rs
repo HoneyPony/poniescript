@@ -2384,6 +2384,8 @@ impl<'db> TypeChecker<'db> {
 				let mut lhs = self.check_expr(ast, set.lhs, true)?;
 
 				let mut var_chain = Vec::new();
+				let leftmost_lhs_ty = lhs;
+				log::trace!("typechecking set {}, chain len = {}, leftmost_lhs_ty = {}", expr_id.to_index(), set.chain.len(), self.db.repr_type(leftmost_lhs_ty));
 
 				// First, build a Vec of vars for all but the last item in the
 				// chain.
@@ -2478,28 +2480,6 @@ impl<'db> TypeChecker<'db> {
 					self.verify_set_lhs_is_not_readonly(ast, set.lhs);
 				}
 
-				if set.op != Tok::Equal {
-					// very important TODO: We actually need to store the
-					// value in a temporary variable, that we read from as
-					// the LHS of both the set and the get. This is so that
-					// something like call_fun().x += 5 does not cause
-					// a double evaluation of call_fun().
-
-					// Read from the variable
-					let null_location = set.location.begin();
-					let read = Expr::push_get(ast, null_location,
-						set.chain.clone(), set.lhs, set.vars.clone());
-					// Perform a binary op, with RHS the assign's current value
-					let binop = Expr::push_binary(ast, set.location.clone(),
-						map_assign_op(set.op), read, set.rhs, self.db.types.unassigned);
-					// That is now what we're assigning.
-					set.rhs = binop;
-
-					// The assign is now a regular assign. (As of writing this
-					// comment, nothing else in the code reads this though.)
-					set.op = Tok::Equal;
-				}
-
 				// We can't check the variable just like an Assign, as that
 				// will overwrite the type (the type is given ONLY by the class
 				// definition itself). But, we do need to check that the RHS
@@ -2525,7 +2505,83 @@ impl<'db> TypeChecker<'db> {
 				// Promote the RHS based on the computed type.
 				self.do_promote_expr(ast, &mut set.rhs, computed);
 
-				self.db.get_var_type(property)
+				let final_ty = self.db.get_var_type(property);
+
+				// Once everything is computed, desugar to a block, if we are a compound assignment.
+				// This prevents us from having to run the typechecker on the block at all, so we
+				// don't have to worry about leaking e.g. the 'ftmp' variable to error messages.
+				if set.op != Tok::Equal {
+					let null_location = set.location.begin();
+					let mut stmts = Vec::new();
+
+					// The semantics of set are a bit weird.
+					//
+					// If we do something like a().x += 5, then we don't want to call a() twice.
+					// So we have to desugar it to a temporary, and then restructure it so the call
+					// only occurs once.
+					//
+					// But if we have a value-typed variable my_vec, for example, and we do
+					// my_vec.x += 5, we are not allowed to desugar it at all... because creating
+					// a new temporary and doing the set on that temporary would completely break the
+					// semantics.
+					//
+					// All in all, a more principled lvalue system would go a long way. For now,
+					// we avoid desugaring if the LHS is a variable. (Anything else is fair game,
+					// as it shouldn't be possible to observed any weird semantic).
+
+					// Note: We could in theory also do Expr::Get() in this pattern. Not sure.
+					let use_temp = !matches!(ast.get_expr(set.lhs).as_ref(), Expr::Variable(_));
+
+					let mut lhs_expr = set.lhs; // Default to using the existing lhs
+
+					if use_temp {
+						let var = self.db.new_var_temporary(leftmost_lhs_ty, Some(set.lhs));
+						let tmp = Expr::push_variable(ast, null_location.clone(), var);
+
+						stmts.push(Stmt::push_declare(ast, null_location.clone(), null_location.clone(), var, Some(set.lhs), true));
+
+						log::trace!("set.lhs = {:?} typ = {}", ast.get_expr(set.lhs).as_ref(), self.db.repr_type(leftmost_lhs_ty));
+
+						lhs_expr = tmp;
+					}
+
+					// Read from the variable
+					let read = Expr::push_get(ast, null_location.clone(),
+						set.chain.clone(), lhs_expr, set.vars.clone());
+					// Perform a binary op, with RHS the assign's current value
+					let binop = Expr::push_binary(ast, set.location.clone(),
+						map_assign_op(set.op), read, set.rhs, self.db.types.unassigned);
+					// That is now what we're assigning.
+					set.rhs = binop;
+
+					// Typecheck binary to promote types...
+					self.promote_expr(ast, binop, final_ty /* ? */);
+
+					// Rewrite temporary to also read from the variable.
+					set.lhs = lhs_expr;
+					
+					// The assign is now a regular assign. (As of writing this
+					// comment, nothing else in the code reads this though.)
+					set.op = Tok::Equal;
+
+					// If we're using the temporary, rewrite to a block. Otherwise, don't bother; we
+					// should already have the right structure.
+					if use_temp {
+						let new_location = set.location.clone();
+						
+						let steal_set = std::mem::replace(expr, Expr::Undefined(Undefined { location: null_location.clone() }));
+						let steal_set = ast.exprs.push(steal_set);
+						stmts.push(Stmt::push_expression(ast, null_location, steal_set));
+
+						*expr = Expr::Block(Block {
+							location: new_location,
+							stmts,
+							typ: final_ty
+						});
+					}
+				}
+
+				final_ty
 			}
 
 			Expr::SelfVal(selfval) => {

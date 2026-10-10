@@ -16,7 +16,7 @@ struct PrettyPrinter<'ad> {
 
 impl<'ad> PrettyPrinter<'ad> {
     fn var(&mut self, decl: &Declare) {
-        eprintln!("Declare {} = {}", decl.identity.to_index(), self.db.repr_var(decl.identity));
+        eprintln!("Declare <{}> {} = {}", self.db.repr_type(self.db.get_var_type(decl.identity)), decl.identity.to_index(), self.db.repr_var(decl.identity));
         self.inner_expr(decl.value);
     }
 
@@ -242,7 +242,9 @@ impl<'ad> PrettyPrinter<'ad> {
         match binding.as_ref() {
             crate::expr::Stmt::Declare(declare) => self.var(declare),
             crate::expr::Stmt::Expression(expression) => {
-                eprint!("<{}> ", expression.expression.to_index());
+                let e = expression.expression;
+                let typ = e.typ(self.ast, self.db);
+                eprint!("({}) <{}> ", expression.expression.to_index(), self.db.repr_type(typ));
                 // visit_expr so we don't re-indent-and-newline
                 self.visit_expr(expression.expression);
             }
@@ -275,7 +277,7 @@ impl<'ad> PrettyPrinter<'ad> {
     }
     fn expr(&mut self, expr: ExprId) {
         let indent = Indenter { level: self.indent };
-        eprint!("{} - {} = ", indent, expr.to_index());
+        eprint!("{} <{}> - {} = ", indent, self.db.repr_type(expr.typ(self.ast, self.db)), expr.to_index());
         self.visit_expr(expr);
     }
     fn expr_prefix(&mut self, expr: ExprId, prefix: &str) {
