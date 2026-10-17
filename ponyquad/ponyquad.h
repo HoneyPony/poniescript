@@ -65,6 +65,13 @@ struct sound {
     char opaque[64];
 };
 
+PS_CLASS("StringLoader")
+struct string_loader {
+    ps_object header;
+
+    char opaque[64];
+};
+
 PS_FUN() struct sound* load_sound(PONI_ABI(ps_strbuf *path));
 PS_FUN() void play_sound_once(PONI_ABI(struct sound *sound));
 PS_FUN() void play_sound_looping(PONI_ABI(struct sound *sound));
@@ -174,5 +181,8 @@ PS_FUN("seed_random_with_time") void pq_seed_random_with_time(PONI_ABI());
 /// Inclusive range
 PS_FUN("randi_range") ps_int pq_randi_range(PONI_ABI(ps_int low, ps_int high));
 PS_FUN("randf_range") ps_float pq_randf_range(PONI_ABI(ps_float low, ps_float high));
+
+PS_FUN() struct string_loader* load_string(PONI_ABI(ps_strbuf *path));
+PS_FUN() PS_OPTION(ps_strbuf*) get_loaded_string(PONI_ABI(struct string_loader *loader));
 
 #endif

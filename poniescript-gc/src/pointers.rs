@@ -35,6 +35,15 @@ pub struct GpMaybe<T: HasPsHeader> {
 }
 
 impl<T: HasPsHeader> GpMaybe<T> {
+    pub fn new(ptr: Option<Gp<T>>) -> GpMaybe<T> {
+        match ptr {
+            Some(ptr) => GpMaybe {
+                inner: ptr.inner
+            },
+            None => GpMaybe { inner: AtomicPtr::new(std::ptr::null_mut()) }
+        }
+    }
+
     pub fn get_inner(&self) -> Option<&T> {
         unsafe {
             let ptr = self.inner.load(Ordering::Relaxed);

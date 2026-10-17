@@ -911,6 +911,20 @@ dependencies = [
 [[package]]
 name = "macroquad"
 version = "0.4.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2befbae373456143ef55aa93a73594d080adfb111dc32ec96a1123a3e4ff4ae"
+dependencies = [
+ "fontdue",
+ "glam",
+ "image",
+ "macroquad_macro 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "miniquad",
+ "quad-rand",
+]
+
+[[package]]
+name = "macroquad"
+version = "0.4.14"
 source = "git+https://github.com/HoneyPony/macroquad#25503fde46fc908f943bd98589c0cec4444a78df"
 dependencies = [
  "backtrace",
@@ -918,11 +932,27 @@ dependencies = [
  "glam",
  "image",
  "log",
- "macroquad_macro",
+ "macroquad_macro 0.1.8 (git+https://github.com/HoneyPony/macroquad)",
  "miniquad",
  "quad-rand",
  "quad-snd",
 ]
+
+[[package]]
+name = "macroquad-tiled"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3b8791e385de2f6d399e9e4624a405e23c06855df35c134903fefc3bfb7241c"
+dependencies = [
+ "macroquad 0.4.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nanoserde",
+]
+
+[[package]]
+name = "macroquad_macro"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64b1d96218903768c1ce078b657c0d5965465c95a60d2682fd97443c9d2483dd"
 
 [[package]]
 name = "macroquad_macro"
@@ -1029,6 +1059,21 @@ dependencies = [
  "wasi",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "nanoserde"
+version = "0.1.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5de9cf844ab1e25a0353525bd74cb889843a6215fa4a0d156fd446f4857a1b99"
+dependencies = [
+ "nanoserde-derive",
+]
+
+[[package]]
+name = "nanoserde-derive"
+version = "0.1.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e943b2c21337b7e3ec6678500687cdc741b7639ad457f234693352075c082204"
 
 [[package]]
 name = "ndk-sys"
@@ -1277,7 +1322,8 @@ dependencies = [
  "env_logger",
  "libloading",
  "log",
- "macroquad",
+ "macroquad 0.4.14 (git+https://github.com/HoneyPony/macroquad)",
+ "macroquad-tiled",
  "notify",
  "poniescript-gc",
  "poniescript-rt",

@@ -7,6 +7,8 @@ pub mod sound;
 pub mod gl;
 pub mod rand;
 
+pub mod tiled;
+
 use std::ffi::c_void;
 use macroquad::text::TextParams;
 use poniescript_gc::{GcContext, Gp, PsFloat, PsInt};

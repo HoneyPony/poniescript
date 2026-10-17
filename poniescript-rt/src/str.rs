@@ -1,10 +1,15 @@
 use core::slice;
-use std::{borrow::Cow, sync::atomic::Ordering};
+use std::{alloc::Layout, borrow::Cow, sync::atomic::Ordering};
 
-use poniescript_gc::{AtomicPsInt, Gp, HasPsHeader, PsInt, PsObject};
+use poniescript_gc::{AtomicPsInt, GcContext, Gp, HasPsHeader, HasPsType, PsInt, PsObject};
+
+use crate::{PONI_TAG_STR, PONI_TAG_STRBUF};
 
 unsafe impl HasPsHeader for PsStr {}
 unsafe impl HasPsHeader for PsStrBuf {}
+impl HasPsType for PsStrBuf {
+    const TYP: u64 = PONI_TAG_STRBUF;
+}
 
 #[repr(C)]
 pub struct PsStr {
@@ -33,6 +38,30 @@ pub struct PsStrBuf {
 }
 
 impl PsStrBuf {
+    pub fn from_string(gc: &mut GcContext, str: &str) -> Gp<PsStrBuf> {
+        let bytes = str.as_bytes();
+        let total_len = std::mem::size_of::<PsStr>() + bytes.len();
+        let alloc = gc.alloc_raw_bytes(total_len);
+
+        let ps_str = unsafe {
+            let header: *mut PsStr = alloc as _;
+            let contents: *mut u8 = alloc.byte_add(std::mem::size_of::<PsStr>()) as _;
+
+            *header = PsStr { obj: PsObject::from_type_id(PONI_TAG_STR), length: (bytes.len() as i64).into() };
+            contents.copy_from(bytes.as_ptr(), bytes.len());
+
+            Gp::from_ptr(alloc as *mut PsStr)
+        };
+
+        let str_buf = gc.alloc(PsStrBuf {
+            obj: PsObject::from_type_id(PONI_TAG_STRBUF),
+            buffer: ps_str,
+            length: (bytes.len() as i64).into()
+        });
+
+        str_buf
+    }
+
     pub fn get_data(&self) -> &[u8] {
         unsafe {
             let data_ptr = self.buffer.get_data_ptr();
