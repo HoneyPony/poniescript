@@ -24,6 +24,10 @@ pub fn ps_bool(bool: bool) -> PsBool {
     if bool { 1 } else { 0 }
 }
 
+pub fn m_bool(bool: PsBool) -> bool {
+    if bool == 0 { false } else { true }
+}
+
 pub const PONI_TAG_FLOAT    : u64 = 0x8000000000000002;
 pub const PONI_TAG_INT      : u64 = 0x8000000000000004;
 pub const PONI_TAG_BOOL     : u64 = 0x8000000000000006;

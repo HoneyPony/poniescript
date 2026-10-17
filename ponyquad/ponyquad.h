@@ -91,6 +91,8 @@ PS_FUN() void set_default_camera(PONI_ABI());
 
 PS_FUN() struct texture2d* load_texture(PONI_ABI(ps_strbuf *path));
 PS_FUN() void draw_texture(PONI_ABI(struct texture2d* texture, ps_vec2 position, ps_vec4 color));
+PS_FUN() void draw_texture_flip(PONI_ABI(struct texture2d *texture, ps_vec2 position, ps_bool flip_h, ps_bool flip_v, ps_vec4 color));
+PS_FUN() void draw_texture_flip_frame(PONI_ABI(struct texture2d *texture, ps_vec2 position, ps_bool flip_h, ps_bool flip_v, ps_vec4 frame, ps_vec4 color));
 PS_FUN() void draw_texture_rot(PONI_ABI(struct texture2d* texture, ps_vec2 position, ps_float rotation, ps_vec4 color));
 PS_FUN() void draw_texture_rot_scale(PONI_ABI(struct texture2d* texture, ps_vec2 position, ps_float rotation, ps_float scale, ps_vec4 color));
 
@@ -152,6 +154,9 @@ PS_FUN("pow") ps_float pq_pow(PONI_ABI(ps_float base, ps_float exp));
 
 /// Rounds a vec2 into a vec2i.
 PS_FUN("round2") ps_vec2i pq_round2(PONI_ABI(ps_vec2 v));
+
+/// Rounds a float into an int.
+PS_FUN("round") ps_int pq_round(PONI_ABI(ps_float f));
 
 /// Floors a float into an int.
 PS_FUN("floor") ps_int pq_floor(PONI_ABI(ps_float f));

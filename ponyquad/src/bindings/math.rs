@@ -85,6 +85,11 @@ pub extern "C" fn pq_pow(_gc: &mut GcContext, pow: PsFloat, exp: PsFloat, _closu
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn pq_round(_gc: &mut GcContext, f: PsFloat, _closure: *mut c_void) -> PsInt {
+    f.round() as PsInt
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn pq_round2(_gc: &mut GcContext, v: Vec2, _closure: *mut c_void) -> Vec2i {
     let x = v.x.round() as PsInt;
     let y = v.y.round() as PsInt;

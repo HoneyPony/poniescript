@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::Mutex};
 
-use macroquad::texture::DrawTextureParams;
-use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsFloat, PsInt, PsObject};
+use macroquad::{math::Rect, texture::DrawTextureParams};
+use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsBool, PsFloat, PsInt, PsObject, m_bool};
 use poniescript_rt::{PsStrBuf, Vec2, Vec4};
 
 #[repr(C)]
@@ -80,6 +80,30 @@ pub extern "C" fn draw_texture(_gc: &mut GcContext, texture: Gp<Texture2D>, pos:
 
     //let inner = texture.get_inner();
     //eprintln!("drew texture: {}x{} @ {} {}", inner.inner.width(), inner.inner.height(), pos.x, pos.y);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn draw_texture_flip(_gc: &mut GcContext, texture: Gp<Texture2D>, pos: Vec2, h_flip: PsBool, v_flip: PsBool, color: Vec4, _closure: *mut c_void) {
+    let color = unsafe { std::mem::transmute(color) };
+    macroquad::prelude::draw_texture_ex(&texture.get_inner().inner, pos.x, pos.y, color, DrawTextureParams {
+        flip_x: m_bool(h_flip),
+        flip_y: m_bool(v_flip),
+        ..Default::default()
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn draw_texture_flip_frame(_gc: &mut GcContext, texture: Gp<Texture2D>, pos: Vec2, h_flip: PsBool, v_flip: PsBool, frame: Vec4, color: Vec4, _closure: *mut c_void) {
+    let color = unsafe { std::mem::transmute(color) };
+
+    let size = Rect::new(frame.x, frame.y, frame.z, frame.w);
+
+    macroquad::prelude::draw_texture_ex(&texture.get_inner().inner, pos.x, pos.y, color, DrawTextureParams {
+        flip_x: m_bool(h_flip),
+        flip_y: m_bool(v_flip),
+        source: Some(size),
+        ..Default::default()
+    });
 }
 
 #[unsafe(no_mangle)]

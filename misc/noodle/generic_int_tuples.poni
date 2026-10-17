@@ -1,0 +1,6 @@
+class Iterator {
+    // tuple with N elements
+    fun windows<N: int>() -> (int; N) {
+        
+    }
+}
