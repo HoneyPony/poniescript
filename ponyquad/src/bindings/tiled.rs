@@ -1,9 +1,9 @@
 use std::{os::raw::c_void, sync::Mutex};
 
-use macroquad::audio::PlaySoundParams;
+use macroquad::{audio::PlaySoundParams, math::Rect};
 use macroquad_tiled::{Map, load_map};
 use poniescript_gc::{GcContext, Gp, GpMaybe, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsBool, PsFloat, PsInt, PsObject, poni_tag_opaque, ps_bool};
-use poniescript_rt::{PsArray, PsStr, PsStrBuf, Vec2, Vec4};
+use poniescript_rt::{PsArray, PsStr, PsStrBuf, Vec2, Vec2i, Vec4};
 
 use crate::bindings::texture::Texture2D;
 
@@ -55,7 +55,7 @@ pub async fn process_queue() {
 }
 
 #[unsafe(no_mangle)]
-pub fn load_string(gc: &mut GcContext, path: Gp<PsStrBuf>, _closure: *mut c_void) -> Gp<PqString> {
+pub extern "C" fn load_string(gc: &mut GcContext, path: Gp<PsStrBuf>, _closure: *mut c_void) -> Gp<PqString> {
     let string = PqString {
         header: PsObject::from_type_id(PqString::TYP),
         inner: None,
@@ -70,7 +70,7 @@ pub fn load_string(gc: &mut GcContext, path: Gp<PsStrBuf>, _closure: *mut c_void
 }
 
 #[unsafe(no_mangle)]
-pub fn get_loaded_string(gc: &mut GcContext, string: Gp<PqString>, _closure: *mut c_void) -> GpMaybe<PsStrBuf> {
+pub extern "C" fn get_loaded_string(gc: &mut GcContext, string: Gp<PqString>, _closure: *mut c_void) -> GpMaybe<PsStrBuf> {
     let inner = string.get_inner();
     if let Some(inner) = &inner.inner {
         let buf = PsStrBuf::from_string(gc, &inner);
@@ -93,7 +93,7 @@ impl HasPsType for PqTiledMap {
 }
 
 #[unsafe(no_mangle)]
-pub fn pq_load_map(gc: &mut GcContext, data: Gp<PsStrBuf>, tex_names: Gp<PsArray<Gp<PsStrBuf>>>, textures: Gp<PsArray<Gp<Texture2D>>>, _closure: *mut c_void) -> GpMaybe<PqTiledMap> {    
+pub extern "C" fn pq_load_map(gc: &mut GcContext, data: Gp<PsStrBuf>, tex_names: Gp<PsArray<Gp<PsStrBuf>>>, textures: Gp<PsArray<Gp<Texture2D>>>, _closure: *mut c_void) -> GpMaybe<PqTiledMap> {    
     let mut tex_param = Vec::new();
     for i in 0..tex_names.get_inner().len() {
         if i >= textures.get_inner().len() {
@@ -124,4 +124,31 @@ pub fn pq_load_map(gc: &mut GcContext, data: Gp<PsStrBuf>, tex_names: Gp<PsArray
             GpMaybe::new(None)
         }
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_draw_map(gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, dest: Vec4, _closure: *mut c_void) { 
+    map.get_inner().inner.draw_tiles(&layer.get_inner().get_string(), Rect::new(dest.x, dest.y, dest.z, dest.w), None);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_get_tile_map_size(gc: &mut GcContext, map: Gp<PqTiledMap>, _closure: *mut c_void) -> Vec2i {
+    let mut size: Vec2i = Vec2i { x: 0, y: 0 };
+    for layer in &map.get_inner().inner.layers {
+        let layer = layer.1;
+        size.x = size.x.max(layer.width as PsInt);
+        size.y = size.y.max(layer.height as PsInt);
+    }
+    size
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_get_tile_map_tile(gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, coord: Vec2i, _closure: *mut c_void) -> PsInt {
+    if coord.x < 0 || coord.y < 0 {
+        return -1; // TODO: PonieScript option value types + some crazy way to bind them...
+    }
+    
+    let Some(tile) = map.get_inner().inner.get_tile(&layer.get_inner().get_string(), coord.x as u32, coord.y as u32) else { return -1; };
+
+    tile.id as PsInt
 }
