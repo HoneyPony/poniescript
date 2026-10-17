@@ -1,19 +1,19 @@
 use std::{os::raw::c_void, sync::Mutex};
 
-use macroquad::{math::Rect, texture::DrawTextureParams};
-use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsBool, PsFloat, PsInt, PsObject, m_bool};
+use macroquad::{math::Rect, texture::DrawTextureParams, ui::widgets::Texture};
+use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsBool, PsFloat, PsInt, PsObject, m_bool, poni_tag_opaque};
 use poniescript_rt::{PsStrBuf, Vec2, Vec4};
 
 #[repr(C)]
 pub struct Texture2D {
     header: PsObject,
-    inner: macroquad::texture::Texture2D,
+    pub inner: macroquad::texture::Texture2D,
 }
 
 unsafe impl HasPsHeader for Texture2D {}
 
 impl HasPsType for Texture2D {
-    const TYP: u64 = 18;
+    const TYP: u64 = poni_tag_opaque::<Self>();
 }
 
 /// Handles loading the textures "later."
@@ -60,7 +60,7 @@ pub async fn process_queue() {
 pub extern "C" fn load_texture(gc: &mut GcContext, path: Gp<PsStrBuf>, _closure: *mut c_void) -> Gp<Texture2D> {
     let texture = Texture2D {
         // Opaque, as we don't have any inner members.
-        header: PsObject::from_type_id(PONI_TAG_OPAQUE),
+        header: PsObject::from_type_id(Texture2D::TYP),
         inner: macroquad::prelude::Texture2D::empty()
     };
 

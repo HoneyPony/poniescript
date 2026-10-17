@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::Mutex};
 
 use macroquad::audio::PlaySoundParams;
-use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsBool, PsFloat, PsInt, PsObject, ps_bool};
+use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsBool, PsFloat, PsInt, PsObject, poni_tag_opaque, ps_bool};
 use poniescript_rt::{PsStrBuf, Vec2, Vec4};
 
 #[repr(C)]
@@ -13,7 +13,7 @@ pub struct PqSound {
 unsafe impl HasPsHeader for PqSound {}
 
 impl HasPsType for PqSound {
-    const TYP: u64 = PONI_TAG_OPAQUE;
+    const TYP: u64 = poni_tag_opaque::<Self>();
 }
 
 
@@ -77,7 +77,7 @@ pub async fn process_queue() {
 pub extern "C" fn load_sound(gc: &mut GcContext, path: Gp<PsStrBuf>, _closure: *mut c_void) -> Gp<PqSound> {
     let sound = PqSound {
         // Opaque, as we don't have any inner members.
-        header: PsObject::from_type_id(PONI_TAG_OPAQUE),
+        header: PsObject::from_type_id(PqSound::TYP),
         inner: None,
     };
 

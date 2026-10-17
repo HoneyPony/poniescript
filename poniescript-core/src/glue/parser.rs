@@ -424,6 +424,13 @@ impl<'b> Parser<'b> {
             return Ok(self.db.put_type(Type::Option(inner)));
         }
 
+        if self.match_(GlueTok::AnnotateArray)?.is_some() {
+            expected!(self, GlueTok::LeftParen, "'(' after PS_ARRAY")?;
+            let inner = self.c_type()?;
+            expected!(self, GlueTok::RightParen, "')' after type name")?;
+            return Ok(self.db.put_type(Type::ArrayOf(inner)));
+        }
+
         let id = expected!(self, GlueTok::Identifier, "C type expression")?;
 
         if id.lexeme == self.db.put_str("ps_int") {
@@ -551,6 +558,10 @@ impl<'b> Parser<'b> {
                 GlueTok::AnnotateFun => self.fun()?,
                 GlueTok::AnnotateMember => self.member()?,
                 GlueTok::AnnotateClass => self.class()?,
+                GlueTok::AnnotateDefineItself => {
+                    self.advance()?;
+                    expected!(self, GlueTok::LeftParen, "'(' after PS_WILL_DEFINE_ITSELF")?;
+                }
                 _ => {
                     // Ignore all other tokens.
                     let next = self.advance()?;

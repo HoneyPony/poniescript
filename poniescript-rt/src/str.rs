@@ -6,6 +6,9 @@ use poniescript_gc::{AtomicPsInt, GcContext, Gp, HasPsHeader, HasPsType, PsInt, 
 use crate::{PONI_TAG_STR, PONI_TAG_STRBUF};
 
 unsafe impl HasPsHeader for PsStr {}
+impl HasPsType for PsStr {
+    const TYP: u64 = PONI_TAG_STR;
+}
 unsafe impl HasPsHeader for PsStrBuf {}
 impl HasPsType for PsStrBuf {
     const TYP: u64 = PONI_TAG_STRBUF;
@@ -26,6 +29,22 @@ impl PsStr {
         let data = self as *const PsStr;
         let data = data.add(1);
         data as *mut u8
+    }
+
+    pub fn get_data(&self) -> &[u8] {
+        unsafe {
+            let data_ptr = self.get_data_ptr();
+            let len = self.length.load(Ordering::Relaxed);
+            let len = len.try_into().expect("length");
+            slice::from_raw_parts(data_ptr, len)
+        }
+    }
+
+    pub fn get_string(&self) -> Cow<'_, str> {
+        let data = self.get_data();
+        let utf8 = String::from_utf8_lossy(data);
+
+        utf8
     }
 }
 

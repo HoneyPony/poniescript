@@ -182,7 +182,15 @@ PS_FUN("seed_random_with_time") void pq_seed_random_with_time(PONI_ABI());
 PS_FUN("randi_range") ps_int pq_randi_range(PONI_ABI(ps_int low, ps_int high));
 PS_FUN("randf_range") ps_float pq_randf_range(PONI_ABI(ps_float low, ps_float high));
 
+PS_CLASS("Map")
+struct pq_map {
+    ps_object header;
+
+    char opaque[400];
+};
+
 PS_FUN() struct string_loader* load_string(PONI_ABI(ps_strbuf *path));
 PS_FUN() PS_OPTION(ps_strbuf*) get_loaded_string(PONI_ABI(struct string_loader *loader));
+PS_WILL_DEFINE_ITSELF(PS_FUN("load_map") PS_OPTION(struct pq_map*) pq_load_map(PONI_ABI(ps_strbuf *path, PS_ARRAY(ps_strbuf*) tex_name, PS_ARRAY(struct texture2d*) tex_value));)
 
 #endif

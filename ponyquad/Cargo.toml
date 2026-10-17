@@ -12,7 +12,7 @@ crate-type = ["staticlib", "lib"]
 libloading = "0.9.0"
 log = { version = "0.4.29", features = ["release_max_level_off"] }
 macroquad = { git = "https://github.com/HoneyPony/macroquad", features = ["audio", "backtrace", "log", "log-rs"] }
-macroquad-tiled = "0.2.1"
+macroquad-tiled = { git = "https://github.com/HoneyPony/macroquad" }
 notify = "8.2.0"
 poniescript-gc = { version = "0.1.0", path = "../poniescript-gc", features = ["single-threaded"] }
 poniescript-rt = { version = "0.1.0", path = "../poniescript-rt" }

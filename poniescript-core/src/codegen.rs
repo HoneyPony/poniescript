@@ -328,6 +328,9 @@ poni_gc_get_allocation_size(void *object) {
 	switch(tag) {
 		// Memory safety: Don't let us access an invalid size.
 		default:
+			if(tag & 0x4000000000000000LL) { // Opaque type
+				return (tag & ~0x4000000000000000) >> 1;
+			}
 			abort();
 			return 0;
 		case PONI_TAG_STRCONST:

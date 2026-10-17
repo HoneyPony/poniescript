@@ -1,7 +1,7 @@
 use std::{os::raw::c_void, sync::Mutex};
 
 use macroquad::texture::DrawTextureParams;
-use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsBool, PsFloat, PsInt, PsObject};
+use poniescript_gc::{GcContext, Gp, HasPsHeader, HasPsType, PONI_TAG_OPAQUE, PsBool, PsFloat, PsInt, PsObject, poni_tag_opaque};
 use poniescript_rt::{PsStrBuf, Vec2, Vec4};
 
 #[repr(C)]
@@ -13,7 +13,7 @@ pub struct PqFont {
 unsafe impl HasPsHeader for PqFont {}
 
 impl HasPsType for PqFont {
-    const TYP: u64 = PONI_TAG_OPAQUE;
+    const TYP: u64 = poni_tag_opaque::<Self>();
 }
 
 /// Handles loading the textures "later."
@@ -60,7 +60,7 @@ pub async fn process_queue() {
 pub extern "C" fn load_font(gc: &mut GcContext, path: Gp<PsStrBuf>, _closure: *mut c_void) -> Gp<PqFont> {
     let texture = PqFont {
         // Opaque, as we don't have any inner members.
-        header: PsObject::from_type_id(PONI_TAG_OPAQUE),
+        header: PsObject::from_type_id(PqFont::TYP),
         inner: None,
     };
 

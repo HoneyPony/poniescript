@@ -13,6 +13,11 @@ impl PsObject {
     pub fn from_type_id(id: u64) -> Self {
         Self { header: id.into() }
     }
+
+    #[inline(always)]
+    pub fn type_id(&self) -> u64 {
+        self.header.load(Ordering::Relaxed)
+    }
 }
 
 pub trait HasPsType {
@@ -27,6 +32,10 @@ pub trait HasPsType {
 #[repr(transparent)]
 pub struct Gp<T: HasPsHeader> {
     inner: AtomicPtr<T>
+}
+
+impl<T: HasPsType + HasPsHeader> HasPsType for Gp<T> {
+    const TYP: u64 = T::TYP;
 }
 
 #[repr(transparent)]

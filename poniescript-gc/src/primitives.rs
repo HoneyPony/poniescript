@@ -33,6 +33,11 @@ pub const PONI_TAG_INT      : u64 = 0x8000000000000004;
 pub const PONI_TAG_BOOL     : u64 = 0x8000000000000006;
 
 pub const PONI_TAG_OPAQUE   : u64 =               0x12;
+pub const PONI_TAG_OPAQUE_LEN : u64 = 0x4000000000000000;
+
+pub const fn poni_tag_opaque<T: Sized>() -> u64 {
+    PONI_TAG_OPAQUE_LEN | ((std::mem::size_of::<T>() as u64) << 1)
+}
 
 impl HasPsType for AtomicPsInt { const TYP: u64 = PONI_TAG_INT; }
 impl HasPsType for PsInt       { const TYP: u64 = PONI_TAG_INT; }

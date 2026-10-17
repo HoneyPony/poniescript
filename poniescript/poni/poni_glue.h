@@ -76,4 +76,16 @@
  */
 #define PS_OPTION(ref_ty) ref_ty
 
+/*
+ * Indicates that this is an Array[T]. Probably only works in parameter lists,
+ * currently.
+ */
+#define PS_ARRAY(inner_ty) void*
+
+/*
+ * Wraps a definition and lets PonieScript see it but not the C compiler, because
+ * it would conflict with the PonieScript-generated stub.
+ */
+#define PS_WILL_DEFINE_ITSELF(x)
+
 #endif
