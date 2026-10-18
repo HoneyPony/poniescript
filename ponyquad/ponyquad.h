@@ -191,9 +191,17 @@ struct pq_map {
 
 PS_FUN() struct string_loader* load_string(PONI_ABI(ps_strbuf *path));
 PS_FUN() PS_OPTION(ps_strbuf*) get_loaded_string(PONI_ABI(struct string_loader *loader));
-PS_WILL_DEFINE_ITSELF(PS_FUN("load_map") PS_OPTION(struct pq_map*) pq_load_map(PONI_ABI(ps_strbuf *path, PS_ARRAY(ps_strbuf*) tex_name, PS_ARRAY(struct texture2d*) tex_value));)
+PS_WILL_DEFINE_ITSELF(PS_FUN("load_map") PS_OPTION(struct pq_map*) pq_load_map(PONI_ABI(ps_strbuf *data, PS_ARRAY(ps_strbuf*) tex_name, PS_ARRAY(struct texture2d*) tex_value));)
 PS_FUN("draw_map") void pq_draw_map(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_vec4 dest));
 PS_FUN("get_tile_map_size") ps_vec2i pq_get_tile_map_size(PONI_ABI(struct pq_map *map));
 PS_FUN("get_tile_map_tile") ps_int pq_get_tile_map_tile(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_vec2i coord));
+PS_FUN("set_tile_map_tile") ps_bool pq_set_tile_map_tile(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_vec2i coord, ps_int new_id));
+PS_FUN("remove_tile_map_tile") ps_bool pq_remove_tile_map_tile(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_vec2i coord));
+
+PS_FUN("tiledobj_get_count") ps_int pq_tiledobj_get_count(PONI_ABI(struct pq_map *map, ps_strbuf *layer));
+PS_FUN("tiledobj_get_property_float") ps_float pq_tiledobj_get_property_float(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_int index, ps_strbuf *property));
+PS_FUN("tiledobj_get_property_int") ps_int pq_tiledobj_get_property_int(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_int index, ps_strbuf *property));
+PS_FUN("tiledobj_get_tile_id") ps_int pq_tiledobj_get_tile_id(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_int index));
+PS_FUN("tiledobj_get_position") ps_vec2 pq_tiledobj_get_position(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_int index));
 
 #endif

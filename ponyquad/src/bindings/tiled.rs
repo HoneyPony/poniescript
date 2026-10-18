@@ -152,3 +152,120 @@ pub extern "C" fn pq_get_tile_map_tile(gc: &mut GcContext, map: Gp<PqTiledMap>, 
 
     tile.id as PsInt
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_set_tile_map_tile(gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, coord: Vec2i, new_id: PsInt, _closure: *mut c_void) -> PsBool {
+    if coord.x < 0 || coord.y < 0 {
+        return ps_bool(false);
+    }
+
+    // "SAFETY": ponyquad is single threaded only. Not really a good justification...
+    unsafe {
+        if let Some(layer) = map.get_inner_mut().inner.layers.get_mut(&layer.get_inner().get_string().into_owned()) {
+            let idx = coord.y * layer.width as i64 + coord.x;
+            if idx < 0 { return ps_bool(false); }
+            let idx = idx as usize;
+            if idx >= layer.data.len() { return ps_bool(false); }
+
+            if let Some(tile) = &mut layer.data[idx] {
+                tile.id = new_id as _;
+                return ps_bool(true);
+            }
+        }
+    }
+    
+    ps_bool(false)
+    //let Some(tile) = map.get_inner().inner.get_tile(&layer.get_inner().get_string(), coord.x as u32, coord.y as u32) else { return -1; };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_remove_tile_map_tile(gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, coord: Vec2i, _closure: *mut c_void) -> PsBool {
+    if coord.x < 0 || coord.y < 0 {
+        return ps_bool(false);
+    }
+
+    // "SAFETY": ponyquad is single threaded only. Not really a good justification...
+    unsafe {
+        if let Some(layer) = map.get_inner_mut().inner.layers.get_mut(&layer.get_inner().get_string().into_owned()) {
+            let idx = coord.y * layer.width as i64 + coord.x;
+            if idx < 0 { return ps_bool(false); }
+            let idx = idx as usize;
+            if idx >= layer.data.len() { return ps_bool(false); }
+
+            layer.data[idx] = None;
+            return ps_bool(true);
+        }
+    }
+    
+    ps_bool(false)
+    //let Some(tile) = map.get_inner().inner.get_tile(&layer.get_inner().get_string(), coord.x as u32, coord.y as u32) else { return -1; };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_tiledobj_get_count(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>) -> PsInt {
+    let layer = layer.get_string();
+    let layer = layer.as_ref();
+    if let Some(layer) = map.get_inner().inner.layers.get(layer) {
+        return layer.objects.len() as PsInt;
+    }
+    return 0;
+    //let Some(tile) = map.get_inner().inner.get_tile(&layer.get_inner().get_string(), coord.x as u32, coord.y as u32) else { return -1; };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_tiledobj_get_property_float(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt, property: Gp<PsStrBuf>) -> PsFloat {
+    let layer = layer.get_string();
+    let layer = layer.as_ref();
+    if let Some(layer) = map.get_inner().inner.layers.get(layer) {
+        let property_name = property.get_string();
+
+        return layer.objects[index as usize].properties.get(property_name.as_ref())
+            .map(|s| s.parse::<f32>().ok())
+            .flatten()
+            .unwrap_or(0.0);
+    }
+    return 0.0;
+    //let Some(tile) = map.get_inner().inner.get_tile(&layer.get_inner().get_string(), coord.x as u32, coord.y as u32) else { return -1; };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_tiledobj_get_property_int(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt, property: Gp<PsStrBuf>) -> PsInt {
+    let layer = layer.get_string();
+    let layer = layer.as_ref();
+    if let Some(layer) = map.get_inner().inner.layers.get(layer) {
+        let property_name = property.get_string();
+
+        return layer.objects[index as usize].properties.get(property_name.as_ref())
+            .map(|s| s.parse::<i64>().ok())
+            .flatten()
+            .unwrap_or(0);
+    }
+    return 0;
+    //let Some(tile) = map.get_inner().inner.get_tile(&layer.get_inner().get_string(), coord.x as u32, coord.y as u32) else { return -1; };
+}
+
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_tiledobj_get_tile_id(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt) -> PsInt {
+    let layer = layer.get_string();
+    let layer = layer.as_ref();
+    if let Some(layer) = map.get_inner().inner.layers.get(layer) {
+        return layer.objects[index as usize].gid.map(|g| g as PsInt).unwrap_or(-1);
+    }
+    return -1;
+    //let Some(tile) = map.get_inner().inner.get_tile(&layer.get_inner().get_string(), coord.x as u32, coord.y as u32) else { return -1; };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_tiledobj_get_position(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt) -> Vec2 {
+    let layer = layer.get_string();
+    let layer = layer.as_ref();
+    if let Some(layer) = map.get_inner().inner.layers.get(layer) {
+        return Vec2 {
+            x: layer.objects[index as usize].world_x,
+            y: layer.objects[index as usize].world_y,
+        };
+    }
+    return Vec2 { x: 0.0, y: 0.0 };
+    //let Some(tile) = map.get_inner().inner.get_tile(&layer.get_inner().get_string(), coord.x as u32, coord.y as u32) else { return -1; };
+}

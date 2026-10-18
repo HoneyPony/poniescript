@@ -44,6 +44,9 @@ pub struct GpMaybe<T: HasPsHeader> {
 }
 
 impl<T: HasPsHeader> GpMaybe<T> {
+    #[inline(always)]
+    pub fn none() -> GpMaybe<T> { Self::new(None) }
+
     pub fn new(ptr: Option<Gp<T>>) -> GpMaybe<T> {
         match ptr {
             Some(ptr) => GpMaybe {
