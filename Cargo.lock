@@ -911,7 +911,7 @@ dependencies = [
 [[package]]
 name = "macroquad"
 version = "0.4.14"
-source = "git+https://github.com/HoneyPony/macroquad#25503fde46fc908f943bd98589c0cec4444a78df"
+source = "git+https://github.com/HoneyPony/macroquad#fa48e5f229f18eafeb36f59412cf3c76ed64b3a4"
 dependencies = [
  "backtrace",
  "fontdue",
@@ -927,7 +927,7 @@ dependencies = [
 [[package]]
 name = "macroquad-tiled"
 version = "0.2.1"
-source = "git+https://github.com/HoneyPony/macroquad#25503fde46fc908f943bd98589c0cec4444a78df"
+source = "git+https://github.com/HoneyPony/macroquad#fa48e5f229f18eafeb36f59412cf3c76ed64b3a4"
 dependencies = [
  "macroquad",
  "nanoserde",
@@ -936,7 +936,7 @@ dependencies = [
 [[package]]
 name = "macroquad_macro"
 version = "0.1.8"
-source = "git+https://github.com/HoneyPony/macroquad#25503fde46fc908f943bd98589c0cec4444a78df"
+source = "git+https://github.com/HoneyPony/macroquad#fa48e5f229f18eafeb36f59412cf3c76ed64b3a4"
 
 [[package]]
 name = "malloc_buf"

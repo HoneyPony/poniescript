@@ -78,3 +78,16 @@ pub extern "C" fn pq_is_font_loaded(gc: &mut GcContext, font: Gp<PqFont>, _closu
     let font = font.get_inner();
     return if font.inner.is_some() { 1 } else { 0 };
 }
+
+// TODO: it would be nice if this didn't require the font to already be loaded to work. Oh well..
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_set_font_filter_mode(_gc: &mut GcContext, font: Gp<PqFont>, mode: PsInt, _closure: *mut c_void) {
+    let font = unsafe { font.get_inner_mut() };
+    if let Some(font) = &mut font.inner {
+        let mode = match mode {
+            0 => macroquad::texture::FilterMode::Linear,
+            _ => macroquad::texture::FilterMode::Nearest,
+        };
+        font.set_filter(mode);
+    }
+}

@@ -269,3 +269,16 @@ pub extern "C" fn pq_tiledobj_get_position(_gc: &mut GcContext, map: Gp<PqTiledM
     return Vec2 { x: 0.0, y: 0.0 };
     //let Some(tile) = map.get_inner().inner.get_tile(&layer.get_inner().get_string(), coord.x as u32, coord.y as u32) else { return -1; };
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_tiledobj_get_text(gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt) -> GpMaybe<PsStrBuf> {
+    let layer = layer.get_string();
+    let layer = layer.as_ref();
+    if let Some(layer) = map.get_inner().inner.layers.get(layer) {
+        let object = &layer.objects[index as usize];
+        return object.text.as_ref().map(|m| GpMaybe::new(Some(PsStrBuf::from_string(gc, &m))))
+            .unwrap_or_else(|| GpMaybe::none());
+    }
+    return GpMaybe::none();
+    //let Some(tile) = map.get_inner().inner.get_tile(&layer.get_inner().get_string(), coord.x as u32, coord.y as u32) else { return -1; };
+}

@@ -92,6 +92,7 @@ PS_FUN() ps_vec3 measure_text_font(PONI_ABI(ps_strbuf *text, struct font *font, 
 PS_FUN() ps_vec3 measure_text_fonts(PONI_ABI(ps_strbuf *text, struct font *font, ps_float size, ps_float scale));
 
 PS_FUN("is_font_loaded") ps_bool pq_is_font_loaded(PONI_ABI(struct font* font));
+PS_FUN("set_font_filter_mode") void pq_set_font_filter_mode(PONI_ABI(struct font* font, ps_int mode));
 
 PS_FUN() void set_camera(PONI_ABI(struct camera2d *camera));
 PS_FUN() void set_default_camera(PONI_ABI());
@@ -203,5 +204,6 @@ PS_FUN("tiledobj_get_property_float") ps_float pq_tiledobj_get_property_float(PO
 PS_FUN("tiledobj_get_property_int") ps_int pq_tiledobj_get_property_int(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_int index, ps_strbuf *property));
 PS_FUN("tiledobj_get_tile_id") ps_int pq_tiledobj_get_tile_id(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_int index));
 PS_FUN("tiledobj_get_position") ps_vec2 pq_tiledobj_get_position(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_int index));
+PS_FUN("tiledobj_get_text") PS_OPTION(ps_strbuf*) pq_tiledobj_get_text(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_int index));
 
 #endif
