@@ -133,3 +133,14 @@ pub extern "C" fn pq_is_sound_loaded(gc: &mut GcContext, sound: Gp<PqSound>, _cl
     let inner = sound.get_inner();
     return ps_bool(inner.inner.is_some());
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_set_sound_volume(_gc: &mut GcContext, sound: Gp<PqSound>, volume: PsFloat, _closure: *mut c_void) {
+    let inner = sound.get_inner();
+    if let Some(inner) = &inner.inner {
+        macroquad::audio::set_sound_volume(inner, volume);
+    }
+    else {
+        // TODO: How to handle this...?
+    }
+}

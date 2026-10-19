@@ -104,7 +104,6 @@ pub extern "C" fn pq_load_map(gc: &mut GcContext, data: Gp<PsStrBuf>, tex_names:
         let tex = textures.get_inner().get(i);
 
         let name = name.get_inner().get_string();
-        eprintln!("Got texture: {name} - {}", tex.get_inner().inner.size());
         tex_param.push((name, tex.get_inner().inner.clone()))
     }
 
@@ -116,7 +115,6 @@ pub extern "C" fn pq_load_map(gc: &mut GcContext, data: Gp<PsStrBuf>, tex_names:
     match map {
         Ok(map) => {
             let ptr = gc.alloc(PqTiledMap { header: PsObject::from_type_id(PqTiledMap::TYP), inner: map });
-            eprintln!("Allocated @ {:p} - {}", ptr.get_inner(), ptr.get_inner().header.type_id());
             GpMaybe::new(Some(ptr))
         }
         Err(err) => {
@@ -128,7 +126,11 @@ pub extern "C" fn pq_load_map(gc: &mut GcContext, data: Gp<PsStrBuf>, tex_names:
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pq_draw_map(gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, dest: Vec4, _closure: *mut c_void) { 
-    map.get_inner().inner.draw_tiles(&layer.get_inner().get_string(), Rect::new(dest.x, dest.y, dest.z, dest.w), None);
+    let inner = &map.get_inner().inner;
+    let layer = layer.get_inner().get_string();
+    if inner.contains_layer(&layer) {
+        inner.draw_tiles(&layer, Rect::new(dest.x, dest.y, dest.z, dest.w), None);
+    } 
 }
 
 #[unsafe(no_mangle)]
@@ -202,7 +204,7 @@ pub extern "C" fn pq_remove_tile_map_tile(gc: &mut GcContext, map: Gp<PqTiledMap
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_tiledobj_get_count(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>) -> PsInt {
+pub extern "C" fn pq_tiledobj_get_count(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, _closure: *mut c_void) -> PsInt {
     let layer = layer.get_string();
     let layer = layer.as_ref();
     if let Some(layer) = map.get_inner().inner.layers.get(layer) {
@@ -213,7 +215,7 @@ pub extern "C" fn pq_tiledobj_get_count(_gc: &mut GcContext, map: Gp<PqTiledMap>
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_tiledobj_get_property_float(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt, property: Gp<PsStrBuf>) -> PsFloat {
+pub extern "C" fn pq_tiledobj_get_property_float(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt, property: Gp<PsStrBuf>, _closure: *mut c_void) -> PsFloat {
     let layer = layer.get_string();
     let layer = layer.as_ref();
     if let Some(layer) = map.get_inner().inner.layers.get(layer) {
@@ -229,7 +231,7 @@ pub extern "C" fn pq_tiledobj_get_property_float(_gc: &mut GcContext, map: Gp<Pq
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_tiledobj_get_property_int(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt, property: Gp<PsStrBuf>) -> PsInt {
+pub extern "C" fn pq_tiledobj_get_property_int(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt, property: Gp<PsStrBuf>, _closure: *mut c_void) -> PsInt {
     let layer = layer.get_string();
     let layer = layer.as_ref();
     if let Some(layer) = map.get_inner().inner.layers.get(layer) {
@@ -246,7 +248,7 @@ pub extern "C" fn pq_tiledobj_get_property_int(_gc: &mut GcContext, map: Gp<PqTi
 
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_tiledobj_get_tile_id(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt) -> PsInt {
+pub extern "C" fn pq_tiledobj_get_tile_id(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt, _closure: *mut c_void) -> PsInt {
     let layer = layer.get_string();
     let layer = layer.as_ref();
     if let Some(layer) = map.get_inner().inner.layers.get(layer) {
@@ -257,7 +259,7 @@ pub extern "C" fn pq_tiledobj_get_tile_id(_gc: &mut GcContext, map: Gp<PqTiledMa
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_tiledobj_get_position(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt) -> Vec2 {
+pub extern "C" fn pq_tiledobj_get_position(_gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt, _closure: *mut c_void) -> Vec2 {
     let layer = layer.get_string();
     let layer = layer.as_ref();
     if let Some(layer) = map.get_inner().inner.layers.get(layer) {
@@ -271,7 +273,7 @@ pub extern "C" fn pq_tiledobj_get_position(_gc: &mut GcContext, map: Gp<PqTiledM
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pq_tiledobj_get_text(gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt) -> GpMaybe<PsStrBuf> {
+pub extern "C" fn pq_tiledobj_get_text(gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, index: PsInt, _closure: *mut c_void) -> GpMaybe<PsStrBuf> {
     let layer = layer.get_string();
     let layer = layer.as_ref();
     if let Some(layer) = map.get_inner().inner.layers.get(layer) {

@@ -10,6 +10,8 @@ use poniescript_gc::gc_spawn;
 //     fn f_update(gc: &mut GcContext, closure: *const c_void);
 // }
 
+pub const GAME_TITLE: &'static str = "Game";
+
 // We need an unsafe(no_mangle) main so that we can link ourselves as the main
 // method against the PonieScript script.
 //
@@ -19,7 +21,7 @@ use poniescript_gc::gc_spawn;
 #[unsafe(no_mangle)]
 #[cfg(not(feature = "hotreload"))]
 pub extern "C" fn main() {
-    macroquad::Window::new("Game", async { macroquad_main().await });
+    macroquad::Window::new(GAME_TITLE, async { macroquad_main().await });
 }
 
 #[unsafe(no_mangle)]
@@ -38,7 +40,7 @@ pub extern "C" fn _start() {
 /// Should be called by the hotreload host.
 #[cfg(feature = "hotreload")]
 pub fn ponyquad_main() {
-    macroquad::Window::new("Game", macroquad_main());
+    macroquad::Window::new(GAME_TITLE, macroquad_main());
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -83,10 +85,7 @@ async fn macroquad_main() {
         hot::call_update(ctx, &mut hot);
         hot.poll(ctx);
 
-        bindings::texture::process_queue().await;
-        bindings::font::process_queue().await;
-        bindings::sound::process_queue().await;
-        bindings::tiled::process_queue().await;
+
 
         // Poll the gc. We are in theory going to compile the script code to NOT
         // safepoint at all, so we have to do it here.
@@ -94,6 +93,11 @@ async fn macroquad_main() {
 
         //clear_background(BEIGE);
 
-        next_frame().await
+        next_frame().await;
+
+        bindings::texture::process_queue().await;
+        bindings::font::process_queue().await;
+        bindings::sound::process_queue().await;
+        bindings::tiled::process_queue().await;
     }
 }
