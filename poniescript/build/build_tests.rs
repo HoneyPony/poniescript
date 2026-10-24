@@ -205,6 +205,10 @@ pub fn generate(tests_file: &mut File) {
 		("if/", "if_fun_calls"),
 		("if/", "if_with_prints"),
 
+		("if/", "if_elseif"),
+		("if/", "if_elseif_infer_left"),
+		("if/", "if_elseif_infer_right"),
+
 		("if/", "err_if_bad_condition"),
 		("if/", "err_if_incompat_types"),
 		("if/", "err_if_no_else_bad_type"),

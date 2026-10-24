@@ -1,0 +1,11 @@
+fun val(flag_a: bool, flag_b: bool) -> float {
+    let result = if flag_a { 1.0 } else if flag_b { 2 } else { 3 };
+    result
+}
+
+fun init() {
+    print(val(false, false)); //! 3.000000
+    print(val(false, true));  //! 2.000000
+    print(val(true, false));  //! 1.000000
+    print(val(true, true));   //! 1.000000
+}
