@@ -1788,7 +1788,11 @@ impl Db {
 				// All arrays use the same tag.
 				Type::ArrayOf(_) => { self.tag_cname_cache.insert(typ, "PONI_TAG_ARRAY"); },
 				// All dynamic arrays use the same tag. (?)
-				Type::DynArrayOf(..) => { self.tag_cname_cache.insert(typ, "PONI_TAG_DYNARRAY"); },
+				Type::DynArrayOf(..) => {
+					self.tag_cname_cache.insert(typ, "PONI_TAG_DYNARRAY");
+					// For the benefit of option types:
+					writeln!(self.tag_define_code, "#define PONI_TAG_TY{} PONI_TAG_DYNARRAY", typ.to_nonzero_usize()).unwrap();
+				},
 
 				Type::Fun(_) | Type::Class(_) => {
 					// This is very sad, but for now we'll just make their name

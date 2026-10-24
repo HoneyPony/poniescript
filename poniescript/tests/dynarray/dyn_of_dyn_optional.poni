@@ -1,7 +1,7 @@
 fun init() {
     var test: DynArray[DynArray[int]?] = [];
     test.push(nil);
-    test.push([1, 2, 3]);
+    test.push({ let elem: DynArray[int] = [1, 2, 3]; elem });
     test.push(nil);
 
     //! <nil>

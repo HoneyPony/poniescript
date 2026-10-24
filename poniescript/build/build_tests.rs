@@ -466,6 +466,7 @@ pub fn generate(tests_file: &mut File) {
 		("dynarray/", "builtin_pop_or_panic"),
 		("dynarray/", "builtin_clear"),
 		("dynarray/", "dyn_of_dyn_optional"),
+		("dynarray/", "dyn_of_dyn_optional_promote"),
 
 		("array/", "array_nested_empty_lhs"),
 		("array/", "array_nested_empty_rhs"),

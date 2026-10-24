@@ -1,0 +1,18 @@
+fun init() {
+    var test: DynArray[DynArray[int]?] = [];
+    test.push(nil);
+    test.push([1, 2, 3]); // TODO: This needs to promote properly, right now something crazy is happening
+    test.push(nil);
+
+    //! <nil>
+    //! 3
+    //! <nil>
+    for i in 0..test.length {
+        if test[i].is_some() {
+            print(test[i].or_panic().length);
+        }
+        else {
+            print("<nil>");
+        }
+    }
+}
