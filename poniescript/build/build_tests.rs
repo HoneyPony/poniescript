@@ -546,6 +546,10 @@ pub fn generate(tests_file: &mut File) {
 		("for/", "for_closed_nospace"),
 
 		("for/", "for_optfun"),
+
+		("sugar/", "class_member_equal_var"),
+		("sugar/", "class_member_equal_var_no_ident"),
+		("sugar/", "class_member_equal_var_ty_mismatch"),
 	];
 
 	let mut bt = BuiltTests {

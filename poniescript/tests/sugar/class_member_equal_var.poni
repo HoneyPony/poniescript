@@ -1,0 +1,33 @@
+class Horse {
+    var name: StrBuf;
+    var pos: vec2i;
+    var callback: fun();
+}
+
+fun horse() -> Horse {
+    let name: StrBuf = "Apple";
+    let pos = (1, 2);
+    fun callback() { // Named functions should work.
+        print("named");
+    }
+    new Horse { name, pos, callback }
+}
+
+fun horse2() -> Horse {
+    let name: StrBuf = "Banana";
+    let pos = (3, 4);
+    var callback = fun() {
+        print("anonymous");
+    };
+    new Horse { name, pos, callback, } // Both trailing comma and not need to work.
+}
+
+fun init() {
+    let a = horse();
+    let b = horse2();
+
+    print(a.name, " ", a.pos); //! Apple (1, 2)
+    a.callback(); //! named
+    print(b.name, " ", b.pos); //! Banana (3, 4)
+    b.callback(); //! anonymous
+}

@@ -1,0 +1,10 @@
+class Horse {
+    var name: StrBuf;
+    var pos: vec2i;
+}
+
+fun horse() -> Horse {
+    let name: StrBuf = "Apple";
+    //let pos = (1, 2);
+    new Horse { name, pos } //? Unknown identifier 'pos'
+}

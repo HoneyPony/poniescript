@@ -1,0 +1,10 @@
+class Horse {
+    var name: StrBuf;
+    var pos: vec2i;
+}
+
+fun horse() -> Horse {
+    let name: StrBuf = "Apple";
+    let pos = 45;
+    new Horse { name, pos } //? Invalid assignment to 'pos': need vec2i, but value is int
+}

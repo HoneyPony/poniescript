@@ -566,6 +566,18 @@ impl<'b> Parser<'b> {
 		}
 	}
 
+	fn id_to_expr_in_cur_scope(&mut self, ident: Token) -> Expr {
+		match self.scope_lookup(ident.lexeme) {
+			ScopeEntry::Var(identity) => Expr::mk_variable(ident.location.clone(), identity),
+			ScopeEntry::Fun(identity) =>
+				Expr::mk_funcapture(ident.location.clone(), ident.location.clone(), identity, self.db.types.unassigned, None),
+			ScopeEntry::Class(_) => {
+				todo!("what to do when a class is referenced directly. Perhaps a ClassCapture?");
+			}
+			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
+		}
+	}
+
 	fn expr_ident(&mut self) -> Result<ExprId> {
 		let location = self.start();
 		let ident = expected!(self, Tok::Identifier, "identifier")?;
@@ -577,15 +589,7 @@ impl<'b> Parser<'b> {
 
 		// In the future, if we see a dot or a (), we might generate a getter/setter/call.
 		// For now, we just generate either a Variable or some unbound name.
-		let expr = match self.scope_lookup(ident.lexeme) {
-			ScopeEntry::Var(identity) => Expr::mk_variable(ident.location.clone(), identity),
-			ScopeEntry::Fun(identity) =>
-				Expr::mk_funcapture(ident.location.clone(), ident.location.clone(), identity, self.db.types.unassigned, None),
-			ScopeEntry::Class(_) => {
-				todo!("what to do when a class is referenced directly. Perhaps a ClassCapture?");
-			}
-			ScopeEntry::None => Expr::mk_unbound(ident.location.clone(), ident),
-		};
+		let expr = self.id_to_expr_in_cur_scope(ident);
 
 		if matches_assign(self.current.typ) {
 			let op = self.advance()?;
@@ -835,9 +839,17 @@ impl<'b> Parser<'b> {
 		while !self.at(Tok::RightBrace) && !self.is_at_end() {
 			let location = self.start();
 			let ident = expected!(self, Tok::Identifier, "identifier inside 'new' block")?;
-			expected_after!(self, Tok::Colon, ident, "':' after member name")?;
 
-			let value = self.expression()?;
+			let value = if self.at(Tok::Comma) || self.at(Tok::RightBrace) {
+				// Desugar to varname: varname
+				let expr = self.id_to_expr_in_cur_scope(ident.clone());
+				self.ast.exprs.push(expr)
+			}
+			else {
+				expected_after!(self, Tok::Colon, ident, "':' after member name")?;
+				self.expression()?
+			};
+			
 			initializers.push(NewInitElem { var: self.db.var_unassigned, ident, value, location: self.end(location) });
 
 			self.eat_comma(Tok::RightBrace)?;
