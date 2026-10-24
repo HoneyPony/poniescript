@@ -125,6 +125,62 @@ pub extern "C" fn pq_load_map(gc: &mut GcContext, data: Gp<PsStrBuf>, tex_names:
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn pq_load_map_with_tilesets(
+    gc: &mut GcContext,
+    data: Gp<PsStrBuf>,
+    tex_names: Gp<PsArray<Gp<PsStrBuf>>>, 
+    textures: Gp<PsArray<Gp<Texture2D>>>,
+    tileset_names: Gp<PsArray<Gp<PsStrBuf>>>,
+    tileset_content: Gp<PsArray<Gp<PsStrBuf>>>,
+    _closure: *mut c_void
+) -> GpMaybe<PqTiledMap> {    
+    let mut tex_param = Vec::new();
+    for i in 0..tex_names.get_inner().len() {
+        if i >= textures.get_inner().len() {
+            break;
+        }
+
+        let name = tex_names.get_inner().get(i);
+        let tex = textures.get_inner().get(i);
+
+        let name = name.get_inner().get_string();
+        tex_param.push((name, tex.get_inner().inner.clone()))
+    }
+
+    let mut external_tilesets = Vec::new();
+    for i in 0..tileset_names.get_inner().len() {
+        if i >= tileset_content.get_inner().len() {
+            break;
+        }
+
+        let name = tileset_names.get_inner().get(i);
+        let path = tileset_content.get_inner().get(i);
+
+        let name = name.get_inner().get_string();
+        let path = path.get_inner().get_string();
+
+        external_tilesets.push((name, path));
+    }
+
+    //return GpMaybe::new(None);
+
+    let tex_param: Vec<_> = tex_param.iter().map(|p| (p.0.as_ref(), p.1.clone())).collect();
+    let external_tilesets: Vec<_> = external_tilesets.iter().map(|e| (e.0.as_ref(), e.1.as_ref())).collect();
+    let map = load_map(&data.get_inner().get_string(), &tex_param[..], &external_tilesets[..]);
+
+    match map {
+        Ok(map) => {
+            let ptr = gc.alloc(PqTiledMap { header: PsObject::from_type_id(PqTiledMap::TYP), inner: map });
+            GpMaybe::new(Some(ptr))
+        }
+        Err(err) => {
+            // TODO: log error?
+            GpMaybe::new(None)
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn pq_draw_map(gc: &mut GcContext, map: Gp<PqTiledMap>, layer: Gp<PsStrBuf>, dest: Vec4, _closure: *mut c_void) { 
     let inner = &map.get_inner().inner;
     let layer = layer.get_inner().get_string();

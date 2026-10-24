@@ -194,6 +194,10 @@ struct pq_map {
 PS_FUN() struct string_loader* load_string(PONI_ABI(ps_strbuf *path));
 PS_FUN() PS_OPTION(ps_strbuf*) get_loaded_string(PONI_ABI(struct string_loader *loader));
 PS_WILL_DEFINE_ITSELF(PS_FUN("load_map") PS_OPTION(struct pq_map*) pq_load_map(PONI_ABI(ps_strbuf *data, PS_ARRAY(ps_strbuf*) tex_name, PS_ARRAY(struct texture2d*) tex_value));)
+PS_WILL_DEFINE_ITSELF(PS_FUN("load_map_with_tilesets") PS_OPTION(struct pq_map*) pq_load_map_with_tilesets(PONI_ABI(ps_strbuf *data,
+    PS_ARRAY(ps_strbuf*) tex_name, PS_ARRAY(struct texture2d*) tex_value,
+    PS_ARRAY(ps_strbuf*) tileset_names, PS_ARRAY(ps_strbuf*) tileset_contents
+));)
 PS_FUN("draw_map") void pq_draw_map(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_vec4 dest));
 PS_FUN("get_tile_map_size") ps_vec2i pq_get_tile_map_size(PONI_ABI(struct pq_map *map));
 PS_FUN("get_tile_map_tile") ps_int pq_get_tile_map_tile(PONI_ABI(struct pq_map *map, ps_strbuf *layer, ps_vec2i coord));
