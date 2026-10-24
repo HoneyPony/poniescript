@@ -5,6 +5,7 @@ class Horse {
 
 fun horse() -> Horse {
     let name: StrBuf = "Apple";
-    //let pos = (1, 2);
+    // let pos = (1, 2);
+    // TODO: Consider making these error messages a bit more informative.
     new Horse { name, pos } //? Unknown identifier 'pos'
 }

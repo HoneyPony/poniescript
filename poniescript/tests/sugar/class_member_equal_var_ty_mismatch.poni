@@ -6,5 +6,6 @@ class Horse {
 fun horse() -> Horse {
     let name: StrBuf = "Apple";
     let pos = 45;
+    // TODO: Consider making these error messages a bit more informative.
     new Horse { name, pos } //? Invalid assignment to 'pos': need vec2i, but value is int
 }
