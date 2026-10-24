@@ -1,0 +1,16 @@
+fun init() {
+    let arr: DynArray[int] = [1, 2, 3];
+    let ref = arr;
+
+    print(arr.length, ": ", arr[0], " ", arr[1], " ", arr[2]); //! 3: 1 2 3
+    print(ref.length, ": ", ref[0], " ", ref[1], " ", ref[2]); //! 3: 1 2 3
+
+    arr.clear();
+
+    print(arr.length); //! 0
+    print(ref.length); //! 0
+
+    arr.push(25);
+    print(arr.length, ": ", arr[0]); //! 1: 25
+    print(ref.length, ": ", ref[0]); //! 1: 25
+}

@@ -271,3 +271,35 @@ impl BuiltinMethod for DynarrayPopOrPanic {
         val
     }
 }
+
+pub struct DynarrayClear;
+
+impl BuiltinMethod for DynarrayClear {
+    fn get_types(&self, db: &mut Db, self_ty: TypId) -> (TypId, Vec<TypId>) {
+        // DynArray[T]::clear() -> void
+        match db.get(self_ty) {
+            Type::DynArrayOf(..) => (db.types.void, vec![]),
+            _ => unreachable!()
+        }
+    }
+
+    fn compile(
+        &self,
+        codegen: &mut Codegen,
+        _ast_node: &BuiltinCall,
+        _ast: &AstReadonly,
+        self_val: TypedVal,
+        arg_vals: Vec<TypedVal>,
+        into: &mut String
+    ) -> TypedVal {
+        let Type::DynArrayOf(..) = self_val.get_type(codegen.db) else { unreachable!() };
+        let [] = arg_vals.as_slice() else { unreachable!() };
+
+        let indent = codegen.indent();
+
+        // This will need to be different once DynArray is better. Smile
+        inf_writeln!(into, "{}{}->header.length = 0;", indent, self_val);
+        
+        codegen.new_val_typed(codegen.db.types.void)
+    }
+}

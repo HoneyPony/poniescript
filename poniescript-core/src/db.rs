@@ -1041,9 +1041,13 @@ impl Db {
 			self.builtin_methods.insert((all, dynarray_ty),
 				Arc::clone(&self.builtin_method_table.dynarray_all));
 
-			let all = self.put_str("clone_shallow");
-			self.builtin_methods.insert((all, dynarray_ty),
+			let clone_shallow = self.put_str("clone_shallow");
+			self.builtin_methods.insert((clone_shallow, dynarray_ty),
 				Arc::clone(&self.builtin_method_table.dynarray_clone_shallow));
+
+			let clear = self.put_str("clear");
+			self.builtin_methods.insert((clear, dynarray_ty),
+				Arc::clone(&self.builtin_method_table.dynarray_clear));
 		}
 	}
 
