@@ -161,6 +161,9 @@ PS_FUN("atan2") ps_float pq_atan2(PONI_ABI(ps_vec2 xy));
 /// TODO: Make this a PonieScript builtin.
 PS_FUN("pow") ps_float pq_pow(PONI_ABI(ps_float base, ps_float exp));
 
+PS_FUN("cos") ps_float pq_cos(PONI_ABI(ps_float theta));
+PS_FUN("sin") ps_float pq_sin(PONI_ABI(ps_float theta));
+
 /// Rounds a vec2 into a vec2i.
 PS_FUN("round2") ps_vec2i pq_round2(PONI_ABI(ps_vec2 v));
 

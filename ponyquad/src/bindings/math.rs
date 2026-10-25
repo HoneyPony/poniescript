@@ -100,3 +100,13 @@ pub extern "C" fn pq_round2(_gc: &mut GcContext, v: Vec2, _closure: *mut c_void)
 pub extern "C" fn pq_floor(_gc: &mut GcContext, f: PsFloat, _closure: *mut c_void) -> PsInt {
     f.floor() as PsInt
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_cos(_gc: &mut GcContext, theta: PsFloat, _closure: *mut c_void) -> PsFloat {
+    theta.cos()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pq_sin(_gc: &mut GcContext, theta: PsFloat, _closure: *mut c_void) -> PsFloat {
+    theta.sin()
+}
